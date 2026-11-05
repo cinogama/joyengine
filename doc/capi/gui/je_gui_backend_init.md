@@ -4,9 +4,9 @@
 
 ```c
 JE_API void je_gui_backend_init(
-    jegl_context* gl_context,
-    jegui_user_image_loader_t get_img_res,
-    jegui_user_sampler_loader_t apply_shader_sampler);
+    je_gl_context_t* gl_context,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler);
 ```
 
 ## 描述
@@ -17,9 +17,9 @@ JE_API void je_gui_backend_init(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `gl_context` | `jegl_context*` | 引擎图形上下文指针 |
-| `get_img_res` | `jegui_user_image_loader_t` | 获取纹理底层句柄的回调函数 |
-| `apply_shader_sampler` | `jegui_user_sampler_loader_t` | 应用着色器采样设置的回调函数 |
+| `gl_context` | `je_gl_context_t*` | 引擎图形上下文指针 |
+| `get_img_res` | `je_gui_user_image_loader_t` | 获取纹理底层句柄的回调函数 |
+| `apply_shader_sampler` | `je_gui_user_sampler_loader_t` | 应用着色器采样设置的回调函数 |
 
 ## 返回值
 
@@ -32,20 +32,20 @@ JE_API void je_gui_backend_init(
 ### 回调函数类型
 
 ```cpp
-typedef uint64_t jegui_user_image_handle_t;
-typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context*, jegl_texture_2d*);
-typedef void (*jegui_user_sampler_loader_t)(jegl_context*, jegl_shader*);
+typedef uint64_t je_gui_user_image_handle_t;
+typedef je_gui_user_image_handle_t(*je_gui_user_image_loader_t)(je_gl_context_t*, je_gl_texture_2d_t*);
+typedef void (*je_gui_user_sampler_loader_t)(je_gl_context_t*, je_gl_shader_t*);
 ```
 
 ### 示例
 
 ```cpp
-jegui_user_image_handle_t my_image_loader(jegl_context* ctx, jegl_texture_2d* tex) {
+je_gui_user_image_handle_t my_image_loader(je_gl_context_t* ctx, je_gl_texture_2d_t* tex) {
     // 返回纹理的底层图形库句柄
-    return (jegui_user_image_handle_t)tex->m_resource_id;
+    return (je_gui_user_image_handle_t)tex->m_resource_id;
 }
 
-void my_sampler_loader(jegl_context* ctx, jegl_shader* shader) {
+void my_sampler_loader(je_gl_context_t* ctx, je_gl_shader_t* shader) {
     // 应用着色器的采样器设置
 }
 

@@ -426,7 +426,7 @@ namespace jeecs
             uint64_t m_last_used_frame = 0;
         };
 
-        std::unordered_map<je_font*, font_atlas_t> m_fonts;
+        std::unordered_map<je_font_t*, font_atlas_t> m_fonts;
         size_t m_total_pages = 0;
         uint64_t m_frame = 0;
         bool m_warned_page_eviction = false;
@@ -531,7 +531,7 @@ namespace jeecs
             }
 
             auto texture = graphic::texture2d::create(
-                PAGE_SIZE, PAGE_SIZE, jegl_texture_common::format::RGBA);
+                PAGE_SIZE, PAGE_SIZE, JE_GL_TEXTURE_FORMAT_RGBA);
             std::memset(
                 texture->resource()->m_pixels, 0, PAGE_SIZE * PAGE_SIZE * 4);
 

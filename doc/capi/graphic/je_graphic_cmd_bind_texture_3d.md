@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_cmd_bind_texture_3d(
-    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_3d* texture);
+    je_gl_command_buffer_t* cmd, uint32_t pass, je_gl_texture_3d_t* texture);
 ```
 
 ## 描述
@@ -15,9 +15,9 @@ JE_API void je_graphic_cmd_bind_texture_3d(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `cmd` | `jegl_command_buffer*` | — |
-| `pass` | `uint32_t` | pass 取自 shader 反射（jegl_shader::m_sampler_methods） |
-| `texture` | `jegl_texture_3d*` | — |
+| `cmd` | `je_gl_command_buffer_t*` | — |
+| `pass` | `uint32_t` | pass 取自 shader 反射（je_gl_shader_t::m_sampler_methods） |
+| `texture` | `je_gl_texture_3d_t*` | — |
 
 ## 返回值
 
@@ -26,7 +26,7 @@ JE_API void je_graphic_cmd_bind_texture_3d(
 ## 注意事项
 
 - 必须在 pass 内调用
-- pass 取自 shader 反射（jegl_shader::m_sampler_methods）
+- pass 取自 shader 反射（je_gl_shader_t::m_sampler_methods）
 - 同一 pass 重复绑定会覆盖此前的纹理
 
 ## 相关接口

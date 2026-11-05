@@ -4,8 +4,8 @@
 
 ```c
 JE_API bool je_cache_binary_document_open(
-    jeecs_file* file,
-    jeecs_cache_binary_document* out_doc);
+    je_file_t* file,
+    je_cache_binary_document_t* out_doc);
 ```
 
 ## 描述
@@ -16,8 +16,8 @@ JE_API bool je_cache_binary_document_open(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `file` | `jeecs_file*` | — |
-| `out_doc` | `jeecs_cache_binary_document*` | — |
+| `file` | `je_file_t*` | — |
+| `out_doc` | `je_cache_binary_document_t*` | — |
 
 ## 返回值
 

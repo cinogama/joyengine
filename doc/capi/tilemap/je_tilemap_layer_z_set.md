@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_tilemap_layer_z_set(je_TilemapDocument* map, je_LayerId layer, float z);
+JE_API void je_tilemap_layer_z_set(je_tilemap_document_t* map, je_layer_id_t layer, float z);
 ```
 
 ## 描述
@@ -14,8 +14,8 @@ JE_API void je_tilemap_layer_z_set(je_TilemapDocument* map, je_LayerId layer, fl
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | — |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | — |
 | `z` | `float` | — |
 
 ## 返回值

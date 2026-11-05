@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API void je_audio_effect_slot_bind(jeal_effect_slot* slot, void* effect_may_null);
+JE_API void je_audio_effect_slot_bind(je_audio_effect_slot_t* slot, void* effect_may_null);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_audio_effect_slot_bind(jeal_effect_slot* slot, void* effect_may_n
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| slot | jeal_effect_slot* | 效果槽指针 |
+| slot | je_audio_effect_slot_t* | 效果槽指针 |
 | effect_may_null | void* | 效果实例指针，传入 nullptr 表示解除绑定 |
 
 ## 返回值
@@ -24,8 +24,8 @@ JE_API void je_audio_effect_slot_bind(jeal_effect_slot* slot, void* effect_may_n
 ## 用法示例
 
 ```cpp
-jeal_effect_slot* slot = je_audio_effect_slot_create();
-jeal_effect_reverb* reverb = je_audio_effect_reverb_create();
+je_audio_effect_slot_t* slot = je_audio_effect_slot_create();
+je_audio_effect_reverb_t* reverb = je_audio_effect_reverb_create();
 
 // 绑定混响效果
 je_audio_effect_slot_bind(slot, reverb);

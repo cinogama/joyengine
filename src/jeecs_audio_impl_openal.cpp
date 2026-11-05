@@ -12,7 +12,7 @@
 #include <chrono>
 
 #define JE_AL_DEVICE reinterpret_cast<ALCdevice *>
-#define AL_JE_DEVICE reinterpret_cast<jeal_native_play_device_instance *>
+#define AL_JE_DEVICE reinterpret_cast<je_audio_native_play_device_instance_t *>
 
 struct jeal_native_effect_instance
 {
@@ -31,19 +31,19 @@ struct alignas(8) jeal_effect_head
 
     size_t m_references;
 };
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_reverb) == 0);
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_chorus) == 0);
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_distortion) == 0);
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_echo) == 0);
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_flanger) == 0);
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_frequency_shifter) == 0);
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_vocal_morpher) == 0);
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_pitch_shifter) == 0);
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_ring_modulator) == 0);
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_autowah) == 0);
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_compressor) == 0);
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_equalizer) == 0);
-static_assert(sizeof(jeal_effect_head) % alignof(jeal_effect_eaxreverb) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_reverb_t) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_chorus_t) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_distortion_t) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_echo_t) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_flanger_t) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_frequency_shifter_t) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_vocal_morpher_t) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_pitch_shifter_t) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_ring_modulator_t) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_autowah_t) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_compressor_t) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_equalizer_t) == 0);
+static_assert(sizeof(jeal_effect_head) % alignof(je_audio_effect_eax_reverb_t) == 0);
 
 #define JE_EFFECT_HEAD(v) (jeal_effect_head *)(reinterpret_cast<intptr_t>(v) - sizeof(jeal_effect_head))
 #define JE_EFFECT_DATA(t, v) (t *)(reinterpret_cast<intptr_t>(v) + sizeof(jeal_effect_head))
@@ -53,28 +53,28 @@ namespace jeecs
     class AudioContextHelper
     {
     public:
-        static void increase_ref(const jeal_buffer* buffer);
-        static void decrease_ref(const jeal_buffer* buffer);
+        static void increase_ref(const je_audio_buffer_t* buffer);
+        static void decrease_ref(const je_audio_buffer_t* buffer);
         static void increase_ref(jeal_effect_head* effect);
         static void decrease_ref(jeal_effect_head* effect);
-        static void increase_ref(jeal_effect_slot* effect_slot);
-        static void decrease_ref(jeal_effect_slot* effect_slot);
-        static void increase_ref(jeal_filter* filter);
-        static void decrease_ref(jeal_filter* filter);
+        static void increase_ref(je_audio_effect_slot_t* effect_slot);
+        static void decrease_ref(je_audio_effect_slot_t* effect_slot);
+        static void increase_ref(je_audio_filter_t* filter);
+        static void decrease_ref(je_audio_filter_t* filter);
 
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_reverb* reverb);
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_chorus* chorus);
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_distortion* distortion);
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_echo* echo);
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_flanger* flanger);
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_frequency_shifter* shifter);
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_vocal_morpher* morpher);
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_pitch_shifter* shifter);
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_ring_modulator* modulator);
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_autowah* wah);
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_compressor* compressor);
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_equalizer* equalizer);
-        static void effect_init_default(jeal_effect_head* head, jeal_effect_eaxreverb* eaxreverb);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_reverb_t* reverb);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_chorus_t* chorus);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_distortion_t* distortion);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_echo_t* echo);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_flanger_t* flanger);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_frequency_shifter_t* shifter);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_vocal_morpher_t* morpher);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_pitch_shifter_t* shifter);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_ring_modulator_t* modulator);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_autowah_t* wah);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_compressor_t* compressor);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_equalizer_t* equalizer);
+        static void effect_init_default(jeal_effect_head* head, je_audio_effect_eax_reverb_t* eaxreverb);
 
         template <typename T>
         class Holder
@@ -128,7 +128,7 @@ namespace jeecs
     };
 }
 
-struct jeal_native_buffer_instance
+struct je_audio_native_buffer_instance_t
 {
     ALuint m_buffer_id;
 
@@ -137,28 +137,28 @@ struct jeal_native_buffer_instance
     };
     std::optional<dump_data_t> m_dump;
 };
-struct jeal_native_source_instance
+struct je_audio_native_source_instance_t
 {
     ALuint m_source_id;
-    jeecs::AudioContextHelper::Holder<const jeal_buffer> m_playing_buffer;
-    jeecs::AudioContextHelper::Holder<jeal_filter> m_playing_filter;
+    jeecs::AudioContextHelper::Holder<const je_audio_buffer_t> m_playing_buffer;
+    jeecs::AudioContextHelper::Holder<je_audio_filter_t> m_playing_filter;
 
     struct playing_effect_slot_and_filter
     {
-        jeecs::AudioContextHelper::Holder<jeal_effect_slot>    m_slot;
-        jeecs::AudioContextHelper::Holder<jeal_filter>         m_filter;
+        jeecs::AudioContextHelper::Holder<je_audio_effect_slot_t>    m_slot;
+        jeecs::AudioContextHelper::Holder<je_audio_filter_t>         m_filter;
     };
     playing_effect_slot_and_filter m_playing_effect_slot_and_filters[jeecs::audio::MAX_AUXILIARY_SENDS];
 
     // Dump data:
     struct dump_data_t
     {
-        jeal_state m_play_state;
+        je_audio_state_t m_play_state;
         ALint m_play_process;
     };
     std::optional<dump_data_t> m_dump;
 };
-struct jeal_native_effect_slot_instance
+struct je_audio_native_effect_slot_instance_t
 {
     ALuint m_effect_slot_id;
     jeecs::AudioContextHelper::Holder<jeal_effect_head> m_binding_effect;
@@ -168,7 +168,7 @@ struct jeal_native_effect_slot_instance
     };
     std::optional<dump_data_t> m_dump;
 };
-struct jeal_native_filter_instance
+struct je_audio_native_filter_instance_t
 {
     ALuint m_filter_id;
 
@@ -190,7 +190,7 @@ namespace jeecs
         const bool m_openal_ALC_ENUMERATE_ALL_EXT_enabled;
 
         bool m_context_updating_thread_quit;
-        std::optional<jeal_play_device*> m_current_play_device;
+        std::optional<je_audio_play_device_t*> m_current_play_device;
 
         std::shared_mutex m_context_mx; // g0
         std::condition_variable_any m_context_cv_for_device_updating;
@@ -237,20 +237,20 @@ namespace jeecs
             }
         };
 
-        std::vector<jeal_play_device> m_enumed_play_devices;
+        std::vector<je_audio_play_device_t> m_enumed_play_devices;
 
         std::mutex m_sources_mx; // g1
-        std::unordered_set<jeal_source*> m_sources;
+        std::unordered_set<je_audio_source_t*> m_sources;
         std::mutex m_buffers_mx; // g2
-        std::unordered_set<jeal_buffer*> m_buffers;
+        std::unordered_set<je_audio_buffer_t*> m_buffers;
         std::mutex m_effects_mx; // g3
         std::unordered_set<jeal_effect_head*> m_effects;
         std::mutex m_effect_slots_mx; // g4
-        std::unordered_set<jeal_effect_slot*> m_effect_slots;
+        std::unordered_set<je_audio_effect_slot_t*> m_effect_slots;
         std::mutex m_filters_mx; // g5
-        std::unordered_set<jeal_filter*> m_filters;
+        std::unordered_set<je_audio_filter_t*> m_filters;
 
-        jeal_listener m_listener;
+        je_audio_listener_t m_listener;
 
         struct OpenALEfx
         {
@@ -270,7 +270,7 @@ namespace jeecs
 
             JECS_DISABLE_MOVE_AND_COPY(OpenALEfx);
 
-            OpenALEfx(jeal_native_play_device_instance* device)
+            OpenALEfx(je_audio_native_play_device_instance_t* device)
             {
                 auto* aldevice = JE_AL_DEVICE(device);
 
@@ -302,20 +302,20 @@ namespace jeecs
 
         struct jeal_play_device_states_dump
         {
-            std::unordered_map<jeal_buffer*, jeal_native_buffer_instance*>
+            std::unordered_map<je_audio_buffer_t*, je_audio_native_buffer_instance_t*>
                 m_buffers_dump;
-            std::unordered_map<jeal_source*, jeal_native_source_instance*>
+            std::unordered_map<je_audio_source_t*, je_audio_native_source_instance_t*>
                 m_sources_dump;
             std::unordered_map<jeal_effect_head*, jeal_native_effect_instance*>
                 m_effects_dump;
-            std::unordered_map<jeal_effect_slot*, jeal_native_effect_slot_instance*>
+            std::unordered_map<je_audio_effect_slot_t*, je_audio_native_effect_slot_instance_t*>
                 m_effect_slots_dump;
-            std::unordered_map<jeal_filter*, jeal_native_filter_instance*>
+            std::unordered_map<je_audio_filter_t*, je_audio_native_filter_instance_t*>
                 m_filters_dump;
         };
         std::optional<jeal_play_device_states_dump> m_play_state_dump = std::nullopt;
 
-        static bool check_device_instance_connected(jeal_native_play_device_instance* device)
+        static bool check_device_instance_connected(je_audio_native_play_device_instance_t* device)
         {
             ALCint device_connected;
             alcGetIntegerv(reinterpret_cast<ALCdevice*>(device), ALC_CONNECTED, 1, &device_connected);
@@ -353,14 +353,14 @@ namespace jeecs
                 switch (play_state)
                 {
                 case AL_PLAYING:
-                    dump.m_play_state = jeal_state::JE_AUDIO_STATE_PLAYING;
+                    dump.m_play_state = je_audio_state_t::JE_AUDIO_STATE_PLAYING;
                     break;
                 case AL_PAUSED:
-                    dump.m_play_state = jeal_state::JE_AUDIO_STATE_PAUSED;
+                    dump.m_play_state = je_audio_state_t::JE_AUDIO_STATE_PAUSED;
                     break;
                 default:
                     assert(play_state == AL_STOPPED || play_state == AL_INITIAL);
-                    dump.m_play_state = jeal_state::JE_AUDIO_STATE_STOPPED;
+                    dump.m_play_state = je_audio_state_t::JE_AUDIO_STATE_STOPPED;
                     break;
                 }
 
@@ -559,7 +559,7 @@ namespace jeecs
             assert(!m_play_state_dump.has_value());
         }
 
-        void deactive_using_device(jeal_play_device* device)
+        void deactive_using_device(je_audio_play_device_t* device)
         {
             assert(device->m_active);
             assert(device->m_device_instance != nullptr);
@@ -580,7 +580,7 @@ namespace jeecs
 
             alcDestroyContext(current_context);
         }
-        void active_using_device(jeal_play_device* device)
+        void active_using_device(je_audio_play_device_t* device)
         {
             assert(!device->m_active);
             assert(device->m_device_instance != nullptr);
@@ -616,7 +616,7 @@ namespace jeecs
             device->m_active = true;
         }
 
-        void update_enumed_play_devices(std::vector<jeal_play_device>&& new_opened_devices)
+        void update_enumed_play_devices(std::vector<je_audio_play_device_t>&& new_opened_devices)
         {
             // 关闭之前的设备实例
             for (auto& device : m_enumed_play_devices)
@@ -645,7 +645,7 @@ namespace jeecs
                 auto fnd = std::find_if(
                     m_enumed_play_devices.begin(),
                     m_enumed_play_devices.end(),
-                    [](jeal_play_device& device)
+                    [](je_audio_play_device_t& device)
                     {
                         return device.m_active;
                     });
@@ -683,7 +683,7 @@ namespace jeecs
             else
                 device_names = alcGetString(NULL, ALC_DEFAULT_DEVICE_SPECIFIER);
 
-            std::vector<jeal_play_device> new_opened_devices;
+            std::vector<je_audio_play_device_t> new_opened_devices;
 
             const char* current_device_name = device_names;
             while (current_device_name && *current_device_name != 0)
@@ -691,7 +691,7 @@ namespace jeecs
                 auto fnd = std::find_if(
                     m_enumed_play_devices.begin(),
                     m_enumed_play_devices.end(),
-                    [current_device_name](jeal_play_device& device)
+                    [current_device_name](je_audio_play_device_t& device)
                     {
                         if (device.m_name != nullptr)
                             return strcmp(device.m_name, current_device_name) == 0;
@@ -775,7 +775,7 @@ namespace jeecs
                 debug::logwarn("No play devices found.");
         }
 
-        static ALenum je_al_format(jeal_format format, size_t* out_byte_per_sample)
+        static ALenum je_al_format(je_audio_format_t format, size_t* out_byte_per_sample)
         {
             switch (format)
             {
@@ -811,7 +811,7 @@ namespace jeecs
         }
 
         // Buffer
-        void update_buffer_lockfree(jeal_buffer* buffer)
+        void update_buffer_lockfree(je_audio_buffer_t* buffer)
         {
             if (!m_current_play_device.has_value())
             {
@@ -822,7 +822,7 @@ namespace jeecs
 
             if (buffer->m_buffer_instance == nullptr)
             {
-                buffer->m_buffer_instance = new jeal_native_buffer_instance;
+                buffer->m_buffer_instance = new je_audio_native_buffer_instance_t;
                 alGenBuffers(1, &buffer->m_buffer_instance->m_buffer_id);
             }
 
@@ -838,11 +838,11 @@ namespace jeecs
                 buffer->m_buffer_instance->m_dump.reset();
             }
         }
-        const jeal_buffer* instance_buffer(
+        const je_audio_buffer_t* instance_buffer(
             const void* new_allocated_buffer_data,
             size_t buffer_data_len,
             size_t sample_rate,
-            jeal_format format)
+            je_audio_format_t format)
         {
             size_t byte_per_sample;
             auto al_format = je_al_format(format, &byte_per_sample);
@@ -858,7 +858,7 @@ namespace jeecs
                 return nullptr;
             }
 
-            jeal_buffer* audio_buffer = new jeal_buffer;
+            je_audio_buffer_t* audio_buffer = new je_audio_buffer_t;
 
             audio_buffer->m_buffer_instance = nullptr;
 
@@ -875,7 +875,7 @@ namespace jeecs
 
             return audio_buffer;
         }
-        jeal_native_buffer_instance* shutdown_buffer_native_instance(jeal_buffer* buffer_instance)
+        je_audio_native_buffer_instance_t* shutdown_buffer_native_instance(je_audio_buffer_t* buffer_instance)
         {
             if (buffer_instance->m_buffer_instance != nullptr)
             {
@@ -887,7 +887,7 @@ namespace jeecs
             }
             return nullptr;
         }
-        void shutdown_buffer(jeal_buffer* buffer)
+        void shutdown_buffer(je_audio_buffer_t* buffer)
         {
             assert(buffer != nullptr);
 
@@ -915,7 +915,7 @@ namespace jeecs
         }
 
         // Source
-        void update_source_lockfree(jeal_source* source)
+        void update_source_lockfree(je_audio_source_t* source)
         {
             if (!m_current_play_device.has_value())
             {
@@ -926,7 +926,7 @@ namespace jeecs
 
             if (source->m_source_instance == nullptr)
             {
-                source->m_source_instance = new jeal_native_source_instance;
+                source->m_source_instance = new je_audio_native_source_instance_t;
                 alGenSources(1, &source->m_source_instance->m_source_id);
 
                 assert(!source->m_source_instance->m_playing_buffer.has_value());
@@ -955,7 +955,7 @@ namespace jeecs
                         AL_BUFFER,
                         buffer->m_buffer_instance->m_buffer_id);
 
-                    if (dump.m_play_state != jeal_state::JE_AUDIO_STATE_STOPPED)
+                    if (dump.m_play_state != je_audio_state_t::JE_AUDIO_STATE_STOPPED)
                     {
                         // 恢复播放状态
                         alSourcei(
@@ -963,11 +963,11 @@ namespace jeecs
                             AL_BYTE_OFFSET,
                             dump.m_play_process);
 
-                        if (dump.m_play_state == jeal_state::JE_AUDIO_STATE_PAUSED)
+                        if (dump.m_play_state == je_audio_state_t::JE_AUDIO_STATE_PAUSED)
                             alSourcePause(source->m_source_instance->m_source_id);
                         else
                         {
-                            assert(dump.m_play_state == jeal_state::JE_AUDIO_STATE_PLAYING);
+                            assert(dump.m_play_state == je_audio_state_t::JE_AUDIO_STATE_PLAYING);
                             alSourcePlay(source->m_source_instance->m_source_id);
                         }
                     }
@@ -1005,7 +1005,7 @@ namespace jeecs
                 source->m_source_instance->m_dump.reset();
             }
         }
-        jeal_native_source_instance* shutdown_source_native_instance(jeal_source* source_instance)
+        je_audio_native_source_instance_t* shutdown_source_native_instance(je_audio_source_t* source_instance)
         {
             if (source_instance->m_source_instance != nullptr)
             {
@@ -1017,7 +1017,7 @@ namespace jeecs
             }
             return nullptr;
         }
-        void shutdown_source(jeal_source* source)
+        void shutdown_source(je_audio_source_t* source)
         {
             assert(source != nullptr);
 
@@ -1042,8 +1042,8 @@ namespace jeecs
             delete source;
         }
 
-        jeal_native_source_instance* require_dump_for_no_device_context_source(
-            jeal_source* source)
+        je_audio_native_source_instance_t* require_dump_for_no_device_context_source(
+            je_audio_source_t* source)
         {
             assert(source != nullptr);
 
@@ -1059,13 +1059,13 @@ namespace jeecs
                 return fnd->second;
             }
 
-            jeal_native_source_instance* new_dump_for_no_device_context_source =
-                new jeal_native_source_instance;
+            je_audio_native_source_instance_t* new_dump_for_no_device_context_source =
+                new je_audio_native_source_instance_t;
 
             auto& source_dump = new_dump_for_no_device_context_source->m_dump.emplace();
             assert(!new_dump_for_no_device_context_source->m_playing_buffer.has_value());
             source_dump.m_play_process = 0;
-            source_dump.m_play_state = jeal_state::JE_AUDIO_STATE_STOPPED;
+            source_dump.m_play_state = je_audio_state_t::JE_AUDIO_STATE_STOPPED;
 
             // NOTE: 只有完全没有设备的情况下才需要 require_dump_for_no_device_context_source，此时
             //      源 ID 已经可有可无，此处不需要设置
@@ -1077,8 +1077,8 @@ namespace jeecs
             return new_dump_for_no_device_context_source;
         }
 
-        jeal_native_effect_slot_instance* require_dump_for_no_device_context_effect_slot(
-            jeal_effect_slot* slot)
+        je_audio_native_effect_slot_instance_t* require_dump_for_no_device_context_effect_slot(
+            je_audio_effect_slot_t* slot)
         {
             assert(slot != nullptr);
 
@@ -1094,8 +1094,8 @@ namespace jeecs
                 return fnd->second;
             }
 
-            jeal_native_effect_slot_instance* new_dump_for_no_device_context_effect_slot =
-                new jeal_native_effect_slot_instance;
+            je_audio_native_effect_slot_instance_t* new_dump_for_no_device_context_effect_slot =
+                new je_audio_native_effect_slot_instance_t;
 
             auto& effect_slot_dump = new_dump_for_no_device_context_effect_slot->m_dump.emplace();
             (void)effect_slot_dump;
@@ -1110,9 +1110,9 @@ namespace jeecs
             return new_dump_for_no_device_context_effect_slot;
         }
 
-        void close_buffer_lockfree(const jeal_buffer* buffer)
+        void close_buffer_lockfree(const je_audio_buffer_t* buffer)
         {
-            auto* rw_buffer = const_cast<jeal_buffer*>(buffer);
+            auto* rw_buffer = const_cast<je_audio_buffer_t*>(buffer);
 
             m_buffers.erase(rw_buffer);
             shutdown_buffer(rw_buffer);
@@ -1146,7 +1146,7 @@ namespace jeecs
                 {
                 case AL_EFFECT_REVERB:
                 {
-                    const jeal_effect_reverb* instance_data = JE_EFFECT_DATA(jeal_effect_reverb, effect);
+                    const je_audio_effect_reverb_t* instance_data = JE_EFFECT_DATA(je_audio_effect_reverb_t, effect);
 
                     efx->alEffectf(effect_id, AL_REVERB_DENSITY, instance_data->m_density);
                     efx->alEffectf(effect_id, AL_REVERB_DIFFUSION, instance_data->m_diffusion);
@@ -1166,7 +1166,7 @@ namespace jeecs
                 }
                 case AL_EFFECT_CHORUS:
                 {
-                    const jeal_effect_chorus* instance_data = JE_EFFECT_DATA(jeal_effect_chorus, effect);
+                    const je_audio_effect_chorus_t* instance_data = JE_EFFECT_DATA(je_audio_effect_chorus_t, effect);
 
                     efx->alEffecti(effect_id, AL_CHORUS_WAVEFORM, (ALint)instance_data->m_waveform);
                     efx->alEffecti(effect_id, AL_CHORUS_PHASE, instance_data->m_phase);
@@ -1179,7 +1179,7 @@ namespace jeecs
                 }
                 case AL_EFFECT_DISTORTION:
                 {
-                    const jeal_effect_distortion* instance_data = JE_EFFECT_DATA(jeal_effect_distortion, effect);
+                    const je_audio_effect_distortion_t* instance_data = JE_EFFECT_DATA(je_audio_effect_distortion_t, effect);
 
                     efx->alEffectf(effect_id, AL_DISTORTION_EDGE, instance_data->m_edge);
                     efx->alEffectf(effect_id, AL_DISTORTION_GAIN, instance_data->m_gain);
@@ -1191,7 +1191,7 @@ namespace jeecs
                 }
                 case AL_EFFECT_ECHO:
                 {
-                    const jeal_effect_echo* instance_data = JE_EFFECT_DATA(jeal_effect_echo, effect);
+                    const je_audio_effect_echo_t* instance_data = JE_EFFECT_DATA(je_audio_effect_echo_t, effect);
 
                     efx->alEffectf(effect_id, AL_ECHO_DELAY, instance_data->m_delay);
                     efx->alEffectf(effect_id, AL_ECHO_LRDELAY, instance_data->m_lr_delay);
@@ -1203,7 +1203,7 @@ namespace jeecs
                 }
                 case AL_EFFECT_FLANGER:
                 {
-                    const jeal_effect_flanger* instance_data = JE_EFFECT_DATA(jeal_effect_flanger, effect);
+                    const je_audio_effect_flanger_t* instance_data = JE_EFFECT_DATA(je_audio_effect_flanger_t, effect);
 
                     efx->alEffecti(effect_id, AL_FLANGER_WAVEFORM, (ALint)instance_data->m_waveform);
                     efx->alEffecti(effect_id, AL_FLANGER_PHASE, instance_data->m_phase);
@@ -1216,7 +1216,7 @@ namespace jeecs
                 }
                 case AL_EFFECT_FREQUENCY_SHIFTER:
                 {
-                    const jeal_effect_frequency_shifter* instance_data = JE_EFFECT_DATA(jeal_effect_frequency_shifter, effect);
+                    const je_audio_effect_frequency_shifter_t* instance_data = JE_EFFECT_DATA(je_audio_effect_frequency_shifter_t, effect);
 
                     efx->alEffectf(effect_id, AL_FREQUENCY_SHIFTER_FREQUENCY, instance_data->m_frequency);
                     efx->alEffecti(effect_id, AL_FREQUENCY_SHIFTER_LEFT_DIRECTION, (ALint)instance_data->m_left_direction);
@@ -1226,7 +1226,7 @@ namespace jeecs
                 }
                 case AL_EFFECT_VOCAL_MORPHER:
                 {
-                    const jeal_effect_vocal_morpher* instance_data = JE_EFFECT_DATA(jeal_effect_vocal_morpher, effect);
+                    const je_audio_effect_vocal_morpher_t* instance_data = JE_EFFECT_DATA(je_audio_effect_vocal_morpher_t, effect);
 
                     efx->alEffecti(effect_id, AL_VOCAL_MORPHER_PHONEMEA, (ALint)instance_data->m_phoneme_a);
                     efx->alEffecti(effect_id, AL_VOCAL_MORPHER_PHONEMEA_COARSE_TUNING, instance_data->m_phoneme_a_coarse_tuning);
@@ -1239,7 +1239,7 @@ namespace jeecs
                 }
                 case AL_EFFECT_PITCH_SHIFTER:
                 {
-                    const jeal_effect_pitch_shifter* instance_data = JE_EFFECT_DATA(jeal_effect_pitch_shifter, effect);
+                    const je_audio_effect_pitch_shifter_t* instance_data = JE_EFFECT_DATA(je_audio_effect_pitch_shifter_t, effect);
 
                     efx->alEffecti(effect_id, AL_PITCH_SHIFTER_COARSE_TUNE, instance_data->m_coarse_tune);
                     efx->alEffecti(effect_id, AL_PITCH_SHIFTER_FINE_TUNE, instance_data->m_fine_tune);
@@ -1248,7 +1248,7 @@ namespace jeecs
                 }
                 case AL_EFFECT_RING_MODULATOR:
                 {
-                    const jeal_effect_ring_modulator* instance_data = JE_EFFECT_DATA(jeal_effect_ring_modulator, effect);
+                    const je_audio_effect_ring_modulator_t* instance_data = JE_EFFECT_DATA(je_audio_effect_ring_modulator_t, effect);
 
                     efx->alEffectf(effect_id, AL_RING_MODULATOR_FREQUENCY, instance_data->m_frequency);
                     efx->alEffectf(effect_id, AL_RING_MODULATOR_HIGHPASS_CUTOFF, instance_data->m_highpass_cutoff);
@@ -1258,7 +1258,7 @@ namespace jeecs
                 }
                 case AL_EFFECT_AUTOWAH:
                 {
-                    const jeal_effect_autowah* instance_data = JE_EFFECT_DATA(jeal_effect_autowah, effect);
+                    const je_audio_effect_autowah_t* instance_data = JE_EFFECT_DATA(je_audio_effect_autowah_t, effect);
 
                     efx->alEffectf(effect_id, AL_AUTOWAH_ATTACK_TIME, instance_data->m_attack_time);
                     efx->alEffectf(effect_id, AL_AUTOWAH_RELEASE_TIME, instance_data->m_release_time);
@@ -1269,7 +1269,7 @@ namespace jeecs
                 }
                 case AL_EFFECT_COMPRESSOR:
                 {
-                    const jeal_effect_compressor* instance_data = JE_EFFECT_DATA(jeal_effect_compressor, effect);
+                    const je_audio_effect_compressor_t* instance_data = JE_EFFECT_DATA(je_audio_effect_compressor_t, effect);
 
                     efx->alEffecti(effect_id, AL_COMPRESSOR_ONOFF, instance_data->m_enabled ? AL_TRUE : AL_FALSE);
 
@@ -1277,7 +1277,7 @@ namespace jeecs
                 }
                 case AL_EFFECT_EQUALIZER:
                 {
-                    const jeal_effect_equalizer* instance_data = JE_EFFECT_DATA(jeal_effect_equalizer, effect);
+                    const je_audio_effect_equalizer_t* instance_data = JE_EFFECT_DATA(je_audio_effect_equalizer_t, effect);
 
                     efx->alEffectf(effect_id, AL_EQUALIZER_LOW_GAIN, instance_data->m_low_gain);
                     efx->alEffectf(effect_id, AL_EQUALIZER_LOW_CUTOFF, instance_data->m_low_cutoff);
@@ -1294,7 +1294,7 @@ namespace jeecs
                 }
                 case AL_EFFECT_EAXREVERB:
                 {
-                    const jeal_effect_eaxreverb* instance_data = JE_EFFECT_DATA(jeal_effect_eaxreverb, effect);
+                    const je_audio_effect_eax_reverb_t* instance_data = JE_EFFECT_DATA(je_audio_effect_eax_reverb_t, effect);
 
                     efx->alEffectf(effect_id, AL_EAXREVERB_DENSITY, instance_data->m_density);
                     efx->alEffectf(effect_id, AL_EAXREVERB_DIFFUSION, instance_data->m_diffusion);
@@ -1391,7 +1391,7 @@ namespace jeecs
             shutdown_effect(effect);
         }
 
-        void update_effect_slot_lockfree(jeal_effect_slot* slot)
+        void update_effect_slot_lockfree(je_audio_effect_slot_t* slot)
         {
             if (!m_current_play_device.has_value())
             {
@@ -1403,7 +1403,7 @@ namespace jeecs
             auto* efx = m_alext_efx.has_value() ? &m_alext_efx.value() : nullptr;
             if (slot->m_effect_slot_instance == nullptr)
             {
-                slot->m_effect_slot_instance = new jeal_native_effect_slot_instance;
+                slot->m_effect_slot_instance = new je_audio_native_effect_slot_instance_t;
                 if (efx != nullptr)
                     efx->alGenAuxiliaryEffectSlots(1, &slot->m_effect_slot_instance->m_effect_slot_id);
             }
@@ -1434,7 +1434,7 @@ namespace jeecs
                 slot->m_effect_slot_instance->m_dump.reset();
             }
         }
-        jeal_native_effect_slot_instance* shutdown_effect_slot_native_instance(jeal_effect_slot* slot)
+        je_audio_native_effect_slot_instance_t* shutdown_effect_slot_native_instance(je_audio_effect_slot_t* slot)
         {
             if (slot->m_effect_slot_instance != nullptr)
             {
@@ -1449,7 +1449,7 @@ namespace jeecs
             }
             return nullptr;
         }
-        void shutdown_effect_slot(jeal_effect_slot* slot)
+        void shutdown_effect_slot(je_audio_effect_slot_t* slot)
         {
             assert(slot != nullptr);
 
@@ -1473,13 +1473,13 @@ namespace jeecs
 
             delete slot;
         }
-        void close_effect_slot_lockfree(jeal_effect_slot* slot)
+        void close_effect_slot_lockfree(je_audio_effect_slot_t* slot)
         {
             m_effect_slots.erase(slot);
             shutdown_effect_slot(slot);
         }
 
-        void update_filter_lockfree(jeal_filter* filter)
+        void update_filter_lockfree(je_audio_filter_t* filter)
         {
             if (!m_current_play_device.has_value())
             {
@@ -1491,7 +1491,7 @@ namespace jeecs
             auto* efx = m_alext_efx.has_value() ? &m_alext_efx.value() : nullptr;
             if (filter->m_filter_instance == nullptr)
             {
-                filter->m_filter_instance = new jeal_native_filter_instance;
+                filter->m_filter_instance = new je_audio_native_filter_instance_t;
                 if (efx != nullptr)
                     efx->alGenFilters(1, &filter->m_filter_instance->m_filter_id);
 
@@ -1503,17 +1503,17 @@ namespace jeecs
                 ALuint filter_id = filter->m_filter_instance->m_filter_id;
                 switch (filter->m_type)
                 {
-                case jeal_filter_type::JE_AUDIO_FILTER_LOWPASS:
+                case je_audio_filter_type_t::JE_AUDIO_FILTER_LOWPASS:
                     efx->alFilteri(filter->m_filter_instance->m_filter_id, AL_FILTER_TYPE, AL_FILTER_LOWPASS);
                     efx->alFilterf(filter_id, AL_LOWPASS_GAIN, filter->m_gain);
                     efx->alFilterf(filter_id, AL_LOWPASS_GAINHF, filter->m_gain_hf);
                     break;
-                case jeal_filter_type::JE_AUDIO_FILTER_HIGHPASS:
+                case je_audio_filter_type_t::JE_AUDIO_FILTER_HIGHPASS:
                     efx->alFilteri(filter->m_filter_instance->m_filter_id, AL_FILTER_TYPE, AL_FILTER_HIGHPASS);
                     efx->alFilterf(filter_id, AL_HIGHPASS_GAIN, filter->m_gain);
                     efx->alFilterf(filter_id, AL_HIGHPASS_GAINLF, filter->m_gain_lf);
                     break;
-                case jeal_filter_type::JE_AUDIO_FILTER_BANDPASS:
+                case je_audio_filter_type_t::JE_AUDIO_FILTER_BANDPASS:
                     efx->alFilteri(filter->m_filter_instance->m_filter_id, AL_FILTER_TYPE, AL_FILTER_BANDPASS);
                     efx->alFilterf(filter_id, AL_BANDPASS_GAIN, filter->m_gain);
                     efx->alFilterf(filter_id, AL_BANDPASS_GAINLF, filter->m_gain_lf);
@@ -1531,7 +1531,7 @@ namespace jeecs
                 filter->m_filter_instance->m_dump.reset();
             }
         }
-        jeal_native_filter_instance* shutdown_filter_native_instance(jeal_filter* filter)
+        je_audio_native_filter_instance_t* shutdown_filter_native_instance(je_audio_filter_t* filter)
         {
             if (filter->m_filter_instance != nullptr)
             {
@@ -1543,7 +1543,7 @@ namespace jeecs
             }
             return nullptr;
         }
-        void shutdown_filter(jeal_filter* filter)
+        void shutdown_filter(je_audio_filter_t* filter)
         {
             assert(filter != nullptr);
             auto* native_instance = shutdown_filter_native_instance(filter);
@@ -1564,22 +1564,22 @@ namespace jeecs
                 delete native_instance;
             delete filter;
         }
-        void close_filter_lockfree(jeal_filter* filter)
+        void close_filter_lockfree(je_audio_filter_t* filter)
         {
             m_filters.erase(filter);
             shutdown_filter(filter);
         }
 
     public:
-        jeal_filter* create_filter()
+        je_audio_filter_t* create_filter()
         {
-            jeal_filter* filter = new jeal_filter;
+            je_audio_filter_t* filter = new je_audio_filter_t;
 
             filter->m_filter_instance = nullptr;
 
             filter->m_references = 1;
 
-            filter->m_type = jeal_filter_type::JE_AUDIO_FILTER_LOWPASS;
+            filter->m_type = je_audio_filter_type_t::JE_AUDIO_FILTER_LOWPASS;
             filter->m_gain = 1.0f;
             filter->m_gain_hf = 0.5f;
             filter->m_gain_lf = 0.5f;
@@ -1592,14 +1592,14 @@ namespace jeecs
 
             return filter;
         }
-        void update_filter(jeal_filter* filter)
+        void update_filter(je_audio_filter_t* filter)
         {
             std::lock_guard g5(m_filters_mx);       // g5
             std::shared_lock g0(m_context_mx);      // g0
 
             update_filter_lockfree(filter);
         }
-        void close_filter(jeal_filter* filter)
+        void close_filter(je_audio_filter_t* filter)
         {
             std::lock_guard g5(m_filters_mx);       // g5
             std::shared_lock g0(m_context_mx);      // g0
@@ -1607,9 +1607,9 @@ namespace jeecs
             AudioContextHelper::decrease_ref(filter);
         }
 
-        jeal_effect_slot* create_effect_slot()
+        je_audio_effect_slot_t* create_effect_slot()
         {
-            jeal_effect_slot* slot = new jeal_effect_slot;
+            je_audio_effect_slot_t* slot = new je_audio_effect_slot_t;
 
             slot->m_effect_slot_instance = nullptr;
             slot->m_references = 1;
@@ -1623,21 +1623,21 @@ namespace jeecs
 
             return slot;
         }
-        void update_effect_slot(jeal_effect_slot* slot)
+        void update_effect_slot(je_audio_effect_slot_t* slot)
         {
             std::lock_guard g4(m_effect_slots_mx); // g4
             std::shared_lock g0(m_context_mx);     // g0
 
             update_effect_slot_lockfree(slot);
         }
-        void close_effect_slot(jeal_effect_slot* slot)
+        void close_effect_slot(je_audio_effect_slot_t* slot)
         {
             std::lock_guard g4(m_effect_slots_mx); // g4
             std::shared_lock g0(m_context_mx);     // g0
 
             AudioContextHelper::decrease_ref(slot);
         }
-        void set_slot_effect(jeal_effect_slot* slot, jeal_effect_head* effect_may_null)
+        void set_slot_effect(je_audio_effect_slot_t* slot, jeal_effect_head* effect_may_null)
         {
             std::lock_guard g4(m_effect_slots_mx); // g4
             std::lock_guard g3(m_effects_mx);      // g3
@@ -1720,11 +1720,11 @@ namespace jeecs
             AudioContextHelper::decrease_ref(JE_EFFECT_HEAD(effect_data));
         }
 
-        const jeal_buffer* create_buffer(
+        const je_audio_buffer_t* create_buffer(
             const void* data,
             size_t buffer_data_len,
             size_t sample_rate,
-            jeal_format format)
+            je_audio_format_t format)
         {
             void* buffer_data = malloc(buffer_data_len);
             assert(buffer_data != nullptr);
@@ -1739,7 +1739,7 @@ namespace jeecs
                 sample_rate,
                 format);
         }
-        const jeal_buffer* load_buffer_wav(const char* path)
+        const je_audio_buffer_t* load_buffer_wav(const char* path)
         {
             // Wav文件数据体模块
             struct WAVE_Data
@@ -1771,7 +1771,7 @@ namespace jeecs
             RIFF_Header riff_header;
             WAVE_Data wave_data;
 
-            jeecs_file* wav_file = je_file_open(path);
+            je_file_t* wav_file = je_file_open(path);
             if (wav_file == nullptr)
             {
                 jeecs::debug::logerr("Failed to open file: '%s', unable to create audio buffer.", path);
@@ -1815,7 +1815,7 @@ namespace jeecs
                 je_file_seek(
                     wav_file, 
                     wave_format.subChunkSize - 16, 
-                    je_read_file_seek_mode::JE_READ_FILE_SEEK_CURRENT);
+                    je_file_seek_mode_t::JE_READ_FILE_SEEK_CURRENT);
             }
 
             do
@@ -1869,7 +1869,7 @@ namespace jeecs
                 return nullptr;
             }
 
-            jeal_format wav_format = JE_AUDIO_FORMAT_MONO8;
+            je_audio_format_t wav_format = JE_AUDIO_FORMAT_MONO8;
 
             // The format is worked out by looking at the number of
             // channels and the bits per sample.
@@ -1925,7 +1925,7 @@ namespace jeecs
                 wave_format.sampleRate,
                 wav_format);
         }
-        void close_buffer(const jeal_buffer* buffer)
+        void close_buffer(const je_audio_buffer_t* buffer)
         {
             std::lock_guard g2(m_buffers_mx);  // g2
             std::shared_lock g0(m_context_mx); // g0
@@ -1933,9 +1933,9 @@ namespace jeecs
             AudioContextHelper::decrease_ref(buffer);
         }
 
-        jeal_source* create_source()
+        je_audio_source_t* create_source()
         {
-            jeal_source* source = new jeal_source;
+            je_audio_source_t* source = new je_audio_source_t;
 
             source->m_source_instance = nullptr;
             source->m_loop = false;
@@ -1956,7 +1956,7 @@ namespace jeecs
 
             return source;
         }
-        void close_source(jeal_source* source)
+        void close_source(je_audio_source_t* source)
         {
             // NOTE: 此处锁定 g2-g4 是因为源在关闭时，需要修改/关闭引用计数
             std::lock_guard g4(m_effect_slots_mx); // g4
@@ -1969,7 +1969,7 @@ namespace jeecs
             m_sources.erase(source);
             shutdown_source(source);
         }
-        void update_source(jeal_source* source)
+        void update_source(je_audio_source_t* source)
         {
             // NOTE: 尽管update_source 可能读取buffer的状态，但buffer没有内部可变性，
             //      并且纯粹的update操作不涉及引用计数的变更和实例的创建/销毁，因此
@@ -1980,10 +1980,10 @@ namespace jeecs
             update_source_lockfree(source);
         }
         void set_source_effect_slot_and_filter(
-            jeal_source* source, 
+            je_audio_source_t* source, 
             size_t slot_idx,
-            jeal_effect_slot* slot_may_null,
-            jeal_filter* filter_may_null)
+            je_audio_effect_slot_t* slot_may_null,
+            je_audio_filter_t* filter_may_null)
         {
             assert(source != nullptr);
             assert(slot_idx < audio::MAX_AUXILIARY_SENDS);
@@ -2042,7 +2042,7 @@ namespace jeecs
                 break;
             }
         }
-        void set_source_filter(jeal_source* source, jeal_filter* filter_may_null)
+        void set_source_filter(je_audio_source_t* source, je_audio_filter_t* filter_may_null)
         {
             assert(source != nullptr);
 
@@ -2086,7 +2086,7 @@ namespace jeecs
                 break;
             }
         }
-        bool set_source_buffer(jeal_source* source, const jeal_buffer* buffer)
+        bool set_source_buffer(je_audio_source_t* source, const je_audio_buffer_t* buffer)
         {
             assert(source != nullptr);
             assert(buffer != nullptr);
@@ -2144,7 +2144,7 @@ namespace jeecs
                         auto& dump = dump_instance->m_dump.value();
 
                         dump_instance->m_playing_buffer.set_res(buffer);
-                        dump.m_play_state = jeal_state::JE_AUDIO_STATE_STOPPED;
+                        dump.m_play_state = je_audio_state_t::JE_AUDIO_STATE_STOPPED;
                         dump.m_play_process = 0;
 
                         buffer_changed = true;
@@ -2154,7 +2154,7 @@ namespace jeecs
             }
             return buffer_changed;
         }
-        void play_source(jeal_source* source)
+        void play_source(je_audio_source_t* source)
         {
             std::lock_guard g2(m_buffers_mx); // g2
             std::lock_guard g1(m_sources_mx); // g1
@@ -2184,16 +2184,16 @@ namespace jeecs
 
                     if (dump_instance->m_playing_buffer.has_value())
                     {
-                        if (dump.m_play_state == jeal_state::JE_AUDIO_STATE_STOPPED)
+                        if (dump.m_play_state == je_audio_state_t::JE_AUDIO_STATE_STOPPED)
                             dump.m_play_process = 0;
 
-                        dump.m_play_state = jeal_state::JE_AUDIO_STATE_PLAYING;
+                        dump.m_play_state = je_audio_state_t::JE_AUDIO_STATE_PLAYING;
                     }
                 }
                 break;
             }
         }
-        void pause_source(jeal_source* source)
+        void pause_source(je_audio_source_t* source)
         {
             std::lock_guard g2(m_buffers_mx); // g2
             std::lock_guard g1(m_sources_mx); // g1
@@ -2223,14 +2223,14 @@ namespace jeecs
 
                     if (dump_instance->m_playing_buffer.has_value())
                     {
-                        if (dump.m_play_state == jeal_state::JE_AUDIO_STATE_PLAYING)
-                            dump.m_play_state = jeal_state::JE_AUDIO_STATE_PAUSED;
+                        if (dump.m_play_state == je_audio_state_t::JE_AUDIO_STATE_PLAYING)
+                            dump.m_play_state = je_audio_state_t::JE_AUDIO_STATE_PAUSED;
                     }
                 }
                 break;
             }
         }
-        void stop_source(jeal_source* source)
+        void stop_source(je_audio_source_t* source)
         {
             std::lock_guard g2(m_buffers_mx); // g2
             std::lock_guard g1(m_sources_mx); // g1
@@ -2260,14 +2260,14 @@ namespace jeecs
 
                     if (dump_instance->m_playing_buffer.has_value())
                     {
-                        if (dump.m_play_state == jeal_state::JE_AUDIO_STATE_PLAYING)
-                            dump.m_play_state = jeal_state::JE_AUDIO_STATE_STOPPED;
+                        if (dump.m_play_state == je_audio_state_t::JE_AUDIO_STATE_PLAYING)
+                            dump.m_play_state = je_audio_state_t::JE_AUDIO_STATE_STOPPED;
                     }
                 }
                 break;
             }
         }
-        jeal_state get_source_play_state(jeal_source* source)
+        je_audio_state_t get_source_play_state(je_audio_source_t* source)
         {
             std::lock_guard g2(m_buffers_mx); // g2
             std::lock_guard g1(m_sources_mx); // g1
@@ -2282,7 +2282,7 @@ namespace jeecs
                         continue;
 
                     if (!source->m_source_instance->m_playing_buffer.has_value())
-                        return jeal_state::JE_AUDIO_STATE_STOPPED;
+                        return je_audio_state_t::JE_AUDIO_STATE_STOPPED;
 
                     ALenum play_state;
                     alGetSourcei(
@@ -2293,12 +2293,12 @@ namespace jeecs
                     switch (play_state)
                     {
                     case AL_PLAYING:
-                        return jeal_state::JE_AUDIO_STATE_PLAYING;
+                        return je_audio_state_t::JE_AUDIO_STATE_PLAYING;
                     case AL_PAUSED:
-                        return jeal_state::JE_AUDIO_STATE_PAUSED;
+                        return je_audio_state_t::JE_AUDIO_STATE_PAUSED;
                     default:
                         assert(play_state == AL_STOPPED || play_state == AL_INITIAL);
-                        return jeal_state::JE_AUDIO_STATE_STOPPED;
+                        return je_audio_state_t::JE_AUDIO_STATE_STOPPED;
                     }
                 }
                 else
@@ -2315,12 +2315,12 @@ namespace jeecs
                     if (dump_instance->m_playing_buffer.has_value())
                         return dump.m_play_state;
 
-                    return jeal_state::JE_AUDIO_STATE_STOPPED;
+                    return je_audio_state_t::JE_AUDIO_STATE_STOPPED;
                 }
                 break;
             }
         }
-        size_t get_source_play_process(jeal_source* source)
+        size_t get_source_play_process(je_audio_source_t* source)
         {
             std::lock_guard g2(m_buffers_mx); // g2
             std::lock_guard g1(m_sources_mx); // g1
@@ -2364,10 +2364,10 @@ namespace jeecs
                 break;
             }
         }
-        void set_source_play_process(jeal_source* source, size_t offset)
+        void set_source_play_process(je_audio_source_t* source, size_t offset)
         {
             auto align_offset =
-                [](const jeal_buffer* buffer, size_t offset)
+                [](const je_audio_buffer_t* buffer, size_t offset)
                 {
                     if (offset % buffer->m_sample_size != 0)
                     {
@@ -2447,13 +2447,13 @@ namespace jeecs
                 alListenerfv(AL_ORIENTATION, orientation);
             }
         }
-        jeal_listener* get_listener()
+        je_audio_listener_t* get_listener()
         {
             return &m_listener;
         }
 
         void refetch_devices_and_do(
-            jeal_enumerate_device_callback_t callback, void* userdata)
+            je_audio_enumerate_device_callback_t callback, void* userdata)
         {
             std::lock_guard g0(m_context_mx); // g0
 
@@ -2470,7 +2470,7 @@ namespace jeecs
                     deactive_using_device(m_current_play_device.value());
 
                 active_using_device(
-                    const_cast<jeal_play_device*>(using_device));
+                    const_cast<je_audio_play_device_t*>(using_device));
             }
         }
 
@@ -2527,9 +2527,9 @@ namespace jeecs
                     // 切换到默认设备
                     refetch_devices_and_do(
                         [](
-                            const jeal_play_device* enumerated_devices,
+                            const je_audio_play_device_t* enumerated_devices,
                             size_t enumerated_device_count,
-                            void* userdata)-> const jeal_play_device*
+                            void* userdata)-> const je_audio_play_device_t*
                         {
                             if (enumerated_device_count != 0)
                             {
@@ -2600,11 +2600,11 @@ namespace jeecs
 
     static AudioContext* g_engine_audio_context = nullptr;
 
-    void AudioContextHelper::increase_ref(const jeal_buffer* buffer)
+    void AudioContextHelper::increase_ref(const je_audio_buffer_t* buffer)
     {
         ++buffer->m_references;
     }
-    void AudioContextHelper::decrease_ref(const jeal_buffer* buffer)
+    void AudioContextHelper::decrease_ref(const je_audio_buffer_t* buffer)
     {
         if (0 == --buffer->m_references)
         {
@@ -2626,11 +2626,11 @@ namespace jeecs
         }
     }
 
-    void AudioContextHelper::increase_ref(jeal_effect_slot* slot)
+    void AudioContextHelper::increase_ref(je_audio_effect_slot_t* slot)
     {
         ++slot->m_references;
     }
-    void AudioContextHelper::decrease_ref(jeal_effect_slot* slot)
+    void AudioContextHelper::decrease_ref(je_audio_effect_slot_t* slot)
     {
         if (0 == --slot->m_references)
         {
@@ -2639,11 +2639,11 @@ namespace jeecs
         }
     }
 
-    void AudioContextHelper::increase_ref(jeal_filter* filter)
+    void AudioContextHelper::increase_ref(je_audio_filter_t* filter)
     {
         ++filter->m_references;
     }
-    void AudioContextHelper::decrease_ref(jeal_filter* filter)
+    void AudioContextHelper::decrease_ref(je_audio_filter_t* filter)
     {
         if (0 == --filter->m_references)
         {
@@ -2652,7 +2652,7 @@ namespace jeecs
         }
     }
 
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_reverb* reverb)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_reverb_t* reverb)
     {
         head->m_effect_kind = AL_EFFECT_REVERB;
 
@@ -2670,18 +2670,18 @@ namespace jeecs
         reverb->m_room_rolloff_factor = AL_REVERB_DEFAULT_ROOM_ROLLOFF_FACTOR;
         reverb->m_decay_hf_limit = AL_REVERB_DEFAULT_DECAY_HFLIMIT != AL_FALSE;
     }
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_chorus* chorus)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_chorus_t* chorus)
     {
         head->m_effect_kind = AL_EFFECT_CHORUS;
 
-        chorus->m_waveform = (jeal_effect_chorus::waveform)AL_CHORUS_DEFAULT_WAVEFORM;
+        chorus->m_waveform = (je_audio_effect_chorus_waveform_t)AL_CHORUS_DEFAULT_WAVEFORM;
         chorus->m_phase = AL_CHORUS_DEFAULT_PHASE;
         chorus->m_rate = AL_CHORUS_DEFAULT_RATE;
         chorus->m_depth = AL_CHORUS_DEFAULT_DEPTH;
         chorus->m_feedback = AL_CHORUS_DEFAULT_FEEDBACK;
         chorus->m_delay = AL_CHORUS_DEFAULT_DELAY;
     }
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_distortion* distortion)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_distortion_t* distortion)
     {
         head->m_effect_kind = AL_EFFECT_DISTORTION;
 
@@ -2691,7 +2691,7 @@ namespace jeecs
         distortion->m_equalizer_center_freq = AL_DISTORTION_DEFAULT_EQCENTER;
         distortion->m_equalizer_bandwidth = AL_DISTORTION_DEFAULT_EQBANDWIDTH;
     }
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_echo* echo)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_echo_t* echo)
     {
         head->m_effect_kind = AL_EFFECT_ECHO;
 
@@ -2701,54 +2701,54 @@ namespace jeecs
         echo->m_feedback = AL_ECHO_DEFAULT_FEEDBACK;
         echo->m_spread = AL_ECHO_DEFAULT_SPREAD;
     }
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_flanger* flanger)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_flanger_t* flanger)
     {
         head->m_effect_kind = AL_EFFECT_FLANGER;
 
-        flanger->m_waveform = (jeal_effect_flanger::waveform)AL_FLANGER_DEFAULT_WAVEFORM;
+        flanger->m_waveform = (je_audio_effect_flanger_waveform_t)AL_FLANGER_DEFAULT_WAVEFORM;
         flanger->m_phase = AL_FLANGER_DEFAULT_PHASE;
         flanger->m_rate = AL_FLANGER_DEFAULT_RATE;
         flanger->m_depth = AL_FLANGER_DEFAULT_DEPTH;
         flanger->m_feedback = AL_FLANGER_DEFAULT_FEEDBACK;
         flanger->m_delay = AL_FLANGER_DEFAULT_DELAY;
     }
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_frequency_shifter* shifter)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_frequency_shifter_t* shifter)
     {
         head->m_effect_kind = AL_EFFECT_FREQUENCY_SHIFTER;
 
         shifter->m_frequency = AL_FREQUENCY_SHIFTER_DEFAULT_FREQUENCY;
         shifter->m_left_direction =
-            (jeal_effect_frequency_shifter::direction)AL_FREQUENCY_SHIFTER_DEFAULT_LEFT_DIRECTION;
+            (je_audio_effect_frequency_shifter_direction_t)AL_FREQUENCY_SHIFTER_DEFAULT_LEFT_DIRECTION;
         shifter->m_right_direction =
-            (jeal_effect_frequency_shifter::direction)AL_FREQUENCY_SHIFTER_DEFAULT_RIGHT_DIRECTION;
+            (je_audio_effect_frequency_shifter_direction_t)AL_FREQUENCY_SHIFTER_DEFAULT_RIGHT_DIRECTION;
     }
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_vocal_morpher* morpher)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_vocal_morpher_t* morpher)
     {
         head->m_effect_kind = AL_EFFECT_VOCAL_MORPHER;
 
-        morpher->m_phoneme_a = (jeal_effect_vocal_morpher::phoneme)AL_VOCAL_MORPHER_DEFAULT_PHONEMEA;
+        morpher->m_phoneme_a = (je_audio_effect_vocal_morpher_phoneme_t)AL_VOCAL_MORPHER_DEFAULT_PHONEMEA;
         morpher->m_phoneme_a_coarse_tuning = AL_VOCAL_MORPHER_DEFAULT_PHONEMEA_COARSE_TUNING;
-        morpher->m_phoneme_b = (jeal_effect_vocal_morpher::phoneme)AL_VOCAL_MORPHER_DEFAULT_PHONEMEB;
+        morpher->m_phoneme_b = (je_audio_effect_vocal_morpher_phoneme_t)AL_VOCAL_MORPHER_DEFAULT_PHONEMEB;
         morpher->m_phoneme_b_coarse_tuning = AL_VOCAL_MORPHER_DEFAULT_PHONEMEB_COARSE_TUNING;
-        morpher->m_waveform = (jeal_effect_vocal_morpher::waveform)AL_VOCAL_MORPHER_DEFAULT_WAVEFORM;
+        morpher->m_waveform = (je_audio_effect_vocal_morpher_waveform_t)AL_VOCAL_MORPHER_DEFAULT_WAVEFORM;
         morpher->m_rate = AL_VOCAL_MORPHER_DEFAULT_RATE;
     }
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_pitch_shifter* shifter)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_pitch_shifter_t* shifter)
     {
         head->m_effect_kind = AL_EFFECT_PITCH_SHIFTER;
 
         shifter->m_coarse_tune = AL_PITCH_SHIFTER_DEFAULT_COARSE_TUNE;
         shifter->m_fine_tune = AL_PITCH_SHIFTER_DEFAULT_FINE_TUNE;
     }
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_ring_modulator* modulator)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_ring_modulator_t* modulator)
     {
         head->m_effect_kind = AL_EFFECT_RING_MODULATOR;
 
         modulator->m_frequency = AL_RING_MODULATOR_DEFAULT_FREQUENCY;
         modulator->m_highpass_cutoff = AL_RING_MODULATOR_DEFAULT_HIGHPASS_CUTOFF;
-        modulator->m_waveform = (jeal_effect_ring_modulator::waveform)AL_RING_MODULATOR_DEFAULT_WAVEFORM;
+        modulator->m_waveform = (je_audio_effect_ring_modulator_waveform_t)AL_RING_MODULATOR_DEFAULT_WAVEFORM;
     }
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_autowah* wah)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_autowah_t* wah)
     {
         head->m_effect_kind = AL_EFFECT_AUTOWAH;
 
@@ -2757,13 +2757,13 @@ namespace jeecs
         wah->m_resonance = AL_AUTOWAH_DEFAULT_RESONANCE;
         wah->m_peak_gain = AL_AUTOWAH_DEFAULT_PEAK_GAIN;
     }
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_compressor* compressor)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_compressor_t* compressor)
     {
         head->m_effect_kind = AL_EFFECT_COMPRESSOR;
 
         compressor->m_enabled = AL_COMPRESSOR_DEFAULT_ONOFF != AL_FALSE;
     }
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_equalizer* equalizer)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_equalizer_t* equalizer)
     {
         head->m_effect_kind = AL_EFFECT_EQUALIZER;
 
@@ -2778,7 +2778,7 @@ namespace jeecs
         equalizer->m_high_gain = AL_EQUALIZER_DEFAULT_HIGH_GAIN;
         equalizer->m_high_cutoff = AL_EQUALIZER_DEFAULT_HIGH_CUTOFF;
     }
-    void AudioContextHelper::effect_init_default(jeal_effect_head* head, jeal_effect_eaxreverb* eaxreverb)
+    void AudioContextHelper::effect_init_default(jeal_effect_head* head, je_audio_effect_eax_reverb_t* eaxreverb)
     {
         head->m_effect_kind = AL_EFFECT_EAXREVERB;
 
@@ -2823,58 +2823,58 @@ void jeal_finish()
     delete jeecs::g_engine_audio_context;
     jeecs::g_engine_audio_context = nullptr;
 }
-/* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sample size */ const jeal_buffer* je_audio_buffer_create(
+/* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sample size */ const je_audio_buffer_t* je_audio_buffer_create(
     const void* data,
     size_t buffer_data_len,
     size_t sample_rate,
-    jeal_format format)
+    je_audio_format_t format)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_buffer(
         data, buffer_data_len, sample_rate, format);
 }
-/* OPTIONAL: If wav file failed to load */ const jeal_buffer* je_audio_buffer_load_wav(const char* path)
+/* OPTIONAL: If wav file failed to load */ const je_audio_buffer_t* je_audio_buffer_load_wav(const char* path)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->load_buffer_wav(path);
 }
-void je_audio_buffer_close(const jeal_buffer* buffer)
+void je_audio_buffer_close(const je_audio_buffer_t* buffer)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->close_buffer(buffer);
 }
-jeal_source* je_audio_source_create()
+je_audio_source_t* je_audio_source_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_source();
 }
-void je_audio_source_update(jeal_source* source)
+void je_audio_source_update(je_audio_source_t* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->update_source(source);
 }
-void je_audio_source_close(jeal_source* source)
+void je_audio_source_close(je_audio_source_t* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->close_source(source);
 }
-bool je_audio_source_buffer_set(jeal_source* source, const jeal_buffer* buffer)
+bool je_audio_source_buffer_set(je_audio_source_t* source, const je_audio_buffer_t* buffer)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->set_source_buffer(source, buffer);
 }
 void je_audio_source_effect_slot_and_filter_set(
-    jeal_source* source,
+    je_audio_source_t* source,
     size_t slot_idx,
-    /* OPTIONAL */ jeal_effect_slot* slot_may_null,
-    /* OPTIONAL */ jeal_filter* filter_may_null)
+    /* OPTIONAL */ je_audio_effect_slot_t* slot_may_null,
+    /* OPTIONAL */ je_audio_filter_t* filter_may_null)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
@@ -2882,50 +2882,50 @@ void je_audio_source_effect_slot_and_filter_set(
         source, slot_idx, slot_may_null, filter_may_null);
 }
 
-void je_audio_source_filter_set(jeal_source* source, /* OPTIONAL */ jeal_filter* filter_may_null)
+void je_audio_source_filter_set(je_audio_source_t* source, /* OPTIONAL */ je_audio_filter_t* filter_may_null)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->set_source_filter(source, filter_may_null);
 }
 
-void je_audio_source_play(jeal_source* source)
+void je_audio_source_play(je_audio_source_t* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->play_source(source);
 }
-void je_audio_source_pause(jeal_source* source)
+void je_audio_source_pause(je_audio_source_t* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->pause_source(source);
 }
-void je_audio_source_stop(jeal_source* source)
+void je_audio_source_stop(je_audio_source_t* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->stop_source(source);
 }
-jeal_state je_audio_source_play_state_get(jeal_source* source)
+je_audio_state_t je_audio_source_play_state_get(je_audio_source_t* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->get_source_play_state(source);
 }
-size_t je_audio_source_play_process_get(jeal_source* source)
+size_t je_audio_source_play_process_get(je_audio_source_t* source)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->get_source_play_process(source);
 }
-void je_audio_source_play_process_set(jeal_source* source, size_t offset)
+void je_audio_source_play_process_set(je_audio_source_t* source, size_t offset)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->set_source_play_process(source, offset);
 }
-jeal_listener* je_audio_listener_get()
+je_audio_listener_t* je_audio_listener_get()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
@@ -2938,130 +2938,130 @@ void je_audio_listener_update()
     jeecs::g_engine_audio_context->update_listener();
 }
 
-jeal_filter* je_audio_filter_create()
+je_audio_filter_t* je_audio_filter_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_filter();
 }
 
-void je_audio_filter_update(jeal_filter* filter)
+void je_audio_filter_update(je_audio_filter_t* filter)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->update_filter(filter);
 }
 
-void je_audio_filter_close(jeal_filter* filter)
+void je_audio_filter_close(je_audio_filter_t* filter)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->close_filter(filter);
 }
 
-jeal_effect_slot* je_audio_effect_slot_create()
+je_audio_effect_slot_t* je_audio_effect_slot_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     return jeecs::g_engine_audio_context->create_effect_slot();
 }
-void je_audio_effect_slot_bind(jeal_effect_slot* slot, /* OPTIONAL */ void* effect_may_null)
+void je_audio_effect_slot_bind(je_audio_effect_slot_t* slot, /* OPTIONAL */ void* effect_may_null)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->set_slot_effect(
         slot, effect_may_null != nullptr ? JE_EFFECT_HEAD(effect_may_null) : nullptr);
 }
-void je_audio_effect_slot_close(jeal_effect_slot* slot)
+void je_audio_effect_slot_close(je_audio_effect_slot_t* slot)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->close_effect_slot(slot);
 }
-void je_audio_effect_slot_update(jeal_effect_slot* slot)
+void je_audio_effect_slot_update(je_audio_effect_slot_t* slot)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
     jeecs::g_engine_audio_context->update_effect_slot(slot);
 }
 
-jeal_effect_reverb* je_audio_effect_reverb_create()
+je_audio_effect_reverb_t* je_audio_effect_reverb_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_reverb>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_reverb_t>();
 }
-jeal_effect_chorus* je_audio_effect_chorus_create()
+je_audio_effect_chorus_t* je_audio_effect_chorus_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_chorus>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_chorus_t>();
 }
-jeal_effect_distortion* je_audio_effect_distortion_create()
+je_audio_effect_distortion_t* je_audio_effect_distortion_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_distortion>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_distortion_t>();
 }
-jeal_effect_echo* je_audio_effect_echo_create()
+je_audio_effect_echo_t* je_audio_effect_echo_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_echo>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_echo_t>();
 }
-jeal_effect_flanger* je_audio_effect_flanger_create()
+je_audio_effect_flanger_t* je_audio_effect_flanger_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_flanger>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_flanger_t>();
 }
-jeal_effect_frequency_shifter* je_audio_effect_frequency_shifter_create()
+je_audio_effect_frequency_shifter_t* je_audio_effect_frequency_shifter_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_frequency_shifter>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_frequency_shifter_t>();
 }
-jeal_effect_vocal_morpher* je_audio_effect_vocal_morpher_create()
+je_audio_effect_vocal_morpher_t* je_audio_effect_vocal_morpher_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_vocal_morpher>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_vocal_morpher_t>();
 }
-jeal_effect_pitch_shifter* je_audio_effect_pitch_shifter_create()
+je_audio_effect_pitch_shifter_t* je_audio_effect_pitch_shifter_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_pitch_shifter>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_pitch_shifter_t>();
 }
-jeal_effect_ring_modulator* je_audio_effect_ring_modulator_create()
+je_audio_effect_ring_modulator_t* je_audio_effect_ring_modulator_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_ring_modulator>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_ring_modulator_t>();
 }
-jeal_effect_autowah* je_audio_effect_autowah_create()
+je_audio_effect_autowah_t* je_audio_effect_autowah_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_autowah>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_autowah_t>();
 }
-jeal_effect_compressor* je_audio_effect_compressor_create()
+je_audio_effect_compressor_t* je_audio_effect_compressor_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_compressor>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_compressor_t>();
 }
-jeal_effect_equalizer* je_audio_effect_equalizer_create()
+je_audio_effect_equalizer_t* je_audio_effect_equalizer_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_equalizer>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_equalizer_t>();
 }
-jeal_effect_eaxreverb* je_audio_effect_eaxreverb_create()
+je_audio_effect_eax_reverb_t* je_audio_effect_eaxreverb_create()
 {
     assert(jeecs::g_engine_audio_context != nullptr);
 
-    return jeecs::g_engine_audio_context->create_effect<jeal_effect_eaxreverb>();
+    return jeecs::g_engine_audio_context->create_effect<je_audio_effect_eax_reverb_t>();
 }
 void je_audio_effect_close(void* effect)
 {
@@ -3077,7 +3077,7 @@ void je_audio_effect_update(void* effect)
 }
 
 void je_audio_devices_enumerate_and_do(
-    jeal_enumerate_device_callback_t callback, /* OPTIONAL */ void* userdata)
+    je_audio_enumerate_device_callback_t callback, /* OPTIONAL */ void* userdata)
 {
     assert(jeecs::g_engine_audio_context != nullptr);
     jeecs::g_engine_audio_context->refetch_devices_and_do(

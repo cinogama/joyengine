@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_texture_2d_close(jegl_texture_2d* texture);
+JE_API void je_graphic_texture_2d_close(je_gl_texture_2d_t* texture);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_texture_2d_close(jegl_texture_2d* texture);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `texture` | `jegl_texture_2d*` | 纹理资源指针 |
+| `texture` | `je_gl_texture_2d_t*` | 纹理资源指针 |
 
 ## 返回值
 
@@ -27,7 +27,7 @@ JE_API void je_graphic_texture_2d_close(jegl_texture_2d* texture);
 ### 示例
 
 ```cpp
-jegl_texture_2d* texture = je_graphic_texture_2d_load(ctx, "@/textures/diffuse.png");
+je_gl_texture_2d_t* texture = je_graphic_texture_2d_load(ctx, "@/textures/diffuse.png");
 
 // 使用纹理...
 
@@ -43,6 +43,6 @@ je_graphic_texture_2d_close(texture);
 
 ## 相关接口
 
-- [jegl_load_texture](je_graphic_texture_2d_load.md) - 加载纹理
-- [jegl_create_texture](je_graphic_texture_2d_create.md) - 创建纹理
+- [je_graphic_texture_2d_load](je_graphic_texture_2d_load.md) - 加载纹理
+- [je_graphic_texture_2d_create](je_graphic_texture_2d_create.md) - 创建纹理
 - [je_graphic_resource_handle_share](je_graphic_resource_handle_share.md) - 增加资源引用计数

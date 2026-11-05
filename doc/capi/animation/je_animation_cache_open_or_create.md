@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API /* OPTIONAL */ jeecs_file* je_animation_cache_open_or_create(const char* path);
+JE_API /* OPTIONAL */ je_file_t* je_animation_cache_open_or_create(const char* path);
 ```
 
 ## 描述
@@ -20,7 +20,7 @@ JE_API /* OPTIONAL */ jeecs_file* je_animation_cache_open_or_create(const char* 
 
 | 类型 | 描述 |
 |------|------|
-| `jeecs_file*` | 见描述。 |
+| `je_file_t*` | 见描述。 |
 
 ## 注意事项
 

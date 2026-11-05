@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API int32_t je_tilemap_is_walkable(je_TilemapDocument* map, int32_t x, int32_t y);
+JE_API int32_t je_tilemap_is_walkable(je_tilemap_document_t* map, int32_t x, int32_t y);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API int32_t je_tilemap_is_walkable(je_TilemapDocument* map, int32_t x, int32_
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
+| `map` | `je_tilemap_document_t*` | — |
 | `x` | `int32_t` | — |
 | `y` | `int32_t` | — |
 

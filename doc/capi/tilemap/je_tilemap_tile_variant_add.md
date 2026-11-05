@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_tile_variant_add(je_TilesetDocument* tileset,
-    je_TileId tile_id, je_TileId variant_tile_id);
+JE_API bool je_tilemap_tile_variant_add(je_tileset_document_t* tileset,
+    je_tile_id_t tile_id, je_tile_id_t variant_tile_id);
 ```
 
 ## 描述
@@ -15,9 +15,9 @@ JE_API bool je_tilemap_tile_variant_add(je_TilesetDocument* tileset,
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
-| `tile_id` | `je_TileId` | — |
-| `variant_tile_id` | `je_TileId` | — |
+| `tileset` | `je_tileset_document_t*` | — |
+| `tile_id` | `je_tile_id_t` | — |
+| `variant_tile_id` | `je_tile_id_t` | — |
 
 ## 返回值
 

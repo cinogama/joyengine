@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_cmd_bind_pipeline(
-    jegl_command_buffer* cmd, jegl_pipeline* pipeline);
+    je_gl_command_buffer_t* cmd, je_gl_pipeline_t* pipeline);
 ```
 
 ## 描述
@@ -15,8 +15,8 @@ JE_API void je_graphic_cmd_bind_pipeline(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `cmd` | `jegl_command_buffer*` | — |
-| `pipeline` | `jegl_pipeline*` | pipeline 必须与命令缓冲区属于同一个图形上下文 |
+| `cmd` | `je_gl_command_buffer_t*` | — |
+| `pipeline` | `je_gl_pipeline_t*` | pipeline 必须与命令缓冲区属于同一个图形上下文 |
 
 ## 返回值
 

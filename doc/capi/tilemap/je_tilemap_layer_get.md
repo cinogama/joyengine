@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_tilemap_layer_get(je_TilemapDocument* map, je_LayerId layer,
+JE_API void je_tilemap_layer_get(je_tilemap_document_t* map, je_layer_id_t layer,
     /* OPTIONAL */ const char** name, /* OPTIONAL */ int32_t* visible, /* OPTIONAL */ int32_t* locked);
 ```
 
@@ -15,8 +15,8 @@ JE_API void je_tilemap_layer_get(je_TilemapDocument* map, je_LayerId layer,
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | — |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | — |
 | `name` | `const char**` | 可选。 |
 | `visible` | `int32_t*` | 可选。 |
 | `locked` | `int32_t*` | 可选。 |

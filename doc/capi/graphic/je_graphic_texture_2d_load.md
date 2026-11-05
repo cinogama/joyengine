@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API jegl_texture_2d* je_graphic_texture_2d_load(
-    jegl_context* context,
+JE_API je_gl_texture_2d_t* je_graphic_texture_2d_load(
+    je_gl_context_t* context,
     const char* path);
 ```
 
@@ -16,14 +16,14 @@ JE_API jegl_texture_2d* je_graphic_texture_2d_load(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `context` | `jegl_context*` | 图形上下文指针 |
+| `context` | `je_gl_context_t*` | 图形上下文指针 |
 | `path` | `const char*` | 纹理文件路径 |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_texture_2d*` | 纹理资源指针；若加载失败返回 `nullptr` |
+| `je_gl_texture_2d_t*` | 纹理资源指针；若加载失败返回 `nullptr` |
 
 ## 用法
 
@@ -32,12 +32,11 @@ JE_API jegl_texture_2d* je_graphic_texture_2d_load(
 ### 示例
 
 ```cpp
-jegl_texture_2d* texture = je_graphic_texture_2d_load(ctx, "@/textures/brick.png");
+je_gl_texture_2d_t* texture = je_graphic_texture_2d_load(ctx, "@/textures/brick.png");
 
 if (texture != nullptr) {
-    // 绑定纹理到着色器
-    jegl_bind_texture_2d(texture, 0);
-    
+    // 在命令缓冲区中通过 je_graphic_cmd_bind_texture_2d 绑定纹理
+
     // 使用完毕后释放
     je_graphic_texture_2d_close(texture);
 }
@@ -48,10 +47,10 @@ if (texture != nullptr) {
 - 若指定的文件不存在或不是一个合法的纹理，则返回 `nullptr`
 - 图形资源创建时自动获取一个引用计数
 - 使用 `jegl_share_resource` 可增加引用计数
-- 使用 `jegl_close_texture` 可减少引用计数
+- 使用 `je_graphic_texture_2d_close` 可减少引用计数
 
 ## 相关接口
 
-- [jegl_create_texture](je_graphic_texture_2d_create.md) - 创建纹理
-- [jegl_close_texture](je_graphic_texture_2d_close.md) - 关闭纹理
+- [je_graphic_texture_2d_create](je_graphic_texture_2d_create.md) - 创建纹理
+- [je_graphic_texture_2d_close](je_graphic_texture_2d_close.md) - 关闭纹理
 - [je_file_open](../file/je_file_open.md) - 打开文件

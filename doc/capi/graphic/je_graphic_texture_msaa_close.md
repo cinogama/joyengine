@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_texture_msaa_close(jegl_texture_msaa* texture);
+JE_API void je_graphic_texture_msaa_close(je_gl_texture_msaa_t* texture);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_texture_msaa_close(jegl_texture_msaa* texture);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `texture` | `jegl_texture_msaa*` | — |
+| `texture` | `je_gl_texture_msaa_t*` | — |
 
 ## 返回值
 

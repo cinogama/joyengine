@@ -13,49 +13,49 @@
 
 // From jeecs_graphic_api_basic.cpp
 void _jegl_init_resource_handle(
-    jegl_resource_handle* resource_handle,
+    je_gl_resource_handle_t* resource_handle,
     const char* path_may_null_if_builtin);
 
 namespace
 {
     void _jegl_get_uniform_layout(
-        jegl_shader::uniform_type type, uint32_t* out_size, uint32_t* out_align)
+        je_gl_shader_uniform_type_t type, uint32_t* out_size, uint32_t* out_align)
     {
         switch (type)
         {
-        case jegl_shader::uniform_type::INT:
-        case jegl_shader::uniform_type::FLOAT:
+        case JE_GL_SHADER_UNIFORM_TYPE_INT:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT:
             *out_size = 4;
             *out_align = 4;
             break;
-        case jegl_shader::uniform_type::INT2:
-        case jegl_shader::uniform_type::FLOAT2:
+        case JE_GL_SHADER_UNIFORM_TYPE_INT2:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2:
             *out_size = 8;
             *out_align = 8;
             break;
-        case jegl_shader::uniform_type::INT3:
-        case jegl_shader::uniform_type::FLOAT3:
+        case JE_GL_SHADER_UNIFORM_TYPE_INT3:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3:
             *out_size = 12;
             *out_align = 16;
             break;
-        case jegl_shader::uniform_type::INT4:
-        case jegl_shader::uniform_type::FLOAT4:
+        case JE_GL_SHADER_UNIFORM_TYPE_INT4:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4:
             *out_size = 16;
             *out_align = 16;
             break;
-        case jegl_shader::uniform_type::FLOAT2X2:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2X2:
             *out_size = 16;
             *out_align = 8;
             break;
-        case jegl_shader::uniform_type::FLOAT3X3:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3X3:
             *out_size = 48;
             *out_align = 16;
             break;
-        case jegl_shader::uniform_type::FLOAT4X4:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4X4:
             *out_size = 64;
             *out_align = 16;
             break;
-        case jegl_shader::uniform_type::TEXTURE:
+        case JE_GL_SHADER_UNIFORM_TYPE_TEXTURE:
             *out_size = 0;
             *out_align = 1;
             break;
@@ -77,7 +77,7 @@ namespace
     // so the layout must stay stable across backends; the shader generator
     // sorts uniforms by packing rank to keep HLSL cbuffer packing identical to
     // std140 (see je/shader/shader.wo).
-    void _jegl_resolve_canonical_uniform_layout(jegl_shader* shader)
+    void _jegl_resolve_canonical_uniform_layout(je_gl_shader_t* shader)
     {
         uint32_t offset = 0;
         uint32_t max_align = 4;
@@ -111,7 +111,7 @@ namespace
                 uniform != nullptr;
                 uniform = uniform->m_next)
             {
-                if (uniform->m_uniform_type != jegl_shader::uniform_type::TEXTURE
+                if (uniform->m_uniform_type != JE_GL_SHADER_UNIFORM_TYPE_TEXTURE
                     && std::strcmp(uniform->m_name, name) == 0)
                     return uniform->m_offset;
             }
@@ -138,7 +138,7 @@ namespace
 #include <resource_limits_c.h>
 #include <spirv_cross_c.h>
 
-void _jegl_create_shader_cache(jegl_shader* shader_resource, uint64_t virtual_file_crc64)
+void _jegl_create_shader_cache(je_gl_shader_t* shader_resource, uint64_t virtual_file_crc64)
 {
     assert(shader_resource->m_handle.m_path_may_null_if_builtin != nullptr);
 
@@ -185,8 +185,8 @@ void _jegl_create_shader_cache(jegl_shader* shader_resource, uint64_t virtual_fi
         je_cache_file_write(shader_resource->m_fragment_msl_mac_src, sizeof(char), (size_t)fragment_msl_mac_src_len, cachefile);
 
         // 1.5. SPIR-V
-        const uint64_t vertex_spirv_src_len = (uint64_t)shader_resource->m_vertex_spirv_count * sizeof(jegl_shader::spir_v_code_t);
-        const uint64_t fragment_spirv_src_len = (uint64_t)shader_resource->m_fragment_spirv_count * sizeof(jegl_shader::spir_v_code_t);
+        const uint64_t vertex_spirv_src_len = (uint64_t)shader_resource->m_vertex_spirv_count * sizeof(je_gl_shader_spirv_code_t);
+        const uint64_t fragment_spirv_src_len = (uint64_t)shader_resource->m_fragment_spirv_count * sizeof(je_gl_shader_spirv_code_t);
 
         je_cache_file_write(&vertex_spirv_src_len, sizeof(uint64_t), 1, cachefile);
         je_cache_file_write(shader_resource->m_vertex_spirv_codes, sizeof(char), (size_t)vertex_spirv_src_len, cachefile);
@@ -195,17 +195,17 @@ void _jegl_create_shader_cache(jegl_shader* shader_resource, uint64_t virtual_fi
 
         // 2. write shader config to cache
         /*
-            depth_test_method   m_depth_test;
-            depth_mask_method   m_depth_mask;
-            blend_method        m_blend_src_mode, m_blend_dst_mode;
-            cull_mode           m_cull_mode;
+            je_gl_shader_depth_test_method_t   m_depth_test;
+            je_gl_shader_depth_mask_method_t   m_depth_mask;
+            je_gl_shader_blend_method_t        m_blend_src_mode, m_blend_dst_mode;
+            je_gl_shader_cull_mode_t           m_cull_mode;
         */
-        je_cache_file_write(&shader_resource->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cachefile);
-        je_cache_file_write(&shader_resource->m_depth_mask, sizeof(jegl_shader::depth_mask_method), 1, cachefile);
-        je_cache_file_write(&shader_resource->m_blend_equation, sizeof(jegl_shader::blend_equation), 1, cachefile);
-        je_cache_file_write(&shader_resource->m_blend_src_mode, sizeof(jegl_shader::blend_method), 1, cachefile);
-        je_cache_file_write(&shader_resource->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cachefile);
-        je_cache_file_write(&shader_resource->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cachefile);
+        je_cache_file_write(&shader_resource->m_depth_test, sizeof(je_gl_shader_depth_test_method_t), 1, cachefile);
+        je_cache_file_write(&shader_resource->m_depth_mask, sizeof(je_gl_shader_depth_mask_method_t), 1, cachefile);
+        je_cache_file_write(&shader_resource->m_blend_equation, sizeof(je_gl_shader_blend_equation_t), 1, cachefile);
+        je_cache_file_write(&shader_resource->m_blend_src_mode, sizeof(je_gl_shader_blend_method_t), 1, cachefile);
+        je_cache_file_write(&shader_resource->m_blend_dst_mode, sizeof(je_gl_shader_blend_method_t), 1, cachefile);
+        je_cache_file_write(&shader_resource->m_cull_mode, sizeof(je_gl_shader_cull_mode_t), 1, cachefile);
 
         // 3. write if shader is enable to shared?
         je_cache_file_write(&shader_resource->m_enable_to_shared, sizeof(bool), 1, cachefile);
@@ -238,8 +238,8 @@ void _jegl_create_shader_cache(jegl_shader* shader_resource, uint64_t virtual_fi
             je_cache_file_write(custom_uniform->m_name, sizeof(char), (size_t)uniform_name_len, cachefile);
 
             // 4.1.2 write type & tags
-            je_cache_file_write(&custom_uniform->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cachefile);
-            je_cache_file_write(&custom_uniform->m_uniform_mask, sizeof(jegl_shader::uniform_mask), 1, cachefile);
+            je_cache_file_write(&custom_uniform->m_uniform_type, sizeof(je_gl_shader_uniform_type_t), 1, cachefile);
+            je_cache_file_write(&custom_uniform->m_uniform_mask, sizeof(je_gl_shader_uniform_mask_t), 1, cachefile);
 
             // 4.1.3 write data
             static_assert(sizeof(custom_uniform->m_value.m_float4x4) == sizeof(float[4][4]));
@@ -268,12 +268,12 @@ void _jegl_create_shader_cache(jegl_shader* shader_resource, uint64_t virtual_fi
         // 4.3 write shader vertex layout
         uint64_t vertex_in_count = (uint64_t)shader_resource->m_vertex_in_count;
         je_cache_file_write(&vertex_in_count, sizeof(uint64_t), 1, cachefile);
-        je_cache_file_write(shader_resource->m_vertex_in, sizeof(jegl_shader::uniform_type),
+        je_cache_file_write(shader_resource->m_vertex_in, sizeof(je_gl_shader_uniform_type_t),
             shader_resource->m_vertex_in_count, cachefile);
 
         uint64_t fragment_out_count = (uint64_t)shader_resource->m_fragment_out_count;
         je_cache_file_write(&fragment_out_count, sizeof(uint64_t), 1, cachefile);
-        je_cache_file_write(shader_resource->m_fragment_out, sizeof(jegl_shader::uniform_type),
+        je_cache_file_write(shader_resource->m_fragment_out, sizeof(je_gl_shader_uniform_type_t),
             shader_resource->m_fragment_out_count, cachefile);
 
         // 4.4 write sampler informations;
@@ -282,11 +282,11 @@ void _jegl_create_shader_cache(jegl_shader* shader_resource, uint64_t virtual_fi
         for (uint64_t i = 0; i < sampler_count; ++i)
         {
             auto& sampler = shader_resource->m_sampler_methods[i];
-            je_cache_file_write(&sampler.m_min, sizeof(jegl_shader::fliter_mode), 1, cachefile);
-            je_cache_file_write(&sampler.m_mag, sizeof(jegl_shader::fliter_mode), 1, cachefile);
-            je_cache_file_write(&sampler.m_mip, sizeof(jegl_shader::fliter_mode), 1, cachefile);
-            je_cache_file_write(&sampler.m_uwrap, sizeof(jegl_shader::wrap_mode), 1, cachefile);
-            je_cache_file_write(&sampler.m_vwrap, sizeof(jegl_shader::wrap_mode), 1, cachefile);
+            je_cache_file_write(&sampler.m_min, sizeof(je_gl_shader_filter_mode_t), 1, cachefile);
+            je_cache_file_write(&sampler.m_mag, sizeof(je_gl_shader_filter_mode_t), 1, cachefile);
+            je_cache_file_write(&sampler.m_mip, sizeof(je_gl_shader_filter_mode_t), 1, cachefile);
+            je_cache_file_write(&sampler.m_uwrap, sizeof(je_gl_shader_wrap_mode_t), 1, cachefile);
+            je_cache_file_write(&sampler.m_vwrap, sizeof(je_gl_shader_wrap_mode_t), 1, cachefile);
             je_cache_file_write(&sampler.m_sampler_id, sizeof(uint32_t), 1, cachefile);
             je_cache_file_write(&sampler.m_pass_id_count, sizeof(uint64_t), 1, cachefile);
             je_cache_file_write(sampler.m_pass_ids, sizeof(uint32_t), (size_t)sampler.m_pass_id_count, cachefile);
@@ -305,14 +305,14 @@ void _jegl_create_shader_cache(jegl_shader* shader_resource, uint64_t virtual_fi
 
             je_cache_file_write(&texture.m_pass, sizeof(uint32_t), 1, cachefile);
             je_cache_file_write(&texture.m_sampler_id, sizeof(uint32_t), 1, cachefile);
-            je_cache_file_write(&texture.m_kind, sizeof(jegl_texture_kind), 1, cachefile);
+            je_cache_file_write(&texture.m_kind, sizeof(je_gl_texture_kind_t), 1, cachefile);
         }
 
         je_cache_file_close(cachefile);
     }
 }
 
-jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment, size_t* out_codelen)
+je_gl_shader_spirv_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, bool is_fragment, size_t* out_codelen)
 {
     glslang_input_t hlsl_shader_input;
     hlsl_shader_input.language = glslang_source_t::GLSLANG_SOURCE_HLSL;
@@ -381,12 +381,12 @@ jegl_shader::spir_v_code_t* _jegl_parse_spir_v_from_hlsl(const char* hlsl_src, b
     auto spir_v_codes = glslang_program_SPIRV_get_ptr(program);
 
     *out_codelen = spir_v_code_len;
-    jegl_shader::spir_v_code_t* codes =
-        (jegl_shader::spir_v_code_t*)je_mem_alloc(
-            spir_v_code_len * sizeof(jegl_shader::spir_v_code_t));
+    je_gl_shader_spirv_code_t* codes =
+        (je_gl_shader_spirv_code_t*)je_mem_alloc(
+            spir_v_code_len * sizeof(je_gl_shader_spirv_code_t));
 
     memcpy(codes, spir_v_codes,
-        spir_v_code_len * sizeof(jegl_shader::spir_v_code_t));
+        spir_v_code_len * sizeof(je_gl_shader_spirv_code_t));
 
     glslang_shader_delete(hlsl_shader);
     glslang_program_delete(program);
@@ -685,7 +685,7 @@ void _jegl_regenerate_and_alloc_msl_from_spir_v(
     spvc_context_destroy(context);
 }
 
-void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_shader* write_to_shader)
+void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, je_gl_shader_t* write_to_shader)
 {
     shader_wrapper* shader_wrapper_ptr = (shader_wrapper*)shader_generator;
 
@@ -745,12 +745,12 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
 
     // 4. Generate other info.
     write_to_shader->m_vertex_in_count = shader_wrapper_ptr->m_vin_layout.size();
-    write_to_shader->m_vertex_in = new jegl_shader::uniform_type[write_to_shader->m_vertex_in_count];
+    write_to_shader->m_vertex_in = new je_gl_shader_uniform_type_t[write_to_shader->m_vertex_in_count];
     for (size_t i = 0; i < write_to_shader->m_vertex_in_count; ++i)
         write_to_shader->m_vertex_in[i] = shader_wrapper_ptr->m_vin_layout.at(i);
 
     write_to_shader->m_fragment_out_count = shader_wrapper_ptr->m_fout_layout.size();
-    write_to_shader->m_fragment_out = new jegl_shader::uniform_type[write_to_shader->m_fragment_out_count];
+    write_to_shader->m_fragment_out = new je_gl_shader_uniform_type_t[write_to_shader->m_fragment_out_count];
     for (size_t i = 0; i < write_to_shader->m_fragment_out_count; ++i)
         write_to_shader->m_fragment_out[i] = shader_wrapper_ptr->m_fout_layout.at(i);
 
@@ -767,10 +767,10 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
     std::map<uint32_t, std::set<uint32_t>> sampler_binded_texture_passes;
     do
     {
-        jegl_shader::unifrom_variables** last = &write_to_shader->m_custom_uniforms;
+        je_gl_shader_uniform_variables_t** last = &write_to_shader->m_custom_uniforms;
         for (auto& uniform_info : shader_wrapper_ptr->m_uniform_vars)
         {
-            jegl_shader::unifrom_variables* variable = new jegl_shader::unifrom_variables();
+            je_gl_shader_uniform_variables_t* variable = new je_gl_shader_uniform_variables_t();
             variable->m_next = nullptr;
 
             variable->m_name = jeecs::basic::make_new_string(uniform_info.m_name);
@@ -790,11 +790,11 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
         {
             (void)sampler_binded_texture_passes[texture.m_sampler_id].insert(texture.m_pass);
 
-            jegl_shader::unifrom_variables* variable = new jegl_shader::unifrom_variables();
+            je_gl_shader_uniform_variables_t* variable = new je_gl_shader_uniform_variables_t();
             variable->m_next = nullptr;
             variable->m_name = jeecs::basic::make_new_string(texture.m_name);
-            variable->m_uniform_type = jegl_shader::uniform_type::TEXTURE;
-            variable->m_uniform_mask = jegl_shader::uniform_mask::NONE;
+            variable->m_uniform_type = JE_GL_SHADER_UNIFORM_TYPE_TEXTURE;
+            variable->m_uniform_mask = JE_GL_SHADER_UNIFORM_MASK_NONE;
             variable->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
             variable->m_offset = jeecs::graphic::INVALID_UNIFORM_LOCATION;
             variable->m_size = 0;
@@ -810,7 +810,7 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
 
     // Texture binding reflection used by the render API.
     write_to_shader->m_texture_count = shader_wrapper_ptr->m_textures.size();
-    write_to_shader->m_textures = new jegl_shader::texture_decl[write_to_shader->m_texture_count];
+    write_to_shader->m_textures = new je_gl_shader_texture_decl_t[write_to_shader->m_texture_count];
     for (size_t i = 0; i < write_to_shader->m_texture_count; ++i)
     {
         const auto& texture = shader_wrapper_ptr->m_textures.at(i);
@@ -823,10 +823,10 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
 
     do
     {
-        jegl_shader::uniform_blocks** last = &write_to_shader->m_custom_uniform_blocks;
+        je_gl_shader_uniform_block_t** last = &write_to_shader->m_custom_uniform_blocks;
         for (auto& [_ /*useless*/, uniform_block_info] : _uniform_blocks)
         {
-            jegl_shader::uniform_blocks* block = new jegl_shader::uniform_blocks();
+            je_gl_shader_uniform_block_t* block = new je_gl_shader_uniform_block_t();
             block->m_next = nullptr;
 
             assert(uniform_block_info->m_binding_place != jeecs::graphic::INVALID_UNIFORM_LOCATION);
@@ -840,7 +840,7 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, jegl_s
     } while (false);
 
     write_to_shader->m_sampler_count = shader_wrapper_ptr->m_samplers.size();
-    auto* sampler_methods = new jegl_shader::sampler_method[write_to_shader->m_sampler_count];
+    auto* sampler_methods = new je_gl_shader_sampler_method_t[write_to_shader->m_sampler_count];
     for (size_t i = 0; i < write_to_shader->m_sampler_count; ++i)
     {
         const auto& sampler = shader_wrapper_ptr->m_samplers.at(i);
@@ -883,10 +883,10 @@ void jegl_shader_generator_shutdown()
 {}
 #endif
 
-jegl_shader* _jegl_create_shader_instance_and_init(void)
+je_gl_shader_t* _jegl_create_shader_instance_and_init(void)
 {
-    jegl_shader* shader_instance = static_cast<jegl_shader*>(
-        malloc(sizeof(jegl_shader)));
+    je_gl_shader_t* shader_instance = static_cast<je_gl_shader_t*>(
+        malloc(sizeof(je_gl_shader_t)));
 
     assert(shader_instance != nullptr);
     static_assert(
@@ -913,11 +913,11 @@ jegl_shader* _jegl_create_shader_instance_and_init(void)
 
     return shader_instance;
 }
-jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
+je_gl_shader_t* _jegl_load_shader_cache(je_file_t* cache_file, const char* path)
 {
     assert(cache_file != nullptr);
 
-    jegl_shader* shader_instance = _jegl_create_shader_instance_and_init();
+    je_gl_shader_t* shader_instance = _jegl_create_shader_instance_and_init();
 
     uint64_t
         vertex_hlsl_src_len,
@@ -988,26 +988,26 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
 
     // 1.5. SPIR-V
     je_file_read(&vertex_spirv_src_len, sizeof(uint64_t), 1, cache_file);
-    assert((size_t)vertex_spirv_src_len % sizeof(jegl_shader::spir_v_code_t) == 0);
+    assert((size_t)vertex_spirv_src_len % sizeof(je_gl_shader_spirv_code_t) == 0);
 
-    shader_instance->m_vertex_spirv_count = (size_t)vertex_spirv_src_len / sizeof(jegl_shader::spir_v_code_t);
-    shader_instance->m_vertex_spirv_codes = (const jegl_shader::spir_v_code_t*)je_mem_alloc((size_t)vertex_spirv_src_len);
-    je_file_read(const_cast<jegl_shader::spir_v_code_t*>(shader_instance->m_vertex_spirv_codes), sizeof(char), (size_t)vertex_spirv_src_len, cache_file);
+    shader_instance->m_vertex_spirv_count = (size_t)vertex_spirv_src_len / sizeof(je_gl_shader_spirv_code_t);
+    shader_instance->m_vertex_spirv_codes = (const je_gl_shader_spirv_code_t*)je_mem_alloc((size_t)vertex_spirv_src_len);
+    je_file_read(const_cast<je_gl_shader_spirv_code_t*>(shader_instance->m_vertex_spirv_codes), sizeof(char), (size_t)vertex_spirv_src_len, cache_file);
 
     je_file_read(&fragment_spirv_src_len, sizeof(uint64_t), 1, cache_file);
-    assert((size_t)fragment_spirv_src_len % sizeof(jegl_shader::spir_v_code_t) == 0);
+    assert((size_t)fragment_spirv_src_len % sizeof(je_gl_shader_spirv_code_t) == 0);
 
-    shader_instance->m_fragment_spirv_count = (size_t)fragment_spirv_src_len / sizeof(jegl_shader::spir_v_code_t);
-    shader_instance->m_fragment_spirv_codes = (const jegl_shader::spir_v_code_t*)je_mem_alloc((size_t)fragment_spirv_src_len);
-    je_file_read(const_cast<jegl_shader::spir_v_code_t*>(shader_instance->m_fragment_spirv_codes), sizeof(char), (size_t)fragment_spirv_src_len, cache_file);
+    shader_instance->m_fragment_spirv_count = (size_t)fragment_spirv_src_len / sizeof(je_gl_shader_spirv_code_t);
+    shader_instance->m_fragment_spirv_codes = (const je_gl_shader_spirv_code_t*)je_mem_alloc((size_t)fragment_spirv_src_len);
+    je_file_read(const_cast<je_gl_shader_spirv_code_t*>(shader_instance->m_fragment_spirv_codes), sizeof(char), (size_t)fragment_spirv_src_len, cache_file);
 
     // 2. read shader config
-    je_file_read(&shader_instance->m_depth_test, sizeof(jegl_shader::depth_test_method), 1, cache_file);
-    je_file_read(&shader_instance->m_depth_mask, sizeof(jegl_shader::depth_mask_method), 1, cache_file);
-    je_file_read(&shader_instance->m_blend_equation, sizeof(jegl_shader::blend_equation), 1, cache_file);
-    je_file_read(&shader_instance->m_blend_src_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
-    je_file_read(&shader_instance->m_blend_dst_mode, sizeof(jegl_shader::blend_method), 1, cache_file);
-    je_file_read(&shader_instance->m_cull_mode, sizeof(jegl_shader::cull_mode), 1, cache_file);
+    je_file_read(&shader_instance->m_depth_test, sizeof(je_gl_shader_depth_test_method_t), 1, cache_file);
+    je_file_read(&shader_instance->m_depth_mask, sizeof(je_gl_shader_depth_mask_method_t), 1, cache_file);
+    je_file_read(&shader_instance->m_blend_equation, sizeof(je_gl_shader_blend_equation_t), 1, cache_file);
+    je_file_read(&shader_instance->m_blend_src_mode, sizeof(je_gl_shader_blend_method_t), 1, cache_file);
+    je_file_read(&shader_instance->m_blend_dst_mode, sizeof(je_gl_shader_blend_method_t), 1, cache_file);
+    je_file_read(&shader_instance->m_cull_mode, sizeof(je_gl_shader_cull_mode_t), 1, cache_file);
 
     // 3. read if shader is enable to shared?
     je_file_read(&shader_instance->m_enable_to_shared, sizeof(bool), 1, cache_file);
@@ -1020,10 +1020,10 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
 
     shader_instance->m_custom_uniforms = nullptr;
 
-    jegl_shader::unifrom_variables* last_create_variable = nullptr;
+    je_gl_shader_uniform_variables_t* last_create_variable = nullptr;
     for (uint64_t i = 0; i < custom_uniform_count; ++i)
     {
-        jegl_shader::unifrom_variables* current_variable = new jegl_shader::unifrom_variables();
+        je_gl_shader_uniform_variables_t* current_variable = new je_gl_shader_uniform_variables_t();
 
         if (shader_instance->m_custom_uniforms == nullptr)
             shader_instance->m_custom_uniforms = current_variable;
@@ -1039,8 +1039,8 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
         const_cast<char*>(current_variable->m_name)[(size_t)uniform_name_len] = 0;
 
         // 4.1.2 read type & tags
-        je_file_read(&current_variable->m_uniform_type, sizeof(jegl_shader::uniform_type), 1, cache_file);
-        je_file_read(&current_variable->m_uniform_mask, sizeof(jegl_shader::uniform_mask), 1, cache_file);
+        je_file_read(&current_variable->m_uniform_type, sizeof(je_gl_shader_uniform_type_t), 1, cache_file);
+        je_file_read(&current_variable->m_uniform_mask, sizeof(je_gl_shader_uniform_mask_t), 1, cache_file);
 
         // 4.1.3 read data
         static_assert(sizeof(current_variable->m_value.m_float4x4) == sizeof(float[4][4]));
@@ -1065,10 +1065,10 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
 
     shader_instance->m_custom_uniform_blocks = nullptr;
 
-    jegl_shader::uniform_blocks* last_create_block = nullptr;
+    je_gl_shader_uniform_block_t* last_create_block = nullptr;
     for (uint64_t i = 0; i < custom_uniform_block_count; ++i)
     {
-        jegl_shader::uniform_blocks* current_block = new jegl_shader::uniform_blocks();
+        je_gl_shader_uniform_block_t* current_block = new je_gl_shader_uniform_block_t();
         if (shader_instance->m_custom_uniform_blocks == nullptr)
             shader_instance->m_custom_uniform_blocks = current_block;
 
@@ -1094,30 +1094,30 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     uint64_t vertex_in_count;
     je_file_read(&vertex_in_count, sizeof(uint64_t), 1, cache_file);
     shader_instance->m_vertex_in_count = (size_t)vertex_in_count;
-    shader_instance->m_vertex_in = new jegl_shader::uniform_type[shader_instance->m_vertex_in_count];
-    je_file_read(shader_instance->m_vertex_in, sizeof(jegl_shader::uniform_type),
+    shader_instance->m_vertex_in = new je_gl_shader_uniform_type_t[shader_instance->m_vertex_in_count];
+    je_file_read(shader_instance->m_vertex_in, sizeof(je_gl_shader_uniform_type_t),
         shader_instance->m_vertex_in_count, cache_file);
 
     uint64_t fragment_out_count;
     je_file_read(&fragment_out_count, sizeof(uint64_t), 1, cache_file);
     shader_instance->m_fragment_out_count = (size_t)fragment_out_count;
-    shader_instance->m_fragment_out = new jegl_shader::uniform_type[shader_instance->m_fragment_out_count];
-    je_file_read(shader_instance->m_fragment_out, sizeof(jegl_shader::uniform_type),
+    shader_instance->m_fragment_out = new je_gl_shader_uniform_type_t[shader_instance->m_fragment_out_count];
+    je_file_read(shader_instance->m_fragment_out, sizeof(je_gl_shader_uniform_type_t),
         shader_instance->m_fragment_out_count, cache_file);
 
     // 4.4 read sampler informations;
     uint64_t sampler_count;
     je_file_read(&sampler_count, sizeof(uint64_t), 1, cache_file);
     shader_instance->m_sampler_count = (size_t)sampler_count;
-    shader_instance->m_sampler_methods = new jegl_shader::sampler_method[(size_t)sampler_count];
+    shader_instance->m_sampler_methods = new je_gl_shader_sampler_method_t[(size_t)sampler_count];
     for (uint64_t i = 0; i < sampler_count; ++i)
     {
         auto& sampler = shader_instance->m_sampler_methods[i];
-        je_file_read(&sampler.m_min, sizeof(jegl_shader::fliter_mode), 1, cache_file);
-        je_file_read(&sampler.m_mag, sizeof(jegl_shader::fliter_mode), 1, cache_file);
-        je_file_read(&sampler.m_mip, sizeof(jegl_shader::fliter_mode), 1, cache_file);
-        je_file_read(&sampler.m_uwrap, sizeof(jegl_shader::wrap_mode), 1, cache_file);
-        je_file_read(&sampler.m_vwrap, sizeof(jegl_shader::wrap_mode), 1, cache_file);
+        je_file_read(&sampler.m_min, sizeof(je_gl_shader_filter_mode_t), 1, cache_file);
+        je_file_read(&sampler.m_mag, sizeof(je_gl_shader_filter_mode_t), 1, cache_file);
+        je_file_read(&sampler.m_mip, sizeof(je_gl_shader_filter_mode_t), 1, cache_file);
+        je_file_read(&sampler.m_uwrap, sizeof(je_gl_shader_wrap_mode_t), 1, cache_file);
+        je_file_read(&sampler.m_vwrap, sizeof(je_gl_shader_wrap_mode_t), 1, cache_file);
         je_file_read(&sampler.m_sampler_id, sizeof(uint32_t), 1, cache_file);
         je_file_read(&sampler.m_pass_id_count, sizeof(uint64_t), 1, cache_file);
 
@@ -1129,7 +1129,7 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     uint64_t texture_count;
     je_file_read(&texture_count, sizeof(uint64_t), 1, cache_file);
     shader_instance->m_texture_count = (size_t)texture_count;
-    shader_instance->m_textures = new jegl_shader::texture_decl[shader_instance->m_texture_count];
+    shader_instance->m_textures = new je_gl_shader_texture_decl_t[shader_instance->m_texture_count];
     for (uint64_t i = 0; i < texture_count; ++i)
     {
         auto& texture = shader_instance->m_textures[i];
@@ -1142,7 +1142,7 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
 
         je_file_read(&texture.m_pass, sizeof(uint32_t), 1, cache_file);
         je_file_read(&texture.m_sampler_id, sizeof(uint32_t), 1, cache_file);
-        je_file_read(&texture.m_kind, sizeof(jegl_texture_kind), 1, cache_file);
+        je_file_read(&texture.m_kind, sizeof(je_gl_texture_kind_t), 1, cache_file);
     }
 
     je_file_close(cache_file);
@@ -1150,7 +1150,7 @@ jegl_shader* _jegl_load_shader_cache(jeecs_file* cache_file, const char* path)
     _jegl_init_resource_handle(&shader_instance->m_handle, path);
     return shader_instance;
 }
-void jegl_shader_free_generated_shader_source(jegl_shader* write_to_shader)
+void jegl_shader_free_generated_shader_source(je_gl_shader_t* write_to_shader)
 {
     je_mem_free((void*)write_to_shader->m_vertex_hlsl_src);
     je_mem_free((void*)write_to_shader->m_fragment_hlsl_src);
@@ -1258,23 +1258,23 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
         {
             switch (t)
             {
-            case Float: return jegl_shader::uniform_type::FLOAT;
-            case Float2: return jegl_shader::uniform_type::FLOAT2;
-            case Float3: return jegl_shader::uniform_type::FLOAT3;
-            case Float4: return jegl_shader::uniform_type::FLOAT4;
-            case Float2x2: return jegl_shader::uniform_type::FLOAT2X2;
-            case Float3x3: return jegl_shader::uniform_type::FLOAT3X3;
-            case Float4x4: return jegl_shader::uniform_type::FLOAT4X4;
-            case Integer: return jegl_shader::uniform_type::INT;
-            case Integer2: return jegl_shader::uniform_type::INT2;
-            case Integer3: return jegl_shader::uniform_type::INT3;
-            case Integer4: return jegl_shader::uniform_type::INT4;
+            case Float: return JE_GL_SHADER_UNIFORM_TYPE_FLOAT;
+            case Float2: return JE_GL_SHADER_UNIFORM_TYPE_FLOAT2;
+            case Float3: return JE_GL_SHADER_UNIFORM_TYPE_FLOAT3;
+            case Float4: return JE_GL_SHADER_UNIFORM_TYPE_FLOAT4;
+            case Float2x2: return JE_GL_SHADER_UNIFORM_TYPE_FLOAT2X2;
+            case Float3x3: return JE_GL_SHADER_UNIFORM_TYPE_FLOAT3X3;
+            case Float4x4: return JE_GL_SHADER_UNIFORM_TYPE_FLOAT4X4;
+            case Integer: return JE_GL_SHADER_UNIFORM_TYPE_INT;
+            case Integer2: return JE_GL_SHADER_UNIFORM_TYPE_INT2;
+            case Integer3: return JE_GL_SHADER_UNIFORM_TYPE_INT3;
+            case Integer4: return JE_GL_SHADER_UNIFORM_TYPE_INT4;
             // Color uses FLOAT4 storage; the color semantics are carried by
             // the uniform mask recorded next to the type.
-            case Color: return jegl_shader::uniform_type::FLOAT4;
+            case Color: return JE_GL_SHADER_UNIFORM_TYPE_FLOAT4;
             default:
                 jeecs::debug::logfatal("Unsupport woshader type: %d.", (int)t);
-                return jegl_shader::uniform_type::FLOAT;
+                return JE_GL_SHADER_UNIFORM_TYPE_FLOAT;
             }
 
         };
@@ -1284,12 +1284,12 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
             switch (f)
             {
             case WoshaderFilter::LINEAR:
-                return jegl_shader::fliter_mode::LINEAR;
+                return JE_GL_SHADER_FILTER_MODE_LINEAR;
             case WoshaderFilter::NEAREST:
-                return jegl_shader::fliter_mode::NEAREST;
+                return JE_GL_SHADER_FILTER_MODE_NEAREST;
             default:
                 jeecs::debug::logfatal("Unsupport woshader filter type: %d.", (int)f);
-                return jegl_shader::fliter_mode::LINEAR;
+                return JE_GL_SHADER_FILTER_MODE_LINEAR;
             }
         };
     auto parse_woshader_wrap_to_je_wrap =
@@ -1298,32 +1298,32 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
             switch (w)
             {
             case WoshaderWrap::CLAMP:
-                return jegl_shader::wrap_mode::CLAMP;
+                return JE_GL_SHADER_WRAP_MODE_CLAMP;
             case WoshaderWrap::REPEAT:
-                return jegl_shader::wrap_mode::REPEAT;
+                return JE_GL_SHADER_WRAP_MODE_REPEAT;
             default:
                 jeecs::debug::logfatal("Unsupport woshader wrap type: %d.", (int)w);
-                return jegl_shader::wrap_mode::CLAMP;
+                return JE_GL_SHADER_WRAP_MODE_CLAMP;
             }
         };
     auto parse_woshader_texture_type_to_je_kind =
-        [](WoshaderType t) -> jegl_texture_kind
+        [](WoshaderType t) -> je_gl_texture_kind_t
         {
             switch (t)
             {
             case WoshaderType::Texture2D:
-                return jegl_texture_kind::TEXTURE_2D;
+                return je_gl_texture_kind_t::TEXTURE_2D;
             case WoshaderType::Texture2DArray:
-                return jegl_texture_kind::TEXTURE_ARRAY;
+                return je_gl_texture_kind_t::TEXTURE_ARRAY;
             case WoshaderType::Texture3D:
-                return jegl_texture_kind::TEXTURE_3D;
+                return je_gl_texture_kind_t::TEXTURE_3D;
             case WoshaderType::TextureCube:
-                return jegl_texture_kind::TEXTURE_CUBE;
+                return je_gl_texture_kind_t::TEXTURE_CUBE;
             case WoshaderType::Texture2DMS:
-                return jegl_texture_kind::TEXTURE_MSAA;
+                return je_gl_texture_kind_t::TEXTURE_MSAA;
             default:
                 jeecs::debug::logfatal("Unsupport woshader texture type: %d.", (int)t);
-                return jegl_texture_kind::TEXTURE_2D;
+                return je_gl_texture_kind_t::TEXTURE_2D;
             }
         };
 
@@ -1424,8 +1424,8 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
         uniform_variable.m_type =
             parse_woshader_type_to_je_uniform_type(woshader_type);
         uniform_variable.m_uniform_mask = woshader_type == WoshaderType::Color
-            ? jegl_shader::uniform_mask::COLOR
-            : jegl_shader::uniform_mask::NONE;
+            ? JE_GL_SHADER_UNIFORM_MASK_COLOR
+            : JE_GL_SHADER_UNIFORM_MASK_NONE;
 
         woort_struct_get(tmp2, tmp, 2);
 
@@ -1433,16 +1433,16 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
         woort_struct_get(tmp, tmp2, 1);
         switch (uniform_variable.m_type)
         {
-        case jegl_shader::uniform_type::INT:
+        case JE_GL_SHADER_UNIFORM_TYPE_INT:
             uniform_variable.m_init_value.m_int = (int)woort_int(tmp);
             break;
-        case jegl_shader::uniform_type::INT2:
+        case JE_GL_SHADER_UNIFORM_TYPE_INT2:
             woort_struct_get(tmp2, tmp, 0);
             uniform_variable.m_init_value.m_int2[0] = (int)woort_int(tmp2);
             woort_struct_get(tmp2, tmp, 1);
             uniform_variable.m_init_value.m_int2[1] = (int)woort_int(tmp2);
             break;
-        case jegl_shader::uniform_type::INT3:
+        case JE_GL_SHADER_UNIFORM_TYPE_INT3:
             woort_struct_get(tmp2, tmp, 0);
             uniform_variable.m_init_value.m_int3[0] = (int)woort_int(tmp2);
             woort_struct_get(tmp2, tmp, 1);
@@ -1450,7 +1450,7 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
             woort_struct_get(tmp2, tmp, 2);
             uniform_variable.m_init_value.m_int3[2] = (int)woort_int(tmp2);
             break;
-        case jegl_shader::uniform_type::INT4:
+        case JE_GL_SHADER_UNIFORM_TYPE_INT4:
             woort_struct_get(tmp2, tmp, 0);
             uniform_variable.m_init_value.m_int4[0] = (int)woort_int(tmp2);
             woort_struct_get(tmp2, tmp, 1);
@@ -1460,16 +1460,16 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
             woort_struct_get(tmp2, tmp, 3);
             uniform_variable.m_init_value.m_int4[3] = (int)woort_int(tmp2);
             break;
-        case jegl_shader::uniform_type::FLOAT:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT:
             uniform_variable.m_init_value.m_float = woort_float(tmp);
             break;
-        case jegl_shader::uniform_type::FLOAT2:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2:
             woort_struct_get(tmp2, tmp, 0);
             uniform_variable.m_init_value.m_float2[0] = woort_float(tmp2);
             woort_struct_get(tmp2, tmp, 1);
             uniform_variable.m_init_value.m_float2[1] = woort_float(tmp2);
             break;
-        case jegl_shader::uniform_type::FLOAT3:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3:
             woort_struct_get(tmp2, tmp, 0);
             uniform_variable.m_init_value.m_float3[0] = woort_float(tmp2);
             woort_struct_get(tmp2, tmp, 1);
@@ -1477,7 +1477,7 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
             woort_struct_get(tmp2, tmp, 2);
             uniform_variable.m_init_value.m_float3[2] = woort_float(tmp2);
             break;
-        case jegl_shader::uniform_type::FLOAT4:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4:
             woort_struct_get(tmp2, tmp, 0);
             uniform_variable.m_init_value.m_float4[0] = woort_float(tmp2);
             woort_struct_get(tmp2, tmp, 1);
@@ -1487,7 +1487,7 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
             woort_struct_get(tmp2, tmp, 3);
             uniform_variable.m_init_value.m_float4[3] = woort_float(tmp2);
             break;
-        case jegl_shader::uniform_type::FLOAT2X2:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2X2:
             for (size_t x = 0; x < 2; ++x)
             {
                 woort_struct_get(tmp2, tmp, x);
@@ -1498,7 +1498,7 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
                 }
             }
             break;
-        case jegl_shader::uniform_type::FLOAT3X3:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3X3:
             for (size_t x = 0; x < 3; ++x)
             {
                 woort_struct_get(tmp2, tmp, x);
@@ -1509,7 +1509,7 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
                 }
             }
             break;
-        case jegl_shader::uniform_type::FLOAT4X4:
+        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4X4:
             for (size_t x = 0; x < 4; ++x)
             {
                 woort_struct_get(tmp2, tmp, x);
@@ -1542,17 +1542,17 @@ WOORT_API woort_api jeecs_shader_wrap_result_pack(void)
     woort_struct_get(tmp, configs, 0);
     wrapper->m_shader_config.m_enable_shared = woort_bool(tmp);
     woort_struct_get(tmp, configs, 1);
-    wrapper->m_shader_config.m_depth_test = (jegl_shader::depth_test_method)woort_int(tmp);
+    wrapper->m_shader_config.m_depth_test = (je_gl_shader_depth_test_method_t)woort_int(tmp);
     woort_struct_get(tmp, configs, 2);
-    wrapper->m_shader_config.m_depth_mask = (jegl_shader::depth_mask_method)woort_int(tmp);
+    wrapper->m_shader_config.m_depth_mask = (je_gl_shader_depth_mask_method_t)woort_int(tmp);
     woort_struct_get(tmp, configs, 3);
-    wrapper->m_shader_config.m_blend_equation = (jegl_shader::blend_equation)woort_int(tmp);
+    wrapper->m_shader_config.m_blend_equation = (je_gl_shader_blend_equation_t)woort_int(tmp);
     woort_struct_get(tmp, configs, 4);
-    wrapper->m_shader_config.m_blend_src = (jegl_shader::blend_method)woort_int(tmp);
+    wrapper->m_shader_config.m_blend_src = (je_gl_shader_blend_method_t)woort_int(tmp);
     woort_struct_get(tmp, configs, 5);
-    wrapper->m_shader_config.m_blend_dst = (jegl_shader::blend_method)woort_int(tmp);
+    wrapper->m_shader_config.m_blend_dst = (je_gl_shader_blend_method_t)woort_int(tmp);
     woort_struct_get(tmp, configs, 6);
-    wrapper->m_shader_config.m_cull_mode = (jegl_shader::cull_mode)woort_int(tmp);
+    wrapper->m_shader_config.m_cull_mode = (je_gl_shader_cull_mode_t)woort_int(tmp);
 
     return woort_ret_gchandle(
         wrapper,

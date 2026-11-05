@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_tile_at_index(je_TilesetDocument* tileset, int32_t index,
-    je_TileId* out_id);
+JE_API bool je_tilemap_tile_at_index(je_tileset_document_t* tileset, int32_t index,
+    je_tile_id_t* out_id);
 ```
 
 ## 描述
@@ -15,9 +15,9 @@ JE_API bool je_tilemap_tile_at_index(je_TilesetDocument* tileset, int32_t index,
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
+| `tileset` | `je_tileset_document_t*` | — |
 | `index` | `int32_t` | — |
-| `out_id` | `je_TileId*` | — |
+| `out_id` | `je_tile_id_t*` | — |
 
 ## 返回值
 

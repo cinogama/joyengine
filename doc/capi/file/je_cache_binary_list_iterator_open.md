@@ -4,8 +4,8 @@
 
 ```c
 JE_API bool je_cache_binary_list_iterator_open(
-    const jeecs_cache_binary_list* list,
-    jeecs_cache_binary_list_iterator* out_iterator);
+    const je_cache_binary_list_t* list,
+    je_cache_binary_list_iterator_t* out_iterator);
 ```
 
 ## 描述
@@ -16,8 +16,8 @@ JE_API bool je_cache_binary_list_iterator_open(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `list` | `const jeecs_cache_binary_list*` | — |
-| `out_iterator` | `jeecs_cache_binary_list_iterator*` | — |
+| `list` | `const je_cache_binary_list_t*` | — |
+| `out_iterator` | `je_cache_binary_list_iterator_t*` | — |
 
 ## 返回值
 

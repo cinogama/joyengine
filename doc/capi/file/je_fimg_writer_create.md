@@ -3,10 +3,10 @@
 ## 函数签名
 
 ```c
-JE_API jeecs_fimg_writer* je_fimg_writer_create(
+JE_API je_fimg_writer_t* je_fimg_writer_create(
     const char* root,
     size_t shard_size,
-    /* OPTIONAL */ const jeecs_fimg_writer_options* options);
+    /* OPTIONAL */ const je_fimg_writer_options_t* options);
 ```
 
 ## 描述
@@ -24,9 +24,9 @@ JE_API jeecs_fimg_writer* je_fimg_writer_create(
 |--------|------|------|
 | `root` | `const char*` | 输出目录，必须已经存在且可写 |
 | `shard_size` | `size_t` | 单个分片的目标大小；传 0 使用默认值 1 MiB |
-| `options` | `const jeecs_fimg_writer_options*` | 压缩选项；传 `nullptr` 使用默认配置 |
+| `options` | `const je_fimg_writer_options_t*` | 压缩选项；传 `nullptr` 使用默认配置 |
 
-### jeecs_fimg_writer_options
+### je_fimg_writer_options_t
 
 | 字段 | 类型 | 描述 |
 |------|------|------|
@@ -40,17 +40,17 @@ JE_API jeecs_fimg_writer* je_fimg_writer_create(
 
 | 类型 | 描述 |
 |------|------|
-| `jeecs_fimg_writer*` | writer 句柄 |
+| `je_fimg_writer_t*` | writer 句柄 |
 
 ## 用法
 
 ```cpp
-jeecs_fimg_writer_options options;
+je_fimg_writer_options_t options;
 options.compression_level = 6;
 options.min_compress_size = 1024;
 options.skip_extensions = je_fimg_default_skip_extensions();
 
-jeecs_fimg_writer* writer = je_fimg_writer_create(
+je_fimg_writer_t* writer = je_fimg_writer_create(
     "/output/.export",
     16 * 1024 * 1024,
     &options);

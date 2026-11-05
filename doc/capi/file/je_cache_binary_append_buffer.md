@@ -4,7 +4,7 @@
 
 ```c
 JE_API bool je_cache_binary_append_buffer(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     const void* buf,
     size_t buflen);
 ```
@@ -17,7 +17,7 @@ JE_API bool je_cache_binary_append_buffer(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `file` | `je_writing_cache_file*` | — |
+| `file` | `je_writing_cache_file_t*` | — |
 | `buf` | `const void*` | — |
 | `buflen` | `size_t` | — |
 

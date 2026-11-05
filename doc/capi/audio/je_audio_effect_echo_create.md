@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_effect_echo* je_audio_effect_echo_create();
+JE_API je_audio_effect_echo_t* je_audio_effect_echo_create();
 ```
 
 ## 描述
@@ -18,12 +18,12 @@ JE_API jeal_effect_echo* je_audio_effect_echo_create();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_effect_echo* | 回声效果实例指针 |
+| je_audio_effect_echo_t* | 回声效果实例指针 |
 
-### jeal_effect_echo 结构体
+### je_audio_effect_echo_t 结构体
 
 ```cpp
-struct jeal_effect_echo {
+struct je_audio_effect_echo_t {
     float m_delay;    // 延迟时间，默认 0.1，范围 [0.0, 0.207]
     float m_lr_delay; // 左声道延迟，默认 0.1，范围 [0.0, 0.404]
     float m_damping;  // 阻尼，默认 0.5，范围 [0.0, 0.99]
@@ -35,7 +35,7 @@ struct jeal_effect_echo {
 ## 用法示例
 
 ```cpp
-jeal_effect_echo* echo = je_audio_effect_echo_create();
+je_audio_effect_echo_t* echo = je_audio_effect_echo_create();
 
 // 调整回声参数
 echo->m_delay = 0.15f;

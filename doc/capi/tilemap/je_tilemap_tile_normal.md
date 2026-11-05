@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_tile_normal(je_TilesetDocument* tileset, je_TileId tile_id,
+JE_API bool je_tilemap_tile_normal(je_tileset_document_t* tileset, je_tile_id_t tile_id,
     /* OPTIONAL */ float* out_x, /* OPTIONAL */ float* out_y, /* OPTIONAL */ float* out_z);
 ```
 
@@ -15,8 +15,8 @@ JE_API bool je_tilemap_tile_normal(je_TilesetDocument* tileset, je_TileId tile_i
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
-| `tile_id` | `je_TileId` | — |
+| `tileset` | `je_tileset_document_t*` | — |
+| `tile_id` | `je_tile_id_t` | — |
 | `out_x` | `float*` | 可选。 |
 | `out_y` | `float*` | 可选。 |
 | `out_z` | `float*` | 可选。 |

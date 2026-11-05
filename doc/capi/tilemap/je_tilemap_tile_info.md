@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_tile_info(je_TilesetDocument* tileset, je_TileId tile_id,
-    /* OPTIONAL */ je_SourceId* source_idx, /* OPTIONAL */ int32_t* ix, /* OPTIONAL */ int32_t* iy, /* OPTIONAL */ int32_t* walkable);
+JE_API bool je_tilemap_tile_info(je_tileset_document_t* tileset, je_tile_id_t tile_id,
+    /* OPTIONAL */ je_source_id_t* source_idx, /* OPTIONAL */ int32_t* ix, /* OPTIONAL */ int32_t* iy, /* OPTIONAL */ int32_t* walkable);
 ```
 
 ## 描述
@@ -15,9 +15,9 @@ JE_API bool je_tilemap_tile_info(je_TilesetDocument* tileset, je_TileId tile_id,
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
-| `tile_id` | `je_TileId` | — |
-| `source_idx` | `je_SourceId*` | 可选。 |
+| `tileset` | `je_tileset_document_t*` | — |
+| `tile_id` | `je_tile_id_t` | — |
+| `source_idx` | `je_source_id_t*` | 可选。 |
 | `ix` | `int32_t*` | 可选。 |
 | `iy` | `int32_t*` | 可选。 |
 | `walkable` | `int32_t*` | 可选。 |

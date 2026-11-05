@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API jegl_context* je_graphic_uhost_get_context(jeecs::graphic_uhost* host);
+JE_API je_gl_context_t* je_graphic_uhost_get_context(jeecs::graphic_uhost* host);
 ```
 
 ## 描述
@@ -20,7 +20,7 @@ JE_API jegl_context* je_graphic_uhost_get_context(jeecs::graphic_uhost* host);
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_context*` | 图形上下文指针 |
+| `je_gl_context_t*` | 图形上下文指针 |
 
 ## 用法
 
@@ -32,10 +32,10 @@ JE_API jegl_context* je_graphic_uhost_get_context(jeecs::graphic_uhost* host);
 jeecs::graphic_uhost* host = je_graphic_uhost_get_or_create_for_universe(universe, nullptr);
 
 // 获取图形上下文
-jegl_context* ctx = je_graphic_uhost_get_context(host);
+je_gl_context_t* ctx = je_graphic_uhost_get_context(host);
 
 // 使用上下文加载资源
-jegl_shader* shader = je_graphic_shader_load(ctx, "@/shaders/basic.shader");
+je_gl_shader_t* shader = je_graphic_shader_load(ctx, "@/shaders/basic.shader");
 ```
 
 ## 相关接口

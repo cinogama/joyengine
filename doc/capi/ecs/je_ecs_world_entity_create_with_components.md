@@ -4,9 +4,9 @@
 
 ```c
 JE_API void je_ecs_world_entity_create_with_components(
-    je_GameWorld* world,
-    je_GameEntity* out_entity,
-    const je_TypeId* component_ids,
+    je_game_world_t* world,
+    je_game_entity_t* out_entity,
+    const je_type_id_t* component_ids,
     size_t component_count);
 ```
 
@@ -18,9 +18,9 @@ JE_API void je_ecs_world_entity_create_with_components(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `world` | `je_GameWorld*` | 指向世界的指针 |
-| `out_entity` | `je_GameEntity*` | 用于接收创建结果的实体指针 |
-| `component_ids` | `const je_TypeId*` | 组件类型 ID 数组 |
+| `world` | `je_game_world_t*` | 指向世界的指针 |
+| `out_entity` | `je_game_entity_t*` | 用于接收创建结果的实体指针 |
+| `component_ids` | `const je_type_id_t*` | 组件类型 ID 数组 |
 | `component_count` | `size_t` | 组件种类数量 |
 
 ## 返回值
@@ -35,21 +35,21 @@ JE_API void je_ecs_world_entity_create_with_components(
 
 ```cpp
 // 获取组件类型
-const je_TypeInfo* transform_type = 
+const je_type_info_t* transform_type = 
     je_typing_info_get_by_name("Transform::Translation");
-const je_TypeInfo* renderer_type = 
+const je_type_info_t* renderer_type = 
     je_typing_info_get_by_name("Renderer::Shape");
 
 // 构建组件 ID 数组
-const je_TypeId components[] = {
+const je_type_id_t components[] = {
     transform_type->m_id,
     renderer_type->m_id,
 };
 
 // 创建实体
-je_GameEntity entity;
+je_game_entity_t entity;
 je_ecs_world_entity_create_with_components(
-    world, &entity, components, sizeof(components) / sizeof(je_TypeId));
+    world, &entity, components, sizeof(components) / sizeof(je_type_id_t));
 
 // 获取并设置组件数据
 auto* transform = (Transform::Translation*)
@@ -64,7 +64,7 @@ if (transform != nullptr) {
 
 - `component_ids` 应指向一个储存有 N 个类型 ID 的连续空间
 - 其中 N 是组件种类数量（`component_count`）且不应该为 0
-- 除预设体（见 [je_ecs_world_prefab_create_with_components](je_ecs_world_prefab_create_with_components.md)）外，`je_GameEntity` 只允许在一帧期间持有：一帧结束时，引擎可能执行碎片回收（defragmentation），导致 `je_GameEntity` 索引失效
+- 除预设体（见 [je_ecs_world_prefab_create_with_components](je_ecs_world_prefab_create_with_components.md)）外，`je_game_entity_t` 只允许在一帧期间持有：一帧结束时，引擎可能执行碎片回收（defragmentation），导致 `je_game_entity_t` 索引失效
 - 世界销毁是异步的（见 [je_ecs_world_destroy](je_ecs_world_destroy.md)）：向已提交销毁请求（正在销毁中）的世界创建实体仍会成功，`out_entity` 将被写入有效句柄，但该实体会在下一次世界更新时随世界一并销毁
 - 向已被销毁的世界（指针已悬空）创建实体是未定义行为
 

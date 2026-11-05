@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API je_image_texture_color_space je_image_texture_color_space_get(
+JE_API je_image_texture_color_space_t je_image_texture_color_space_get(
     const char* path);
 ```
 
@@ -21,7 +21,7 @@ JE_API je_image_texture_color_space je_image_texture_color_space_get(
 
 | 类型 | 描述 |
 |------|------|
-| `je_image_texture_color_space` | 见描述。 |
+| `je_image_texture_color_space_t` | 见描述。 |
 
 ## 注意事项
 

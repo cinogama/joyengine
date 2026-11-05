@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API void je_audio_source_play(jeal_source* source);
+JE_API void je_audio_source_play(je_audio_source_t* source);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_audio_source_play(jeal_source* source);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| source | jeal_source* | 音频源指针 |
+| source | je_audio_source_t* | 音频源指针 |
 
 ## 返回值
 
@@ -23,8 +23,8 @@ JE_API void je_audio_source_play(jeal_source* source);
 ## 用法示例
 
 ```cpp
-jeal_source* source = je_audio_source_create();
-const jeal_buffer* buffer = je_audio_buffer_load_wav("@/sounds/effect.wav");
+je_audio_source_t* source = je_audio_source_create();
+const je_audio_buffer_t* buffer = je_audio_buffer_load_wav("@/sounds/effect.wav");
 
 je_audio_source_buffer_set(source, buffer);
 je_audio_source_play(source);

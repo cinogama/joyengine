@@ -3,11 +3,11 @@
 ## 函数签名
 
 ```c
-JE_API jegl_context* je_graphic_thread_start(
-    jegl_interface_config config,
-    void* universe_instance,
-    jeecs_api_register_func_t register_func,
-    jegl_context::frame_job_func_t frame_rend_work,
+JE_API je_gl_context_t* je_graphic_thread_start(
+    je_gl_interface_config_t config,
+    je_game_universe_t* universe_instance,
+    je_graphic_api_register_func_t register_func,
+    je_gl_frame_job_func_t frame_rend_work,
     void* arg);
 ```
 
@@ -19,17 +19,17 @@ JE_API jegl_context* je_graphic_thread_start(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `config` | `jegl_interface_config` | 图形接口配置 |
-| `universe_instance` | `void*` | Universe 实例指针 |
-| `register_func` | `jeecs_api_register_func_t` | API 注册函数 |
-| `frame_rend_work` | `jegl_context::frame_job_func_t` | 帧渲染工作函数 |
+| `config` | `je_gl_interface_config_t` | 图形接口配置 |
+| `universe_instance` | `je_game_universe_t*` | Universe 实例指针 |
+| `register_func` | `je_graphic_api_register_func_t` | API 注册函数 |
+| `frame_rend_work` | `je_gl_frame_job_func_t` | 帧渲染工作函数 |
 | `arg` | `void*` | 传递给帧渲染函数的用户参数 |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_context*` | 图形上下文指针 |
+| `je_gl_context_t*` | 图形上下文指针 |
 
 ## 用法
 
@@ -38,23 +38,23 @@ JE_API jegl_context* je_graphic_thread_start(
 ### 配置参数说明
 
 ```cpp
-struct jegl_interface_config {
-    display_mode m_display_mode;  // WINDOWED, FULLSCREEN, BOARDLESS
+typedef struct je_gl_interface_config_t {
+    je_gl_display_mode_t m_display_mode;  // JE_GL_DISPLAY_MODE_WINDOWED / FULLSCREEN / BOARDLESS
     bool m_enable_resize;         // 是否允许窗口调整大小
     size_t m_msaa;                // MSAA 采样数（0 表示关闭）
     size_t m_width;               // 窗口宽度（0 使用默认）
     size_t m_height;              // 窗口高度（0 使用默认）
     size_t m_fps;                 // 帧率限制（0 启用垂直同步）
     const char* m_title;          // 窗口标题
-    const char* m_icon_path;      // 窗口图标路径
-};
+    void* m_userdata;             // 平台相关的用户数据
+} je_gl_interface_config_t;
 ```
 
 ### 示例
 
 ```cpp
-jegl_interface_config config = {};
-config.m_display_mode = jegl_interface_config::WINDOWED;
+je_gl_interface_config_t config = {};
+config.m_display_mode = JE_GL_DISPLAY_MODE_WINDOWED;
 config.m_enable_resize = true;
 config.m_msaa = 4;
 config.m_width = 1280;
@@ -62,7 +62,7 @@ config.m_height = 720;
 config.m_fps = 60;
 config.m_title = "My Game";
 
-jegl_context* ctx = je_graphic_thread_start(
+je_gl_context_t* ctx = je_graphic_thread_start(
     config,
     universe,
     je_graphic_using_opengl3_apis,

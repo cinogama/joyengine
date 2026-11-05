@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_file_close(jeecs_file* file);
+JE_API void je_file_close(je_file_t* file);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_file_close(jeecs_file* file);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `file` | `jeecs_file*` | 指向需要关闭的文件句柄的指针 |
+| `file` | `je_file_t*` | 指向需要关闭的文件句柄的指针 |
 
 ## 返回值
 
@@ -27,7 +27,7 @@ JE_API void je_file_close(jeecs_file* file);
 ### 示例
 
 ```cpp
-jeecs_file* file = je_file_open("@/data/config.txt");
+je_file_t* file = je_file_open("@/data/config.txt");
 if (file != nullptr) {
     // 使用文件...
     

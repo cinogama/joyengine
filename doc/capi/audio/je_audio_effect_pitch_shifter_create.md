@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_effect_pitch_shifter* je_audio_effect_pitch_shifter_create();
+JE_API je_audio_effect_pitch_shifter_t* je_audio_effect_pitch_shifter_create();
 ```
 
 ## 描述
@@ -18,7 +18,7 @@ JE_API jeal_effect_pitch_shifter* je_audio_effect_pitch_shifter_create();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_effect_pitch_shifter* | 音高偏移效果实例指针 |
+| je_audio_effect_pitch_shifter_t* | 音高偏移效果实例指针 |
 
 ## 注意事项
 

@@ -4,7 +4,7 @@
 
 ```c
 JE_API bool je_tilemap_map_path_bind(
-    je_TilemapDocument* map, const char* path);
+    je_tilemap_document_t* map, const char* path);
 ```
 
 ## 描述
@@ -15,7 +15,7 @@ JE_API bool je_tilemap_map_path_bind(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
+| `map` | `je_tilemap_document_t*` | — |
 | `path` | `const char*` | path 支持 @/ 与 !/ 前缀（与 je_tilemap_map_open 一致） |
 
 ## 返回值

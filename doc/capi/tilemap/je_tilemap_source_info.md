@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_source_info(je_TilesetDocument* tileset, je_SourceId source_idx,
+JE_API bool je_tilemap_source_info(je_tileset_document_t* tileset, je_source_id_t source_idx,
     /* OPTIONAL */ const char** texture_path, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* xcount, /* OPTIONAL */ int32_t* ycount);
 ```
 
@@ -15,8 +15,8 @@ JE_API bool je_tilemap_source_info(je_TilesetDocument* tileset, je_SourceId sour
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
-| `source_idx` | `je_SourceId` | — |
+| `tileset` | `je_tileset_document_t*` | — |
+| `source_idx` | `je_source_id_t` | — |
 | `texture_path` | `const char**` | 可选。 |
 | `tile_px` | `int32_t*` | 可选。 |
 | `xcount` | `int32_t*` | 可选。 |

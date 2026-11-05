@@ -7,7 +7,7 @@ JE_API size_t je_file_read(
     void* out_buffer,
     size_t elem_size,
     size_t count,
-    jeecs_file* file);
+    je_file_t* file);
 ```
 
 ## 描述
@@ -21,7 +21,7 @@ JE_API size_t je_file_read(
 | `out_buffer` | `void*` | 用于存储读取数据的缓冲区 |
 | `elem_size` | `size_t` | 每个元素的大小（字节） |
 | `count` | `size_t` | 要读取的元素数量 |
-| `file` | `jeecs_file*` | 指向文件句柄的指针 |
+| `file` | `je_file_t*` | 指向文件句柄的指针 |
 
 ## 返回值
 
@@ -36,7 +36,7 @@ JE_API size_t je_file_read(
 ### 示例
 
 ```cpp
-jeecs_file* file = je_file_open("@/data/model.bin");
+je_file_t* file = je_file_open("@/data/model.bin");
 if (file != nullptr) {
     // 读取文件头（假设是一个 struct header）
     struct header {

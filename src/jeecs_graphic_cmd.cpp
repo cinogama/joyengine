@@ -56,27 +56,27 @@ namespace
     {
         T* resource = static_cast<T*>(ptr);
 
-        if constexpr (std::is_same_v<T, jegl_shader>)
+        if constexpr (std::is_same_v<T, je_gl_shader_t>)
             je_graphic_shader_close(resource);
-        else if constexpr (std::is_same_v<T, jegl_texture_2d>)
+        else if constexpr (std::is_same_v<T, je_gl_texture_2d_t>)
             je_graphic_texture_2d_close(resource);
-        else if constexpr (std::is_same_v<T, jegl_texture_3d>)
+        else if constexpr (std::is_same_v<T, je_gl_texture_3d_t>)
             je_graphic_texture_3d_close(resource);
-        else if constexpr (std::is_same_v<T, jegl_texture_array>)
+        else if constexpr (std::is_same_v<T, je_gl_texture_array_t>)
             je_graphic_texture_array_close(resource);
-        else if constexpr (std::is_same_v<T, jegl_texture_cube>)
+        else if constexpr (std::is_same_v<T, je_gl_texture_cube_t>)
             je_graphic_texture_cube_close(resource);
-        else if constexpr (std::is_same_v<T, jegl_texture_msaa>)
+        else if constexpr (std::is_same_v<T, je_gl_texture_msaa_t>)
             je_graphic_texture_msaa_close(resource);
-        else if constexpr (std::is_same_v<T, jegl_vertex>)
+        else if constexpr (std::is_same_v<T, je_gl_vertex_t>)
             je_graphic_vertex_close(resource);
-        else if constexpr (std::is_same_v<T, jegl_frame_buffer>)
+        else if constexpr (std::is_same_v<T, je_gl_frame_buffer_t>)
             je_graphic_framebuf_close(resource);
-        else if constexpr (std::is_same_v<T, jegl_uniform_buffer>)
+        else if constexpr (std::is_same_v<T, je_gl_uniform_buffer_t>)
             je_graphic_uniformbuf_close(resource);
-        else if constexpr (std::is_same_v<T, jegl_pipeline>)
+        else if constexpr (std::is_same_v<T, je_gl_pipeline_t>)
             je_graphic_pipeline_close(resource);
-        else if constexpr (std::is_same_v<T, jegl_sampler>)
+        else if constexpr (std::is_same_v<T, je_gl_sampler_t>)
             je_graphic_sampler_close(resource);
         else
             static_assert(!sizeof(T*), "Unsupported graphic resource type.");
@@ -93,18 +93,18 @@ namespace
     }
 
     bool _jegl_topology_of_vertex(
-        const jegl_vertex* vertex, jegl_topology* out_topology)
+        const je_gl_vertex_t* vertex, je_gl_topology_t* out_topology)
     {
         switch (vertex->m_type)
         {
-        case jegl_vertex::type::LINESTRIP:
-            *out_topology = jegl_topology::LINE_STRIP;
+        case JE_GL_VERTEX_TYPE_LINESTRIP:
+            *out_topology = je_gl_topology_t::LINE_STRIP;
             return true;
-        case jegl_vertex::type::TRIANGLES:
-            *out_topology = jegl_topology::TRIANGLES;
+        case JE_GL_VERTEX_TYPE_TRIANGLES:
+            *out_topology = je_gl_topology_t::TRIANGLES;
             return true;
-        case jegl_vertex::type::TRIANGLESTRIP:
-            *out_topology = jegl_topology::TRIANGLE_STRIP;
+        case JE_GL_VERTEX_TYPE_TRIANGLESTRIP:
+            *out_topology = je_gl_topology_t::TRIANGLE_STRIP;
             return true;
         default:
             return false;
@@ -112,7 +112,7 @@ namespace
     }
 
     bool _jegl_vertex_layout_matches(
-        const jegl_vertex* vertex, const jegl_shader* shader)
+        const je_gl_vertex_t* vertex, const je_gl_shader_t* shader)
     {
         // A shader consumes a prefix of the vertex attributes. Models may
         // carry extra attributes (normal/tangent/...) that the shader ignores;
@@ -125,41 +125,41 @@ namespace
         {
             const auto type = shader->m_vertex_in[i];
             size_t count = 0;
-            jegl_vertex::data_type base_type;
+            je_gl_vertex_data_type_t base_type;
 
             switch (type)
             {
-            case jegl_shader::uniform_type::FLOAT:
+            case JE_GL_SHADER_UNIFORM_TYPE_FLOAT:
                 count = 1;
-                base_type = jegl_vertex::data_type::FLOAT32;
+                base_type = JE_GL_VERTEX_DATA_TYPE_FLOAT32;
                 break;
-            case jegl_shader::uniform_type::FLOAT2:
+            case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2:
                 count = 2;
-                base_type = jegl_vertex::data_type::FLOAT32;
+                base_type = JE_GL_VERTEX_DATA_TYPE_FLOAT32;
                 break;
-            case jegl_shader::uniform_type::FLOAT3:
+            case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3:
                 count = 3;
-                base_type = jegl_vertex::data_type::FLOAT32;
+                base_type = JE_GL_VERTEX_DATA_TYPE_FLOAT32;
                 break;
-            case jegl_shader::uniform_type::FLOAT4:
+            case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4:
                 count = 4;
-                base_type = jegl_vertex::data_type::FLOAT32;
+                base_type = JE_GL_VERTEX_DATA_TYPE_FLOAT32;
                 break;
-            case jegl_shader::uniform_type::INT:
+            case JE_GL_SHADER_UNIFORM_TYPE_INT:
                 count = 1;
-                base_type = jegl_vertex::data_type::INT32;
+                base_type = JE_GL_VERTEX_DATA_TYPE_INT32;
                 break;
-            case jegl_shader::uniform_type::INT2:
+            case JE_GL_SHADER_UNIFORM_TYPE_INT2:
                 count = 2;
-                base_type = jegl_vertex::data_type::INT32;
+                base_type = JE_GL_VERTEX_DATA_TYPE_INT32;
                 break;
-            case jegl_shader::uniform_type::INT3:
+            case JE_GL_SHADER_UNIFORM_TYPE_INT3:
                 count = 3;
-                base_type = jegl_vertex::data_type::INT32;
+                base_type = JE_GL_VERTEX_DATA_TYPE_INT32;
                 break;
-            case jegl_shader::uniform_type::INT4:
+            case JE_GL_SHADER_UNIFORM_TYPE_INT4:
                 count = 4;
-                base_type = jegl_vertex::data_type::INT32;
+                base_type = JE_GL_VERTEX_DATA_TYPE_INT32;
                 break;
             default:
                 return false;
@@ -173,18 +173,18 @@ namespace
     }
 }
 
-struct jegl_command_buffer
+struct je_gl_command_buffer_t
 {
-    JECS_DISABLE_MOVE_AND_COPY(jegl_command_buffer);
+    JECS_DISABLE_MOVE_AND_COPY(je_gl_command_buffer_t);
 
     struct texture_binding
     {
         uint32_t m_pass;
-        jegl_texture_kind m_kind;
+        je_gl_texture_kind_t m_kind;
         void* m_texture;
     };
 
-    jegl_context* m_context;
+    je_gl_context_t* m_context;
 
     std::vector<jegl_cmd> m_commands;
     std::vector<uint8_t> m_uniform_arena;
@@ -202,10 +202,10 @@ struct jegl_command_buffer
 
     bool m_has_pipeline;
     bool m_has_vertex;
-    jegl_pipeline* m_pipeline;
-    jegl_vertex* m_vertex;
+    je_gl_pipeline_t* m_pipeline;
+    je_gl_vertex_t* m_vertex;
 
-    jegl_frame_buffer* m_target;
+    je_gl_frame_buffer_t* m_target;
     uint32_t m_target_attachment_count;
 
     std::vector<uint8_t> m_uniform_staging;
@@ -218,7 +218,7 @@ struct jegl_command_buffer
     texture_binding m_texture_bindings[32];
     size_t m_texture_binding_count;
 
-    explicit jegl_command_buffer(jegl_context* context)
+    explicit je_gl_command_buffer_t(je_gl_context_t* context)
         : m_context(context)
         , m_resource_count(0)
         , m_in_pass(false)
@@ -244,7 +244,7 @@ struct jegl_command_buffer
         assert(context != nullptr);
     }
 
-    ~jegl_command_buffer()
+    ~je_gl_command_buffer_t()
     {
         release_all_resources();
     }
@@ -380,7 +380,7 @@ struct jegl_command_buffer
         m_commands.push_back(command);
     }
 
-    void reset_uniform_staging(jegl_pipeline* pipeline)
+    void reset_uniform_staging(je_gl_pipeline_t* pipeline)
     {
         const auto* shader = pipeline->m_shader;
         const uint32_t size = shader->m_uniform_block_size;
@@ -400,7 +400,7 @@ struct jegl_command_buffer
                 if (uniform->m_size == 0)
                     continue;
 
-                if (uniform->m_uniform_type == jegl_shader::uniform_type::FLOAT3X3)
+                if (uniform->m_uniform_type == JE_GL_SHADER_UNIFORM_TYPE_FLOAT3X3)
                 {
                     for (size_t row = 0; row < 3; ++row)
                     {
@@ -430,7 +430,7 @@ struct jegl_command_buffer
         assert(m_has_vertex);
 
         const auto* shader = m_pipeline->m_shader;
-        jegl_topology topology;
+        je_gl_topology_t topology;
         assert(_jegl_topology_of_vertex(m_vertex, &topology));
         assert(topology == m_pipeline->m_state.m_topology);
         assert(_jegl_vertex_layout_matches(m_vertex, shader));
@@ -513,20 +513,20 @@ struct jegl_command_buffer
 // Pipeline / uniform reflection
 /////////////////////////////////////////////////////////////////////////////
 
-jegl_pipeline_state je_graphic_pipeline_state_from_shader(jegl_shader* shader)
+je_gl_pipeline_state_t je_graphic_pipeline_state_from_shader(je_gl_shader_t* shader)
 {
     assert(shader != nullptr);
 
-    jegl_pipeline_state state{};
-    state.m_topology = jegl_topology::TRIANGLES;
+    je_gl_pipeline_state_t state{};
+    state.m_topology = je_gl_topology_t::TRIANGLES;
 
     state.m_depth_test = true;
     state.m_depth_func = shader->m_depth_test;
     state.m_depth_write =
-        shader->m_depth_mask == jegl_shader::depth_mask_method::ENABLE;
+        shader->m_depth_mask == je_gl_shader_depth_mask_method_t::ENABLE;
 
     state.m_blend =
-        shader->m_blend_equation != jegl_shader::blend_equation::DISABLED;
+        shader->m_blend_equation != je_gl_shader_blend_equation_t::DISABLED;
     state.m_blend_equation = shader->m_blend_equation;
     state.m_blend_src_color = shader->m_blend_src_mode;
     state.m_blend_dst_color = shader->m_blend_dst_mode;
@@ -534,35 +534,35 @@ jegl_pipeline_state je_graphic_pipeline_state_from_shader(jegl_shader* shader)
     state.m_blend_dst_alpha = shader->m_blend_dst_mode;
 
     state.m_cull = shader->m_cull_mode;
-    state.m_front_face = jegl_front_face::COUNTER_CLOCKWISE;
+    state.m_front_face = je_gl_front_face_t::COUNTER_CLOCKWISE;
     state.m_color_write_mask = 0x0F;
 
-    if (state.m_depth_func == jegl_shader::depth_test_method::INVALID)
+    if (state.m_depth_func == je_gl_shader_depth_test_method_t::INVALID)
     {
         state.m_depth_test = false;
-        state.m_depth_func = jegl_shader::depth_test_method::LESS;
+        state.m_depth_func = je_gl_shader_depth_test_method_t::LESS;
     }
-    if (state.m_blend_equation == jegl_shader::blend_equation::INVALID)
+    if (state.m_blend_equation == je_gl_shader_blend_equation_t::INVALID)
     {
         state.m_blend = false;
-        state.m_blend_equation = jegl_shader::blend_equation::DISABLED;
+        state.m_blend_equation = je_gl_shader_blend_equation_t::DISABLED;
     }
-    if (state.m_blend_src_color == jegl_shader::blend_method::INVALID)
-        state.m_blend_src_color = jegl_shader::blend_method::ONE;
-    if (state.m_blend_dst_color == jegl_shader::blend_method::INVALID)
-        state.m_blend_dst_color = jegl_shader::blend_method::ZERO;
-    if (state.m_blend_src_alpha == jegl_shader::blend_method::INVALID)
-        state.m_blend_src_alpha = jegl_shader::blend_method::ONE;
-    if (state.m_blend_dst_alpha == jegl_shader::blend_method::INVALID)
-        state.m_blend_dst_alpha = jegl_shader::blend_method::ZERO;
-    if (state.m_cull == jegl_shader::cull_mode::INVALID)
-        state.m_cull = jegl_shader::cull_mode::NONE;
+    if (state.m_blend_src_color == je_gl_shader_blend_method_t::INVALID)
+        state.m_blend_src_color = je_gl_shader_blend_method_t::ONE;
+    if (state.m_blend_dst_color == je_gl_shader_blend_method_t::INVALID)
+        state.m_blend_dst_color = je_gl_shader_blend_method_t::ZERO;
+    if (state.m_blend_src_alpha == je_gl_shader_blend_method_t::INVALID)
+        state.m_blend_src_alpha = je_gl_shader_blend_method_t::ONE;
+    if (state.m_blend_dst_alpha == je_gl_shader_blend_method_t::INVALID)
+        state.m_blend_dst_alpha = je_gl_shader_blend_method_t::ZERO;
+    if (state.m_cull == je_gl_shader_cull_mode_t::INVALID)
+        state.m_cull = je_gl_shader_cull_mode_t::NONE;
 
     return state;
 }
 
-jegl_uniform_slot je_graphic_pipeline_uniform_slot(
-    jegl_pipeline* pipeline, const char* name)
+je_gl_uniform_slot_t je_graphic_pipeline_uniform_slot(
+    je_gl_pipeline_t* pipeline, const char* name)
 {
     assert(pipeline != nullptr);
     assert(name != nullptr);
@@ -571,15 +571,15 @@ jegl_uniform_slot je_graphic_pipeline_uniform_slot(
         uniform != nullptr;
         uniform = uniform->m_next)
     {
-        if (uniform->m_uniform_type != jegl_shader::uniform_type::TEXTURE
+        if (uniform->m_uniform_type != JE_GL_SHADER_UNIFORM_TYPE_TEXTURE
             && std::strcmp(uniform->m_name, name) == 0)
-            return jegl_uniform_slot{ uniform->m_offset, uniform->m_size };
+            return je_gl_uniform_slot_t{ uniform->m_offset, uniform->m_size };
     }
-    return jegl_uniform_slot{ JEGL_UNIFORM_SLOT_NONE, 0 };
+    return je_gl_uniform_slot_t{ JE_GL_UNIFORM_SLOT_NONE, 0 };
 }
 
-const jegl_builtin_uniform_slots* je_graphic_pipeline_builtin_uniform_slots(
-    jegl_pipeline* pipeline)
+const je_gl_builtin_uniform_slots_t* je_graphic_pipeline_builtin_uniform_slots(
+    je_gl_pipeline_t* pipeline)
 {
     assert(pipeline != nullptr);
     return &pipeline->m_builtin_slots;
@@ -589,34 +589,34 @@ const jegl_builtin_uniform_slots* je_graphic_pipeline_builtin_uniform_slots(
 // Command buffer
 /////////////////////////////////////////////////////////////////////////////
 
-jegl_command_buffer* je_graphic_cmd_create(jegl_context* context)
+je_gl_command_buffer_t* je_graphic_cmd_create(je_gl_context_t* context)
 {
     assert(context != nullptr);
-    return new jegl_command_buffer(context);
+    return new je_gl_command_buffer_t(context);
 }
 
-void je_graphic_cmd_close(jegl_command_buffer* cmd)
+void je_graphic_cmd_close(je_gl_command_buffer_t* cmd)
 {
     assert(cmd != nullptr);
     delete cmd;
 }
 
-void je_graphic_cmd_reset(jegl_command_buffer* cmd)
+void je_graphic_cmd_reset(je_gl_command_buffer_t* cmd)
 {
     assert(cmd != nullptr);
     cmd->reset();
 }
 
-jegl_context* je_graphic_cmd_get_context(jegl_command_buffer* cmd)
+je_gl_context_t* je_graphic_cmd_get_context(je_gl_command_buffer_t* cmd)
 {
     assert(cmd != nullptr);
     return cmd->m_context;
 }
 
 void je_graphic_cmd_begin_pass(
-    jegl_command_buffer* cmd,
-    /* OPTIONAL: nullptr means screen */ jegl_frame_buffer* target,
-    const jegl_viewport* viewport)
+    je_gl_command_buffer_t* cmd,
+    /* OPTIONAL: nullptr means screen */ je_gl_frame_buffer_t* target,
+    const je_gl_viewport_t* viewport)
 {
     assert(cmd != nullptr);
     assert(viewport != nullptr);
@@ -653,7 +653,7 @@ void je_graphic_cmd_begin_pass(
 }
 
 void je_graphic_cmd_clear_color(
-    jegl_command_buffer* cmd, uint32_t attachment, const float rgba[4])
+    je_gl_command_buffer_t* cmd, uint32_t attachment, const float rgba[4])
 {
     assert(cmd != nullptr);
     assert(rgba != nullptr);
@@ -672,7 +672,7 @@ void je_graphic_cmd_clear_color(
     cmd->push_command(command);
 }
 
-void je_graphic_cmd_clear_depth(jegl_command_buffer* cmd, float depth)
+void je_graphic_cmd_clear_depth(je_gl_command_buffer_t* cmd, float depth)
 {
     assert(cmd != nullptr);
     assert(cmd->m_in_pass);
@@ -685,7 +685,7 @@ void je_graphic_cmd_clear_depth(jegl_command_buffer* cmd, float depth)
     cmd->push_command(command);
 }
 
-void je_graphic_cmd_end_pass(jegl_command_buffer* cmd)
+void je_graphic_cmd_end_pass(je_gl_command_buffer_t* cmd)
 {
     assert(cmd != nullptr);
     assert(cmd->m_in_pass);
@@ -700,7 +700,7 @@ void je_graphic_cmd_end_pass(jegl_command_buffer* cmd)
 }
 
 void je_graphic_cmd_bind_pipeline(
-    jegl_command_buffer* cmd, jegl_pipeline* pipeline)
+    je_gl_command_buffer_t* cmd, je_gl_pipeline_t* pipeline)
 {
     assert(cmd != nullptr);
     assert(pipeline != nullptr);
@@ -721,7 +721,7 @@ void je_graphic_cmd_bind_pipeline(
 }
 
 void je_graphic_cmd_bind_vertex(
-    jegl_command_buffer* cmd, jegl_vertex* vertex)
+    je_gl_command_buffer_t* cmd, je_gl_vertex_t* vertex)
 {
     assert(cmd != nullptr);
     assert(vertex != nullptr);
@@ -740,7 +740,7 @@ void je_graphic_cmd_bind_vertex(
 }
 
 void je_graphic_cmd_bind_uniform_buffer(
-    jegl_command_buffer* cmd, jegl_uniform_buffer* buffer)
+    je_gl_command_buffer_t* cmd, je_gl_uniform_buffer_t* buffer)
 {
     assert(cmd != nullptr);
     assert(buffer != nullptr);
@@ -757,9 +757,9 @@ void je_graphic_cmd_bind_uniform_buffer(
 
 template<typename TexT>
 static void _jegl_cmd_bind_texture_impl(
-    jegl_command_buffer* cmd,
+    je_gl_command_buffer_t* cmd,
     jegl_cmd_op op,
-    jegl_texture_kind kind,
+    je_gl_texture_kind_t kind,
     uint32_t pass,
     TexT* texture)
 {
@@ -798,35 +798,35 @@ static void _jegl_cmd_bind_texture_impl(
 }
 
 void je_graphic_cmd_bind_texture_2d(
-    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_2d* texture)
+    je_gl_command_buffer_t* cmd, uint32_t pass, je_gl_texture_2d_t* texture)
 {
     _jegl_cmd_bind_texture_impl(
-        cmd, jegl_cmd_op::BIND_TEXTURE_2D, jegl_texture_kind::TEXTURE_2D, pass, texture);
+        cmd, jegl_cmd_op::BIND_TEXTURE_2D, je_gl_texture_kind_t::TEXTURE_2D, pass, texture);
 }
 
 void je_graphic_cmd_bind_texture_3d(
-    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_3d* texture)
+    je_gl_command_buffer_t* cmd, uint32_t pass, je_gl_texture_3d_t* texture)
 {
     _jegl_cmd_bind_texture_impl(
-        cmd, jegl_cmd_op::BIND_TEXTURE_3D, jegl_texture_kind::TEXTURE_3D, pass, texture);
+        cmd, jegl_cmd_op::BIND_TEXTURE_3D, je_gl_texture_kind_t::TEXTURE_3D, pass, texture);
 }
 
 void je_graphic_cmd_bind_texture_array(
-    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_array* texture)
+    je_gl_command_buffer_t* cmd, uint32_t pass, je_gl_texture_array_t* texture)
 {
     _jegl_cmd_bind_texture_impl(
-        cmd, jegl_cmd_op::BIND_TEXTURE_ARRAY, jegl_texture_kind::TEXTURE_ARRAY, pass, texture);
+        cmd, jegl_cmd_op::BIND_TEXTURE_ARRAY, je_gl_texture_kind_t::TEXTURE_ARRAY, pass, texture);
 }
 
 void je_graphic_cmd_bind_texture_cube(
-    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_cube* texture)
+    je_gl_command_buffer_t* cmd, uint32_t pass, je_gl_texture_cube_t* texture)
 {
     _jegl_cmd_bind_texture_impl(
-        cmd, jegl_cmd_op::BIND_TEXTURE_CUBE, jegl_texture_kind::TEXTURE_CUBE, pass, texture);
+        cmd, jegl_cmd_op::BIND_TEXTURE_CUBE, je_gl_texture_kind_t::TEXTURE_CUBE, pass, texture);
 }
 
 void je_graphic_cmd_bind_sampler(
-    jegl_command_buffer* cmd, uint32_t sampler_id, jegl_sampler* sampler)
+    je_gl_command_buffer_t* cmd, uint32_t sampler_id, je_gl_sampler_t* sampler)
 {
     assert(cmd != nullptr);
     assert(sampler != nullptr);
@@ -845,15 +845,15 @@ void je_graphic_cmd_bind_sampler(
 }
 
 void je_graphic_cmd_set_uniform(
-    jegl_command_buffer* cmd,
-    jegl_uniform_slot slot,
+    je_gl_command_buffer_t* cmd,
+    je_gl_uniform_slot_t slot,
     const void* data,
     uint32_t size)
 {
     assert(cmd != nullptr);
     assert(data != nullptr);
     assert(cmd->m_has_pipeline);
-    assert(slot.m_offset != JEGL_UNIFORM_SLOT_NONE);
+    assert(slot.m_offset != JE_GL_UNIFORM_SLOT_NONE);
     assert(slot.m_size > 0);
     assert(size == slot.m_size);
     assert(slot.m_offset + size <= cmd->m_uniform_staging_size);
@@ -868,14 +868,14 @@ void je_graphic_cmd_set_uniform(
 }
 
 void je_graphic_cmd_set_uniform_float(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, float value)
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, float value)
 {
     assert(slot.m_size == sizeof(float));
     je_graphic_cmd_set_uniform(cmd, slot, &value, sizeof(value));
 }
 
 void je_graphic_cmd_set_uniform_float2(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y)
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, float x, float y)
 {
     const float value[2] = { x, y };
     assert(slot.m_size == sizeof(value));
@@ -883,7 +883,7 @@ void je_graphic_cmd_set_uniform_float2(
 }
 
 void je_graphic_cmd_set_uniform_float3(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y, float z)
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, float x, float y, float z)
 {
     const float value[3] = { x, y, z };
     assert(slot.m_size == sizeof(value));
@@ -891,7 +891,7 @@ void je_graphic_cmd_set_uniform_float3(
 }
 
 void je_graphic_cmd_set_uniform_float4(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y, float z, float w)
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, float x, float y, float z, float w)
 {
     const float value[4] = { x, y, z, w };
     assert(slot.m_size == sizeof(value));
@@ -899,14 +899,14 @@ void je_graphic_cmd_set_uniform_float4(
 }
 
 void je_graphic_cmd_set_uniform_int(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, int value)
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, int value)
 {
     assert(slot.m_size == sizeof(int));
     je_graphic_cmd_set_uniform(cmd, slot, &value, sizeof(value));
 }
 
 void je_graphic_cmd_set_uniform_int2(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y)
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, int x, int y)
 {
     const int value[2] = { x, y };
     assert(slot.m_size == sizeof(value));
@@ -914,7 +914,7 @@ void je_graphic_cmd_set_uniform_int2(
 }
 
 void je_graphic_cmd_set_uniform_int3(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y, int z)
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, int x, int y, int z)
 {
     const int value[3] = { x, y, z };
     assert(slot.m_size == sizeof(value));
@@ -922,7 +922,7 @@ void je_graphic_cmd_set_uniform_int3(
 }
 
 void je_graphic_cmd_set_uniform_int4(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y, int z, int w)
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, int x, int y, int z, int w)
 {
     const int value[4] = { x, y, z, w };
     assert(slot.m_size == sizeof(value));
@@ -930,12 +930,12 @@ void je_graphic_cmd_set_uniform_int4(
 }
 
 void je_graphic_cmd_set_uniform_float2x2(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[2])
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, const float (*mat)[2])
 {
     assert(cmd != nullptr);
     assert(mat != nullptr);
     assert(cmd->m_has_pipeline);
-    assert(slot.m_offset != JEGL_UNIFORM_SLOT_NONE);
+    assert(slot.m_offset != JE_GL_UNIFORM_SLOT_NONE);
     assert(slot.m_size == sizeof(float) * 2 * 2);
     assert(slot.m_offset + slot.m_size <= cmd->m_uniform_staging_size);
 
@@ -949,12 +949,12 @@ void je_graphic_cmd_set_uniform_float2x2(
 }
 
 void je_graphic_cmd_set_uniform_float3x3(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[3])
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, const float (*mat)[3])
 {
     assert(cmd != nullptr);
     assert(mat != nullptr);
     assert(cmd->m_has_pipeline);
-    assert(slot.m_offset != JEGL_UNIFORM_SLOT_NONE);
+    assert(slot.m_offset != JE_GL_UNIFORM_SLOT_NONE);
     assert(slot.m_size == 48);
     assert(slot.m_offset + slot.m_size <= cmd->m_uniform_staging_size);
 
@@ -970,12 +970,12 @@ void je_graphic_cmd_set_uniform_float3x3(
 }
 
 void je_graphic_cmd_set_uniform_float4x4(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[4])
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, const float (*mat)[4])
 {
     assert(cmd != nullptr);
     assert(mat != nullptr);
     assert(cmd->m_has_pipeline);
-    assert(slot.m_offset != JEGL_UNIFORM_SLOT_NONE);
+    assert(slot.m_offset != JE_GL_UNIFORM_SLOT_NONE);
     assert(slot.m_size == sizeof(float) * 4 * 4);
     assert(slot.m_offset + slot.m_size <= cmd->m_uniform_staging_size);
 
@@ -989,7 +989,7 @@ void je_graphic_cmd_set_uniform_float4x4(
 }
 
 void je_graphic_cmd_draw_indexed(
-    jegl_command_buffer* cmd,
+    je_gl_command_buffer_t* cmd,
     uint32_t index_count, uint32_t first_index, uint32_t instance_count)
 {
     assert(cmd != nullptr);
@@ -1006,7 +1006,7 @@ void je_graphic_cmd_draw_indexed(
 }
 
 void je_graphic_cmd_draw(
-    jegl_command_buffer* cmd,
+    je_gl_command_buffer_t* cmd,
     uint32_t vertex_count, uint32_t first_vertex, uint32_t instance_count)
 {
     assert(cmd != nullptr);
@@ -1022,7 +1022,7 @@ void je_graphic_cmd_draw(
         instance_count);
 }
 
-void je_graphic_cmd_commit(jegl_command_buffer* cmd)
+void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
 {
     assert(cmd != nullptr);
     assert(cmd->m_context != nullptr);
@@ -1044,16 +1044,16 @@ void je_graphic_cmd_commit(jegl_command_buffer* cmd)
 
     const auto* render = cmd->m_context->m_apis;
 
-    jegl_context* const graphic_context = cmd->m_context;
+    je_gl_context_t* const graphic_context = cmd->m_context;
     const auto impl_context = graphic_context->m_graphic_impl_context;
     render->commit_begin(impl_context);
 
-    jegl_pipeline* last_pipeline = nullptr;
-    jegl_vertex* last_vertex = nullptr;
-    jegl_uniform_buffer* last_ubo = nullptr;
+    je_gl_pipeline_t* last_pipeline = nullptr;
+    je_gl_vertex_t* last_vertex = nullptr;
+    je_gl_uniform_buffer_t* last_ubo = nullptr;
     void* last_texture[32] = {};
     uint32_t last_texture_kind[32] = {};
-    jegl_sampler* last_sampler[16] = {};
+    je_gl_sampler_t* last_sampler[16] = {};
 
     for (const auto& command : cmd->m_commands)
     {
@@ -1062,7 +1062,7 @@ void je_graphic_cmd_commit(jegl_command_buffer* cmd)
         case jegl_cmd_op::BEGIN_PASS:
         {
             auto* target =
-                reinterpret_cast<jegl_frame_buffer*>(command.m_ptr0);
+                reinterpret_cast<je_gl_frame_buffer_t*>(command.m_ptr0);
 
             if (target != nullptr)
             {
@@ -1071,7 +1071,7 @@ void je_graphic_cmd_commit(jegl_command_buffer* cmd)
                 (void)ready;
             }
 
-            const jegl_viewport viewport{
+            const je_gl_viewport_t viewport{
                 (int32_t)command.m_a,
                 (int32_t)command.m_b,
                 command.m_c,
@@ -1100,7 +1100,7 @@ void je_graphic_cmd_commit(jegl_command_buffer* cmd)
         case jegl_cmd_op::BIND_PIPELINE:
         {
             auto* pipeline =
-                reinterpret_cast<jegl_pipeline*>(command.m_ptr0);
+                reinterpret_cast<je_gl_pipeline_t*>(command.m_ptr0);
 
             const auto prepare =
                 _jegl_prepare_shader_resource(pipeline->m_shader);
@@ -1127,7 +1127,7 @@ void je_graphic_cmd_commit(jegl_command_buffer* cmd)
         case jegl_cmd_op::BIND_VERTEX:
         {
             auto* vertex =
-                reinterpret_cast<jegl_vertex*>(command.m_ptr0);
+                reinterpret_cast<je_gl_vertex_t*>(command.m_ptr0);
 
             const bool ready = _jegl_prepare_vertex_resource(vertex);
             assert(ready);
@@ -1143,7 +1143,7 @@ void je_graphic_cmd_commit(jegl_command_buffer* cmd)
         case jegl_cmd_op::BIND_UNIFORM_BUFFER:
         {
             auto* buffer =
-                reinterpret_cast<jegl_uniform_buffer*>(command.m_ptr0);
+                reinterpret_cast<je_gl_uniform_buffer_t*>(command.m_ptr0);
 
             const bool ready = _jegl_prepare_uniform_buffer_resource(buffer);
             assert(ready);
@@ -1177,19 +1177,19 @@ void je_graphic_cmd_commit(jegl_command_buffer* cmd)
             {
             case jegl_cmd_op::BIND_TEXTURE_2D:
                 ready = _jegl_prepare_texture_2d_resource(
-                    static_cast<jegl_texture_2d*>(texture));
+                    static_cast<je_gl_texture_2d_t*>(texture));
                 break;
             case jegl_cmd_op::BIND_TEXTURE_3D:
                 ready = _jegl_prepare_texture_3d_resource(
-                    static_cast<jegl_texture_3d*>(texture));
+                    static_cast<je_gl_texture_3d_t*>(texture));
                 break;
             case jegl_cmd_op::BIND_TEXTURE_ARRAY:
                 ready = _jegl_prepare_texture_array_resource(
-                    static_cast<jegl_texture_array*>(texture));
+                    static_cast<je_gl_texture_array_t*>(texture));
                 break;
             case jegl_cmd_op::BIND_TEXTURE_CUBE:
                 ready = _jegl_prepare_texture_cube_resource(
-                    static_cast<jegl_texture_cube*>(texture));
+                    static_cast<je_gl_texture_cube_t*>(texture));
                 break;
             default:
                 break;
@@ -1204,19 +1204,19 @@ void je_graphic_cmd_commit(jegl_command_buffer* cmd)
                 {
                 case jegl_cmd_op::BIND_TEXTURE_2D:
                     render->bind_texture_2d(
-                        impl_context, pass, static_cast<jegl_texture_2d*>(texture));
+                        impl_context, pass, static_cast<je_gl_texture_2d_t*>(texture));
                     break;
                 case jegl_cmd_op::BIND_TEXTURE_3D:
                     render->bind_texture_3d(
-                        impl_context, pass, static_cast<jegl_texture_3d*>(texture));
+                        impl_context, pass, static_cast<je_gl_texture_3d_t*>(texture));
                     break;
                 case jegl_cmd_op::BIND_TEXTURE_ARRAY:
                     render->bind_texture_array(
-                        impl_context, pass, static_cast<jegl_texture_array*>(texture));
+                        impl_context, pass, static_cast<je_gl_texture_array_t*>(texture));
                     break;
                 case jegl_cmd_op::BIND_TEXTURE_CUBE:
                     render->bind_texture_cube(
-                        impl_context, pass, static_cast<jegl_texture_cube*>(texture));
+                        impl_context, pass, static_cast<je_gl_texture_cube_t*>(texture));
                     break;
                 default:
                     break;
@@ -1231,7 +1231,7 @@ void je_graphic_cmd_commit(jegl_command_buffer* cmd)
         {
             const uint32_t sampler_id = command.m_a;
             auto* sampler =
-                reinterpret_cast<jegl_sampler*>(command.m_ptr0);
+                reinterpret_cast<je_gl_sampler_t*>(command.m_ptr0);
 
             const auto sampler_prepare =
                 _jegl_prepare_sampler_resource(sampler);
@@ -1293,9 +1293,9 @@ void je_graphic_cmd_commit(jegl_command_buffer* cmd)
 }
 
 void _jegl_cmd_begin_deferred_draw(
-    jegl_command_buffer* cmd,
-    jegl_pipeline* pipeline,
-    jegl_vertex* vertex,
+    je_gl_command_buffer_t* cmd,
+    je_gl_pipeline_t* pipeline,
+    je_gl_vertex_t* vertex,
     uint32_t index_count,
     uint32_t instance_count)
 {
@@ -1320,7 +1320,7 @@ void _jegl_cmd_begin_deferred_draw(
     cmd->m_pending_c = instance_count;
 }
 
-void _jegl_cmd_end_deferred_draw(jegl_command_buffer* cmd)
+void _jegl_cmd_end_deferred_draw(je_gl_command_buffer_t* cmd)
 {
     assert(cmd != nullptr);
     cmd->flush_pending_draw();

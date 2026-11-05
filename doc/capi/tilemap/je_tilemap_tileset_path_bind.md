@@ -4,7 +4,7 @@
 
 ```c
 JE_API bool je_tilemap_tileset_path_bind(
-    je_TilesetDocument* tileset, const char* path);
+    je_tileset_document_t* tileset, const char* path);
 ```
 
 ## 描述
@@ -15,7 +15,7 @@ JE_API bool je_tilemap_tileset_path_bind(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
+| `tileset` | `je_tileset_document_t*` | — |
 | `path` | `const char*` | path 支持 @/ 与 !/ 前缀（与 je_tilemap_tileset_open 一致） |
 
 ## 返回值

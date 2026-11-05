@@ -3,10 +3,10 @@
 ## 函数签名
 
 ```c
-JE_API jegl_command_buffer* /* NOT NULL */ je_graphic_branch_new_command_buffer(
-    je_RenderBranch* branch,
-    /* OPTIONAL: nullptr 表示屏幕 */ jegl_frame_buffer* framebuffer,
-    const jegl_viewport* viewport);
+JE_API je_gl_command_buffer_t* /* NOT NULL */ je_graphic_branch_new_command_buffer(
+    je_render_branch_t* branch,
+    /* OPTIONAL: nullptr 表示屏幕 */ je_gl_frame_buffer_t* framebuffer,
+    const je_gl_viewport_t* viewport);
 ```
 
 ## 描述
@@ -17,12 +17,12 @@ JE_API jegl_command_buffer* /* NOT NULL */ je_graphic_branch_new_command_buffer(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `branch` | `je_RenderBranch*` | — |
-| `framebuffer` | `jegl_frame_buffer*` | 可选（nullptr 表示屏幕） |
-| `viewport` | `const jegl_viewport*` | — |
+| `branch` | `je_render_branch_t*` | — |
+| `framebuffer` | `je_gl_frame_buffer_t*` | 可选（nullptr 表示屏幕） |
+| `viewport` | `const je_gl_viewport_t*` | — |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_command_buffer*` | 见描述。 |
+| `je_gl_command_buffer_t*` | 见描述。 |

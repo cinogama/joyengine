@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API size_t je_file_tell(jeecs_file* file);
+JE_API size_t je_file_tell(je_file_t* file);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API size_t je_file_tell(jeecs_file* file);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `file` | `jeecs_file*` | 指向文件句柄的指针 |
+| `file` | `je_file_t*` | 指向文件句柄的指针 |
 
 ## 返回值
 
@@ -29,7 +29,7 @@ JE_API size_t je_file_tell(jeecs_file* file);
 ### 示例
 
 ```cpp
-jeecs_file* file = je_file_open("@/data/test.bin");
+je_file_t* file = je_file_open("@/data/test.bin");
 if (file != nullptr) {
     // 读取一些数据
     char buffer[100];

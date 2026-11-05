@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API jeecs_fimg_archive* je_fimg_archive_open(const char* root);
+JE_API je_fimg_archive_t* je_fimg_archive_open(const char* root);
 ```
 
 ## 描述
@@ -20,12 +20,12 @@ JE_API jeecs_fimg_archive* je_fimg_archive_open(const char* root);
 
 | 类型 | 描述 |
 |------|------|
-| `jeecs_fimg_archive*` | 镜像句柄；目录不存在清单或清单损坏时返回 `nullptr` |
+| `je_fimg_archive_t*` | 镜像句柄；目录不存在清单或清单损坏时返回 `nullptr` |
 
 ## 用法
 
 ```cpp
-jeecs_fimg_archive* archive = je_fimg_archive_open("/srv/game");
+je_fimg_archive_t* archive = je_fimg_archive_open("/srv/game");
 if (archive != nullptr) {
     if (je_fimg_archive_has_file(archive, "@/resource/worlds/main.je4world")) {
         size_t size = je_fimg_archive_file_size(archive, "@/resource/worlds/main.je4world");

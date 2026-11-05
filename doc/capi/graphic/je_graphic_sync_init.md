@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_sync_init(jegl_context* thread, bool isreboot);
+JE_API void je_graphic_sync_init(je_gl_context_t* thread, bool isreboot);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_sync_init(jegl_context* thread, bool isreboot);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `thread` | `jegl_context*` | 图形上下文指针 |
+| `thread` | `je_gl_context_t*` | 图形上下文指针 |
 | `isreboot` | `bool` | 是否为重启初始化 |
 
 ## 返回值
@@ -28,20 +28,20 @@ JE_API void je_graphic_sync_init(jegl_context* thread, bool isreboot);
 ### 示例
 
 ```cpp
-jegl_context* ctx = /* 获取图形上下文 */;
+je_gl_context_t* ctx = /* 获取图形上下文 */;
 
 // 首次初始化
 je_graphic_sync_init(ctx, false);
 
 // 主循环
 while (running) {
-    jegl_sync_state state = je_graphic_sync_update(ctx);
+    je_gl_sync_state_t state = je_graphic_sync_update(ctx);
     
-    if (state == JEGL_SYNC_REBOOT) {
+    if (state == JE_GL_SYNC_REBOOT) {
         // 需要重启
         je_graphic_sync_shutdown(ctx, true);
         je_graphic_sync_init(ctx, true);  // 重启初始化
-    } else if (state == JEGL_SYNC_SHUTDOWN) {
+    } else if (state == JE_GL_SYNC_SHUTDOWN) {
         je_graphic_sync_shutdown(ctx, false);
         break;
     }
@@ -50,7 +50,7 @@ while (running) {
 
 ## 注意事项
 
-- 初始化完成后，循环执行 `je_graphic_sync_update` 直到其返回 `JEGL_SYNC_SHUTDOWN` 或 `JEGL_SYNC_REBOOT`
+- 初始化完成后，循环执行 `je_graphic_sync_update` 直到其返回 `JE_GL_SYNC_SHUTDOWN` 或 `JE_GL_SYNC_REBOOT`
 - 仅在不支持多线程渲染的平台上使用
 
 ## 相关接口

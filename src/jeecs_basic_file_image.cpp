@@ -19,7 +19,7 @@ namespace
     je_read_file_seek_func_t _m_read_file_seek_impl = nullptr;
     je_read_file_close_func_t _m_read_file_close_impl = nullptr;
 
-    jeecs_raw_file _je_file_open(const char* path, size_t* out_len)
+    je_raw_file_t _je_file_open(const char* path, size_t* out_len)
     {
         if (_m_read_file_open_impl != nullptr)
             return _m_read_file_open_impl(path, out_len);
@@ -44,7 +44,7 @@ namespace
         return fhandle;
     }
 
-    size_t _je_file_read(void* buffer, size_t elemsz, size_t elemcount, jeecs_raw_file file)
+    size_t _je_file_read(void* buffer, size_t elemsz, size_t elemcount, je_raw_file_t file)
     {
         if (_m_read_file_impl != nullptr)
             return _m_read_file_impl(buffer, elemsz, elemcount, file);
@@ -52,7 +52,7 @@ namespace
         return fread(buffer, elemsz, elemcount, static_cast<FILE*>(file));
     }
 
-    size_t _je_file_tell(jeecs_raw_file file)
+    size_t _je_file_tell(je_raw_file_t file)
     {
         if (_m_read_file_tell_impl != nullptr)
             return _m_read_file_tell_impl(file);
@@ -64,7 +64,7 @@ namespace
 #endif
     }
 
-    int _je_file_seek(jeecs_raw_file file, int64_t offset, je_read_file_seek_mode mode)
+    int _je_file_seek(je_raw_file_t file, int64_t offset, je_file_seek_mode_t mode)
     {
         if (_m_read_file_seek_impl != nullptr)
             return _m_read_file_seek_impl(file, offset, mode);
@@ -76,7 +76,7 @@ namespace
 #endif
     }
 
-    int _je_file_close(jeecs_raw_file file)
+    int _je_file_close(je_raw_file_t file)
     {
         if (_m_read_file_close_impl != nullptr)
             return _m_read_file_close_impl(file);
@@ -194,19 +194,19 @@ namespace jeecs::fimg
     }
 }
 
-struct jeecs_file
+struct je_file_t
 {
-    jeecs_raw_file m_native_file_handle = nullptr;
+    je_raw_file_t m_native_file_handle = nullptr;
     std::unique_ptr<jeecs::fimg::file> m_image_file_handle;
     size_t m_file_length = 0;
 };
 
-struct jeecs_fimg_archive
+struct je_fimg_archive_t
 {
     std::shared_ptr<const jeecs::fimg::archive> impl;
 };
 
-struct jeecs_fimg_writer
+struct je_fimg_writer_t
 {
     std::unique_ptr<jeecs::fimg::writer> impl;
 };
@@ -253,7 +253,7 @@ const char* je_file_runtime_path_get()
     return _g_runtime_path.c_str();
 }
 
-/* OPTIONAL */ jeecs_file* je_file_open(const char* path)
+/* OPTIONAL */ je_file_t* je_file_open(const char* path)
 {
     assert(path != nullptr);
     if (path[0] == '\0')
@@ -262,10 +262,10 @@ const char* je_file_runtime_path_get()
     const std::string resolved_path = _resolve_path(path);
 
     size_t file_length = 0;
-    jeecs_raw_file native_handle = _je_file_open(resolved_path.c_str(), &file_length);
+    je_raw_file_t native_handle = _je_file_open(resolved_path.c_str(), &file_length);
     if (native_handle != nullptr)
     {
-        auto* file = new jeecs_file;
+        auto* file = new je_file_t;
         file->m_native_file_handle = native_handle;
         file->m_file_length = file_length;
         return file;
@@ -287,14 +287,14 @@ const char* je_file_runtime_path_get()
     if (entry == nullptr)
         return nullptr;
 
-    auto* file = new jeecs_file;
+    auto* file = new je_file_t;
     file->m_image_file_handle
         = std::make_unique<jeecs::fimg::file>(std::move(archive), *entry);
     file->m_file_length = static_cast<size_t>(entry->size);
     return file;
 }
 
-void je_file_close(jeecs_file* file)
+void je_file_close(je_file_t* file)
 {
     assert(file != nullptr);
 
@@ -313,7 +313,7 @@ size_t je_file_read(
     void* out_buffer,
     size_t elem_size,
     size_t count,
-    jeecs_file* file)
+    je_file_t* file)
 {
     assert(file != nullptr);
     assert(out_buffer != nullptr || elem_size == 0 || count == 0);
@@ -324,7 +324,7 @@ size_t je_file_read(
     return file->m_image_file_handle->read(out_buffer, elem_size, count);
 }
 
-size_t je_file_tell(jeecs_file* file)
+size_t je_file_tell(je_file_t* file)
 {
     assert(file != nullptr);
 
@@ -334,7 +334,7 @@ size_t je_file_tell(jeecs_file* file)
     return static_cast<size_t>(file->m_image_file_handle->tell());
 }
 
-bool je_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mode mode)
+bool je_file_seek(je_file_t* file, int64_t offset, je_file_seek_mode_t mode)
 {
     assert(file != nullptr);
 
@@ -354,7 +354,7 @@ bool je_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mode mode)
     return false;
 }
 
-size_t je_file_size(jeecs_file* file)
+size_t je_file_size(je_file_t* file)
 {
     assert(file != nullptr);
     return file->m_file_length;
@@ -378,7 +378,7 @@ bool je_fimg_default_archive_set(const char* root)
     return loaded;
 }
 
-jeecs_fimg_archive* je_fimg_archive_open(const char* root)
+je_fimg_archive_t* je_fimg_archive_open(const char* root)
 {
     assert(root != nullptr);
 
@@ -386,18 +386,18 @@ jeecs_fimg_archive* je_fimg_archive_open(const char* root)
     if (impl == nullptr)
         return nullptr;
 
-    auto* archive = new jeecs_fimg_archive;
+    auto* archive = new je_fimg_archive_t;
     archive->impl = std::move(impl);
     return archive;
 }
 
-void je_fimg_archive_close(jeecs_fimg_archive* archive)
+void je_fimg_archive_close(je_fimg_archive_t* archive)
 {
     assert(archive != nullptr);
     delete archive;
 }
 
-bool je_fimg_archive_has_file(const jeecs_fimg_archive* archive, const char* path)
+bool je_fimg_archive_has_file(const je_fimg_archive_t* archive, const char* path)
 {
     assert(archive != nullptr && archive->impl != nullptr);
     assert(path != nullptr);
@@ -405,7 +405,7 @@ bool je_fimg_archive_has_file(const jeecs_fimg_archive* archive, const char* pat
     return archive->impl->find(path) != nullptr;
 }
 
-size_t je_fimg_archive_file_size(const jeecs_fimg_archive* archive, const char* path)
+size_t je_fimg_archive_file_size(const je_fimg_archive_t* archive, const char* path)
 {
     assert(archive != nullptr && archive->impl != nullptr);
     assert(path != nullptr);
@@ -414,10 +414,10 @@ size_t je_fimg_archive_file_size(const jeecs_fimg_archive* archive, const char* 
     return entry == nullptr ? 0 : static_cast<size_t>(entry->size);
 }
 
-jeecs_fimg_writer* je_fimg_writer_create(
+je_fimg_writer_t* je_fimg_writer_create(
     const char* root,
     size_t shard_size,
-    const jeecs_fimg_writer_options* options)
+    const je_fimg_writer_options_t* options)
 {
     assert(root != nullptr);
 
@@ -439,7 +439,7 @@ jeecs_fimg_writer* je_fimg_writer_create(
 
     auto impl = jeecs::fimg::writer::create(root, shard_size, std::move(resolved));
 
-    auto* writer = new jeecs_fimg_writer;
+    auto* writer = new je_fimg_writer_t;
     writer->impl = std::move(impl);
     return writer;
 }
@@ -450,7 +450,7 @@ const char* je_fimg_default_skip_extensions()
 }
 
 bool je_fimg_writer_pack_file(
-    jeecs_fimg_writer* writer,
+    je_fimg_writer_t* writer,
     const char* source_path,
     const char* archive_path)
 {
@@ -461,7 +461,7 @@ bool je_fimg_writer_pack_file(
 }
 
 bool je_fimg_writer_pack_buffer(
-    jeecs_fimg_writer* writer,
+    je_fimg_writer_t* writer,
     const void* buffer,
     size_t len,
     const char* archive_path)
@@ -473,13 +473,13 @@ bool je_fimg_writer_pack_buffer(
     return writer->impl->pack_buffer(buffer, len, archive_path);
 }
 
-bool je_fimg_writer_finish(jeecs_fimg_writer* writer)
+bool je_fimg_writer_finish(je_fimg_writer_t* writer)
 {
     assert(writer != nullptr && writer->impl != nullptr);
     return writer->impl->finish();
 }
 
-void je_fimg_writer_abort(jeecs_fimg_writer* writer)
+void je_fimg_writer_abort(je_fimg_writer_t* writer)
 {
     assert(writer != nullptr && writer->impl != nullptr);
 
@@ -487,7 +487,7 @@ void je_fimg_writer_abort(jeecs_fimg_writer* writer)
     delete writer;
 }
 
-je_image_texture_color_space je_image_texture_color_space_get(const char* path)
+je_image_texture_color_space_t je_image_texture_color_space_get(const char* path)
 {
     assert(path != nullptr);
 
@@ -506,13 +506,13 @@ je_image_texture_color_space je_image_texture_color_space_get(const char* path)
 }
 
 bool je_image_texture_color_space_set(
-    const char* path, je_image_texture_color_space color_space)
+    const char* path, je_image_texture_color_space_t color_space)
 {
     assert(path != nullptr);
 
     // je_cache_file_create also embeds the image CRC64, so changing the
     // image later invalidates this property cache automatically.
-    je_writing_cache_file* const cache = je_cache_file_create(path, IMAGE_TEXTURE_CACHE_VERSION, 0);
+    je_writing_cache_file_t* const cache = je_cache_file_create(path, IMAGE_TEXTURE_CACHE_VERSION, 0);
     if (cache == nullptr)
         return false;
 

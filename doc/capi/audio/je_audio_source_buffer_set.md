@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API bool je_audio_source_buffer_set(jeal_source* source, const jeal_buffer* buffer);
+JE_API bool je_audio_source_buffer_set(je_audio_source_t* source, const je_audio_buffer_t* buffer);
 ```
 
 ## 描述
@@ -14,8 +14,8 @@ JE_API bool je_audio_source_buffer_set(jeal_source* source, const jeal_buffer* b
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| source | jeal_source* | 音频源指针 |
-| buffer | const jeal_buffer* | 音频缓冲区指针 |
+| source | je_audio_source_t* | 音频源指针 |
+| buffer | const je_audio_buffer_t* | 音频缓冲区指针 |
 
 ## 返回值
 
@@ -26,8 +26,8 @@ JE_API bool je_audio_source_buffer_set(jeal_source* source, const jeal_buffer* b
 ## 用法示例
 
 ```cpp
-jeal_source* source = je_audio_source_create();
-const jeal_buffer* buffer = je_audio_buffer_load_wav("@/sounds/bgm.wav");
+je_audio_source_t* source = je_audio_source_create();
+const je_audio_buffer_t* buffer = je_audio_buffer_load_wav("@/sounds/bgm.wav");
 
 // 设置音频缓冲区
 bool changed = je_audio_source_buffer_set(source, buffer);

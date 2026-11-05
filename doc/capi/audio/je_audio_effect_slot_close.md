@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API void je_audio_effect_slot_close(jeal_effect_slot* slot);
+JE_API void je_audio_effect_slot_close(je_audio_effect_slot_t* slot);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_audio_effect_slot_close(jeal_effect_slot* slot);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| slot | jeal_effect_slot* | 要关闭的效果槽指针 |
+| slot | je_audio_effect_slot_t* | 要关闭的效果槽指针 |
 
 ## 返回值
 
@@ -23,7 +23,7 @@ JE_API void je_audio_effect_slot_close(jeal_effect_slot* slot);
 ## 用法示例
 
 ```cpp
-jeal_effect_slot* slot = je_audio_effect_slot_create();
+je_audio_effect_slot_t* slot = je_audio_effect_slot_create();
 
 // 使用效果槽...
 

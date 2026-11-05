@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API je_CollectedRequirements* je_ecs_requirements_collect(
-    /* OPTIONAL: If total requirement count is 0 */ const je_ComponentRequirement* requirements,
+JE_API je_collected_requirements_t* je_ecs_requirements_collect(
+    /* OPTIONAL: If total requirement count is 0 */ const je_component_requirement_t* requirements,
     size_t view_requiremnt_count,
     size_t other_requiremnts_count);
 ```
@@ -17,7 +17,7 @@ JE_API je_CollectedRequirements* je_ecs_requirements_collect(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `requirements` | `const je_ComponentRequirement*` | 可选（If total requirement count is 0） requirements 的前 view_requiremnt_count 项作为视图需求，其余作为附加需求 |
+| `requirements` | `const je_component_requirement_t*` | 可选（If total requirement count is 0） requirements 的前 view_requiremnt_count 项作为视图需求，其余作为附加需求 |
 | `view_requiremnt_count` | `size_t` | — |
 | `other_requiremnts_count` | `size_t` | — |
 
@@ -25,7 +25,7 @@ JE_API je_CollectedRequirements* je_ecs_requirements_collect(
 
 | 类型 | 描述 |
 |------|------|
-| `je_CollectedRequirements*` | 见描述。 |
+| `je_collected_requirements_t*` | 见描述。 |
 
 ## 注意事项
 

@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API je_TileKind je_tilemap_tile_kind(je_TilesetDocument* tileset, je_TileId tile_id);
+JE_API je_tile_kind_t je_tilemap_tile_kind(je_tileset_document_t* tileset, je_tile_id_t tile_id);
 ```
 
 ## 描述
@@ -14,11 +14,11 @@ JE_API je_TileKind je_tilemap_tile_kind(je_TilesetDocument* tileset, je_TileId t
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
-| `tile_id` | `je_TileId` | — |
+| `tileset` | `je_tileset_document_t*` | — |
+| `tile_id` | `je_tile_id_t` | — |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `je_TileKind` | 见描述。 |
+| `je_tile_kind_t` | 见描述。 |

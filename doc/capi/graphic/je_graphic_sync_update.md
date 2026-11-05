@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API jegl_sync_state je_graphic_sync_update(jegl_context* thread);
+JE_API je_gl_sync_state_t je_graphic_sync_update(je_gl_context_t* thread);
 ```
 
 ## 描述
@@ -14,21 +14,21 @@ JE_API jegl_sync_state je_graphic_sync_update(jegl_context* thread);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `thread` | `jegl_context*` | 图形上下文指针 |
+| `thread` | `je_gl_context_t*` | 图形上下文指针 |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_sync_state` | 同步状态枚举值 |
+| `je_gl_sync_state_t` | 同步状态枚举值 |
 
 ### 返回状态
 
 | 状态 | 描述 |
 |------|------|
-| `JEGL_SYNC_COMPLETE` | 正常结束，可继续循环 |
-| `JEGL_SYNC_SHUTDOWN` | 绘制将结束，需要以 `isreboot = false` 调用 `je_graphic_sync_shutdown` |
-| `JEGL_SYNC_REBOOT` | 绘制需要重新初始化，需要以 `isreboot = true` 调用 `je_graphic_sync_shutdown` 后重新初始化 |
+| `JE_GL_SYNC_COMPLETE` | 正常结束，可继续循环 |
+| `JE_GL_SYNC_SHUTDOWN` | 绘制将结束，需要以 `isreboot = false` 调用 `je_graphic_sync_shutdown` |
+| `JE_GL_SYNC_REBOOT` | 绘制需要重新初始化，需要以 `isreboot = true` 调用 `je_graphic_sync_shutdown` 后重新初始化 |
 
 ## 用法
 
@@ -37,21 +37,21 @@ JE_API jegl_sync_state je_graphic_sync_update(jegl_context* thread);
 ### 示例
 
 ```cpp
-jegl_context* ctx = /* 获取图形上下文 */;
+je_gl_context_t* ctx = /* 获取图形上下文 */;
 
 // 主渲染循环
 while (true) {
-    jegl_sync_state state = je_graphic_sync_update(ctx);
+    je_gl_sync_state_t state = je_graphic_sync_update(ctx);
     
     switch (state) {
-        case JEGL_SYNC_COMPLETE:
+        case JE_GL_SYNC_COMPLETE:
             // 正常，继续下一帧
             break;
-        case JEGL_SYNC_SHUTDOWN:
+        case JE_GL_SYNC_SHUTDOWN:
             // 结束渲染
             je_graphic_sync_shutdown(ctx, false);
             return;
-        case JEGL_SYNC_REBOOT:
+        case JE_GL_SYNC_REBOOT:
             // 需要重启
             je_graphic_sync_shutdown(ctx, true);
             je_graphic_sync_init(ctx, true);

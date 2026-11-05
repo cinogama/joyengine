@@ -4,7 +4,7 @@
 
 ```c
 JE_API bool je_cache_binary_append_float64(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     double val);
 ```
 
@@ -16,7 +16,7 @@ JE_API bool je_cache_binary_append_float64(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `file` | `je_writing_cache_file*` | — |
+| `file` | `je_writing_cache_file_t*` | — |
 | `val` | `double` | — |
 
 ## 返回值

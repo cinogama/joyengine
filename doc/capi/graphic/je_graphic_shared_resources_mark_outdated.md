@@ -4,7 +4,7 @@
 
 ```c
 JE_API bool je_graphic_shared_resources_mark_outdated(
-    jegl_context* context,
+    je_gl_context_t* context,
     const char* path);
 ```
 
@@ -16,7 +16,7 @@ JE_API bool je_graphic_shared_resources_mark_outdated(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `context` | `jegl_context*` | 图形上下文指针 |
+| `context` | `je_gl_context_t*` | 图形上下文指针 |
 | `path` | `const char*` | 资源路径 |
 
 ## 返回值
@@ -46,4 +46,4 @@ je_graphic_shared_resources_mark_outdated(ctx, "@/shaders/pbr.shader");
 ## 相关接口
 
 - [je_graphic_shader_load](je_graphic_shader_load.md) - 加载着色器
-- [jegl_load_texture](je_graphic_texture_2d_load.md) - 加载纹理
+- [je_graphic_texture_2d_load](je_graphic_texture_2d_load.md) - 加载纹理

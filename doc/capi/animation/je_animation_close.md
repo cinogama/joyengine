@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_animation_close(je_animation* animation);
+JE_API void je_animation_close(je_animation_t* animation);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_animation_close(je_animation* animation);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `animation` | `je_animation*` | — |
+| `animation` | `je_animation_t*` | — |
 
 ## 返回值
 

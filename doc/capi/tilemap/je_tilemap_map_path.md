@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_map_path(je_TilemapDocument* map, const char** out_path);
+JE_API bool je_tilemap_map_path(je_tilemap_document_t* map, const char** out_path);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API bool je_tilemap_map_path(je_TilemapDocument* map, const char** out_path);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
+| `map` | `je_tilemap_document_t*` | — |
 | `out_path` | `const char**` | — |
 
 ## 返回值

@@ -42,10 +42,10 @@ namespace jeecs
         };
         struct EntityId
         {
-            inline static std::atomic<je_DebugEid> ALLOCATED_EID;
+            inline static std::atomic<je_debug_eid_t> ALLOCATED_EID;
 
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(EntityId);
-            je_DebugEid eid;
+            je_debug_eid_t eid;
 
             EntityId()
                 : eid(1 + ALLOCATED_EID.fetch_add(1, std::memory_order::relaxed))
@@ -69,11 +69,11 @@ namespace jeecs
 }
 
 inline void update_shader(
-    jegl_shader::unifrom_variables* uni_var,
+    je_gl_shader_uniform_variables_t* uni_var,
     const std::string& uname,
     jeecs::graphic::shader* new_shad)
 {
-    using UT = jegl_shader::uniform_type;
+    using UT = je_gl_shader_uniform_type_t;
     const auto& v = uni_var->m_value;
     switch (uni_var->m_uniform_type)
     {
@@ -89,7 +89,7 @@ inline void update_shader(
     }
 }
 
-je_DebugEid je_debug_entity_uid_get(const je_GameEntity* e)
+je_debug_eid_t je_debug_entity_uid_get(const je_game_entity_t* e)
 {
     auto* eid = static_cast<jeecs::Editor::EntityId*>(
         je_ecs_world_entity_component_get(
@@ -103,7 +103,7 @@ je_DebugEid je_debug_entity_uid_get(const je_GameEntity* e)
     return eid->eid;
 }
 
-void je_debug_entity_uid_set(const je_GameEntity* e, je_DebugEid uid)
+void je_debug_entity_uid_set(const je_game_entity_t* e, je_debug_eid_t uid)
 {
     auto* eid = static_cast<jeecs::Editor::EntityId*>(
         je_ecs_world_entity_component_get(

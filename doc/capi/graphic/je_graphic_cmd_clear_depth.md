@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_cmd_clear_depth(
-    jegl_command_buffer* cmd, float depth);
+    je_gl_command_buffer_t* cmd, float depth);
 ```
 
 ## 描述
@@ -15,7 +15,7 @@ JE_API void je_graphic_cmd_clear_depth(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `cmd` | `jegl_command_buffer*` | — |
+| `cmd` | `je_gl_command_buffer_t*` | — |
 | `depth` | `float` | — |
 
 ## 返回值

@@ -3,13 +3,13 @@
 ## 函数签名
 
 ```c
-JE_API jegl_vertex* je_graphic_vertex_create(
-    jegl_vertex::type type,
+JE_API je_gl_vertex_t* je_graphic_vertex_create(
+    je_gl_vertex_type_t type,
     const void* datas,
     size_t data_length,
     const uint32_t* indices,
     size_t index_count,
-    const jegl_vertex::data_layout* format,
+    const je_gl_vertex_data_layout_t* format,
     size_t format_count);
 ```
 
@@ -21,12 +21,12 @@ JE_API jegl_vertex* je_graphic_vertex_create(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `type` | `jegl_vertex::type` | 顶点图元类型 |
+| `type` | `je_gl_vertex_type_t` | 顶点图元类型 |
 | `datas` | `const void*` | 顶点数据指针 |
 | `data_length` | `size_t` | 顶点数据长度（字节） |
 | `indices` | `const uint32_t*` | 索引数据指针 |
 | `index_count` | `size_t` | 索引数量 |
-| `format` | `const jegl_vertex::data_layout*` | 顶点布局格式数组 |
+| `format` | `const je_gl_vertex_data_layout_t*` | 顶点布局格式数组 |
 | `format_count` | `size_t` | 顶点布局格式数量 |
 
 ### 图元类型
@@ -45,7 +45,7 @@ JE_API jegl_vertex* je_graphic_vertex_create(
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_vertex*` | 顶点资源指针 |
+| `je_gl_vertex_t*` | 顶点资源指针 |
 
 ## 用法
 
@@ -65,13 +65,13 @@ float vertices[] = {
 uint32_t indices[] = { 0, 1, 2 };
 
 // 定义顶点布局
-jegl_vertex::data_layout layouts[] = {
-    { jegl_vertex::FLOAT, 3 },  // 位置：3个float
-    { jegl_vertex::FLOAT, 2 },  // UV：2个float
+je_gl_vertex_data_layout_t layouts[] = {
+    { je_gl_vertex_t::FLOAT, 3 },  // 位置：3个float
+    { je_gl_vertex_t::FLOAT, 2 },  // UV：2个float
 };
 
-jegl_vertex* triangle = je_graphic_vertex_create(
-    jegl_vertex::TRIANGLES,
+je_gl_vertex_t* triangle = je_graphic_vertex_create(
+    JE_GL_VERTEX_TYPE_TRIANGLES,
     vertices, sizeof(vertices),
     indices, 3,
     layouts, 2

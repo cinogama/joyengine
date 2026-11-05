@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_uniformbuf_update(
-    jegl_uniform_buffer* uniformbuf,
+    je_gl_uniform_buffer_t* uniformbuf,
     const void* buf,
     size_t update_offset,
     size_t update_length);
@@ -18,7 +18,7 @@ JE_API void je_graphic_uniformbuf_update(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `uniformbuf` | `jegl_uniform_buffer*` | 一致变量缓冲区资源指针 |
+| `uniformbuf` | `je_gl_uniform_buffer_t*` | 一致变量缓冲区资源指针 |
 | `buf` | `const void*` | 数据源指针 |
 | `update_offset` | `size_t` | 更新起始偏移量（字节） |
 | `update_length` | `size_t` | 更新数据长度（字节） |
@@ -34,7 +34,7 @@ JE_API void je_graphic_uniformbuf_update(
 ### 示例
 
 ```cpp
-jegl_uniform_buffer* ubo = je_graphic_uniformbuf_create(0, 256);
+je_gl_uniform_buffer_t* ubo = je_graphic_uniformbuf_create(0, 256);
 
 // 定义数据结构
 struct LightData {

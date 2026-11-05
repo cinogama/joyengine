@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API jegl_uniform_buffer* je_graphic_uniformbuf_create(
+JE_API je_gl_uniform_buffer_t* je_graphic_uniformbuf_create(
     size_t binding_place,
     size_t length);
 ```
@@ -23,7 +23,7 @@ JE_API jegl_uniform_buffer* je_graphic_uniformbuf_create(
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_uniform_buffer*` | 一致变量缓冲区资源指针 |
+| `je_gl_uniform_buffer_t*` | 一致变量缓冲区资源指针 |
 
 ## 用法
 
@@ -33,7 +33,7 @@ JE_API jegl_uniform_buffer* je_graphic_uniformbuf_create(
 
 ```cpp
 // 创建一个 256 字节的 UBO，绑定到 slot 0
-jegl_uniform_buffer* ubo = je_graphic_uniformbuf_create(0, 256);
+je_gl_uniform_buffer_t* ubo = je_graphic_uniformbuf_create(0, 256);
 
 // 定义数据结构
 struct CameraData {

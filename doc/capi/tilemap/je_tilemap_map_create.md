@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API /* OPTIONAL: If size is invalid */ je_TilemapDocument* je_tilemap_map_create(int32_t w, int32_t h, int32_t tile_px);
+JE_API /* OPTIONAL: If size is invalid */ je_tilemap_document_t* je_tilemap_map_create(int32_t w, int32_t h, int32_t tile_px);
 ```
 
 ## 描述
@@ -22,7 +22,7 @@ JE_API /* OPTIONAL: If size is invalid */ je_TilemapDocument* je_tilemap_map_cre
 
 | 类型 | 描述 |
 |------|------|
-| `je_TilemapDocument*` | 见描述。 |
+| `je_tilemap_document_t*` | 见描述。 |
 
 ## 注意事项
 

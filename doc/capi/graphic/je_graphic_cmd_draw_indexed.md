@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_cmd_draw_indexed(
-    jegl_command_buffer* cmd,
+    je_gl_command_buffer_t* cmd,
     uint32_t index_count, uint32_t first_index, uint32_t instance_count);
 ```
 
@@ -16,7 +16,7 @@ JE_API void je_graphic_cmd_draw_indexed(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `cmd` | `jegl_command_buffer*` | — |
+| `cmd` | `je_gl_command_buffer_t*` | — |
 | `index_count` | `uint32_t` | — |
 | `first_index` | `uint32_t` | — |
 | `instance_count` | `uint32_t` | — |

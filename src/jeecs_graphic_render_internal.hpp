@@ -15,7 +15,7 @@ namespace jeecs::graphic
 {
     // Defined in jeecs_graphic_api_basic.cpp. The command-buffer commit path
     // asserts that it runs on the context's graphic thread.
-    extern thread_local jegl_context* _current_graphic_thread;
+    extern thread_local je_gl_context_t* _current_graphic_thread;
 }
 
 // Result of preparing a resource on the graphic thread.
@@ -33,50 +33,50 @@ enum class jegl_resource_prepare_result : uint8_t
 
 // Refcounted CPU-side pipeline description. The backend owns any native
 // pipeline object and stores it in m_backend_ptr.
-struct jegl_pipeline
+struct je_gl_pipeline_t
 {
-    jegl_resource_handle m_handle;
+    je_gl_resource_handle_t m_handle;
 
-    jegl_context* m_context;
-    jegl_shader* m_shader;
-    jegl_pipeline_state m_state;
-    jegl_builtin_uniform_slots m_builtin_slots;
+    je_gl_context_t* m_context;
+    je_gl_shader_t* m_shader;
+    je_gl_pipeline_state_t m_state;
+    je_gl_builtin_uniform_slots_t m_builtin_slots;
 
     void* m_backend_ptr;
     bool m_backend_initialized;
 };
-static_assert(offsetof(jegl_pipeline, m_handle) == 0);
+static_assert(offsetof(je_gl_pipeline_t, m_handle) == 0);
 
 // Refcounted sampler description. The backend owns the native sampler object
 // and stores it in m_backend_ptr.
-struct jegl_sampler
+struct je_gl_sampler_t
 {
-    jegl_resource_handle m_handle;
+    je_gl_resource_handle_t m_handle;
 
-    jegl_context* m_context;
-    jegl_sampler_desc m_desc;
+    je_gl_context_t* m_context;
+    je_gl_sampler_desc_t m_desc;
 
     void* m_backend_ptr;
     bool m_backend_initialized;
 };
-static_assert(offsetof(jegl_sampler, m_handle) == 0);
+static_assert(offsetof(je_gl_sampler_t, m_handle) == 0);
 
 // Resource preparation helpers implemented in jeecs_graphic_api_basic.cpp.
 // They perform lazy init / update on the graphic thread and do not bind or
 // draw anything. The render-API commit loop calls them before issuing the
 // corresponding backend call.
-jegl_resource_prepare_result _jegl_prepare_shader_resource(jegl_shader* shader);
-jegl_resource_prepare_result _jegl_prepare_pipeline_resource(jegl_pipeline* pipeline);
-jegl_resource_prepare_result _jegl_prepare_sampler_resource(jegl_sampler* sampler);
-bool _jegl_prepare_vertex_resource(jegl_vertex* vertex);
-bool _jegl_prepare_uniform_buffer_resource(jegl_uniform_buffer* buffer);
-bool _jegl_prepare_framebuffer_resource(jegl_frame_buffer* framebuffer);
+jegl_resource_prepare_result _jegl_prepare_shader_resource(je_gl_shader_t* shader);
+jegl_resource_prepare_result _jegl_prepare_pipeline_resource(je_gl_pipeline_t* pipeline);
+jegl_resource_prepare_result _jegl_prepare_sampler_resource(je_gl_sampler_t* sampler);
+bool _jegl_prepare_vertex_resource(je_gl_vertex_t* vertex);
+bool _jegl_prepare_uniform_buffer_resource(je_gl_uniform_buffer_t* buffer);
+bool _jegl_prepare_framebuffer_resource(je_gl_frame_buffer_t* framebuffer);
 
-bool _jegl_prepare_texture_2d_resource(jegl_texture_2d* texture);
-bool _jegl_prepare_texture_3d_resource(jegl_texture_3d* texture);
-bool _jegl_prepare_texture_array_resource(jegl_texture_array* texture);
-bool _jegl_prepare_texture_cube_resource(jegl_texture_cube* texture);
-bool _jegl_prepare_texture_msaa_resource(jegl_texture_msaa* texture);
+bool _jegl_prepare_texture_2d_resource(je_gl_texture_2d_t* texture);
+bool _jegl_prepare_texture_3d_resource(je_gl_texture_3d_t* texture);
+bool _jegl_prepare_texture_array_resource(je_gl_texture_array_t* texture);
+bool _jegl_prepare_texture_cube_resource(je_gl_texture_cube_t* texture);
+bool _jegl_prepare_texture_msaa_resource(je_gl_texture_msaa_t* texture);
 
 // Patch the built-in JE_NDC_SCALE uniform inside an already-copied CPU
 // uniform block. DX11/Metal flip y for offscreen targets; Vulkan flips it
@@ -100,9 +100,9 @@ inline void _jegl_patch_ndc_scale(
 // operation flushes it" pattern. Public users should prefer the explicit
 // jegl_cmd_set_uniform_* + je_graphic_cmd_draw_indexed ordering.
 void _jegl_cmd_begin_deferred_draw(
-    jegl_command_buffer* cmd,
-    jegl_pipeline* pipeline,
-    jegl_vertex* vertex,
+    je_gl_command_buffer_t* cmd,
+    je_gl_pipeline_t* pipeline,
+    je_gl_vertex_t* vertex,
     uint32_t index_count,
     uint32_t instance_count);
-void _jegl_cmd_end_deferred_draw(jegl_command_buffer* cmd);
+void _jegl_cmd_end_deferred_draw(je_gl_command_buffer_t* cmd);

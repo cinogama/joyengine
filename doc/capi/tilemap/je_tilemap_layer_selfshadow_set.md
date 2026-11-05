@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_tilemap_layer_selfshadow_set(je_TilemapDocument* map, je_LayerId layer, je_LayerSelfShadow selfshadow);
+JE_API void je_tilemap_layer_selfshadow_set(je_tilemap_document_t* map, je_layer_id_t layer, je_layer_self_shadow_t selfshadow);
 ```
 
 ## 描述
@@ -14,9 +14,9 @@ JE_API void je_tilemap_layer_selfshadow_set(je_TilemapDocument* map, je_LayerId 
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | — |
-| `selfshadow` | `je_LayerSelfShadow` | — |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | — |
+| `selfshadow` | `je_layer_self_shadow_t` | — |
 
 ## 返回值
 
@@ -28,5 +28,5 @@ JE_API void je_tilemap_layer_selfshadow_set(je_TilemapDocument* map, je_LayerId 
 
 ## 相关接口
 
-- [je_tilemap_layer_selfshadow](je_tilemap_layer_selfshadow.md) - 取图层的 2D 光照自阴影行为（je_LayerSelfShadow），下标…
+- [je_tilemap_layer_selfshadow](je_tilemap_layer_selfshadow.md) - 取图层的 2D 光照自阴影行为（je_layer_self_shadow_t），下标…
 - [je_tilemap_layer_selfshadow_factor_set](je_tilemap_layer_selfshadow_factor_set.md) - 设置图层的自阴影覆盖强度：不做范围钳制（与 Light2D::SelfSha…

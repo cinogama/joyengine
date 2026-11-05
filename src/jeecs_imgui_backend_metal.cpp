@@ -9,9 +9,9 @@
 #include <imgui_impl_metal.h>
 
 void jegui_init_metal(
-    jegl_context* ctx,
-    jegui_user_image_loader_t get_img_res,
-    jegui_user_sampler_loader_t apply_shader_sampler,
+    je_gl_context_t* ctx,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler,
     void* window_handle,
     MTL::Device* device)
 {

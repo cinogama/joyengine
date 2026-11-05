@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_source_remove(je_TilesetDocument* tileset, je_SourceId source_idx);
+JE_API bool je_tilemap_source_remove(je_tileset_document_t* tileset, je_source_id_t source_idx);
 ```
 
 ## 描述
@@ -14,8 +14,8 @@ JE_API bool je_tilemap_source_remove(je_TilesetDocument* tileset, je_SourceId so
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
-| `source_idx` | `je_SourceId` | — |
+| `tileset` | `je_tileset_document_t*` | — |
+| `source_idx` | `je_source_id_t` | — |
 
 ## 返回值
 

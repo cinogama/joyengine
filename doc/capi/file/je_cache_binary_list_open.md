@@ -4,8 +4,8 @@
 
 ```c
 JE_API bool je_cache_binary_list_open(
-    jeecs_file* file,
-    jeecs_cache_binary_list* out_list);
+    je_file_t* file,
+    je_cache_binary_list_t* out_list);
 ```
 
 ## 描述
@@ -16,8 +16,8 @@ JE_API bool je_cache_binary_list_open(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `file` | `jeecs_file*` | — |
-| `out_list` | `jeecs_cache_binary_list*` | — |
+| `file` | `je_file_t*` | — |
+| `out_list` | `je_cache_binary_list_t*` | — |
 
 ## 返回值
 

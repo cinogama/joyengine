@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_layer_move(je_TilemapDocument* map, je_LayerId layer, je_LayerId new_pos);
+JE_API bool je_tilemap_layer_move(je_tilemap_document_t* map, je_layer_id_t layer, je_layer_id_t new_pos);
 ```
 
 ## 描述
@@ -14,9 +14,9 @@ JE_API bool je_tilemap_layer_move(je_TilemapDocument* map, je_LayerId layer, je_
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | — |
-| `new_pos` | `je_LayerId` | — |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | — |
+| `new_pos` | `je_layer_id_t` | — |
 
 ## 返回值
 

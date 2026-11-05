@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_cmd_set_uniform_int3(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y, int z);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, int x, int y, int z);
 ```
 
 ## 描述
@@ -15,8 +15,8 @@ JE_API void je_graphic_cmd_set_uniform_int3(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `cmd` | `jegl_command_buffer*` | — |
-| `slot` | `jegl_uniform_slot` | — |
+| `cmd` | `je_gl_command_buffer_t*` | — |
+| `slot` | `je_gl_uniform_slot_t` | — |
 | `x` | `int` | — |
 | `y` | `int` | — |
 | `z` | `int` | — |

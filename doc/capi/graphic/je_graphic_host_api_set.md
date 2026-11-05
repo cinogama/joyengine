@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_host_api_set(jegl_graphic_api_entry api);
+JE_API void je_graphic_host_api_set(je_gl_graphic_api_entry_t api);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_host_api_set(jegl_graphic_api_entry api);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `api` | `jegl_graphic_api_entry` | 图形 API 入口函数指针 |
+| `api` | `je_gl_graphic_api_entry_t` | 图形 API 入口函数指针 |
 
 ## 返回值
 

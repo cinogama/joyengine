@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_sync_thread_callback_register(
-    jeecs_sync_callback_func_t callback,
+    je_graphic_sync_callback_func_t callback,
     void* arg);
 ```
 
@@ -16,7 +16,7 @@ JE_API void je_graphic_sync_thread_callback_register(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `callback` | `jeecs_sync_callback_func_t` | 同步回调函数 |
+| `callback` | `je_graphic_sync_callback_func_t` | 同步回调函数 |
 | `arg` | `void*` | 传递给回调函数的用户参数 |
 
 ## 返回值
@@ -31,19 +31,19 @@ JE_API void je_graphic_sync_thread_callback_register(
 
 ```cpp
 void my_sync_callback(void* ctx, void* arg) {
-    jegl_context* thread = (jegl_context*)ctx;
+    je_gl_context_t* thread = (je_gl_context_t*)ctx;
     
     // 初始化
     je_graphic_sync_init(thread, false);
     
     // 主循环
     while (true) {
-        jegl_sync_state state = je_graphic_sync_update(thread);
+        je_gl_sync_state_t state = je_graphic_sync_update(thread);
         
-        if (state == JEGL_SYNC_SHUTDOWN) {
+        if (state == JE_GL_SYNC_SHUTDOWN) {
             je_graphic_sync_shutdown(thread, false);
             break;
-        } else if (state == JEGL_SYNC_REBOOT) {
+        } else if (state == JE_GL_SYNC_REBOOT) {
             je_graphic_sync_shutdown(thread, true);
             je_graphic_sync_init(thread, true);
         }

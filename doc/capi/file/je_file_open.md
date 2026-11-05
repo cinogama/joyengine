@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API jeecs_file* je_file_open(const char* path);
+JE_API je_file_t* je_file_open(const char* path);
 ```
 
 ## 描述
@@ -20,7 +20,7 @@ JE_API jeecs_file* je_file_open(const char* path);
 
 | 类型 | 描述 |
 |------|------|
-| `jeecs_file*` | 指向打开的文件句柄的指针；若打开失败返回 `nullptr` |
+| `je_file_t*` | 指向打开的文件句柄的指针；若打开失败返回 `nullptr` |
 
 ## 用法
 
@@ -37,7 +37,7 @@ JE_API jeecs_file* je_file_open(const char* path);
 
 ```cpp
 // 打开运行时目录下的文件
-jeecs_file* file = je_file_open("@/config/settings.json");
+je_file_t* file = je_file_open("@/config/settings.json");
 
 if (file != nullptr) {
     // 获取文件大小

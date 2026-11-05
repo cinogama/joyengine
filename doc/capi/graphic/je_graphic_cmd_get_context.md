@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API jegl_context* /* NOT NULL */ je_graphic_cmd_get_context(
-    jegl_command_buffer* cmd);
+JE_API je_gl_context_t* /* NOT NULL */ je_graphic_cmd_get_context(
+    je_gl_command_buffer_t* cmd);
 ```
 
 ## 描述
@@ -15,13 +15,13 @@ JE_API jegl_context* /* NOT NULL */ je_graphic_cmd_get_context(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `cmd` | `jegl_command_buffer*` | — |
+| `cmd` | `je_gl_command_buffer_t*` | — |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_context*` | 见描述。 |
+| `je_gl_context_t*` | 见描述。 |
 
 ## 注意事项
 

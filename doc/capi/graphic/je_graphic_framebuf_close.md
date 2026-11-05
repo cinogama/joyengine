@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_framebuf_close(jegl_frame_buffer* framebuffer);
+JE_API void je_graphic_framebuf_close(je_gl_frame_buffer_t* framebuffer);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_framebuf_close(jegl_frame_buffer* framebuffer);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `framebuffer` | `jegl_frame_buffer*` | 帧缓冲区资源指针 |
+| `framebuffer` | `je_gl_frame_buffer_t*` | 帧缓冲区资源指针 |
 
 ## 返回值
 
@@ -27,7 +27,7 @@ JE_API void je_graphic_framebuf_close(jegl_frame_buffer* framebuffer);
 ### 示例
 
 ```cpp
-jegl_frame_buffer* fbo = je_graphic_framebuf_create(1920, 1080, formats, 2, true);
+je_gl_frame_buffer_t* fbo = je_graphic_framebuf_create(1920, 1080, formats, 2, true);
 
 // 使用帧缓冲...
 

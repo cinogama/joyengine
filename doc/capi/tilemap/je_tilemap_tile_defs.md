@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API int32_t je_tilemap_tile_defs(je_TilesetDocument* tileset,
-    /* OPTIONAL */ je_TileId* out_ids, int32_t capacity);
+JE_API int32_t je_tilemap_tile_defs(je_tileset_document_t* tileset,
+    /* OPTIONAL */ je_tile_id_t* out_ids, int32_t capacity);
 ```
 
 ## 描述
@@ -15,8 +15,8 @@ JE_API int32_t je_tilemap_tile_defs(je_TilesetDocument* tileset,
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
-| `out_ids` | `je_TileId*` | 可选。 out_ids 容量不足时只写入前 capacity 项 |
+| `tileset` | `je_tileset_document_t*` | — |
+| `out_ids` | `je_tile_id_t*` | 可选。 out_ids 容量不足时只写入前 capacity 项 |
 | `capacity` | `int32_t` | — |
 
 ## 返回值

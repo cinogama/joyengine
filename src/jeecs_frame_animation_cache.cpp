@@ -24,7 +24,7 @@
 //                 "name" -> STRING        // 组件类型名
 //                 "member" -> STRING
 //                 "offset" -> BOOL
-//                 "type" -> INT32         // je_animation_value_type
+//                 "type" -> INT32         // je_animation_value_type_t
 //                 "value" -> INT32 | FLOAT32 | LIST of FLOAT32
 //             "uniforms" -> LIST of DOCUMENT
 //                 "name" -> STRING
@@ -33,17 +33,17 @@
 //   END
 // QUAT4 的 value 是四元数 (x, y, z, w)，由生成器从 TOML 中的欧拉角换算。
 //
-// 解析结果写入纯 C 的 je_animation 结构（连续数组，无 C++ 容器），
+// 解析结果写入纯 C 的 je_animation_t 结构（连续数组，无 C++ 容器），
 // 由 je_animation_close 统一释放；组件成员的类型校验在加载时完成。
 
 namespace
 {
     bool _read_cache_string(
-        const jeecs_cache_binary_document* document,
+        const je_cache_binary_document_t* document,
         const char* key,
         std::string* out)
     {
-        jeecs_cache_binary_string str;
+        je_cache_binary_string_t str;
         if (!je_cache_binary_document_index(
             document, key, JE_CACHE_BINARY_VALUE_STRING, &str))
             return false;
@@ -63,7 +63,7 @@ namespace
     }
 
     bool _read_cache_floats(
-        const jeecs_cache_binary_list* list, float* out, size_t count)
+        const je_cache_binary_list_t* list, float* out, size_t count)
     {
         for (size_t i = 0; i < count; ++i)
         {
@@ -75,8 +75,8 @@ namespace
     }
 
     bool _read_cache_data_value(
-        const jeecs_cache_binary_document* document,
-        je_animation_value* out)
+        const je_cache_binary_document_t* document,
+        je_animation_value_t* out)
     {
         int32_t type_tag;
         if (!je_cache_binary_document_index(
@@ -111,7 +111,7 @@ namespace
 
         case JE_ANIMATION_VALUE_VEC2:
         {
-            jeecs_cache_binary_list values;
+            je_cache_binary_list_t values;
             if (!je_cache_binary_document_index(
                 document, "value", JE_CACHE_BINARY_VALUE_LIST, &values)
                 || !_read_cache_floats(&values, out->m_value.v2, 2))
@@ -123,7 +123,7 @@ namespace
 
         case JE_ANIMATION_VALUE_VEC3:
         {
-            jeecs_cache_binary_list values;
+            je_cache_binary_list_t values;
             if (!je_cache_binary_document_index(
                 document, "value", JE_CACHE_BINARY_VALUE_LIST, &values)
                 || !_read_cache_floats(&values, out->m_value.v3, 3))
@@ -135,7 +135,7 @@ namespace
 
         case JE_ANIMATION_VALUE_VEC4:
         {
-            jeecs_cache_binary_list values;
+            je_cache_binary_list_t values;
             if (!je_cache_binary_document_index(
                 document, "value", JE_CACHE_BINARY_VALUE_LIST, &values)
                 || !_read_cache_floats(&values, out->m_value.v4, 4))
@@ -147,7 +147,7 @@ namespace
 
         case JE_ANIMATION_VALUE_QUAT4:
         {
-            jeecs_cache_binary_list values;
+            je_cache_binary_list_t values;
             if (!je_cache_binary_document_index(
                 document, "value", JE_CACHE_BINARY_VALUE_LIST, &values)
                 || !_read_cache_floats(&values, out->m_value.q4, 4))
@@ -164,7 +164,7 @@ namespace
 
     // 组件成员类型必须在加载时匹配，运行期不再逐帧校验。
     bool _animation_member_type_matches(
-        uint8_t type, const je_TypeInfo* member_type)
+        uint8_t type, const je_type_info_t* member_type)
     {
         switch (type)
         {
@@ -187,15 +187,15 @@ namespace
 
     struct _temp_frame_component
     {
-        const je_TypeInfo* m_component_type;
-        const je_MemberInfo* m_member_info;
-        je_animation_value m_member_value;
+        const je_type_info_t* m_component_type;
+        const je_member_info_t* m_member_info;
+        je_animation_value_t m_member_value;
         bool m_offset_mode;
     };
     struct _temp_frame_uniform
     {
         std::string m_uniform_name;
-        je_animation_value m_uniform_value;
+        je_animation_value_t m_uniform_value;
     };
     struct _temp_frame
     {
@@ -217,40 +217,40 @@ namespace
         return result;
     }
 
-    je_animation* _build_animation(const std::vector<_temp_action>& actions)
+    je_animation_t* _build_animation(const std::vector<_temp_action>& actions)
     {
-        auto* result = new je_animation;
+        auto* result = new je_animation_t;
         result->m_actions = actions.empty()
             ? nullptr
-            : new je_animation_action_data[actions.size()];
+            : new je_animation_action_data_t[actions.size()];
         result->m_action_count = actions.size();
 
         for (size_t i = 0; i < actions.size(); ++i)
         {
             const _temp_action& src_action = actions[i];
-            je_animation_action_data& dst_action = result->m_actions[i];
+            je_animation_action_data_t& dst_action = result->m_actions[i];
 
             dst_action.m_name = _copy_c_string(src_action.m_name);
             dst_action.m_frames = src_action.m_frames.empty()
                 ? nullptr
-                : new je_animation_frame_data[src_action.m_frames.size()];
+                : new je_animation_frame_data_t[src_action.m_frames.size()];
             dst_action.m_frame_count = src_action.m_frames.size();
 
             for (size_t j = 0; j < src_action.m_frames.size(); ++j)
             {
                 const _temp_frame& src_frame = src_action.m_frames[j];
-                je_animation_frame_data& dst_frame = dst_action.m_frames[j];
+                je_animation_frame_data_t& dst_frame = dst_action.m_frames[j];
 
                 dst_frame.m_frame_time = src_frame.m_frame_time;
                 dst_frame.m_component_data = src_frame.m_component_data.empty()
                     ? nullptr
-                    : new je_animation_component_data[src_frame.m_component_data.size()];
+                    : new je_animation_component_data_t[src_frame.m_component_data.size()];
                 dst_frame.m_component_data_count = src_frame.m_component_data.size();
 
                 for (size_t k = 0; k < src_frame.m_component_data.size(); ++k)
                 {
                     const _temp_frame_component& src = src_frame.m_component_data[k];
-                    je_animation_component_data& dst = dst_frame.m_component_data[k];
+                    je_animation_component_data_t& dst = dst_frame.m_component_data[k];
 
                     dst.m_component_type = src.m_component_type;
                     dst.m_member_info = src.m_member_info;
@@ -260,13 +260,13 @@ namespace
 
                 dst_frame.m_uniform_data = src_frame.m_uniform_data.empty()
                     ? nullptr
-                    : new je_animation_uniform_data[src_frame.m_uniform_data.size()];
+                    : new je_animation_uniform_data_t[src_frame.m_uniform_data.size()];
                 dst_frame.m_uniform_data_count = src_frame.m_uniform_data.size();
 
                 for (size_t k = 0; k < src_frame.m_uniform_data.size(); ++k)
                 {
                     const _temp_frame_uniform& src = src_frame.m_uniform_data[k];
-                    je_animation_uniform_data& dst = dst_frame.m_uniform_data[k];
+                    je_animation_uniform_data_t& dst = dst_frame.m_uniform_data[k];
 
                     dst.m_uniform_name = _copy_c_string(src.m_uniform_name);
                     dst.m_uniform_value = src.m_uniform_value;
@@ -280,7 +280,7 @@ namespace
     bool _load_animation_actions(
         const char* path, std::vector<_temp_action>* out_actions)
     {
-        jeecs_file* cache_file = je_animation_cache_open_or_create(path);
+        je_file_t* cache_file = je_animation_cache_open_or_create(path);
         if (cache_file == nullptr)
         {
             jeecs::debug::logerr(
@@ -288,7 +288,7 @@ namespace
             return false;
         }
 
-        jeecs_cache_binary_document root;
+        je_cache_binary_document_t root;
         if (!je_cache_binary_document_open(cache_file, &root))
         {
             jeecs::debug::logerr(
@@ -297,7 +297,7 @@ namespace
             return false;
         }
 
-        jeecs_cache_binary_list cache_animations;
+        je_cache_binary_list_t cache_animations;
         if (!je_cache_binary_document_index(
             &root, "animations", JE_CACHE_BINARY_VALUE_LIST, &cache_animations))
         {
@@ -309,7 +309,7 @@ namespace
 
         for (size_t action_index = 0;; ++action_index)
         {
-            jeecs_cache_binary_document action;
+            je_cache_binary_document_t action;
             if (!je_cache_binary_list_index(
                 &cache_animations,
                 action_index,
@@ -326,7 +326,7 @@ namespace
                 continue;
             }
 
-            jeecs_cache_binary_list cache_frames;
+            je_cache_binary_list_t cache_frames;
             if (!je_cache_binary_document_index(
                 &action, "frames", JE_CACHE_BINARY_VALUE_LIST, &cache_frames))
             {
@@ -338,7 +338,7 @@ namespace
 
             for (size_t frame_index = 0;; ++frame_index)
             {
-                jeecs_cache_binary_document frame;
+                je_cache_binary_document_t frame;
                 if (!je_cache_binary_list_index(
                     &cache_frames,
                     frame_index,
@@ -357,14 +357,14 @@ namespace
                     continue;
                 }
 
-                jeecs_cache_binary_list cache_components;
+                je_cache_binary_list_t cache_components;
                 if (je_cache_binary_document_index(
                     &frame, "components", JE_CACHE_BINARY_VALUE_LIST,
                     &cache_components))
                 {
                     for (size_t i = 0;; ++i)
                     {
-                        jeecs_cache_binary_document component;
+                        je_cache_binary_document_t component;
                         if (!je_cache_binary_list_index(
                             &cache_components,
                             i,
@@ -394,7 +394,7 @@ namespace
                             continue;
                         }
 
-                        je_animation_value value;
+                        je_animation_value_t value;
                         if (!_read_cache_data_value(&component, &value))
                         {
                             jeecs::debug::logerr(
@@ -404,7 +404,7 @@ namespace
                             continue;
                         }
 
-                        const je_TypeInfo* component_type =
+                        const je_type_info_t* component_type =
                             jeecs::typing::of(component_name.c_str());
                         if (component_type == nullptr)
                         {
@@ -415,7 +415,7 @@ namespace
                             continue;
                         }
 
-                        const je_MemberInfo* member_info =
+                        const je_member_info_t* member_info =
                             jeecs::typing::find_member_by_name(
                                 component_type, member_name.c_str());
                         if (member_info == nullptr)
@@ -447,14 +447,14 @@ namespace
                     }
                 }
 
-                jeecs_cache_binary_list cache_uniforms;
+                je_cache_binary_list_t cache_uniforms;
                 if (je_cache_binary_document_index(
                     &frame, "uniforms", JE_CACHE_BINARY_VALUE_LIST,
                     &cache_uniforms))
                 {
                     for (size_t i = 0;; ++i)
                     {
-                        jeecs_cache_binary_document uniform;
+                        je_cache_binary_document_t uniform;
                         if (!je_cache_binary_list_index(
                             &cache_uniforms,
                             i,
@@ -497,7 +497,7 @@ namespace
     }
 }
 
-JE_API /* OPTIONAL */ je_animation* je_animation_open(const char* path)
+JE_API /* OPTIONAL */ je_animation_t* je_animation_open(const char* path)
 {
     assert(path != nullptr);
 
@@ -512,17 +512,17 @@ JE_API /* OPTIONAL */ je_animation* je_animation_open(const char* path)
     return _build_animation(actions);
 }
 
-JE_API void je_animation_close(je_animation* animation)
+JE_API void je_animation_close(je_animation_t* animation)
 {
     assert(animation != nullptr);
 
     for (size_t i = 0; i < animation->m_action_count; ++i)
     {
-        je_animation_action_data& action = animation->m_actions[i];
+        je_animation_action_data_t& action = animation->m_actions[i];
 
         for (size_t j = 0; j < action.m_frame_count; ++j)
         {
-            je_animation_frame_data& frame = action.m_frames[j];
+            je_animation_frame_data_t& frame = action.m_frames[j];
 
             for (size_t k = 0; k < frame.m_uniform_data_count; ++k)
                 delete[] frame.m_uniform_data[k].m_uniform_name;
@@ -539,8 +539,8 @@ JE_API void je_animation_close(je_animation* animation)
     delete animation;
 }
 
-JE_API /* OPTIONAL */ const je_animation_action_data* je_animation_action_find(
-    const je_animation* animation, const char* name)
+JE_API /* OPTIONAL */ const je_animation_action_data_t* je_animation_action_find(
+    const je_animation_t* animation, const char* name)
 {
     assert(animation != nullptr);
     assert(name != nullptr);
@@ -557,7 +557,7 @@ WOORT_API woort_api wojeapi_animation_cache_ensure(void)
 {
     const std::string path = woort_string(0);
 
-    jeecs_file* cache = je_animation_cache_open_or_create(path.c_str());
+    je_file_t* cache = je_animation_cache_open_or_create(path.c_str());
     if (nullptr != cache)
     {
         je_file_close(cache);

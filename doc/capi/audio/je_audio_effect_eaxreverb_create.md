@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_effect_eaxreverb* je_audio_effect_eaxreverb_create();
+JE_API je_audio_effect_eax_reverb_t* je_audio_effect_eaxreverb_create();
 ```
 
 ## 描述
@@ -18,7 +18,7 @@ JE_API jeal_effect_eaxreverb* je_audio_effect_eaxreverb_create();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_effect_eaxreverb* | EAX 混响效果实例指针 |
+| je_audio_effect_eax_reverb_t* | EAX 混响效果实例指针 |
 
 ## 注意事项
 

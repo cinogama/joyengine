@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_cmd_close(jegl_command_buffer* cmd);
+JE_API void je_graphic_cmd_close(je_gl_command_buffer_t* cmd);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_cmd_close(jegl_command_buffer* cmd);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `cmd` | `jegl_command_buffer*` | — |
+| `cmd` | `je_gl_command_buffer_t*` | — |
 
 ## 返回值
 

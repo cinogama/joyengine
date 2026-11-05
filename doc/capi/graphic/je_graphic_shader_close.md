@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_shader_close(jegl_shader* shader);
+JE_API void je_graphic_shader_close(je_gl_shader_t* shader);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_shader_close(jegl_shader* shader);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `shader` | `jegl_shader*` | 着色器资源指针 |
+| `shader` | `je_gl_shader_t*` | 着色器资源指针 |
 
 ## 返回值
 
@@ -27,7 +27,7 @@ JE_API void je_graphic_shader_close(jegl_shader* shader);
 ### 示例
 
 ```cpp
-jegl_shader* shader = je_graphic_shader_load(ctx, "@/shaders/basic.shader");
+je_gl_shader_t* shader = je_graphic_shader_load(ctx, "@/shaders/basic.shader");
 
 // 使用着色器...
 

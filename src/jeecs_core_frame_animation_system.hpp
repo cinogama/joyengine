@@ -24,11 +24,11 @@ namespace jeecs
         static void _apply_component_and_uniform_frame_data(
             const game_entity& e,
             /* OPTIONAL */ Renderer::Shaders* shaders,
-            const je_animation_frame_data& frame)
+            const je_animation_frame_data_t& frame)
         {
             for (size_t i = 0; i < frame.m_component_data_count; ++i)
             {
-                const je_animation_component_data& cdata = frame.m_component_data[i];
+                const je_animation_component_data_t& cdata = frame.m_component_data[i];
                 auto* component_addr = je_ecs_world_entity_component_get(&e._m_raw, cdata.m_component_type->m_id);
 
                 if (component_addr == nullptr)
@@ -117,7 +117,7 @@ namespace jeecs
             {
                 for (size_t i = 0; i < frame.m_uniform_data_count; ++i)
                 {
-                    const je_animation_uniform_data& udata = frame.m_uniform_data[i];
+                    const je_animation_uniform_data_t& udata = frame.m_uniform_data[i];
                     switch (udata.m_uniform_value.m_type)
                     {
                     case JE_ANIMATION_VALUE_INT:
@@ -177,7 +177,7 @@ namespace jeecs
                     if (!animation.m_current_action.has_value())
                         continue;
 
-                    const je_animation_action_data* active_action =
+                    const je_animation_action_data_t* active_action =
                         animation.m_animation->find_action(
                             animation.m_current_action.value().c_str());
 
@@ -248,7 +248,7 @@ namespace jeecs
                                 finish_animation = true;
                         }
 
-                        const je_animation_frame_data& updating_frame =
+                        const je_animation_frame_data_t& updating_frame =
                             active_action->m_frames[animation.m_current_frame_index];
 
                         _apply_component_and_uniform_frame_data(e, shaders, updating_frame);

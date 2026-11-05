@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_effect_vocal_morpher* je_audio_effect_vocal_morpher_create();
+JE_API je_audio_effect_vocal_morpher_t* je_audio_effect_vocal_morpher_create();
 ```
 
 ## 描述
@@ -18,7 +18,7 @@ JE_API jeal_effect_vocal_morpher* je_audio_effect_vocal_morpher_create();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_effect_vocal_morpher* | 声音变形效果实例指针 |
+| je_audio_effect_vocal_morpher_t* | 声音变形效果实例指针 |
 
 ## 注意事项
 

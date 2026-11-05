@@ -14,7 +14,7 @@ JE_API void je_cache_file_close(void* file);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `file` | `je_writing_cache_file*` | 缓存文件句柄 |
+| `file` | `je_writing_cache_file_t*` | 缓存文件句柄 |
 
 ## 返回值
 

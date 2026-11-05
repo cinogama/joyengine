@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API int32_t je_tilemap_cell_find(je_TilemapDocument* map, je_LayerId layer,
-    const char* name, je_PropertyType type, const void* value);
+JE_API int32_t je_tilemap_cell_find(je_tilemap_document_t* map, je_layer_id_t layer,
+    const char* name, je_property_type_t type, const void* value);
 ```
 
 ## 描述
@@ -15,10 +15,10 @@ JE_API int32_t je_tilemap_cell_find(je_TilemapDocument* map, je_LayerId layer,
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | layer < 0 时搜索全部图层 |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | layer < 0 时搜索全部图层 |
 | `name` | `const char*` | name 为 "walkable" 时按通行性匹配，type 须为 BOOL，value 指向 bool |
-| `type` | `je_PropertyType` | — |
+| `type` | `je_property_type_t` | — |
 | `value` | `const void*` | — |
 
 ## 返回值

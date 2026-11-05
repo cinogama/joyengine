@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API jeecs_file* je_cache_file_load(
+JE_API je_file_t* je_cache_file_load(
     const char* filepath,
     uint32_t format_version,
     wo_integer_t virtual_crc64);
@@ -33,7 +33,7 @@ JE_API jeecs_file* je_cache_file_load(
 
 | 类型 | 描述 |
 |------|------|
-| `jeecs_file*` | 缓存文件句柄；若加载失败返回 `nullptr` |
+| `je_file_t*` | 缓存文件句柄；若加载失败返回 `nullptr` |
 
 ## 用法
 
@@ -43,7 +43,7 @@ JE_API jeecs_file* je_cache_file_load(
 
 ```cpp
 // 加载缓存文件，自动计算校验值
-jeecs_file* cache = je_cache_file_load("@/shader/basic.shader", 1, 0);
+je_file_t* cache = je_cache_file_load("@/shader/basic.shader", 1, 0);
 
 if (cache != nullptr) {
     // 读取缓存数据
@@ -55,7 +55,7 @@ if (cache != nullptr) {
 }
 
 // 加载缓存文件，忽略校验
-jeecs_file* cache2 = je_cache_file_load("@/shader/basic.shader", 1, -1);
+je_file_t* cache2 = je_cache_file_load("@/shader/basic.shader", 1, -1);
 ```
 
 ## 注意事项

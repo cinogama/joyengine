@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_vertex_close(jegl_vertex* vertex);
+JE_API void je_graphic_vertex_close(je_gl_vertex_t* vertex);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_vertex_close(jegl_vertex* vertex);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `vertex` | `jegl_vertex*` | 顶点资源指针 |
+| `vertex` | `je_gl_vertex_t*` | 顶点资源指针 |
 
 ## 返回值
 
@@ -27,7 +27,7 @@ JE_API void je_graphic_vertex_close(jegl_vertex* vertex);
 ### 示例
 
 ```cpp
-jegl_vertex* mesh = je_graphic_vertex_load(ctx, "@/models/cube.obj");
+je_gl_vertex_t* mesh = je_graphic_vertex_load(ctx, "@/models/cube.obj");
 
 // 使用顶点...
 

@@ -4,8 +4,8 @@
 
 ```c
 JE_API bool je_cache_binary_list_iterator_read(
-    const jeecs_cache_binary_list_iterator* iterator,
-    jeecs_cache_binary_value_type expected_type,
+    const je_cache_binary_list_iterator_t* iterator,
+    je_cache_binary_value_type_t expected_type,
     void* out_value);
 ```
 
@@ -17,8 +17,8 @@ JE_API bool je_cache_binary_list_iterator_read(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `iterator` | `const jeecs_cache_binary_list_iterator*` | — |
-| `expected_type` | `jeecs_cache_binary_value_type` | expected_type 和 out_value 的约定与 je_cache_binary_document_index 相同 |
+| `iterator` | `const je_cache_binary_list_iterator_t*` | — |
+| `expected_type` | `je_cache_binary_value_type_t` | expected_type 和 out_value 的约定与 je_cache_binary_document_index 相同 |
 | `out_value` | `void*` | — |
 
 ## 返回值

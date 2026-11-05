@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API void je_audio_source_filter_set(jeal_source* source, jeal_filter* filter_may_null);
+JE_API void je_audio_source_filter_set(je_audio_source_t* source, je_audio_filter_t* filter_may_null);
 ```
 
 ## 描述
@@ -14,8 +14,8 @@ JE_API void je_audio_source_filter_set(jeal_source* source, jeal_filter* filter_
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| source | jeal_source* | 音频源指针 |
-| filter_may_null | jeal_filter* | 滤波器指针，可以为 nullptr 表示移除滤波器 |
+| source | je_audio_source_t* | 音频源指针 |
+| filter_may_null | je_audio_filter_t* | 滤波器指针，可以为 nullptr 表示移除滤波器 |
 
 ## 返回值
 
@@ -24,8 +24,8 @@ JE_API void je_audio_source_filter_set(jeal_source* source, jeal_filter* filter_
 ## 用法示例
 
 ```cpp
-jeal_source* source = je_audio_source_create();
-jeal_filter* filter = je_audio_filter_create();
+je_audio_source_t* source = je_audio_source_create();
+je_audio_filter_t* filter = je_audio_filter_create();
 
 // 设置为低通滤波器
 filter->m_type = JE_AUDIO_FILTER_LOWPASS;

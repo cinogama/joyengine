@@ -316,16 +316,16 @@ namespace jeecs
                     }
 
                     auto created = graphic::vertex::create(
-                        jegl_vertex::TRIANGLES,
+                        JE_GL_VERTEX_TYPE_TRIANGLES,
                         pool.staging.data(),
                         pool.staging.size() * sizeof(float),
                         indices,
                         {
-                            { jegl_vertex::data_type::FLOAT32, 3 }, // 中心位置（局部）
-                            { jegl_vertex::data_type::FLOAT32, 4 }, // 颜色 RGBA
-                            { jegl_vertex::data_type::FLOAT32, 2 }, // 角点偏移（已自转缩放）
-                            { jegl_vertex::data_type::FLOAT32, 2 }, // UV
-                            { jegl_vertex::data_type::INT32, 1 },   // 粒子 ID
+                            { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3 }, // 中心位置（局部）
+                            { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 4 }, // 颜色 RGBA
+                            { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 2 }, // 角点偏移（已自转缩放）
+                            { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 2 }, // UV
+                            { JE_GL_VERTEX_DATA_TYPE_INT32, 1 },   // 粒子 ID
                         });
 
                     if (created.has_value())
@@ -428,7 +428,7 @@ namespace jeecs
                     continue;
 
                 // ===== 构建公告板网格（局部坐标顶点数据） =====
-                jegl_vertex* raw_vertex = pool.gpu_vertex->get()->resource();
+                je_gl_vertex_t* raw_vertex = pool.gpu_vertex->get()->resource();
 
                 // 世界空间模拟时，经发射器逆变换把世界坐标转回局部
                 math::quat inv_rotation;

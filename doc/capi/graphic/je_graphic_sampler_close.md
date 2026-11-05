@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_sampler_close(jegl_sampler* sampler);
+JE_API void je_graphic_sampler_close(je_gl_sampler_t* sampler);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_sampler_close(jegl_sampler* sampler);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `sampler` | `jegl_sampler*` | — |
+| `sampler` | `je_gl_sampler_t*` | — |
 
 ## 返回值
 

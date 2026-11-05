@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_cmd_bind_uniform_buffer(
-    jegl_command_buffer* cmd, jegl_uniform_buffer* buffer);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_buffer_t* buffer);
 ```
 
 ## 描述
@@ -15,8 +15,8 @@ JE_API void je_graphic_cmd_bind_uniform_buffer(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `cmd` | `jegl_command_buffer*` | — |
-| `buffer` | `jegl_uniform_buffer*` | — |
+| `cmd` | `je_gl_command_buffer_t*` | — |
+| `buffer` | `je_gl_uniform_buffer_t*` | — |
 
 ## 返回值
 

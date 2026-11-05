@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_uniformbuf_close(jegl_uniform_buffer* uniformbuf);
+JE_API void je_graphic_uniformbuf_close(je_gl_uniform_buffer_t* uniformbuf);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_uniformbuf_close(jegl_uniform_buffer* uniformbuf);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `uniformbuf` | `jegl_uniform_buffer*` | 一致变量缓冲区资源指针 |
+| `uniformbuf` | `je_gl_uniform_buffer_t*` | 一致变量缓冲区资源指针 |
 
 ## 返回值
 
@@ -27,7 +27,7 @@ JE_API void je_graphic_uniformbuf_close(jegl_uniform_buffer* uniformbuf);
 ### 示例
 
 ```cpp
-jegl_uniform_buffer* ubo = je_graphic_uniformbuf_create(0, 256);
+je_gl_uniform_buffer_t* ubo = je_graphic_uniformbuf_create(0, 256);
 
 // 使用 UBO...
 

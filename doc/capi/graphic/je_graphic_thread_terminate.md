@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_thread_terminate(jegl_context* thread_handle);
+JE_API void je_graphic_thread_terminate(je_gl_context_t* thread_handle);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_thread_terminate(jegl_context* thread_handle);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `thread_handle` | `jegl_context*` | 图形上下文指针 |
+| `thread_handle` | `je_gl_context_t*` | 图形上下文指针 |
 
 ## 返回值
 
@@ -27,7 +27,7 @@ JE_API void je_graphic_thread_terminate(jegl_context* thread_handle);
 ### 示例
 
 ```cpp
-jegl_context* ctx = je_graphic_thread_start(config, universe, api_func, render_func, arg);
+je_gl_context_t* ctx = je_graphic_thread_start(config, universe, api_func, render_func, arg);
 
 // ... 使用图形线程 ...
 

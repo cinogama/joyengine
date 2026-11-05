@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_pipeline_close(jegl_pipeline* pipeline);
+JE_API void je_graphic_pipeline_close(je_gl_pipeline_t* pipeline);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_pipeline_close(jegl_pipeline* pipeline);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `pipeline` | `jegl_pipeline*` | — |
+| `pipeline` | `je_gl_pipeline_t*` | — |
 
 ## 返回值
 

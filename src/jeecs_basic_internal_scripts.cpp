@@ -19,15 +19,15 @@ namespace jeecs
         {
             do
             {
-                jeecs_cache_binary_document doc;
+                je_cache_binary_document_t doc;
                 if (!je_cache_binary_document_open(cache_file, &doc))
                     break;
 
-                jeecs_cache_binary_buffer content;
+                je_cache_binary_buffer_t content;
                 if (!je_cache_binary_document_index(
                     &doc,
                     "content",
-                    jeecs_cache_binary_value_type::JE_CACHE_BINARY_VALUE_BUFFER,
+                    je_cache_binary_value_type_t::JE_CACHE_BINARY_VALUE_BUFFER,
                     &content))
                 {
                     // Bad cache.
@@ -217,7 +217,7 @@ void je_internal_script_finish()
     }
 }
 
-static jeecs_file* _jeecs_generate_cache(
+static je_file_t* _jeecs_generate_cache(
     const char* path, uint32_t format_version, woort_CodeEnv* cenv)
 {
     static constexpr const char* SCRIPT_ENTRY = "generate";
@@ -230,7 +230,7 @@ static jeecs_file* _jeecs_generate_cache(
         return nullptr;
     }
 
-    je_writing_cache_file* const cache_file = je_cache_file_create(
+    je_writing_cache_file_t* const cache_file = je_cache_file_create(
         path, format_version, 0);
 
     if (cache_file == nullptr)
@@ -297,9 +297,9 @@ static jeecs_file* _jeecs_generate_cache(
     return nullptr;
 }
 
-/* OPTIONAL */ jeecs_file* je_animation_cache_open_or_create(const char* path)
+/* OPTIONAL */ je_file_t* je_animation_cache_open_or_create(const char* path)
 {
-    if (jeecs_file* file = je_cache_file_load(path, ANIMATION_CACHE_VERSION, 0))
+    if (je_file_t* file = je_cache_file_load(path, ANIMATION_CACHE_VERSION, 0))
         return file;
 
     if (cache_builder_of_animation.has_value())
@@ -310,9 +310,9 @@ static jeecs_file* _jeecs_generate_cache(
     return nullptr;
 }
 
-/* OPTIONAL */ jeecs_file* je_tilemap_cache_open_or_create(const char* path)
+/* OPTIONAL */ je_file_t* je_tilemap_cache_open_or_create(const char* path)
 {
-    if (jeecs_file* file = je_cache_file_load(path, TILEMAP_CACHE_VERSION, 0))
+    if (je_file_t* file = je_cache_file_load(path, TILEMAP_CACHE_VERSION, 0))
         return file;
 
     if (cache_builder_of_tilemap.has_value())
@@ -323,9 +323,9 @@ static jeecs_file* _jeecs_generate_cache(
     return nullptr;
 }
 
-/* OPTIONAL */ jeecs_file* je_tileset_cache_open_or_create(const char* path)
+/* OPTIONAL */ je_file_t* je_tileset_cache_open_or_create(const char* path)
 {
-    if (jeecs_file* file = je_cache_file_load(path, TILESET_CACHE_VERSION, 0))
+    if (je_file_t* file = je_cache_file_load(path, TILESET_CACHE_VERSION, 0))
         return file;
 
     if (cache_builder_of_tileset.has_value())

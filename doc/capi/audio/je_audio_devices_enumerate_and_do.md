@@ -4,7 +4,7 @@
 
 ```cpp
 JE_API void je_audio_devices_enumerate_and_do(
-    jeal_enumerate_device_callback_t callback, void* userdata);
+    je_audio_enumerate_device_callback_t callback, void* userdata);
 ```
 
 ## 描述
@@ -15,23 +15,23 @@ JE_API void je_audio_devices_enumerate_and_do(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| callback | jeal_enumerate_device_callback_t | 回调函数 |
+| callback | je_audio_enumerate_device_callback_t | 回调函数 |
 | userdata | void* | 传递给回调函数的用户数据 |
 
 ### 回调函数类型
 
 ```cpp
-typedef const jeal_play_device* (*jeal_enumerate_device_callback_t)(
-    const jeal_play_device* enumerated_devices,
+typedef const je_audio_play_device_t* (*je_audio_enumerate_device_callback_t)(
+    const je_audio_play_device_t* enumerated_devices,
     size_t enumerated_device_count,
     void* userdata);
 ```
 
-### jeal_play_device 结构体
+### je_audio_play_device_t 结构体
 
 ```cpp
-struct jeal_play_device {
-    jeal_native_play_device_instance* m_device_instance;
+struct je_audio_play_device_t {
+    je_audio_native_play_device_instance_t* m_device_instance;
     const char* m_name;        // 设备名称，保证唯一
     bool m_active;             // 是否是当前使用的设备
     bool m_is_default;         // 是否是默认播放设备
@@ -46,8 +46,8 @@ struct jeal_play_device {
 ## 用法示例
 
 ```cpp
-const jeal_play_device* device_selector(
-    const jeal_play_device* devices,
+const je_audio_play_device_t* device_selector(
+    const je_audio_play_device_t* devices,
     size_t count,
     void* userdata)
 {

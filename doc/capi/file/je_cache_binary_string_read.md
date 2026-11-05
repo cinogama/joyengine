@@ -6,7 +6,7 @@
 JE_API bool je_cache_binary_string_read(
     /* OPTIONAL: If *inout_dst_len == 0 */ char* dst,
     size_t* inout_dst_len,
-    const jeecs_cache_binary_string* str);
+    const je_cache_binary_string_t* str);
 ```
 
 ## 描述
@@ -19,7 +19,7 @@ JE_API bool je_cache_binary_string_read(
 |--------|------|------|
 | `dst` | `char*` | 可选（If *inout_dst_len == 0） dst == nullptr 时 inout_dst_len 必须为 0，此时仅查询字符串长度 |
 | `inout_dst_len` | `size_t*` | inout_dst_len 传入 dst 的容量，成功返回时被改写为字符串的实际长度 |
-| `str` | `const jeecs_cache_binary_string*` | — |
+| `str` | `const je_cache_binary_string_t*` | — |
 
 ## 返回值
 

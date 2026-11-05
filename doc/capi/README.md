@@ -115,3 +115,14 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 - 纯名词访问器保持名词形式（如 `je_tilemap_layer_z`）；谓词使用 `_is_*`（如 `je_io_gamepad_is_active`）。
 - `je_gui_*` 与 `wojeapi_*` 是 Woolang 绑定/ImGui 中间层，不遵循此命名约定。
 
+### 类型命名
+
+类型声明（`typedef struct/enum/union`、类型别名）统一为 `je_<domain>_<subject...>_t`，并为每个规范类型提供 `je_<DomainSubject>` 大驼峰别名，二者完全等价：
+
+- `je_game_entity_t` / `je_GameEntity`
+- `je_gl_shader_t` / `je_GlShader`
+- `je_audio_source_t` / `je_AudioSource`
+- `je_tilemap_document_t` / `je_TilemapDocument`
+
+具名嵌套类型（枚举、结构体、union、别名）一律提升为全局类型，不使用 `Owner::Nested` 形式；拆分出的未作用域枚举常量使用 `JE_<DOMAIN>_...` 前缀（如 `JE_GL_TEXTURE_FORMAT_RGBA`、`JE_AUDIO_EFFECT_CHORUS_WAVEFORM_SINUSOID`）。
+

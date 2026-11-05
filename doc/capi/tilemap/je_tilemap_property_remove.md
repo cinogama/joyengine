@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_property_remove(je_TilesetDocument* tileset, const char* name);
+JE_API bool je_tilemap_property_remove(je_tileset_document_t* tileset, const char* name);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API bool je_tilemap_property_remove(je_TilesetDocument* tileset, const char* 
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
+| `tileset` | `je_tileset_document_t*` | — |
 | `name` | `const char*` | — |
 
 ## 返回值

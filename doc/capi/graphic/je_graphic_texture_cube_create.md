@@ -3,10 +3,10 @@
 ## 函数签名
 
 ```c
-JE_API jegl_texture_cube* je_graphic_texture_cube_create(
+JE_API je_gl_texture_cube_t* je_graphic_texture_cube_create(
     size_t width,
     size_t height,
-    jegl_texture_common::format format);
+    je_gl_texture_format_t format);
 ```
 
 ## 描述
@@ -19,13 +19,13 @@ JE_API jegl_texture_cube* je_graphic_texture_cube_create(
 |--------|------|------|
 | `width` | `size_t` | 每个面的宽度（为 0 时视为 1） |
 | `height` | `size_t` | 每个面的高度（为 0 时视为 1） |
-| `format` | `jegl_texture_common::format` | 像素格式 |
+| `format` | `je_gl_texture_format_t` | 像素格式 |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_texture_cube*` | 立方体贴图资源指针，始终非空 |
+| `je_gl_texture_cube_t*` | 立方体贴图资源指针，始终非空 |
 
 ## 用法
 

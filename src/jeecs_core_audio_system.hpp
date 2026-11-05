@@ -43,7 +43,7 @@ namespace jeecs
                 const auto volume = listener.volume;
 
                 audio::listener::update(
-                    [&](jeal_listener* listener_data)
+                    [&](je_audio_listener_t* listener_data)
                     {
                         listener_data->m_location[0] = current_position.x;
                         listener_data->m_location[1] = current_position.y;
@@ -75,7 +75,7 @@ namespace jeecs
                 const auto& current_position = trans.world_position;
 
                 source.source->update(
-                    [&](jeal_source* source_data)
+                    [&](je_audio_source_t* source_data)
                     {
                         source_data->m_gain = source_volume;
                         source_data->m_pitch = source_pitch;
@@ -97,7 +97,7 @@ namespace jeecs
                 {
                     playing.state = Audio::Playing::play_state::STOPPED;
                     playing.play = false;
-                    if (source.source->get_state() != jeal_state::JE_AUDIO_STATE_STOPPED)
+                    if (source.source->get_state() != je_audio_state_t::JE_AUDIO_STATE_STOPPED)
                         source.source->stop();
                 }
                 else
@@ -113,7 +113,7 @@ namespace jeecs
                         {
                             // Request to play.
                             source.source->update(
-                                [looping](jeal_source* source_data)
+                                [looping](je_audio_source_t* source_data)
                                 {
                                     source_data->m_loop = looping;
                                 });
@@ -132,7 +132,7 @@ namespace jeecs
                         if ((playing.state == Audio::Playing::play_state::LOOPED_PLAYING) != playing.loop)
                         {
                             source.source->update(
-                                [looping](jeal_source* source_data)
+                                [looping](je_audio_source_t* source_data)
                                 {
                                     source_data->m_loop = looping;
                                 });
@@ -145,7 +145,7 @@ namespace jeecs
 
                         switch (source.source->get_state())
                         {
-                        case jeal_state::JE_AUDIO_STATE_STOPPED:
+                        case je_audio_state_t::JE_AUDIO_STATE_STOPPED:
                             if (!buffer_updated)
                             {
                                 // Source has been stopped.
@@ -155,11 +155,11 @@ namespace jeecs
                             }
                             // Buffer updated during playing, if `play`, play it immediately.
                             [[fallthrough]];
-                        case jeal_state::JE_AUDIO_STATE_PAUSED:
+                        case je_audio_state_t::JE_AUDIO_STATE_PAUSED:
                             if (playing.play)
                                 source.source->play();
                             break;
-                        case jeal_state::JE_AUDIO_STATE_PLAYING:
+                        case je_audio_state_t::JE_AUDIO_STATE_PLAYING:
                             if (!playing.play)
                                 source.source->pause();
                             break;

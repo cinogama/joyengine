@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_listener* je_audio_listener_get();
+JE_API je_audio_listener_t* je_audio_listener_get();
 ```
 
 ## 描述
@@ -18,12 +18,12 @@ JE_API jeal_listener* je_audio_listener_get();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_listener* | 监听者实例指针 |
+| je_audio_listener_t* | 监听者实例指针 |
 
-### jeal_listener 结构体
+### je_audio_listener_t 结构体
 
 ```cpp
-struct jeal_listener {
+struct je_audio_listener_t {
     float m_gain;        // 音量增益，最终起效的是 m_gain * m_global_gain
     float m_global_gain; // 全局增益，最终起效的是 m_gain * m_global_gain
     float m_location[3]; // 监听器位置
@@ -36,7 +36,7 @@ struct jeal_listener {
 ## 用法示例
 
 ```cpp
-jeal_listener* listener = je_audio_listener_get();
+je_audio_listener_t* listener = je_audio_listener_get();
 
 // 设置监听器位置
 listener->m_location[0] = 0.0f;  // X

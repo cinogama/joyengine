@@ -93,7 +93,7 @@ namespace jeecs::graphic
         }
 
         virtual void create_interface(
-            const jegl_interface_config* config) override
+            const je_gl_interface_config_t* config) override
         {
             auto* data = static_cast<_jegl_window_android_app*>(config->m_userdata);
             assert(data != nullptr);

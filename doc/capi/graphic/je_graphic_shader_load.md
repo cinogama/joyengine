@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API jegl_shader* je_graphic_shader_load(
-    jegl_context* context,
+JE_API je_gl_shader_t* je_graphic_shader_load(
+    je_gl_context_t* context,
     const char* path);
 ```
 
@@ -16,14 +16,14 @@ JE_API jegl_shader* je_graphic_shader_load(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `context` | `jegl_context*` | 图形上下文指针 |
+| `context` | `je_gl_context_t*` | 图形上下文指针 |
 | `path` | `const char*` | 着色器文件路径 |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_shader*` | 着色器资源指针；若加载失败返回 `nullptr` |
+| `je_gl_shader_t*` | 着色器资源指针；若加载失败返回 `nullptr` |
 
 ## 用法
 
@@ -32,7 +32,7 @@ JE_API jegl_shader* je_graphic_shader_load(
 ### 示例
 
 ```cpp
-jegl_shader* shader = je_graphic_shader_load(ctx, "@/shaders/pbr.shader");
+je_gl_shader_t* shader = je_graphic_shader_load(ctx, "@/shaders/pbr.shader");
 
 if (shader != nullptr) {
     // 使用着色器进行渲染...

@@ -166,19 +166,20 @@
 #define typesof(...) <__VA_ARGS__>      // 用于优化泛型参数列表对代码自动整理的影响，配合需要大量泛型参数的接口使用
 
 // ==========================================================================
-// C ABI 原始标量类型（je_ 前缀 + 大驼峰）
-// 这些是 C ABI 段的基础标量类型别名，C/C++ 通用。必须在 C++ 辅助声明段之前
-// 定义，以便 C++ 端以它们为规范提供 jeecs::typing:: 别名，C ABI 签名也直接使用。
+// C ABI 类型命名：规范类型为 je_<domain>_<subject...>_t（如 je_type_hash_t），
+// 并在 C ABI 段末尾为每个类型提供 je_<DomainSubject> 大驼峰别名（如 je_TypeHash）。
+// 这些基础标量类型 C/C++ 通用，必须在 C++ 辅助声明段之前定义，以便 C++ 端
+// 以它们为规范提供 jeecs::typing:: 别名，C ABI 签名也直接使用。
 // ==========================================================================
-typedef size_t   je_TypeHash;     // 类型哈希值
-typedef size_t   je_TypeId;       // 引擎类型工厂管理的类型 ID（无效值 = (je_TypeId)-1）
-#define JE_INVALID_TYPE_ID ((je_TypeId)SIZE_MAX) /* je_TypeId 的无效值，与 JE_INVALID_TYPE_ID 等价 */
-typedef uint32_t je_Version;      // 版本号（实体索引版本、图形线程版本等）
-typedef uint64_t je_TimestampMs;  // 毫秒时间戳
-typedef uint64_t je_DebugEid;     // 调试用实体 ID（仅编辑器）
+typedef size_t   je_type_hash_t;     // 类型哈希值
+typedef size_t   je_type_id_t;       // 引擎类型工厂管理的类型 ID（无效值 = (je_type_id_t)-1）
+#define JE_INVALID_TYPE_ID ((je_type_id_t)SIZE_MAX) /* je_type_id_t 的无效值，与 JE_INVALID_TYPE_ID 等价 */
+typedef uint32_t je_version_t;      // 版本号（实体索引版本、图形线程版本等）
+typedef uint64_t je_timestamp_ms_t;  // 毫秒时间戳
+typedef uint64_t je_debug_eid_t;     // 调试用实体 ID（仅编辑器）
 
-// je_Uuid：全局唯一标识符（平凡布局）。C++ 端 jeecs::typing::uuid 以公开继承方式扩展它（加方法）。
-typedef struct je_Uuid {
+// je_uuid_t：全局唯一标识符（平凡布局）。C++ 端 jeecs::typing::uuid 以公开继承方式扩展它（加方法）。
+typedef struct je_uuid_t {
     union {
         struct {
             uint64_t a;
@@ -194,46 +195,46 @@ typedef struct je_Uuid {
             uint32_t v; // Random
         };
     };
-} je_Uuid;
+} je_uuid_t;
 
 // ---- C ABI ECS 不透明句柄（opaque handle）前向声明 ----
 // 这些类型对外仅暴露指针；完整定义在引擎内部（src/）。C/C++ 通用，二进制兼容。
 // 在引擎内部以空结构体作为公开基类，实际实现类（jeecs_impl::ecs_universe 等）继承它们，
 // 因此 C ABI 边界处可使用干净的 derived↔base static_cast，无需 reinterpret_cast。
-// 此处提前声明是因为 je_GameEntity（见下方）需要引用 je_Chunk。
-typedef struct je_GameUniverse je_GameUniverse;   // ECS 宇宙（全局上下文）
-typedef struct je_GameWorld    je_GameWorld;      // ECS 世界
-typedef struct je_Archtype je_Archtype;   // ECS 原型（ArchType）
-typedef struct je_Chunk    je_Chunk;      // ECS 原型分块（ArchChunk）
+// 此处提前声明是因为 je_game_entity_t（见下方）需要引用 je_chunk_t。
+typedef struct je_game_universe_t je_game_universe_t;   // ECS 宇宙（全局上下文）
+typedef struct je_game_world_t    je_game_world_t;      // ECS 世界
+typedef struct je_archtype_t je_archtype_t;   // ECS 原型（ArchType）
+typedef struct je_chunk_t    je_chunk_t;      // ECS 原型分块（ArchChunk）
 
 // ---- 实体（game_entity）C 类型 ----
-// jeecs::game_entity（C++ 包装）以组合方式持有 je_GameEntity 作为成员；
-// je_EntityStat / meta 不再提供 C++ 别名，直接使用 je_EntityStat / je_GameEntityMeta。
-typedef uint32_t je_EntityIdInChunk;
+// jeecs::game_entity（C++ 包装）以组合方式持有 je_game_entity_t 作为成员；
+// je_entity_stat_t / meta 不再提供 C++ 别名，直接使用 je_entity_stat_t / je_game_entity_meta_t。
+typedef uint32_t je_entity_id_in_chunk_t;
 
-typedef enum je_EntityStat {
+typedef enum je_entity_stat_t {
     JE_ENTITY_STAT_UNAVAILABLE = 0, // Entity is destroyed or just not ready.
     JE_ENTITY_STAT_READY,           // Entity is OK, works as normal.
     JE_ENTITY_STAT_PREFAB,          // Current entity is prefab.
-} je_EntityStat;
+} je_entity_stat_t;
 
-typedef struct je_GameEntityMeta {
-    je_Version m_version;
-    je_EntityStat m_stat;
-} je_GameEntityMeta;
+typedef struct je_game_entity_meta_t {
+    je_version_t m_version;
+    je_entity_stat_t m_stat;
+} je_game_entity_meta_t;
 
-// 注意：除预设体（JE_ENTITY_STAT_PREFAB）之外的 je_GameEntity，只允许在一帧期间持有；
-// 一帧结束时，引擎可能执行碎片回收（defragmentation），导致 je_GameEntity 索引失效。
-typedef struct je_GameEntity {
-    je_Chunk* _m_in_chunk;
-    je_EntityIdInChunk _m_id;
-    je_Version _m_version;
-} je_GameEntity;
+// 注意：除预设体（JE_ENTITY_STAT_PREFAB）之外的 je_game_entity_t，只允许在一帧期间持有；
+// 一帧结束时，引擎可能执行碎片回收（defragmentation），导致 je_game_entity_t 索引失效。
+typedef struct je_game_entity_t {
+    je_chunk_t* _m_in_chunk;
+    je_entity_id_in_chunk_t _m_id;
+    je_version_t _m_version;
+} je_game_entity_t;
 
 // ---- 输入码（input）C 枚举 ----
 // 原 jeecs::input 的 enum class 已迁移为 C 枚举（je_*），C++ 直接使用。
 // 枚举项加 JE_<KIND>_ 前缀以避免不同输入码间的同名冲突（如 LEFT/RIGHT/A/B）。
-typedef enum je_Mousecode {
+typedef enum je_mousecode_t {
     JE_MOUSE_LEFT,
     JE_MOUSE_MID,
     JE_MOUSE_RIGHT,
@@ -249,9 +250,9 @@ typedef enum je_Mousecode {
     JE_MOUSE_CUSTOM_8,
 
     JE_MOUSE_COUNT,
-} je_Mousecode;
+} je_mousecode_t;
 
-typedef enum je_Keycode {
+typedef enum je_keycode_t {
     JE_KEY_UNKNOWN = 0,
 
     JE_KEY_APOSTROPHE = '\'',
@@ -366,9 +367,9 @@ typedef enum je_Keycode {
     JE_KEY_CUSTOM_8,
 
     JE_KEY_COUNT,
-} je_Keycode;
+} je_keycode_t;
 
-typedef enum je_Gamepadcode {
+typedef enum je_gamepadcode_t {
     JE_GAMEPAD_UP,
     JE_GAMEPAD_DOWN,
     JE_GAMEPAD_LEFT,
@@ -389,29 +390,29 @@ typedef enum je_Gamepadcode {
     JE_GAMEPAD_GUIDE,
 
     JE_GAMEPAD_COUNT,
-} je_Gamepadcode;
+} je_gamepadcode_t;
 
-typedef enum je_Joystickcode {
+typedef enum je_joystickcode_t {
     JE_JOY_L,
     JE_JOY_R,
     JE_JOY_LT, // Use x value only.
     JE_JOY_RT, // Use x value only.
 
     JE_JOY_COUNT,
-} je_Joystickcode;
+} je_joystickcode_t;
 
 // ---- C ABI 不透明句柄（opaque handle）前向声明 ----
 // 这些类型对外仅暴露指针；完整定义在引擎内部（src/）。C/C++ 通用，二进制兼容。
-// 注：je_GameUniverse/je_GameWorld/je_Archtype/je_Chunk 的前向声明位于文件更上方（实体类型段之前），
-// 因为 je_GameEntity 等早期定义的类型需要引用 je_Chunk。
-typedef struct je_GraphicUhost    je_GraphicUhost;      // 图形渲染宿主上下文
-typedef struct je_RenderBranch je_RenderBranch;   // 可编程绘制分支
+// 注：je_game_universe_t/je_game_world_t/je_archtype_t/je_chunk_t 的前向声明位于文件更上方（实体类型段之前），
+// 因为 je_game_entity_t 等早期定义的类型需要引用 je_chunk_t。
+typedef struct je_graphic_uhost_t    je_graphic_uhost_t;      // 图形渲染宿主上下文
+typedef struct je_render_branch_t je_render_branch_t;   // 可编程绘制分支
 
 #ifdef __cplusplus
 /*
 jeecs [命名空间] —— C++ 辅助声明段
 此处定义引擎自带的所有的C++接口类、函数、类型和常量。
-该段提供 C ABI 段需要引用的类型别名/前向声明（如 je_TypeInfo、game_entity 等），
+该段提供 C ABI 段需要引用的类型别名/前向声明（如 je_type_info_t、game_entity 等），
 仅 C++ 可见；纯 C 编译器跳过本段。
 */
 namespace jeecs
@@ -433,8 +434,8 @@ namespace jeecs
 #endif
     }
 
-    // 注：je_RenderBranch / je_GraphicUhost 不再在此提供 C++ 别名。
-    // C++ 代码直接使用 C ABI 类型 je_RenderBranch / je_GraphicUhost（见文件顶部 C ABI 段）。
+    // 注：je_render_branch_t / je_graphic_uhost_t 不再在此提供 C++ 别名。
+    // C++ 代码直接使用 C ABI 类型 je_render_branch_t / je_graphic_uhost_t（见文件顶部 C ABI 段）。
 
     /*
     jeecs::typing [命名空间]
@@ -443,12 +444,12 @@ namespace jeecs
     namespace typing
     {
         /*
-        je_TypeHash [类型别名]
+        je_type_hash_t [类型别名]
         用于储存哈希值结果的类型
         */
 
         /*
-        je_TypeId [类型别名]
+        je_type_id_t [类型别名]
         用于储存引擎的类型工厂管理的类型ID，规定的无效值是 JE_INVALID_TYPE_ID
             请参见：
             JE_INVALID_TYPE_ID
@@ -456,11 +457,11 @@ namespace jeecs
 
         /*
         JE_INVALID_TYPE_ID [常量]
-        je_TypeId 类型的无效值
+        je_type_id_t 类型的无效值
         请参见：
-            je_TypeId
+            je_type_id_t
         */
-        constexpr je_TypeId INVALID_TYPE_ID = SIZE_MAX;
+        constexpr je_type_id_t INVALID_TYPE_ID = SIZE_MAX;
 
         using module_entry_t = void (*)(woort_Dylib*);
         using module_leave_t = void (*)(void);
@@ -472,7 +473,7 @@ namespace jeecs
         请参见：
             jeecs::typing::uid_t
         */
-        struct uuid : public je_Uuid
+        struct uuid : public je_uuid_t
         {
             static uuid generate() noexcept;
 
@@ -518,14 +519,14 @@ namespace jeecs
         using uid_t = uuid;
 
         /*
-        je_TimestampMs [类型别名]
+        je_timestamp_ms_t [类型别名]
         用于储存以毫秒为单位的时间戳的类型别名
         请参见：
             je_clock_time_stamp
         */
 
         /*
-        je_DebugEid [类型别名]
+        je_debug_eid_t [类型别名]
         实体的调试 ID，对于任何实体，确保在引擎的生命周期内唯一
         仅编辑器环境下有效。
         ----------------------------------
@@ -731,13 +732,13 @@ namespace jeecs
     {
     public:
         // C ABI 实体句柄（平凡布局）。game_entity 以组合方式持有它，方法操作 _m_raw。
-        // je_EntityStat / meta 不再嵌套于此，请使用 C 类型 je_EntityStat / je_GameEntityMeta。
-        je_GameEntity _m_raw;
+        // je_entity_stat_t / meta 不再嵌套于此，请使用 C 类型 je_entity_stat_t / je_game_entity_meta_t。
+        je_game_entity_t _m_raw;
 
         inline game_entity& _set_arch_chunk_info(
-            je_Chunk* chunk,
-            je_EntityIdInChunk index,
-            je_Version ver) noexcept
+            je_chunk_t* chunk,
+            je_entity_id_in_chunk_t index,
+            je_version_t ver) noexcept
         {
             _m_raw._m_in_chunk = chunk;
             _m_raw._m_id = index;
@@ -816,8 +817,8 @@ namespace jeecs
     {
         constexpr size_t MAX_MOUSE_GROUP_COUNT = 16;
 
-        // 原 je_Mousecode/je_Keycode/je_Gamepadcode/je_Joystickcode 的 enum class 已迁移为
-        // C 枚举 je_Mousecode/je_Keycode/je_Gamepadcode/je_Joystickcode（见文件顶部 C ABI 段）。
+        // 原 je_mousecode_t/je_keycode_t/je_gamepadcode_t/je_joystickcode_t 的 enum class 已迁移为
+        // C 枚举 je_mousecode_t/je_keycode_t/je_gamepadcode_t/je_joystickcode_t（见文件顶部 C ABI 段）。
     }
 
     /*
@@ -837,7 +838,7 @@ namespace jeecs
         jeecs::graphic::INVALID_UNIFORM_LOCATION [常量]
         图形库的一致变量位置信息无效值，通常用于指示着色器中不存在指定名称的一致变量
         请参见：
-            jegl_resource
+            je_gl_shader_t
         */
         constexpr uint32_t INVALID_UNIFORM_LOCATION = (uint32_t)-1;
 
@@ -846,7 +847,7 @@ namespace jeecs
         图形库的一致变量位置信息初始值，由于此信息需要在对应着色器编译完成后才能确定，
         因此此值暗示当前一致变量位置尚未确定，可通过此值确认shader状态，但不推荐
         请参见：
-            jegl_shader
+            je_gl_shader_t
         */
         constexpr uint32_t PENDING_UNIFORM_LOCATION = (uint32_t)-2;
     }
@@ -982,89 +983,89 @@ je_log [基本接口]
 */
 JE_API void je_log(int level, const char* format, ...);
 
-typedef enum je_typing_class
+typedef enum je_typing_class_t
 {
     JE_BASIC_TYPE,
     JE_COMPONENT,
     JE_SYSTEM,
-} je_typing_class;
+} je_typing_class_t;
 
 // ==========================================================================
 // 类型子系统（typing）C 类型
-// je_TypeInfo 及其关联类型拥有公开的平凡数据布局（非不透明）。C++ 包装层
-// （jeecs::typing）直接使用这些 C 类型；原 je_TypeInfo 上的便捷方法以
+// je_type_info_t 及其关联类型拥有公开的平凡数据布局（非不透明）。C++ 包装层
+// （jeecs::typing）直接使用这些 C 类型；原 je_type_info_t 上的便捷方法以
 // jeecs::typing 命名空间下的自由函数形式提供。
 // ==========================================================================
 
-/* 前向声明：函数指针类型与 je_MemberInfo 需要引用 je_TypeInfo */
-typedef struct je_TypeInfo je_TypeInfo;
+/* 前向声明：函数指针类型与 je_member_info_t 需要引用 je_type_info_t */
+typedef struct je_type_info_t je_type_info_t;
 
 /* 类型子系统使用的函数指针类型（C ABI 签名直接使用） */
-typedef void (*je_ConstructFunc)(void* addr, void* arg, const je_TypeInfo* tinfo);
-typedef void (*je_DestructFunc)(void* addr);
-typedef void (*je_CopyConstructFunc)(void* dst, const void* src);
-typedef void (*je_MoveConstructFunc)(void* dst, void* src);
-typedef void (*je_OnEnableOrDisableFunc)(void* sys);
-typedef void (*je_UpdateFunc)(void* sys);
-typedef void (*je_ParseC2WFunc)(const void* c_data, woort_value w_value);
-typedef void (*je_ParseW2CFunc)(void* c_data, woort_value w_value);
+typedef void (*je_construct_func_t)(void* addr, void* arg, const je_type_info_t* tinfo);
+typedef void (*je_destruct_func_t)(void* addr);
+typedef void (*je_copy_construct_func_t)(void* dst, const void* src);
+typedef void (*je_move_construct_func_t)(void* dst, void* src);
+typedef void (*je_on_enable_or_disable_func_t)(void* sys);
+typedef void (*je_update_func_t)(void* sys);
+typedef void (*je_parse_c2w_func_t)(const void* c_data, woort_value w_value);
+typedef void (*je_parse_w2c_func_t)(void* c_data, woort_value w_value);
 
 /* 组件成员信息节点 */
-typedef struct je_MemberInfo {
-    const je_TypeInfo* m_class_type;
+typedef struct je_member_info_t {
+    const je_type_info_t* m_class_type;
     const char* m_member_name;
     const char* m_woovalue_type_may_null;
     woort_GCPin* m_woovalue_init_may_null;
-    const je_TypeInfo* m_member_type;
+    const je_type_info_t* m_member_type;
     ptrdiff_t m_member_offset;
-    struct je_MemberInfo* m_next_member;
-} je_MemberInfo;
+    struct je_member_info_t* m_next_member;
+} je_member_info_t;
 
 /* 组件成员信息集合 */
-typedef struct je_TypeinfoMember {
+typedef struct je_typeinfo_member_t {
     size_t m_member_count;
-    je_MemberInfo* m_members;
-} je_TypeinfoMember;
+    je_member_info_t* m_members;
+} je_typeinfo_member_t;
 
 /* woolang 转换信息 */
-typedef struct je_TypeinfoScriptParser {
-    je_ParseC2WFunc m_script_parse_c2w;
-    je_ParseW2CFunc m_script_parse_w2c;
+typedef struct je_typeinfo_script_parser_t {
+    je_parse_c2w_func_t m_script_parse_c2w;
+    je_parse_w2c_func_t m_script_parse_w2c;
     const char* m_woolang_typename;
     const char* m_woolang_typedecl;
-} je_TypeinfoScriptParser;
+} je_typeinfo_script_parser_t;
 
 /* 系统更新方法集 */
-typedef struct je_TypeinfoSystemUpdater {
-    je_OnEnableOrDisableFunc m_on_enable;
-    je_OnEnableOrDisableFunc m_on_disable;
-    je_UpdateFunc m_pre_update;
-    je_UpdateFunc m_state_update;
-    je_UpdateFunc m_update;
-    je_UpdateFunc m_physics_update;
-    je_UpdateFunc m_transform_update;
-    je_UpdateFunc m_late_update;
-    je_UpdateFunc m_commit_update;
-    je_UpdateFunc m_graphic_update;
-} je_TypeinfoSystemUpdater;
+typedef struct je_typeinfo_system_updater_t {
+    je_on_enable_or_disable_func_t m_on_enable;
+    je_on_enable_or_disable_func_t m_on_disable;
+    je_update_func_t m_pre_update;
+    je_update_func_t m_state_update;
+    je_update_func_t m_update;
+    je_update_func_t m_physics_update;
+    je_update_func_t m_transform_update;
+    je_update_func_t m_late_update;
+    je_update_func_t m_commit_update;
+    je_update_func_t m_graphic_update;
+} je_typeinfo_system_updater_t;
 
 /* 类型信息（完整平凡布局，非不透明） */
-typedef struct je_TypeInfo {
-    je_TypeId m_id;
+typedef struct je_type_info_t {
+    je_type_id_t m_id;
     const char* m_typename; // will be free by je_typing_unregister
     size_t m_size;
     size_t m_align;
-    je_TypeHash m_hash;
-    je_ConstructFunc m_constructor;
-    je_DestructFunc m_destructor;
-    je_CopyConstructFunc m_copier;
-    je_MoveConstructFunc m_mover;
-    je_typing_class m_type_class;
-    const je_TypeinfoMember* m_member_types;
-    const je_TypeinfoScriptParser* m_script_parsers;
-    const je_TypeinfoSystemUpdater* m_system_updaters;
-    const je_TypeInfo* m_next;
-} je_TypeInfo;
+    je_type_hash_t m_hash;
+    je_construct_func_t m_constructor;
+    je_destruct_func_t m_destructor;
+    je_copy_construct_func_t m_copier;
+    je_move_construct_func_t m_mover;
+    je_typing_class_t m_type_class;
+    const je_typeinfo_member_t* m_member_types;
+    const je_typeinfo_script_parser_t* m_script_parsers;
+    const je_typeinfo_system_updater_t* m_system_updaters;
+    const je_type_info_t* m_next;
+} je_type_info_t;
 
 /*
 je_typing_register [基本接口]
@@ -1072,19 +1073,19 @@ je_typing_register [基本接口]
 * 类型的名称是区分的唯一标记符，不同类型必须使用不同的名字。
 * 必须通过 je_typing_unregister 在适当时机释放
 请参见：
-    je_TypeId
+    je_type_id_t
     je_typing_unregister
 */
-JE_API const je_TypeInfo* je_typing_register(
+JE_API const je_type_info_t* je_typing_register(
     const char* _name,
-    je_TypeHash _hash,
+    je_type_hash_t _hash,
     size_t _size,
     size_t _align,
-    je_typing_class _typecls,
-    je_ConstructFunc _constructor,
-    je_DestructFunc _destructor,
-    je_CopyConstructFunc _copy_constructor,
-    je_MoveConstructFunc _move_constructor);
+    je_typing_class_t _typecls,
+    je_construct_func_t _constructor,
+    je_destruct_func_t _destructor,
+    je_copy_construct_func_t _copy_constructor,
+    je_move_construct_func_t _move_constructor);
 
 /*
 je_typing_reset [基本接口]
@@ -1092,41 +1093,41 @@ je_typing_reset [基本接口]
     * 成员字段将被重置，请重新注册
 */
 JE_API void je_typing_reset(
-    const je_TypeInfo* _tinfo,
+    const je_type_info_t* _tinfo,
     size_t _size,
     size_t _align,
-    je_ConstructFunc _constructor,
-    je_DestructFunc _destructor,
-    je_CopyConstructFunc _copy_constructor,
-    je_MoveConstructFunc _move_constructor);
+    je_construct_func_t _constructor,
+    je_destruct_func_t _destructor,
+    je_copy_construct_func_t _copy_constructor,
+    je_move_construct_func_t _move_constructor);
 
 /*
 je_typing_info_get_by_id [基本接口]
 通过类型id获取类型信息，若给定的id不合法，返回nullptr
 请参见：
-    je_TypeId
-    je_TypeInfo
+    je_type_id_t
+    je_type_info_t
 */
-JE_API /* OPTIONAL: If _id is invalid or unregistered */ const je_TypeInfo* je_typing_info_get_by_id(
-    je_TypeId _id);
+JE_API /* OPTIONAL: If _id is invalid or unregistered */ const je_type_info_t* je_typing_info_get_by_id(
+    je_type_id_t _id);
 
 /*
 je_typing_info_get_by_hash [基本接口]
 通过类型的哈希值获取类型信息，若给定的类型哈希不合法，返回nullptr
 请参见：
-    je_TypeHash
-    je_TypeInfo
+    je_type_hash_t
+    je_type_info_t
 */
-JE_API /* OPTIONAL: If _hash is not registered */ const je_TypeInfo* je_typing_info_get_by_hash(
-    je_TypeHash _hash);
+JE_API /* OPTIONAL: If _hash is not registered */ const je_type_info_t* je_typing_info_get_by_hash(
+    je_type_hash_t _hash);
 
 /*
 je_typing_info_get_by_name [基本接口]
 通过类型的名称获取类型信息，若给定的类型名不合法或不存在，返回nullptr
 请参见：
-    je_TypeInfo
+    je_type_info_t
 */
-JE_API /* OPTIONAL: If type_name is not found */ const je_TypeInfo* je_typing_info_get_by_name(
+JE_API /* OPTIONAL: If type_name is not found */ const je_type_info_t* je_typing_info_get_by_name(
     const char* type_name);
 
 /*
@@ -1136,21 +1137,21 @@ je_typing_unregister [基本接口]
 类型是当前模块通过 je_typing_register 成功注册的类型。
 若释放的类型不合法，则给出级别错误的日志信息。
 请参见：
-    je_TypeInfo
+    je_type_info_t
     je_typing_register
 */
-JE_API void je_typing_unregister(const je_TypeInfo* tinfo);
+JE_API void je_typing_unregister(const je_type_info_t* tinfo);
 
 /*
 je_typing_member_register [基本接口]
 向引擎的类型管理器注册指定类型的成员信息。
 * 使用本地typeinfo，而非全局通用typeinfo
 请参见：
-    je_TypeInfo
+    je_type_info_t
 */
 JE_API void je_typing_member_register(
-    const je_TypeInfo* _classtype,
-    const je_TypeInfo* _membertype,
+    const je_type_info_t* _classtype,
+    const je_type_info_t* _membertype,
     const char* _member_name,
     /* OPTIONAL */ const char* _woovalue_type_may_null,
     woort_value _boxed_woovalue_init_may_ignored /* Use WOORT_IGNORE as none init */,
@@ -1161,12 +1162,12 @@ je_typing_script_parser_register [基本接口]
 向引擎的类型管理器注册指定类型的脚本转换方法。
 * 使用本地typeinfo，而非全局通用typeinfo
 请参见：
-    je_TypeInfo
+    je_type_info_t
 */
 JE_API void je_typing_script_parser_register(
-    const je_TypeInfo* _type,
-    je_ParseC2WFunc c2w,
-    je_ParseW2CFunc w2c,
+    const je_type_info_t* _type,
+    je_parse_c2w_func_t c2w,
+    je_parse_w2c_func_t w2c,
     const char* woolang_typename,
     const char* woolang_typedecl);
 
@@ -1175,27 +1176,27 @@ je_typing_system_updater_register [基本接口]
 向引擎的类型管理器注册指定类型的系统更新方法。
 * 使用本地typeinfo，而非全局通用typeinfo
 请参见：
-    je_TypeInfo
+    je_type_info_t
 */
 JE_API void je_typing_system_updater_register(
-    const je_TypeInfo* _type,
-    je_OnEnableOrDisableFunc _on_enable,
-    je_OnEnableOrDisableFunc _on_disable,
-    je_UpdateFunc _pre_update,
-    je_UpdateFunc _state_update,
-    je_UpdateFunc _update,
-    je_UpdateFunc _physics_update,
-    je_UpdateFunc _transform_update,
-    je_UpdateFunc _late_update,
-    je_UpdateFunc _commit_update,
-    je_UpdateFunc _graphic_update);
+    const je_type_info_t* _type,
+    je_on_enable_or_disable_func_t _on_enable,
+    je_on_enable_or_disable_func_t _on_disable,
+    je_update_func_t _pre_update,
+    je_update_func_t _state_update,
+    je_update_func_t _update,
+    je_update_func_t _physics_update,
+    je_update_func_t _transform_update,
+    je_update_func_t _late_update,
+    je_update_func_t _commit_update,
+    je_update_func_t _graphic_update);
 
 ////////////////////// ToWoo //////////////////////
 /*
 je_towoo_api_update [基本接口]
 根据类型信息重新生成 towoo 的接口脚本
 请参见：
-    je_TypeInfo
+    je_type_info_t
 */
 JE_API void je_towoo_api_update();
 
@@ -1207,7 +1208,7 @@ je_towoo_system_register [基本接口]
     je_towoo_system_unregister
     je_towoo_api_update
 */
-JE_API /* OPTIONAL: If registration failed */ const je_TypeInfo* je_towoo_system_register(
+JE_API /* OPTIONAL: If registration failed */ const je_type_info_t* je_towoo_system_register(
     const char* system_name,
     const char* script_path);
 
@@ -1218,7 +1219,7 @@ je_towoo_system_unregister [基本接口]
 请参见：
     je_towoo_system_register
 */
-JE_API void je_towoo_system_unregister(/* OPTIONAL */ const je_TypeInfo* tinfo);
+JE_API void je_towoo_system_unregister(/* OPTIONAL */ const je_type_info_t* tinfo);
 
 ////////////////////// ARCH //////////////////////
 
@@ -1228,20 +1229,20 @@ je_arch_chunk_get [基本接口]
 所以总是返回非nullptr值。
     * 此方法一般由 collection 调用，用于获取指定ArchType中的组件信息
 */
-JE_API je_Chunk* je_arch_chunk_get(je_Archtype* archtype);
+JE_API je_chunk_t* je_arch_chunk_get(je_archtype_t* archtype);
 
 /*
 je_arch_chunk_next [基本接口]
 通过给定的Chunk，获取其下一个Chunk，如果给定Chunk没有后继则返回nullptr
     * 此方法一般由 collection 调用，用于获取指定ArchType中的组件信息
 */
-JE_API /* OPTIONAL: If no successor chunk */ je_Chunk* je_arch_chunk_next(je_Chunk* chunk);
+JE_API /* OPTIONAL: If no successor chunk */ je_chunk_t* je_arch_chunk_next(je_chunk_t* chunk);
 
 /*
 je_arch_entity_meta_addr_in_chunk [基本接口]
 通过给定的Chunk，获取Chunk中的实体元数据起始地址。
 */
-JE_API const je_GameEntityMeta* je_arch_entity_meta_addr_in_chunk(je_Chunk* chunk);
+JE_API const je_game_entity_meta_t* je_arch_entity_meta_addr_in_chunk(je_chunk_t* chunk);
 
 ////////////////////// ECS //////////////////////
 
@@ -1259,7 +1260,7 @@ je_ecs_universe_create [基本接口]
         3. 解除注册所有Job
     完成全部操作后，宇宙将处于可销毁状态。
 */
-JE_API je_GameUniverse* je_ecs_universe_create(void);
+JE_API je_game_universe_t* je_ecs_universe_create(void);
 
 /*
 je_ecs_universe_loop [基本接口]
@@ -1270,7 +1271,7 @@ je_ecs_universe_loop [基本接口]
 请参见：
     je_ecs_universe_exit_callback_register
 */
-JE_API void je_ecs_universe_loop(je_GameUniverse* universe);
+JE_API void je_ecs_universe_loop(je_game_universe_t* universe);
 
 /*
 je_ecs_universe_destroy [基本接口]
@@ -1279,7 +1280,7 @@ je_ecs_universe_destroy [基本接口]
 请参见：
     je_ecs_universe_loop
 */
-JE_API void je_ecs_universe_destroy(je_GameUniverse* universe);
+JE_API void je_ecs_universe_destroy(je_game_universe_t* universe);
 
 /*
 je_ecs_universe_lifetime_grow [基本接口]
@@ -1289,7 +1290,7 @@ je_ecs_universe_lifetime_grow [基本接口]
 请参见：
     je_ecs_universe_lifetime_trim
 */
-JE_API void je_ecs_universe_lifetime_grow(je_GameUniverse* universe);
+JE_API void je_ecs_universe_lifetime_grow(je_game_universe_t* universe);
 
 /*
 je_ecs_universe_lifetime_trim [基本接口]
@@ -1302,7 +1303,7 @@ je_ecs_universe_lifetime_trim [基本接口]
     请参见：
         je_ecs_universe_lifetime_grow
 */
-JE_API void je_ecs_universe_lifetime_trim(je_GameUniverse* universe);
+JE_API void je_ecs_universe_lifetime_trim(je_game_universe_t* universe);
 
 /*
 je_ecs_universe_exit_callback_register [基本接口]
@@ -1312,11 +1313,11 @@ je_ecs_universe_exit_callback_register [基本接口]
     je_ecs_universe_create
 */
 JE_API void je_ecs_universe_exit_callback_register(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     void (*callback)(void*),
     /* OPTIONAL */ void* arg);
 
-typedef void (*je_job_for_worlds_t)(je_GameWorld* /*world*/, void* /*custom_data*/);
+typedef void (*je_job_for_worlds_t)(je_game_world_t* /*world*/, void* /*custom_data*/);
 typedef void (*je_job_call_once_t)(void* /*custom_data*/);
 
 /*
@@ -1324,7 +1325,7 @@ je_ecs_universe_pre_for_worlds_job_register [基本接口]
 向指定宇宙中注册优先遍历世界任务（Pre job for worlds）
 */
 JE_API void je_ecs_universe_pre_for_worlds_job_register(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     je_job_for_worlds_t job,
     /* OPTIONAL */ void* data,
     /* OPTIONAL */ void (*freefunc)(void*));
@@ -1334,7 +1335,7 @@ je_ecs_universe_pre_call_once_job_register [基本接口]
 向指定宇宙中注册优先单独任务（Pre job for once）
 */
 JE_API void je_ecs_universe_pre_call_once_job_register(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     je_job_call_once_t job,
     /* OPTIONAL */ void* data,
     /* OPTIONAL */ void (*freefunc)(void*));
@@ -1344,7 +1345,7 @@ je_ecs_universe_for_worlds_job_register [基本接口]
 向指定宇宙中注册普通遍历世界任务（Job for worlds）
 */
 JE_API void je_ecs_universe_for_worlds_job_register(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     je_job_for_worlds_t job,
     /* OPTIONAL */ void* data,
     /* OPTIONAL */ void (*freefunc)(void*));
@@ -1354,7 +1355,7 @@ je_ecs_universe_call_once_job_register [基本接口]
 向指定宇宙中注册普通单独任务（Job for once）
 */
 JE_API void je_ecs_universe_call_once_job_register(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     je_job_call_once_t job,
     /* OPTIONAL */ void* data,
     /* OPTIONAL */ void (*freefunc)(void*));
@@ -1364,7 +1365,7 @@ je_ecs_universe_after_for_worlds_job_register [基本接口]
 向指定宇宙中注册延后遍历世界任务（Defer job for worlds）
 */
 JE_API void je_ecs_universe_after_for_worlds_job_register(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     je_job_for_worlds_t job,
     /* OPTIONAL */ void* data,
     /* OPTIONAL */ void (*freefunc)(void*));
@@ -1374,7 +1375,7 @@ je_ecs_universe_after_call_once_job_register [基本接口]
 向指定宇宙中注册延后单独任务（Defer job for once）
 */
 JE_API void je_ecs_universe_after_call_once_job_register(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     je_job_call_once_t job,
     /* OPTIONAL */ void* data,
     /* OPTIONAL */ void (*freefunc)(void*));
@@ -1384,7 +1385,7 @@ je_ecs_universe_pre_for_worlds_job_unregister [基本接口]
 从指定宇宙中取消优先遍历世界任务（Pre job for worlds）
 */
 JE_API void je_ecs_universe_pre_for_worlds_job_unregister(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     je_job_for_worlds_t job);
 
 /*
@@ -1392,7 +1393,7 @@ je_ecs_universe_pre_call_once_job_unregister [基本接口]
 从指定宇宙中取消优先单独任务（Pre job for once）
 */
 JE_API void je_ecs_universe_pre_call_once_job_unregister(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     je_job_call_once_t job);
 
 /*
@@ -1400,7 +1401,7 @@ je_ecs_universe_for_worlds_job_unregister [基本接口]
 从指定宇宙中取消普通遍历世界任务（Job for worlds）
 */
 JE_API void je_ecs_universe_for_worlds_job_unregister(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     je_job_for_worlds_t job);
 
 /*
@@ -1408,7 +1409,7 @@ je_ecs_universe_call_once_job_unregister [基本接口]
 从指定宇宙中取消普通单独任务（Job for once）
 */
 JE_API void je_ecs_universe_call_once_job_unregister(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     je_job_call_once_t job);
 
 /*
@@ -1416,7 +1417,7 @@ je_ecs_universe_after_for_worlds_job_unregister [基本接口]
 从指定宇宙中取消延后遍历世界任务（After job for worlds）
 */
 JE_API void je_ecs_universe_after_for_worlds_job_unregister(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     je_job_for_worlds_t job);
 
 /*
@@ -1424,7 +1425,7 @@ je_ecs_universe_after_call_once_job_unregister [基本接口]
 从指定宇宙中取消延后单独任务（After job for once）
 */
 JE_API void je_ecs_universe_after_call_once_job_unregister(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     je_job_call_once_t job);
 
 /*
@@ -1434,33 +1435,33 @@ je_ecs_universe_frame_deltatime_get [基本接口]
     je_ecs_universe_set_deltatime
 */
 JE_API double je_ecs_universe_frame_deltatime_get(
-    je_GameUniverse* universe);
+    je_game_universe_t* universe);
 
 /*
 je_ecs_universe_frame_deltatime_set [基本接口]
 设置当前宇宙的帧更新间隔时间
 */
 JE_API void je_ecs_universe_frame_deltatime_set(
-    je_GameUniverse* universe,
+    je_game_universe_t* universe,
     double delta);
 
 /*
 je_ecs_universe_real_deltatime_get [基本接口]
 获取当前宇宙的实际更新间隔，即距离上次更新的实际时间差异
 */
-JE_API double je_ecs_universe_real_deltatime_get(je_GameUniverse* universe);
+JE_API double je_ecs_universe_real_deltatime_get(je_game_universe_t* universe);
 
 /*
 je_ecs_universe_smooth_deltatime_get [基本接口]
 获取当前宇宙的平滑更新间隔，是过去若干帧的间隔平均值
 */
-JE_API double je_ecs_universe_smooth_deltatime_get(je_GameUniverse* universe);
+JE_API double je_ecs_universe_smooth_deltatime_get(je_game_universe_t* universe);
 
 /*
 je_ecs_universe_max_deltatime_get [基本接口]
 获取当前宇宙的最大时间间隔，deltatime的最大值即为此值
 */
-JE_API double je_ecs_universe_max_deltatime_get(je_GameUniverse* universe);
+JE_API double je_ecs_universe_max_deltatime_get(je_game_universe_t* universe);
 
 /*
 je_ecs_universe_max_deltatime_set [基本接口]
@@ -1469,25 +1470,25 @@ je_ecs_universe_max_deltatime_set [基本接口]
 请参见：
     je_ecs_universe_time_scale_set
 */
-JE_API void je_ecs_universe_max_deltatime_set(je_GameUniverse* universe, double val);
+JE_API void je_ecs_universe_max_deltatime_set(je_game_universe_t* universe, double val);
 
 /*
 je_ecs_universe_time_scale_set [基本接口]
 设置当前宇宙的时间缩放系数
 */
-JE_API void je_ecs_universe_time_scale_set(je_GameUniverse* universe, double scale);
+JE_API void je_ecs_universe_time_scale_set(je_game_universe_t* universe, double scale);
 
 /*
 je_ecs_universe_time_scale_get [基本接口]
 获取当前宇宙的时间缩放系数
 */
-JE_API double je_ecs_universe_time_scale_get(je_GameUniverse* universe);
+JE_API double je_ecs_universe_time_scale_get(je_game_universe_t* universe);
 
 /*
 je_ecs_world_in_universe [基本接口]
 获取指定世界所属的宇宙
 */
-JE_API je_GameUniverse* je_ecs_world_in_universe(je_GameWorld* world);
+JE_API je_game_universe_t* je_ecs_world_in_universe(je_game_world_t* world);
 
 /*
 je_ecs_world_create [基本接口]
@@ -1497,7 +1498,7 @@ je_ecs_world_create [基本接口]
 请参见：
     je_ecs_world_enable_set
 */
-JE_API je_GameWorld* je_ecs_world_create(je_GameUniverse* in_universe);
+JE_API je_game_world_t* je_ecs_world_create(je_game_universe_t* in_universe);
 
 /*
 je_ecs_world_destroy [基本接口]
@@ -1515,41 +1516,41 @@ je_ecs_world_destroy [基本接口]
     je_ecs_world_system_instance_add
     je_ecs_world_entity_create_with_components
 */
-JE_API void je_ecs_world_destroy(je_GameWorld* world);
+JE_API void je_ecs_world_destroy(je_game_world_t* world);
 
-typedef enum je_ComponentRequirementKind
+typedef enum je_component_requirement_kind_t
 {
     JE_COMPONENT_REQUIRE_CONTAINS,  // Must have spcify component
     JE_COMPONENT_REQUIRE_MAYNOT,    // May have or not have
     JE_COMPONENT_REQUIRE_EXCEPT,    // Must not contain spcify component
     JE_COMPONENT_REQUIRE_ANYOF_0,   // Must have one of 'ANYOF' components
 
-}je_ComponentRequirementKind;
+}je_component_requirement_kind_t;
 
-typedef struct je_ComponentRequirement {
-    int /*je_ComponentRequirementKind*/ m_kind;
-    je_TypeId                           m_typeid;
-}je_ComponentRequirement;
+typedef struct je_component_requirement_t {
+    int /*je_component_requirement_kind_t*/ m_kind;
+    je_type_id_t                           m_typeid;
+}je_component_requirement_t;
 
-typedef struct je_DependenceArchInfos
+typedef struct je_dependence_arch_infos_t
 {
-    je_Archtype* m_arch;
+    je_archtype_t* m_arch;
     size_t  m_entity_count;
 
     // View detail.
     size_t* m_view_component_offset;
     size_t* m_view_component_size;
 
-} je_DependenceArchInfos;
+} je_dependence_arch_infos_t;
 
-typedef struct je_CollectedRequirements je_CollectedRequirements;
+typedef struct je_collected_requirements_t je_collected_requirements_t;
 
-typedef struct je_RequirementCollection {
-    je_DependenceArchInfos* m_cached_archs;
+typedef struct je_requirement_collection_t {
+    je_dependence_arch_infos_t* m_cached_archs;
     size_t                      m_cached_arch_count;
 
-    je_CollectedRequirements* m_collected_requirement;
-}je_RequirementCollection;
+    je_collected_requirements_t* m_collected_requirement;
+}je_requirement_collection_t;
 
 /*
 je_ecs_requirements_collect [基本接口]
@@ -1560,8 +1561,8 @@ je_ecs_requirements_collect [基本接口]
     je_ecs_world_collection_update
     je_ecs_world_slice_dependence_query
 */
-JE_API je_CollectedRequirements* je_ecs_requirements_collect(
-    /* OPTIONAL: If total requirement count is 0 */ const je_ComponentRequirement* requirements,
+JE_API je_collected_requirements_t* je_ecs_requirements_collect(
+    /* OPTIONAL: If total requirement count is 0 */ const je_component_requirement_t* requirements,
     size_t view_requiremnt_count,
     size_t other_requiremnts_count);
 
@@ -1575,19 +1576,19 @@ je_ecs_world_collection_update [基本接口]
     je_ecs_world_arch_change_version_get
 */
 JE_API void je_ecs_world_collection_update(
-    je_GameWorld* world,
-    je_RequirementCollection* collection);
+    je_game_world_t* world,
+    je_requirement_collection_t* collection);
 
 /*
 je_ecs_world_arch_change_version_get [基本接口]
 返回世界内 arch-type 的变更版本号（单调递增）。每当世界中创建了新的 arch-type 时
 该值递增。此函数为非消费式读取：调用不会影响 ecs_world::update 对内部系统切片
-缓存的刷新逻辑。外部持久化的 je_RequirementCollection 可通过比较两次观测值来
+缓存的刷新逻辑。外部持久化的 je_requirement_collection_t 可通过比较两次观测值来
 判断是否需要刷新（调用 je_ecs_world_collection_update）。
 */
-JE_API size_t je_ecs_world_arch_change_version_get(je_GameWorld* world);
+JE_API size_t je_ecs_world_arch_change_version_get(je_game_world_t* world);
 
-typedef void* je_System;
+typedef void* je_system_t;
 
 /*
 je_ecs_world_system_instance_add [基本接口]
@@ -1600,18 +1601,18 @@ je_ecs_world_system_instance_add [基本接口]
     * 向正在销毁中的世界添加系统实例仍会返回有效实例，
         但该系统会在下一次世界更新时随世界一并销毁，永远不会执行
 */
-JE_API /* OPTIONAL */ je_System je_ecs_world_system_instance_add(
-    je_GameWorld* world,
-    je_TypeId type);
+JE_API /* OPTIONAL */ je_system_t je_ecs_world_system_instance_add(
+    je_game_world_t* world,
+    je_type_id_t type);
 
 /*
 je_ecs_world_system_instance_get [基本接口]
 从指定世界中获取一个指定类型的系统实例，返回此实例的指针
 若世界中不存在此类型的系统，返回nullptr
 */
-JE_API /* OPTIONAL */ je_System je_ecs_world_system_instance_get(
-    je_GameWorld* world,
-    je_TypeId type);
+JE_API /* OPTIONAL */ je_system_t je_ecs_world_system_instance_get(
+    je_game_world_t* world,
+    je_type_id_t type);
 
 /*
 je_ecs_world_system_instance_remove [基本接口]
@@ -1621,25 +1622,25 @@ je_ecs_world_system_instance_remove [基本接口]
     2. 若此前世界中已经存在同类型系统，则无事发生
 */
 JE_API void je_ecs_world_system_instance_remove(
-    je_GameWorld* world,
-    je_TypeId type);
+    je_game_world_t* world,
+    je_type_id_t type);
 
 /*
 je_ecs_world_entity_create_with_components [基本接口]
 向指定世界中创建一个用于指定组件集合的实体，创建结果通过参数 out_entity 返回
-component_ids 应该指向一个储存有N个je_TypeId实例的连续空间，
+component_ids 应该指向一个储存有N个je_type_id_t实例的连续空间，
 其中，N是组件种类数量（component_count）且不应该为0。
     * 世界销毁是异步的：向已提交销毁请求（正在销毁中）的世界创建实体仍会成功，
         但该实体会在下一次世界更新时随世界一并销毁；
 请参见：
-    je_TypeId
-    je_GameEntity
+    je_type_id_t
+    je_game_entity_t
     jeecs::game_world::add_entity
 */
 JE_API void je_ecs_world_entity_create_with_components(
-    je_GameWorld* world,
-    je_GameEntity* out_entity,
-    const je_TypeId* component_ids,
+    je_game_world_t* world,
+    je_game_entity_t* out_entity,
+    const je_type_id_t* component_ids,
     size_t component_count);
 
 /*
@@ -1651,9 +1652,9 @@ je_ecs_world_prefab_create_with_components [基本接口]
     je_ecs_world_entity_create_with_components
 */
 JE_API void je_ecs_world_prefab_create_with_components(
-    je_GameWorld* world,
-    je_GameEntity* out_entity,
-    const je_TypeId* component_ids,
+    je_game_world_t* world,
+    je_game_entity_t* out_entity,
+    const je_type_id_t* component_ids,
     size_t component_count);
 
 /*
@@ -1668,20 +1669,20 @@ je_ecs_world_entity_create_with_prefab [基本接口]
     je_ecs_world_prefab_create_with_components
 */
 JE_API void je_ecs_world_entity_create_with_prefab(
-    je_GameWorld* world,
-    je_GameEntity* out_entity,
-    const je_GameEntity* prefab);
+    je_game_world_t* world,
+    je_game_entity_t* out_entity,
+    const je_game_entity_t* prefab);
 
 /*
 je_ecs_world_entity_destroy [基本接口]
 从世界中销毁一个实体索引指定的相关组件
 若实体索引是`无效值`或已失效，则无事发生
 请参见：
-    je_GameEntity::close
+    je_game_entity_t::close
 */
 JE_API void je_ecs_world_entity_destroy(
-    je_GameWorld* world,
-    const je_GameEntity* entity);
+    je_game_world_t* world,
+    const je_game_entity_t* entity);
 
 /*
 je_ecs_world_entity_component_add [基本接口]
@@ -1692,11 +1693,11 @@ je_ecs_world_entity_component_add [基本接口]
     1. 若实体已经存在同类型组件，则替换之
     2. 若实体不存在同类型组件，则更新实体
 请参见：
-    je_GameEntity::add_component
+    je_game_entity_t::add_component
 */
 JE_API /* OPTIONAL: If entity is invalid */ void* je_ecs_world_entity_component_add(
-    const je_GameEntity* entity,
-    je_TypeId type);
+    const je_game_entity_t* entity,
+    je_type_id_t type);
 
 /*
 je_ecs_world_entity_component_remove [基本接口]
@@ -1707,32 +1708,32 @@ je_ecs_world_entity_component_remove [基本接口]
     1. 若实体已经存在同类型组件，则移除之
     2. 若实体不存在同类型组件，则无事发生
 请参见：
-    je_GameEntity::remove_component
+    je_game_entity_t::remove_component
 */
 JE_API void je_ecs_world_entity_component_remove(
-    const je_GameEntity* entity,
-    je_TypeId type);
+    const je_game_entity_t* entity,
+    je_type_id_t type);
 
 /*
 je_ecs_world_entity_component_get [基本接口]
 从实体中获取一个组件
 若实体索引是`无效值`或已失效，或者实体不存在指定类型的组件，则返回nullptr
 请参见：
-    je_GameEntity::get_component
+    je_game_entity_t::get_component
 */
 JE_API /* OPTIONAL: If entity is invalid or no such component */ void* je_ecs_world_entity_component_get(
-    const je_GameEntity* entity,
-    je_TypeId type);
+    const je_game_entity_t* entity,
+    je_type_id_t type);
 
 /*
 je_ecs_world_of_entity [基本接口]
 获取实体所在的世界
 若实体索引是`无效值`，则返回nullptr
 请参见：
-    je_GameEntity::game_world
+    je_game_entity_t::game_world
 */
-JE_API /* OPTIONAL: If entity is invalid */ je_GameWorld* je_ecs_world_of_entity(
-    const je_GameEntity* entity);
+JE_API /* OPTIONAL: If entity is invalid */ je_game_world_t* je_ecs_world_of_entity(
+    const je_game_entity_t* entity);
 
 /*
 je_ecs_world_enable_set [基本接口]
@@ -1742,7 +1743,7 @@ je_ecs_world_enable_set [基本接口]
     * 世界在激活/取消激活时，所有系统的对应回调会被执行；如果系统实例创建时，
         世界尚未激活，则系统的回调函数不会被执行
 */
-JE_API void je_ecs_world_enable_set(je_GameWorld* world, bool enable);
+JE_API void je_ecs_world_enable_set(je_game_world_t* world, bool enable);
 
 /*
 je_ecs_world_slice_dependence_query [基本接口]
@@ -1751,10 +1752,10 @@ je_ecs_world_slice_dependence_query [基本接口]
   * 获取到的查询缓存仅在当前帧有效，不应当被持久化保存
 */
 JE_API bool je_ecs_world_slice_dependence_query(
-    je_GameWorld* world,
+    je_game_world_t* world,
     jeecs::game_system* system_instance,
-    je_TypeHash slice_type_hash,
-    je_RequirementCollection** out_collection);
+    je_type_hash_t slice_type_hash,
+    je_requirement_collection_t** out_collection);
 
 // ATTENTION: Following 2 functions have no thread-safe-promise:
 /*
@@ -1766,7 +1767,7 @@ je_ecs_entity_name_get [基本接口]
 或者其他操作，取出的字符串可能失效
 */
 JE_API const char* je_ecs_entity_name_get(
-    const je_GameEntity* entity);
+    const je_game_entity_t* entity);
 
 /*
 je_ecs_entity_name_set [基本接口]
@@ -1780,7 +1781,7 @@ je_ecs_entity_name_set [基本接口]
 若实体不包含 Editor::Name，则创建后再进行设置
 */
 JE_API const char* je_ecs_entity_name_set(
-    const je_GameEntity* entity,
+    const je_game_entity_t* entity,
     const char* name);
 /////////////////////////// Time&Sleep /////////////////////////////////
 
@@ -1816,7 +1817,7 @@ je_clock_time_stamp [基本接口]
 获取当前时间戳，单位是毫秒
     * 这个时间与 je_clock_time 获取到的时间不同，*不是* 引擎启动时起的计时
 */
-JE_API je_TimestampMs je_clock_time_stamp();
+JE_API je_timestamp_ms_t je_clock_time_stamp();
 
 /*
 je_clock_sleep_until [基本接口]
@@ -1838,12 +1839,12 @@ je_uid_generate [基本接口]
 请参见：
     jeecs::typing::uid_t
 */
-JE_API void je_uid_generate(je_Uuid* out_uid);
+JE_API void je_uid_generate(je_uuid_t* out_uid);
 
 /////////////////////////// FILE /////////////////////////////////
 
 /*
-jeecs_file [类型]
+je_file_t [类型]
 文件，用于保存引擎读取的文件。具体布局由引擎内部维护，不对外公开。
 一般使用此类型的指针类型
 请参见：
@@ -1852,10 +1853,10 @@ jeecs_file [类型]
     je_file_read
     je_file_size
 */
-struct jeecs_file;
+typedef struct je_file_t je_file_t;
 
 /*
-jeecs_fimg_archive [类型]
+je_fimg_archive_t [类型]
 只读资源镜像，对应一个目录下的 fimg.je4index 清单与若干 fimg.<N>.je4image 分片
 一般使用此类型的指针类型
 请参见：
@@ -1863,10 +1864,10 @@ jeecs_fimg_archive [类型]
     je_fimg_archive_close
     je_fimg_default_archive_set
 */
-struct jeecs_fimg_archive;
+typedef struct je_fimg_archive_t je_fimg_archive_t;
 
 /*
-jeecs_fimg_writer [类型]
+je_fimg_writer_t [类型]
 资源镜像打包器
 一般使用此类型的指针类型
 请参见：
@@ -1876,22 +1877,22 @@ jeecs_fimg_writer [类型]
     je_fimg_writer_finish
     je_fimg_writer_abort
 */
-struct jeecs_fimg_writer;
+typedef struct je_fimg_writer_t je_fimg_writer_t;
 
-enum je_read_file_seek_mode
+enum je_file_seek_mode_t
 {
     JE_READ_FILE_SEEK_SET = SEEK_SET,
     JE_READ_FILE_SEEK_CURRENT = SEEK_CUR,
     JE_READ_FILE_SEEK_END = SEEK_END,
 };
 
-typedef void* jeecs_raw_file;
+typedef void* je_raw_file_t;
 
-typedef jeecs_raw_file(*je_read_file_open_func_t)(const char*, size_t*);
-typedef size_t(*je_read_file_func_t)(void*, size_t, size_t, jeecs_raw_file);
-typedef size_t(*je_read_file_tell_func_t)(jeecs_raw_file);
-typedef int (*je_read_file_seek_func_t)(jeecs_raw_file, int64_t, je_read_file_seek_mode);
-typedef int (*je_read_file_close_func_t)(jeecs_raw_file);
+typedef je_raw_file_t(*je_read_file_open_func_t)(const char*, size_t*);
+typedef size_t(*je_read_file_func_t)(void*, size_t, size_t, je_raw_file_t);
+typedef size_t(*je_read_file_tell_func_t)(je_raw_file_t);
+typedef int (*je_read_file_seek_func_t)(je_raw_file_t, int64_t, je_file_seek_mode_t);
+typedef int (*je_read_file_close_func_t)(je_raw_file_t);
 
 /*
 je_file_host_path_set [基本接口]
@@ -1967,13 +1968,13 @@ je_file_open [基本接口]
 请参见：
     je_file_close
 */
-JE_API /* OPTIONAL */ jeecs_file* je_file_open(const char* path);
+JE_API /* OPTIONAL */ je_file_t* je_file_open(const char* path);
 
 /*
 je_file_close [基本接口]
 关闭一个文件
 */
-JE_API void je_file_close(jeecs_file* file);
+JE_API void je_file_close(je_file_t* file);
 
 /*
 je_file_read [基本接口]
@@ -1983,28 +1984,28 @@ JE_API size_t je_file_read(
     void* out_buffer,
     size_t elem_size,
     size_t count,
-    jeecs_file* file);
+    je_file_t* file);
 
 /*
 je_file_tell [基本接口]
 获取当前文件下一个读取的位置偏移量
 */
-JE_API size_t je_file_tell(jeecs_file* file);
+JE_API size_t je_file_tell(je_file_t* file);
 
 /*
 je_file_seek [基本接口]
 按照指定的模式，对文件即将读取的位置进行偏移和跳转
 镜像文件的位置会被钳制在 [0, 文件大小] 范围内；成功返回 true
 请参见：
-    je_read_file_seek_mode
+    je_file_seek_mode_t
 */
-JE_API bool je_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mode mode);
+JE_API bool je_file_seek(je_file_t* file, int64_t offset, je_file_seek_mode_t mode);
 
 /*
 je_file_size [基本接口]
 获取文件总大小
 */
-JE_API size_t je_file_size(jeecs_file* file);
+JE_API size_t je_file_size(je_file_t* file);
 
 /*
 je_fimg_archive_open [基本接口]
@@ -2012,31 +2013,31 @@ je_fimg_archive_open [基本接口]
 目录下不存在清单或清单损坏时返回 nullptr
 使用完毕后需要使用 je_fimg_archive_close 关闭
 */
-JE_API /* OPTIONAL */ jeecs_fimg_archive* je_fimg_archive_open(const char* root);
+JE_API /* OPTIONAL */ je_fimg_archive_t* je_fimg_archive_open(const char* root);
 
 /*
 je_fimg_archive_close [基本接口]
 关闭一个镜像；已打开的文件句柄仍然有效，直到它们自身被关闭
 */
-JE_API void je_fimg_archive_close(jeecs_fimg_archive* archive);
+JE_API void je_fimg_archive_close(je_fimg_archive_t* archive);
 
 /*
 je_fimg_archive_has_file [基本接口]
 判断镜像中是否存在指定路径的文件
 */
-JE_API bool je_fimg_archive_has_file(const jeecs_fimg_archive* archive, const char* path);
+JE_API bool je_fimg_archive_has_file(const je_fimg_archive_t* archive, const char* path);
 
 /*
 je_fimg_archive_file_size [基本接口]
 获取镜像中指定文件的大小；文件不存在时返回 0
 */
-JE_API size_t je_fimg_archive_file_size(const jeecs_fimg_archive* archive, const char* path);
+JE_API size_t je_fimg_archive_file_size(const je_fimg_archive_t* archive, const char* path);
 
 /*
-jeecs_fimg_writer_options [类型]
+je_fimg_writer_options_t [类型]
 fimg 打包选项
 */
-typedef struct jeecs_fimg_writer_options
+typedef struct je_fimg_writer_options_t
 {
     /* -1 使用默认等级 6；0 仅存储；1-9 使用 deflate */
     int compression_level;
@@ -2045,7 +2046,7 @@ typedef struct jeecs_fimg_writer_options
     /* OPTIONAL: nullptr 使用内置默认列表；空字符串表示不跳过任何扩展名
        逗号/分号/空白分隔，大小写不敏感，前导 '.' 可有可无 */
     const char* skip_extensions;
-} jeecs_fimg_writer_options;
+} je_fimg_writer_options_t;
 
 /*
 je_fimg_writer_create [基本接口]
@@ -2054,10 +2055,10 @@ je_fimg_writer_create [基本接口]
     * shard_size 是单个分片文件的目标大小，传 0 使用默认值（1 MiB）
     * options 为 nullptr 时使用默认压缩配置（等级 6、最小 64 字节、内置跳过列表）
 */
-JE_API jeecs_fimg_writer* je_fimg_writer_create(
+JE_API je_fimg_writer_t* je_fimg_writer_create(
     const char* root,
     size_t shard_size,
-    /* OPTIONAL */ const jeecs_fimg_writer_options* options);
+    /* OPTIONAL */ const je_fimg_writer_options_t* options);
 
 /*
 je_fimg_default_skip_extensions [基本接口]
@@ -2072,7 +2073,7 @@ je_fimg_writer_pack_file [基本接口]
 archive_path 重复、源文件读取失败或 writer 已结束/失败时返回 false
 */
 JE_API bool je_fimg_writer_pack_file(
-    jeecs_fimg_writer* writer,
+    je_fimg_writer_t* writer,
     const char* filepath,
     const char* archive_path);
 
@@ -2082,7 +2083,7 @@ je_fimg_writer_pack_buffer [基本接口]
 archive_path 重复、参数非法或 writer 已结束/失败时返回 false
 */
 JE_API bool je_fimg_writer_pack_buffer(
-    jeecs_fimg_writer* writer,
+    je_fimg_writer_t* writer,
     /* OPTIONAL: If len == 0 */ const void* buffer,
     size_t len,
     const char* archive_path);
@@ -2093,7 +2094,7 @@ je_fimg_writer_finish [基本接口]
 成功返回 true；失败返回 false 且 writer 进入失败状态，需要调用
 je_fimg_writer_abort 清理
 */
-JE_API bool je_fimg_writer_finish(jeecs_fimg_writer* writer);
+JE_API bool je_fimg_writer_finish(je_fimg_writer_t* writer);
 
 /*
 je_fimg_writer_abort [基本接口]
@@ -2101,7 +2102,7 @@ je_fimg_writer_abort [基本接口]
     * 如果尚未成功 finish，仅关闭当前分片并释放 writer，已经写出的文件保留
     * 输出目录由调用方负责清理
 */
-JE_API void je_fimg_writer_abort(jeecs_fimg_writer* writer);
+JE_API void je_fimg_writer_abort(je_fimg_writer_t* writer);
 
 // If ignore_crc64 == true, cache will always work even if origin file changed.
 
@@ -2118,14 +2119,14 @@ je_cache_file_load [基本接口]
     je_file_read
     je_file_close
 */
-JE_API /* OPTIONAL */ jeecs_file* je_cache_file_load(
+JE_API /* OPTIONAL */ je_file_t* je_cache_file_load(
     const char* filepath,
     uint32_t format_version,
     uint64_t virtual_crc64);
 
 // If usecrc64 != 0, cache file will use it instead of reading from origin file.
 
-typedef struct je_writing_cache_file je_writing_cache_file;
+typedef struct je_writing_cache_file_t je_writing_cache_file_t;
 
 /*
 je_cache_file_create [基本接口]
@@ -2139,7 +2140,7 @@ je_cache_file_create [基本接口]
     je_cache_file_close
     je_cache_file_write
 */
-JE_API /* OPTIONAL */ je_writing_cache_file* je_cache_file_create(
+JE_API /* OPTIONAL */ je_writing_cache_file_t* je_cache_file_create(
     const char* filepath,
     uint32_t format_version,
     uint64_t usecrc64);
@@ -2152,18 +2153,18 @@ JE_API size_t je_cache_file_write(
     const void* write_buffer,
     size_t elem_size,
     size_t count,
-    je_writing_cache_file* file);
+    je_writing_cache_file_t* file);
 
 /*
 je_cache_file_close [基本接口]
 关闭创建出的缓存文件
 */
-JE_API void je_cache_file_close(je_writing_cache_file* file);
+JE_API void je_cache_file_close(je_writing_cache_file_t* file);
 
 /////////////////////////// CACHE BINARY DOCUMENT /////////////////////////////////
 
 /*
-jeecs_cache_binary_value_type [类型]
+je_cache_binary_value_type_t [类型]
 二进制缓存文档中的值类型标记。每个值都从一个 1 字节的类型标记开始：
     * BOOL ~ FLOAT64 —— 标量，紧跟固定宽度的数据，按本机字节序存储；
                          BOOL 固定占用 1 字节，读取时非 0 即 true
@@ -2175,7 +2176,7 @@ jeecs_cache_binary_value_type [类型]
     je_cache_binary_append_document
     je_cache_binary_document_index
 */
-typedef enum jeecs_cache_binary_value_type
+typedef enum je_cache_binary_value_type_t
 {
     JE_CACHE_BINARY_VALUE_BOOL = 0,
     JE_CACHE_BINARY_VALUE_INT8 = 1,
@@ -2193,47 +2194,47 @@ typedef enum jeecs_cache_binary_value_type
     JE_CACHE_BINARY_VALUE_LIST = 13,
     JE_CACHE_BINARY_VALUE_DOCUMENT = 14,
     JE_CACHE_BINARY_VALUE_END = 15,
-} jeecs_cache_binary_value_type;
+} je_cache_binary_value_type_t;
 
 /*
-jeecs_cache_binary_document [类型]
+je_cache_binary_document_t [类型]
 二进制缓存文档的只读句柄，位置指向文档的第一个键（DOCUMENT 标记之后）
     * 文档由若干 [STRING 键][值] 组成，以 END 结束
-    * 句柄不拥有文件，句柄有效期间对应的 jeecs_file 必须保持打开
+    * 句柄不拥有文件，句柄有效期间对应的 je_file_t 必须保持打开
     * 读取接口会移动文件读取位置，不要与顺序读取混用
 字段由引擎内部维护，请勿直接修改
 请参见：
     je_cache_binary_document_open
     je_cache_binary_document_index
 */
-typedef struct jeecs_cache_binary_document
+typedef struct je_cache_binary_document_t
 {
-    jeecs_file* m_file;
+    je_file_t* m_file;
     size_t m_location;
-} jeecs_cache_binary_document;
+} je_cache_binary_document_t;
 
 /*
-jeecs_cache_binary_list [类型]
+je_cache_binary_list_t [类型]
 二进制缓存列表的只读句柄，位置指向列表的第一个元素（LIST 标记之后）
     * 列表由若干值组成，以 END 结束
-    * 句柄不拥有文件，句柄有效期间对应的 jeecs_file 必须保持打开
+    * 句柄不拥有文件，句柄有效期间对应的 je_file_t 必须保持打开
     * 读取接口会移动文件读取位置，不要与顺序读取混用
 字段由引擎内部维护，请勿直接修改
 请参见：
     je_cache_binary_list_open
     je_cache_binary_list_index
 */
-typedef struct jeecs_cache_binary_list
+typedef struct je_cache_binary_list_t
 {
-    jeecs_file* m_file;
+    je_file_t* m_file;
     size_t m_location;
-} jeecs_cache_binary_list;
+} je_cache_binary_list_t;
 
 /*
-jeecs_cache_binary_list_iterator [类型]
+je_cache_binary_list_iterator_t [类型]
 二进制缓存列表的顺序遍历游标，位置指向下一个尚未读取的元素
     * 由 je_cache_binary_list_iterator_open 从列表句柄初始化
-    * 不拥有文件，游标有效期间对应的 jeecs_file 必须保持打开
+    * 不拥有文件，游标有效期间对应的 je_file_t 必须保持打开
     * 读取接口会移动文件读取位置，不要与顺序读取混用
 字段由引擎内部维护，请勿直接修改
 请参见：
@@ -2242,41 +2243,41 @@ jeecs_cache_binary_list_iterator [类型]
     je_cache_binary_list_iterator_read
     je_cache_binary_list_iterator_advance
 */
-typedef struct jeecs_cache_binary_list_iterator
+typedef struct je_cache_binary_list_iterator_t
 {
-    jeecs_file* m_file;
+    je_file_t* m_file;
     size_t m_location;
-} jeecs_cache_binary_list_iterator;
+} je_cache_binary_list_iterator_t;
 
 /*
-jeecs_cache_binary_string [类型]
+je_cache_binary_string_t [类型]
 二进制缓存字符串值的只读句柄，位置指向该值自己的 STRING 标记
-    * 句柄不拥有文件，句柄有效期间对应的 jeecs_file 必须保持打开
+    * 句柄不拥有文件，句柄有效期间对应的 je_file_t 必须保持打开
     * 读取接口会移动文件读取位置，不要与顺序读取混用
 字段由引擎内部维护，请勿直接修改
 请参见：
     je_cache_binary_string_read
 */
-typedef struct jeecs_cache_binary_string
+typedef struct je_cache_binary_string_t
 {
-    jeecs_file* m_file;
+    je_file_t* m_file;
     size_t m_location;
-} jeecs_cache_binary_string;
+} je_cache_binary_string_t;
 
 /*
-jeecs_cache_binary_buffer [类型]
+je_cache_binary_buffer_t [类型]
 二进制缓存缓冲区值的只读句柄，位置指向该值自己的 BUFFER 标记
-    * 句柄不拥有文件，句柄有效期间对应的 jeecs_file 必须保持打开
+    * 句柄不拥有文件，句柄有效期间对应的 je_file_t 必须保持打开
     * 读取接口会移动文件读取位置，不要与顺序读取混用
 字段由引擎内部维护，请勿直接修改
 请参见：
     je_cache_binary_buffer_read
 */
-typedef struct jeecs_cache_binary_buffer
+typedef struct je_cache_binary_buffer_t
 {
-    jeecs_file* m_file;
+    je_file_t* m_file;
     size_t m_location;
-} jeecs_cache_binary_buffer;
+} je_cache_binary_buffer_t;
 
 /*
 je_cache_binary_document_open [基本接口]
@@ -2288,8 +2289,8 @@ je_cache_binary_document_open [基本接口]
     je_cache_binary_list_open
 */
 JE_API bool je_cache_binary_document_open(
-    jeecs_file* file,
-    jeecs_cache_binary_document* out_doc);
+    je_file_t* file,
+    je_cache_binary_document_t* out_doc);
 
 /*
 je_cache_binary_list_open [基本接口]
@@ -2301,8 +2302,8 @@ je_cache_binary_list_open [基本接口]
     je_cache_binary_document_open
 */
 JE_API bool je_cache_binary_list_open(
-    jeecs_file* file,
-    jeecs_cache_binary_list* out_list);
+    je_file_t* file,
+    je_cache_binary_list_t* out_list);
 
 /*
 je_cache_binary_string_read [基本接口]
@@ -2319,7 +2320,7 @@ je_cache_binary_string_read [基本接口]
 JE_API bool je_cache_binary_string_read(
     /* OPTIONAL: If *inout_dst_len == 0 */ char* dst,
     size_t* inout_dst_len,
-    const jeecs_cache_binary_string* str);
+    const je_cache_binary_string_t* str);
 
 /*
 je_cache_binary_buffer_read [基本接口]
@@ -2330,13 +2331,13 @@ je_cache_binary_buffer_read [基本接口]
     * 实际长度可能大于容量，调用方可据此重新分配后再次读取
     * 读取失败返回 false
 请参见：
-    jeecs_cache_binary_buffer
+    je_cache_binary_buffer_t
     je_cache_binary_document_index
 */
 JE_API bool je_cache_binary_buffer_read(
     /* OPTIONAL: If *inout_dst_len == 0 */ void* dst,
     size_t* inout_dst_len,
-    const jeecs_cache_binary_buffer* buf);
+    const je_cache_binary_buffer_t* buf);
 
 /*
 je_cache_binary_document_index [基本接口]
@@ -2347,22 +2348,22 @@ je_cache_binary_document_index [基本接口]
         INT8 / INT16 / INT32 / INT64 写入 int8_t / int16_t / int32_t / int64_t
         UINT8 / UINT16 / UINT32 / UINT64 写入 uint8_t / uint16_t / uint32_t / uint64_t
         FLOAT32 / FLOAT64 写入 float / double
-        STRING 写入 jeecs_cache_binary_string
-        BUFFER 写入 jeecs_cache_binary_buffer
-        LIST 写入 jeecs_cache_binary_list
-        DOCUMENT 写入 jeecs_cache_binary_document
+        STRING 写入 je_cache_binary_string_t
+        BUFFER 写入 je_cache_binary_buffer_t
+        LIST 写入 je_cache_binary_list_t
+        DOCUMENT 写入 je_cache_binary_document_t
     * 同一个键出现多次时使用第一个
     * 键不存在、类型不符或读取失败时返回 false
 请参见：
-    jeecs_cache_binary_value_type
+    je_cache_binary_value_type_t
     je_cache_binary_string_read
     je_cache_binary_buffer_read
     je_cache_binary_list_index
 */
 JE_API bool je_cache_binary_document_index(
-    const jeecs_cache_binary_document* document,
+    const je_cache_binary_document_t* document,
     const char* key,
-    jeecs_cache_binary_value_type expected_type,
+    je_cache_binary_value_type_t expected_type,
     void* out_value);
 
 /*
@@ -2374,9 +2375,9 @@ je_cache_binary_list_index [基本接口]
     je_cache_binary_document_index
 */
 JE_API bool je_cache_binary_list_index(
-    const jeecs_cache_binary_list* list,
+    const je_cache_binary_list_t* list,
     size_t index,
-    jeecs_cache_binary_value_type expected_type,
+    je_cache_binary_value_type_t expected_type,
     void* out_value);
 
 /*
@@ -2385,11 +2386,11 @@ je_cache_binary_list_iterator_open [基本接口]
     * 游标指向列表的第一个元素（可能已经是 END）
     * 读取接口会移动文件读取位置，不要与顺序读取混用
 请参见：
-    jeecs_cache_binary_list_iterator
+    je_cache_binary_list_iterator_t
 */
 JE_API bool je_cache_binary_list_iterator_open(
-    const jeecs_cache_binary_list* list,
-    jeecs_cache_binary_list_iterator* out_iterator);
+    const je_cache_binary_list_t* list,
+    je_cache_binary_list_iterator_t* out_iterator);
 
 /*
 je_cache_binary_list_iterator_is_end [基本接口]
@@ -2399,10 +2400,10 @@ je_cache_binary_list_iterator_is_end [基本接口]
       据此拒绝损坏的缓存
     * 读取不会移动游标的逻辑位置
 请参见：
-    jeecs_cache_binary_list_iterator
+    je_cache_binary_list_iterator_t
 */
 JE_API bool je_cache_binary_list_iterator_is_end(
-    const jeecs_cache_binary_list_iterator* iterator);
+    const je_cache_binary_list_iterator_t* iterator);
 
 /*
 je_cache_binary_list_iterator_read [基本接口]
@@ -2413,8 +2414,8 @@ je_cache_binary_list_iterator_read [基本接口]
     je_cache_binary_list_iterator_advance
 */
 JE_API bool je_cache_binary_list_iterator_read(
-    const jeecs_cache_binary_list_iterator* iterator,
-    jeecs_cache_binary_value_type expected_type,
+    const je_cache_binary_list_iterator_t* iterator,
+    je_cache_binary_value_type_t expected_type,
     void* out_value);
 
 /*
@@ -2425,7 +2426,7 @@ je_cache_binary_list_iterator_advance [基本接口]
     je_cache_binary_list_iterator_read
 */
 JE_API bool je_cache_binary_list_iterator_advance(
-    jeecs_cache_binary_list_iterator* inout_iterator);
+    je_cache_binary_list_iterator_t* inout_iterator);
 
 /*
 je_cache_binary_append_document [基本接口]
@@ -2436,7 +2437,7 @@ je_cache_binary_append_document [基本接口]
     je_cache_binary_append_end
     je_cache_binary_append_string
 */
-JE_API bool je_cache_binary_append_document(je_writing_cache_file* file);
+JE_API bool je_cache_binary_append_document(je_writing_cache_file_t* file);
 
 /*
 je_cache_binary_append_list [基本接口]
@@ -2446,7 +2447,7 @@ je_cache_binary_append_list [基本接口]
 请参见：
     je_cache_binary_append_end
 */
-JE_API bool je_cache_binary_append_list(je_writing_cache_file* file);
+JE_API bool je_cache_binary_append_list(je_writing_cache_file_t* file);
 
 /*
 je_cache_binary_append_end [基本接口]
@@ -2456,7 +2457,7 @@ je_cache_binary_append_end [基本接口]
     je_cache_binary_append_document
     je_cache_binary_append_list
 */
-JE_API bool je_cache_binary_append_end(je_writing_cache_file* file);
+JE_API bool je_cache_binary_append_end(je_writing_cache_file_t* file);
 
 /*
 je_cache_binary_append_string [基本接口]
@@ -2467,7 +2468,7 @@ je_cache_binary_append_string [基本接口]
     je_cache_binary_string_read
 */
 JE_API bool je_cache_binary_append_string(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     const char* str);
 
 /*
@@ -2479,7 +2480,7 @@ je_cache_binary_append_buffer [基本接口]
     je_cache_binary_buffer_read
 */
 JE_API bool je_cache_binary_append_buffer(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     const void* buf,
     size_t buflen);
 
@@ -2490,7 +2491,7 @@ je_cache_binary_append_bool [基本接口]
     * 写入失败返回 false
 */
 JE_API bool je_cache_binary_append_bool(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     bool val);
 
 /*
@@ -2498,7 +2499,7 @@ je_cache_binary_append_int8 [基本接口]
 向缓存文件追加一个 int8 值，写入失败返回 false
 */
 JE_API bool je_cache_binary_append_int8(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     int8_t val);
 
 /*
@@ -2506,7 +2507,7 @@ je_cache_binary_append_int16 [基本接口]
 向缓存文件追加一个 int16 值，写入失败返回 false
 */
 JE_API bool je_cache_binary_append_int16(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     int16_t val);
 
 /*
@@ -2514,7 +2515,7 @@ je_cache_binary_append_int32 [基本接口]
 向缓存文件追加一个 int32 值，写入失败返回 false
 */
 JE_API bool je_cache_binary_append_int32(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     int32_t val);
 
 /*
@@ -2522,7 +2523,7 @@ je_cache_binary_append_int64 [基本接口]
 向缓存文件追加一个 int64 值，写入失败返回 false
 */
 JE_API bool je_cache_binary_append_int64(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     int64_t val);
 
 /*
@@ -2530,7 +2531,7 @@ je_cache_binary_append_uint8 [基本接口]
 向缓存文件追加一个 uint8 值，写入失败返回 false
 */
 JE_API bool je_cache_binary_append_uint8(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     uint8_t val);
 
 /*
@@ -2538,7 +2539,7 @@ je_cache_binary_append_uint16 [基本接口]
 向缓存文件追加一个 uint16 值，写入失败返回 false
 */
 JE_API bool je_cache_binary_append_uint16(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     uint16_t val);
 
 /*
@@ -2546,7 +2547,7 @@ je_cache_binary_append_uint32 [基本接口]
 向缓存文件追加一个 uint32 值，写入失败返回 false
 */
 JE_API bool je_cache_binary_append_uint32(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     uint32_t val);
 
 /*
@@ -2554,7 +2555,7 @@ je_cache_binary_append_uint64 [基本接口]
 向缓存文件追加一个 uint64 值，写入失败返回 false
 */
 JE_API bool je_cache_binary_append_uint64(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     uint64_t val);
 
 /*
@@ -2562,7 +2563,7 @@ je_cache_binary_append_float32 [基本接口]
 向缓存文件追加一个 float32 值，写入失败返回 false
 */
 JE_API bool je_cache_binary_append_float32(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     float val);
 
 /*
@@ -2570,16 +2571,16 @@ je_cache_binary_append_float64 [基本接口]
 向缓存文件追加一个 float64 值，写入失败返回 false
 */
 JE_API bool je_cache_binary_append_float64(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     double val);
 
 /////////////////////////// ANIMATION RESOURCE /////////////////////////////////
 
 /*
-je_animation_value_type [类型]
+je_animation_value_type_t [类型]
 帧动画中一个数据值的类型标记，与缓存文档中写入的 type 字段一致
 */
-typedef enum je_animation_value_type
+typedef enum je_animation_value_type_t
 {
     JE_ANIMATION_VALUE_INT = 0,
     JE_ANIMATION_VALUE_FLOAT,
@@ -2587,10 +2588,10 @@ typedef enum je_animation_value_type
     JE_ANIMATION_VALUE_VEC3,
     JE_ANIMATION_VALUE_VEC4,
     JE_ANIMATION_VALUE_QUAT4,
-} je_animation_value_type;
+} je_animation_value_type_t;
 
 /*
-je_animation_value [类型]
+je_animation_value_t [类型]
 帧动画中的一个数据值。按 m_type 解释 m_value：
     * INT   —— i32
     * FLOAT —— f32
@@ -2599,7 +2600,7 @@ je_animation_value [类型]
     * VEC4  —— v4[0..3]
     * QUAT4 —— q4[0..3]（x, y, z, w）
 */
-typedef struct je_animation_value
+typedef struct je_animation_value_t
 {
     uint8_t m_type;
     union
@@ -2611,67 +2612,67 @@ typedef struct je_animation_value
         float v4[4];
         float q4[4];
     } m_value;
-} je_animation_value;
+} je_animation_value_t;
 
 /*
-je_animation_component_data [类型]
+je_animation_component_data_t [类型]
 帧动画中作用于组件成员的一段数据
     * m_component_type / m_member_info 在加载时解析并校验，无效条目不会保留
     * m_offset_mode 为 true 时在原值上叠加，否则直接赋值
 */
-typedef struct je_animation_component_data
+typedef struct je_animation_component_data_t
 {
-    const je_TypeInfo* m_component_type;
-    const je_MemberInfo* m_member_info;
-    je_animation_value m_member_value;
+    const je_type_info_t* m_component_type;
+    const je_member_info_t* m_member_info;
+    je_animation_value_t m_member_value;
     bool m_offset_mode;
-} je_animation_component_data;
+} je_animation_component_data_t;
 
 /*
-je_animation_uniform_data [类型]
+je_animation_uniform_data_t [类型]
 帧动画中作用于着色器变量的一段数据
 */
-typedef struct je_animation_uniform_data
+typedef struct je_animation_uniform_data_t
 {
     const char* m_uniform_name;
-    je_animation_value m_uniform_value;
-} je_animation_uniform_data;
+    je_animation_value_t m_uniform_value;
+} je_animation_uniform_data_t;
 
 /*
-je_animation_frame_data [类型]
+je_animation_frame_data_t [类型]
 帧动画中的一帧：持续时间、组件数据与着色器变量数据
 */
-typedef struct je_animation_frame_data
+typedef struct je_animation_frame_data_t
 {
     float m_frame_time;
-    je_animation_component_data* m_component_data;
+    je_animation_component_data_t* m_component_data;
     size_t m_component_data_count;
-    je_animation_uniform_data* m_uniform_data;
+    je_animation_uniform_data_t* m_uniform_data;
     size_t m_uniform_data_count;
-} je_animation_frame_data;
+} je_animation_frame_data_t;
 
 /*
-je_animation_action_data [类型]
+je_animation_action_data_t [类型]
 帧动画中的一个动作（一组帧）
 */
-typedef struct je_animation_action_data
+typedef struct je_animation_action_data_t
 {
     const char* m_name;
-    je_animation_frame_data* m_frames;
+    je_animation_frame_data_t* m_frames;
     size_t m_frame_count;
-} je_animation_action_data;
+} je_animation_action_data_t;
 
 /*
-je_animation [类型]
+je_animation_t [类型]
 帧动画的只读数据，由 je_animation_open 创建、je_animation_close 释放
     * 该结构不包含任何 C++ 容器，动画数据以连续数组持有
     * 数据在加载完成后不再修改，可被多个组件/实体共享
 */
-typedef struct je_animation
+typedef struct je_animation_t
 {
-    je_animation_action_data* m_actions;
+    je_animation_action_data_t* m_actions;
     size_t m_action_count;
-} je_animation;
+} je_animation_t;
 
 /*
 je_animation_open [基本接口]
@@ -2682,20 +2683,20 @@ je_animation_open [基本接口]
     * 其他失败情况返回 nullptr 并记录日志
     * 返回的数据使用 je_animation_close 释放
 */
-JE_API /* OPTIONAL */ je_animation* je_animation_open(const char* path);
+JE_API /* OPTIONAL */ je_animation_t* je_animation_open(const char* path);
 
 /*
 je_animation_close [基本接口]
 释放 je_animation_open 返回的帧动画数据
 */
-JE_API void je_animation_close(je_animation* animation);
+JE_API void je_animation_close(je_animation_t* animation);
 
 /*
 je_animation_action_find [基本接口]
 按名称查找动作，找不到返回 nullptr
 */
-JE_API /* OPTIONAL */ const je_animation_action_data* je_animation_action_find(
-    const je_animation* animation,
+JE_API /* OPTIONAL */ const je_animation_action_data_t* je_animation_action_find(
+    const je_animation_t* animation,
     const char* name);
 
 /*
@@ -2706,16 +2707,16 @@ je_animation_cache_open_or_create [基本接口]
     je_cache_file_load
     je_file_close
 */
-JE_API /* OPTIONAL */ jeecs_file* je_animation_cache_open_or_create(const char* path);
+JE_API /* OPTIONAL */ je_file_t* je_animation_cache_open_or_create(const char* path);
 
 /*
-je_image_texture_color_space [类型]
+je_image_texture_color_space_t [类型]
 图片纹理的颜色空间。图片加载时按此决定 GPU 纹理格式：
     * SRGB   —— 8 位 RGB 数据按 sRGB 编码存储，采样时由硬件转换为线性；
                 这是未提供属性缓存时的默认值
     * LINEAR —— 8 位 RGB 数据按线性数值直接采样（法线图、遮罩等非颜色数据）
 */
-enum je_image_texture_color_space
+enum je_image_texture_color_space_t
 {
     JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB = 0,
     JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR = 1,
@@ -2727,7 +2728,7 @@ je_image_texture_color_space_get [基本接口]
     * 缓存不存在、校验失败（图片已改动）或内容非法时返回 SRGB
     * 不检查 path 指向的文件是否为图片
 */
-JE_API je_image_texture_color_space je_image_texture_color_space_get(
+JE_API je_image_texture_color_space_t je_image_texture_color_space_get(
     const char* path);
 
 /*
@@ -2738,27 +2739,31 @@ je_image_texture_color_space_set [基本接口]
 */
 JE_API bool je_image_texture_color_space_set(
     const char* path,
-    je_image_texture_color_space color_space);
+    je_image_texture_color_space_t color_space);
 
 /////////////////////////// GRAPHIC //////////////////////////////
 // Here to store low-level-graphic-api.
 
 /*
-jegl_interface_config [类型]
+je_gl_display_mode_t [枚举]
+图形接口窗口的显示模式
+*/
+typedef enum je_gl_display_mode_t
+{
+    JE_GL_DISPLAY_MODE_WINDOWED,
+    JE_GL_DISPLAY_MODE_FULLSCREEN,
+    JE_GL_DISPLAY_MODE_BOARDLESS,
+} je_gl_display_mode_t;
+
+/*
+je_gl_interface_config_t [类型]
 图形接口的配置类型，创建图形线程时传入并生效
 */
-struct jegl_interface_config
+typedef struct je_gl_interface_config_t
 {
-    enum display_mode
-    {
-        WINDOWED,
-        FULLSCREEN,
-        BOARDLESS,
-    };
-
     // 显示模式，指示图形应该在全屏、窗口或无边框窗口中显示
     // * 在一些平台上无效
-    display_mode m_display_mode;
+    je_gl_display_mode_t m_display_mode;
 
     // 是否允许用户调整窗口大小
     // * 在一些平台上无效
@@ -2785,75 +2790,80 @@ struct jegl_interface_config
     // 用户数据，针对一些特殊的平台，可能需要通过此参数传递一些特定的参数
     // * 不同图形库可能以不同的方式使用此参数，请根据额外约定使用。
     void* m_userdata;
-};
+} je_gl_interface_config_t;
 
-struct jegl_context_notifier;
-struct jegl_graphic_api;
-struct jegl_context_promise_t;
+typedef struct je_gl_context_notifier_t je_gl_context_notifier_t;
+typedef struct je_gl_graphic_api_t je_gl_graphic_api_t;
+typedef struct je_gl_context_promise_t je_gl_context_promise_t;
 
 /*
-jegl_update_action [类型]
+je_gl_update_action_t [类型]
 图形后端的帧更新接口返回的渲染动作，也会作为参数传给帧渲染任务
-    * JEGL_UPDATE_CONTINUE 表示继续正常渲染
-    * JEGL_UPDATE_SKIP 表示跳过本帧的渲染
-    * JEGL_UPDATE_STOP 表示请求关闭渲染
+    * JE_GL_UPDATE_CONTINUE 表示继续正常渲染
+    * JE_GL_UPDATE_SKIP 表示跳过本帧的渲染
+    * JE_GL_UPDATE_STOP 表示请求关闭渲染
 */
-enum jegl_update_action
+typedef enum je_gl_update_action_t
 {
-    JEGL_UPDATE_CONTINUE,
-    JEGL_UPDATE_SKIP,
-    JEGL_UPDATE_STOP,
-};
+    JE_GL_UPDATE_CONTINUE,
+    JE_GL_UPDATE_SKIP,
+    JE_GL_UPDATE_STOP,
+} je_gl_update_action_t;
+
+typedef struct je_gl_context_t je_gl_context_t;
 
 /*
-jegl_context [类型]
+je_gl_frame_job_func_t [类型]
+图形线程每帧调用的帧渲染任务函数类型
+*/
+typedef void (*je_gl_frame_job_func_t)(je_gl_context_t*, void*, je_gl_update_action_t);
+
+/*
+je_gl_context_t [类型]
 图形上下文，储存有当前图形线程的各项信息
 */
-// 图形实现上下文指针（提升到文件作用域，供 jegl_graphic_api 的函数指针别名直接使用，避免 C++ 的 :: 作用域解析）。
-typedef void* je_GraphicImplContext;
-struct jegl_context
+// 图形实现上下文指针（提升到文件作用域，供 je_gl_graphic_api_t 的函数指针别名直接使用，避免 C++ 的 :: 作用域解析）。
+typedef void* je_graphic_impl_context_t;
+struct je_gl_context_t
 {
-    // 图形帧渲染任务函数类型定义，图形线程负责每帧调用一次此函数
-    typedef void (*frame_job_func_t)(jegl_context*, void*, jegl_update_action);
-
-    frame_job_func_t _m_frame_rend_work;
+    je_gl_frame_job_func_t _m_frame_rend_work;
     void* _m_frame_rend_work_arg;
     void* _m_sync_callback_arg;
 
-    jegl_context_notifier* _m_thread_notifier;
+    je_gl_context_notifier_t* _m_thread_notifier;
     void* _m_interface_handle;
 
-    je_GameUniverse* m_universe_instance;
-    je_Version m_version;
-    jegl_interface_config m_config;
-    jegl_graphic_api* m_apis;
-    je_GraphicImplContext m_graphic_impl_context;
+    je_game_universe_t* m_universe_instance;
+    je_version_t m_version;
+    je_gl_interface_config_t m_config;
+    je_gl_graphic_api_t* m_apis;
+    je_graphic_impl_context_t m_graphic_impl_context;
 };
 
-using jegl_resource_blob = void*;
-struct jegl_resource_bind_counter;
+typedef void* je_gl_resource_blob_t;
+typedef struct je_gl_resource_bind_counter_t je_gl_resource_bind_counter_t;
 
 /*
-jegl_resource_handle [类型]
+je_gl_resource_handle_t [类型]
 图形资源句柄，储存有资源的路径、底层图形实现指针和引用计数等信息
 */
-struct jegl_resource_handle
+typedef struct je_gl_resource_handle_t
 {
     const char* m_path_may_null_if_builtin;
-    jegl_resource_bind_counter* m_raw_ref_count;
+    je_gl_resource_bind_counter_t* m_raw_ref_count;
 
-    jegl_context* m_graphic_thread;
-    je_Version m_graphic_thread_version;
+    je_gl_context_t* m_graphic_thread;
+    je_version_t m_graphic_thread_version;
 
     bool m_modified;
     void* m_ptr;
-};
+} je_gl_resource_handle_t;
 
 /*
-jegl_texture_kind [类型]
+je_gl_texture_kind_t [类型]
 纹理类别标签，用于在类型被擦除的边界（绘制链重放、脚本语言包装层）区分纹理的实际类别
 */
-enum class jegl_texture_kind : uint8_t
+enum class je_gl_texture_kind_t : uint8_t
 {
     TEXTURE_2D,
     TEXTURE_3D,
@@ -2863,145 +2873,172 @@ enum class jegl_texture_kind : uint8_t
 };
 
 /*
-jegl_texture_common [类型]
+je_gl_texture_pixel_data_t [类型别名]
+纹理像素数据的存储单元类型
+*/
+typedef uint8_t je_gl_texture_pixel_data_t;
+
+/*
+je_gl_texture_format_t [枚举]
+纹理像素格式；低位表示通道布局，其余位是附加标志
+*/
+typedef enum je_gl_texture_format_t : uint16_t
+{
+    JE_GL_TEXTURE_FORMAT_MONO = 0x0001,
+    JE_GL_TEXTURE_FORMAT_RGBA = 0x0004,
+    JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK = 0x000F,
+
+    JE_GL_TEXTURE_FORMAT_FLOAT16 = 0x0010,
+    JE_GL_TEXTURE_FORMAT_DEPTH = 0x0020,
+    JE_GL_TEXTURE_FORMAT_FRAMEBUF = 0x0040,
+    // Sample RGB through the sRGB transfer function (hardware decode).
+    // Pixel storage is unchanged; alpha is always linear.
+    JE_GL_TEXTURE_FORMAT_SRGB = 0x0080,
+
+    // Formats that do not keep a CPU-side pixel buffer.
+    JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK =
+        JE_GL_TEXTURE_FORMAT_FLOAT16 | JE_GL_TEXTURE_FORMAT_DEPTH | JE_GL_TEXTURE_FORMAT_FRAMEBUF,
+} je_gl_texture_format_t;
+
+/*
+je_gl_texture_common_t [类型]
 各类纹理的公共前缀布局，仅供其余纹理类型继承，不应被单独使用。
 所有纹理类型必须保证 m_handle 位于结构体偏移 0 处，以复用引擎的资源生命周期管理。
 */
-struct jegl_texture_common
+typedef struct je_gl_texture_common_t
 {
-    using pixel_data_t = uint8_t;
-    enum format : uint16_t
-    {
-        MONO = 0x0001,
-        RGBA = 0x0004,
-        COLOR_DEPTH_MASK = 0x000F,
-
-        FLOAT16 = 0x0010,
-        DEPTH = 0x0020,
-        FRAMEBUF = 0x0040,
-        // Sample RGB through the sRGB transfer function (hardware decode).
-        // Pixel storage is unchanged; alpha is always linear.
-        SRGB = 0x0080,
-
-        // Formats that do not keep a CPU-side pixel buffer.
-        NON_PIXEL_FORMAT_MASK = FLOAT16 | DEPTH | FRAMEBUF,
-    };
-
     // NOTE:
     // * Pixel data is storage from LEFT/BOTTOM to RIGHT/TOP
     // * If texture's m_pixels is nullptr, only create a texture in pipeline.
-    jegl_resource_handle m_handle;
-    jegl_texture_kind m_kind;
+    je_gl_resource_handle_t m_handle;
+    je_gl_texture_kind_t m_kind;
 
-    pixel_data_t* m_pixels;
+    je_gl_texture_pixel_data_t* m_pixels;
     size_t m_width;
     size_t m_height;
-    format m_format;
+    je_gl_texture_format_t m_format;
 
     // Partical texture data update
     size_t m_modified_min_x;
     size_t m_modified_min_y;
     size_t m_modified_max_x;
     size_t m_modified_max_y;
-};
+} je_gl_texture_common_t;
 
 /*
-jegl_texture_2d [类型]
+je_gl_texture_2d_t [类型]
 二维纹理原始数据，储存有纹理的采样方式和像素数据等信息
 */
-struct jegl_texture_2d : public jegl_texture_common
+struct je_gl_texture_2d_t : public je_gl_texture_common_t
 {
-    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_2D;
+    static constexpr je_gl_texture_kind_t KIND = je_gl_texture_kind_t::TEXTURE_2D;
 };
 static_assert(
-    std::is_trivial_v<jegl_texture_2d> && 0 == offsetof(jegl_texture_2d, m_handle));
+    std::is_trivial_v<je_gl_texture_2d_t> && 0 == offsetof(je_gl_texture_2d_t, m_handle));
 
 /*
-jegl_texture_3d [类型]
+je_gl_texture_3d_t [类型]
 三维纹理原始数据，m_depth 指示纹理在深度方向上的纹素数量，像素数据按
 宽度 x 高度 x 深度 连续排布
 */
-struct jegl_texture_3d : public jegl_texture_common
+struct je_gl_texture_3d_t : public je_gl_texture_common_t
 {
-    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_3D;
+    static constexpr je_gl_texture_kind_t KIND = je_gl_texture_kind_t::TEXTURE_3D;
     size_t m_depth;
 };
 static_assert(
-    std::is_trivial_v<jegl_texture_3d> && 0 == offsetof(jegl_texture_3d, m_handle));
+    std::is_trivial_v<je_gl_texture_3d_t> && 0 == offsetof(je_gl_texture_3d_t, m_handle));
 
 /*
-jegl_texture_array [类型]
+je_gl_texture_array_t [类型]
 纹理数组原始数据，m_layers 指示数组中二维纹理层的数量，像素数据按
 宽度 x 高度 x 层数 连续排布
 */
-struct jegl_texture_array : public jegl_texture_common
+struct je_gl_texture_array_t : public je_gl_texture_common_t
 {
-    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_ARRAY;
+    static constexpr je_gl_texture_kind_t KIND = je_gl_texture_kind_t::TEXTURE_ARRAY;
     size_t m_layers;
 };
 static_assert(
-    std::is_trivial_v<jegl_texture_array> && 0 == offsetof(jegl_texture_array, m_handle));
+    std::is_trivial_v<je_gl_texture_array_t> && 0 == offsetof(je_gl_texture_array_t, m_handle));
 
 /*
-jegl_texture_cube [类型]
+je_gl_texture_cube_t [类型]
 立方体贴图纹理原始数据，固定包含 6 个宽度高度相同的正方形面，
 像素数据按 6 x 宽度 x 高度 连续排布（面的顺序与图形 API 的
 +CUBE_MAP_POSITIVE_X .. -Z 顺序一致）
 */
-struct jegl_texture_cube : public jegl_texture_common
+struct je_gl_texture_cube_t : public je_gl_texture_common_t
 {
-    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_CUBE;
+    static constexpr je_gl_texture_kind_t KIND = je_gl_texture_kind_t::TEXTURE_CUBE;
 };
 static_assert(
-    std::is_trivial_v<jegl_texture_cube> && 0 == offsetof(jegl_texture_cube, m_handle));
+    std::is_trivial_v<je_gl_texture_cube_t> && 0 == offsetof(je_gl_texture_cube_t, m_handle));
 
 /*
-jegl_texture_msaa [类型]
+je_gl_texture_msaa_t [类型]
 多重采样二维纹理原始数据，仅存在于 GPU 侧（渲染目标附件），不持有 CPU 像素数据，
 m_samples 指示每像素采样数
 */
-struct jegl_texture_msaa : public jegl_texture_common
+struct je_gl_texture_msaa_t : public je_gl_texture_common_t
 {
-    static constexpr jegl_texture_kind KIND = jegl_texture_kind::TEXTURE_MSAA;
+    static constexpr je_gl_texture_kind_t KIND = je_gl_texture_kind_t::TEXTURE_MSAA;
     size_t m_samples;
 };
 static_assert(
-    std::is_trivial_v<jegl_texture_msaa> && 0 == offsetof(jegl_texture_msaa, m_handle));
+    std::is_trivial_v<je_gl_texture_msaa_t> && 0 == offsetof(je_gl_texture_msaa_t, m_handle));
 
 /*
-jegl_vertex [类型]
+je_gl_vertex_type_t [枚举]
+顶点的图元绘制方式
+*/
+typedef enum je_gl_vertex_type_t
+{
+    JE_GL_VERTEX_TYPE_LINESTRIP = 0,
+    JE_GL_VERTEX_TYPE_TRIANGLES,
+    JE_GL_VERTEX_TYPE_TRIANGLESTRIP,
+
+    JE_GL_VERTEX_TYPE_COUNT,
+} je_gl_vertex_type_t;
+
+/*
+je_gl_vertex_data_type_t [枚举]
+顶点属性分量的数据类型
+*/
+typedef enum je_gl_vertex_data_type_t
+{
+    JE_GL_VERTEX_DATA_TYPE_INT32 = 0,
+    JE_GL_VERTEX_DATA_TYPE_FLOAT32,
+} je_gl_vertex_data_type_t;
+
+/*
+je_gl_vertex_data_layout_t [类型]
+顶点属性布局的一项
+*/
+typedef struct je_gl_vertex_data_layout_t
+{
+    je_gl_vertex_data_type_t m_type;
+    size_t m_count;
+} je_gl_vertex_data_layout_t;
+
+/*
+je_gl_vertex_bone_data_t [类型]
+顶点骨骼绑定数据
+*/
+typedef struct je_gl_vertex_bone_data_t
+{
+    const char* m_name;
+    size_t m_index;
+    float m_m2b_trans[4][4];
+} je_gl_vertex_bone_data_t;
+
+/*
+je_gl_vertex_t [类型]
 顶点原始数据，储存有顶点的绘制方式、格式、大小和顶点数据等信息
 */
-struct jegl_vertex
+typedef struct je_gl_vertex_t
 {
-    jegl_resource_handle m_handle;
-
-    enum type
-    {
-        LINESTRIP = 0,
-        TRIANGLES,
-        TRIANGLESTRIP,
-
-        VERTEX_TYPE_COUNT,
-    };
-    enum data_type
-    {
-        INT32 = 0,
-        FLOAT32,
-    };
-
-    struct data_layout
-    {
-        data_type m_type;
-        size_t m_count;
-    };
-
-    struct bone_data
-    {
-        const char* m_name;
-        size_t m_index;
-        float m_m2b_trans[4][4];
-    };
+    je_gl_resource_handle_t m_handle;
 
     float m_x_min, m_x_max,
         m_y_min, m_y_max,
@@ -3014,231 +3051,310 @@ struct jegl_vertex
     // 索引缓冲的分配容量：m_index_count 可被 je_graphic_vertex_buffer_update 收缩为
     // 激活数量，本字段保持创建时的分配大小，作为收缩的上限
     size_t m_index_capacity;
-    const data_layout* m_formats;
+    const je_gl_vertex_data_layout_t* m_formats;
     size_t m_format_count;
     size_t m_data_size_per_point;
-    type m_type;
-    const bone_data** m_bones;
+    je_gl_vertex_type_t m_type;
+    const je_gl_vertex_bone_data_t** m_bones;
     size_t m_bone_count;
-};
+} je_gl_vertex_t;
 static_assert(
-    std::is_trivial_v<jegl_vertex> && 0 == offsetof(jegl_vertex, m_handle));
+    std::is_trivial_v<je_gl_vertex_t> && 0 == offsetof(je_gl_vertex_t, m_handle));
 
 /*
-jegl_shader [类型]
+je_gl_shader_filter_mode_t [枚举]
+着色器默认采样器的过滤模式
+*/
+typedef enum je_gl_shader_filter_mode_t
+{
+    JE_GL_SHADER_FILTER_MODE_NEAREST,
+    JE_GL_SHADER_FILTER_MODE_LINEAR,
+} je_gl_shader_filter_mode_t;
+
+/*
+je_gl_shader_wrap_mode_t [枚举]
+着色器默认采样器的寻址模式
+*/
+typedef enum je_gl_shader_wrap_mode_t
+{
+    JE_GL_SHADER_WRAP_MODE_CLAMP,
+    JE_GL_SHADER_WRAP_MODE_REPEAT,
+} je_gl_shader_wrap_mode_t;
+
+/*
+je_gl_shader_sampler_method_t [类型]
+着色器声明的默认采样器参数
+*/
+typedef struct je_gl_shader_sampler_method_t
+{
+    je_gl_shader_filter_mode_t m_min;
+    je_gl_shader_filter_mode_t m_mag;
+    je_gl_shader_filter_mode_t m_mip;
+    je_gl_shader_wrap_mode_t m_uwrap;
+    je_gl_shader_wrap_mode_t m_vwrap;
+    uint32_t m_sampler_id; // Used for DX11 & HLSL generation
+    uint64_t m_pass_id_count;
+    uint32_t* m_pass_ids; // Used for GL3 & GLSL generation
+} je_gl_shader_sampler_method_t;
+
+/*
+je_gl_shader_uniform_type_t [枚举]
+自定义 uniform 的存储类型
+*/
+typedef enum je_gl_shader_uniform_type_t
+{
+    JE_GL_SHADER_UNIFORM_TYPE_INT,
+    JE_GL_SHADER_UNIFORM_TYPE_INT2,
+    JE_GL_SHADER_UNIFORM_TYPE_INT3,
+    JE_GL_SHADER_UNIFORM_TYPE_INT4,
+    JE_GL_SHADER_UNIFORM_TYPE_FLOAT,
+    JE_GL_SHADER_UNIFORM_TYPE_FLOAT2,
+    JE_GL_SHADER_UNIFORM_TYPE_FLOAT3,
+    JE_GL_SHADER_UNIFORM_TYPE_FLOAT4,
+    JE_GL_SHADER_UNIFORM_TYPE_TEXTURE,
+    JE_GL_SHADER_UNIFORM_TYPE_FLOAT2X2,
+    JE_GL_SHADER_UNIFORM_TYPE_FLOAT3X3,
+    JE_GL_SHADER_UNIFORM_TYPE_FLOAT4X4,
+} je_gl_shader_uniform_type_t;
+
+/*
+自定义 uniform 的附加标签（位掩码）。标签不改变存储类型与 ABI：
+例如 COLOR 仍然是 FLOAT4，仅告知编辑器/脚本层按颜色呈现。
+后续新增的编辑器语义标签继续在这里追加。
+*/
+typedef enum je_gl_shader_uniform_mask_t : uint32_t
+{
+    JE_GL_SHADER_UNIFORM_MASK_NONE = 0x0000,
+    JE_GL_SHADER_UNIFORM_MASK_COLOR = 0x0001,
+} je_gl_shader_uniform_mask_t;
+
+/*
+Woolang `shader::uniform_variable` union 的 variant 索引（脚本 ABI）。
+必须与 je/graphic.wo 中的 union 声明顺序一致。
+*/
+typedef enum je_gl_shader_script_uniform_variant_t
+{
+    JE_GL_SHADER_SCRIPT_UNIFORM_INTEGER = 0,
+    JE_GL_SHADER_SCRIPT_UNIFORM_INTEGER2,
+    JE_GL_SHADER_SCRIPT_UNIFORM_INTEGER3,
+    JE_GL_SHADER_SCRIPT_UNIFORM_INTEGER4,
+    JE_GL_SHADER_SCRIPT_UNIFORM_FLOAT,
+    JE_GL_SHADER_SCRIPT_UNIFORM_FLOAT2,
+    JE_GL_SHADER_SCRIPT_UNIFORM_FLOAT3,
+    JE_GL_SHADER_SCRIPT_UNIFORM_FLOAT4,
+    JE_GL_SHADER_SCRIPT_UNIFORM_TEXTURE,
+    JE_GL_SHADER_SCRIPT_UNIFORM_COLOR,
+    JE_GL_SHADER_SCRIPT_UNIFORM_OTHERS,
+} je_gl_shader_script_uniform_variant_t;
+
+/*
+je_gl_shader_builtin_uniform_location_t [类型]
+内建 uniform 的后端位置表
+*/
+typedef struct je_gl_shader_builtin_uniform_location_t
+{
+    // NOTE: m_builtin_uniform_ndc_scale 是图形库的保留变量，任何情况下都不要
+    //      从外部修改它的值，它会在渲染时被图形库自动更新为正确的NDC缩放值
+    uint32_t m_builtin_uniform_ndc_scale;
+
+    uint32_t m_builtin_uniform_m;
+    uint32_t m_builtin_uniform_mv;
+    uint32_t m_builtin_uniform_mvp;
+
+    uint32_t m_builtin_uniform_local_scale;
+
+    uint32_t m_builtin_uniform_tiling;
+    uint32_t m_builtin_uniform_offset;
+
+    uint32_t m_builtin_uniform_color;
+
+    uint32_t m_builtin_uniform_light2d_resolution;
+    uint32_t m_builtin_uniform_light2d_decay;
+
+    // SpriteShadow 接触椭圆参数：x=长轴全长，y=短轴全长，
+    // z=背光尾迹延伸长度，w=有效消隐距离（视图空间长度）
+    uint32_t m_builtin_uniform_shadow_ellipse;
+} je_gl_shader_builtin_uniform_location_t;
+
+/*
+je_gl_shader_uniform_value_t [联合]
+单个 uniform 的值
+*/
+typedef union je_gl_shader_uniform_value_t
+{
+    int m_int;
+    int m_int2[2];
+    int m_int3[3];
+    int m_int4[4];
+    float m_float;
+    float m_float2[2];
+    float m_float3[3];
+    float m_float4[4];
+    float m_float2x2[2][2];
+    float m_float3x3[3][3];
+    float m_float4x4[4][4];
+} je_gl_shader_uniform_value_t;
+static_assert(0 == offsetof(je_gl_shader_uniform_value_t, m_int));
+static_assert(0 == offsetof(je_gl_shader_uniform_value_t, m_int2));
+static_assert(0 == offsetof(je_gl_shader_uniform_value_t, m_int3));
+static_assert(0 == offsetof(je_gl_shader_uniform_value_t, m_int4));
+static_assert(0 == offsetof(je_gl_shader_uniform_value_t, m_float));
+static_assert(0 == offsetof(je_gl_shader_uniform_value_t, m_float2));
+static_assert(0 == offsetof(je_gl_shader_uniform_value_t, m_float3));
+static_assert(0 == offsetof(je_gl_shader_uniform_value_t, m_float4));
+static_assert(0 == offsetof(je_gl_shader_uniform_value_t, m_float2x2));
+static_assert(0 == offsetof(je_gl_shader_uniform_value_t, m_float3x3));
+static_assert(0 == offsetof(je_gl_shader_uniform_value_t, m_float4x4));
+
+/*
+je_gl_shader_uniform_variables_t [类型]
+着色器自定义 uniform 的反射信息链表节点
+*/
+typedef struct je_gl_shader_uniform_variables_t
+{
+    const char* m_name;
+    // Backend-resolved location, kept for the legacy immediate API.
+    // PENDING_UNIFORM_LOCATION until the shader blob is initialized.
+    uint32_t m_index;
+    // Canonical std140 byte offset/size inside the shader uniform block.
+    // Computed once when the shader source is generated (or loaded from
+    // cache) and shared by every backend and the command-buffer recorder.
+    uint32_t m_offset;
+    uint32_t m_size;
+    je_gl_shader_uniform_type_t m_uniform_type;
+    je_gl_shader_uniform_mask_t m_uniform_mask;
+    bool m_updated;
+
+    je_gl_shader_uniform_variables_t* m_next;
+    je_gl_shader_uniform_value_t m_value;
+} je_gl_shader_uniform_variables_t;
+
+/*
+je_gl_shader_uniform_block_t [类型]
+着色器 uniform block 的反射信息链表节点
+*/
+typedef struct je_gl_shader_uniform_block_t
+{
+    const char* m_name;
+    uint32_t m_specify_binding_place;
+
+    je_gl_shader_uniform_block_t* m_next;
+} je_gl_shader_uniform_block_t;
+
+/*
+je_gl_shader_depth_test_method_t [枚举]
+深度测试方法
+*/
+enum class je_gl_shader_depth_test_method_t : int8_t
+{
+    INVALID = -1,
+
+    NEVER,
+    LESS, /* DEFAULT */
+    EQUAL,
+    LESS_EQUAL,
+    GREATER,
+    NOT_EQUAL,
+    GREATER_EQUAL,
+    ALWAYS,
+};
+
+/*
+je_gl_shader_depth_mask_method_t [枚举]
+深度写入方法
+*/
+enum class je_gl_shader_depth_mask_method_t : int8_t
+{
+    INVALID = -1,
+
+    DISABLE,
+    ENABLE, /* DEFAULT */
+};
+
+/*
+je_gl_shader_blend_equation_t [枚举]
+混合方程
+*/
+enum class je_gl_shader_blend_equation_t : int8_t
+{
+    INVALID = -1,
+
+    DISABLED, /* DEFAULT */
+    ADD,
+    SUBTRACT,
+    REVERSE_SUBTRACT,
+    MIN,
+    MAX,
+};
+
+/*
+je_gl_shader_blend_method_t [枚举]
+混合因子
+*/
+enum class je_gl_shader_blend_method_t : int8_t
+{
+    INVALID = -1,
+
+    ZERO, /* DEFAULT SRC = ONE, DST = ZERO */
+    ONE,
+
+    SRC_COLOR,
+    SRC_ALPHA,
+
+    ONE_MINUS_SRC_ALPHA,
+    ONE_MINUS_SRC_COLOR,
+
+    DST_COLOR,
+    DST_ALPHA,
+
+    ONE_MINUS_DST_ALPHA,
+    ONE_MINUS_DST_COLOR,
+
+    // CONST_COLOR,
+    // ONE_MINUS_CONST_COLOR,
+
+    // CONST_ALPHA,
+    // ONE_MINUS_CONST_ALPHA,
+};
+
+/*
+je_gl_shader_cull_mode_t [枚举]
+面剔除模式
+*/
+enum class je_gl_shader_cull_mode_t : int8_t
+{
+    INVALID = -1,
+
+    NONE, /* DEFAULT */
+    FRONT,
+    BACK,
+};
+
+/*
+je_gl_shader_spirv_code_t [类型别名]
+SPIR-V 代码字
+*/
+typedef uint32_t je_gl_shader_spirv_code_t;
+
+/*
+je_gl_shader_texture_decl_t [类型]
+着色器声明的纹理绑定
+*/
+typedef struct je_gl_shader_texture_decl_t
+{
+    const char* m_name;
+    uint32_t m_pass;
+    uint32_t m_sampler_id;
+    je_gl_texture_kind_t m_kind;
+} je_gl_shader_texture_decl_t;
+
+/*
+je_gl_shader_t [类型]
 着色器原始数据，储存有着色器源码、绘制参数和一致变量等信息
 */
-struct jegl_shader
+typedef struct je_gl_shader_t
 {
-    jegl_resource_handle m_handle;
-
-    enum fliter_mode
-    {
-        NEAREST,
-        LINEAR,
-    };
-    enum wrap_mode
-    {
-        CLAMP,
-        REPEAT,
-    };
-    struct sampler_method
-    {
-        fliter_mode m_min;
-        fliter_mode m_mag;
-        fliter_mode m_mip;
-        wrap_mode m_uwrap;
-        wrap_mode m_vwrap;
-        uint32_t m_sampler_id; // Used for DX11 & HLSL generation
-        uint64_t m_pass_id_count;
-        uint32_t* m_pass_ids; // Used for GL3 & GLSL generation
-    };
-
-    enum uniform_type
-    {
-        INT,
-        INT2,
-        INT3,
-        INT4,
-        FLOAT,
-        FLOAT2,
-        FLOAT3,
-        FLOAT4,
-        TEXTURE,
-        FLOAT2X2,
-        FLOAT3X3,
-        FLOAT4X4,
-    };
-    /*
-    自定义 uniform 的附加标签（位掩码）。标签不改变存储类型与 ABI：
-    例如 COLOR 仍然是 FLOAT4，仅告知编辑器/脚本层按颜色呈现。
-    后续新增的编辑器语义标签继续在这里追加。
-    */
-    enum uniform_mask : uint32_t
-    {
-        NONE = 0x0000,
-        COLOR = 0x0001,
-    };
-    /*
-    Woolang `shader::uniform_variable` union 的 variant 索引（脚本 ABI）。
-    必须与 je/graphic.wo 中的 union 声明顺序一致。
-    */
-    enum script_uniform_variant
-    {
-        SCRIPT_UNIFORM_INTEGER = 0,
-        SCRIPT_UNIFORM_INTEGER2,
-        SCRIPT_UNIFORM_INTEGER3,
-        SCRIPT_UNIFORM_INTEGER4,
-        SCRIPT_UNIFORM_FLOAT,
-        SCRIPT_UNIFORM_FLOAT2,
-        SCRIPT_UNIFORM_FLOAT3,
-        SCRIPT_UNIFORM_FLOAT4,
-        SCRIPT_UNIFORM_TEXTURE,
-        SCRIPT_UNIFORM_COLOR,
-        SCRIPT_UNIFORM_OTHERS,
-    };
-    struct builtin_uniform_location
-    {
-        // NOTE: m_builtin_uniform_ndc_scale 是图形库的保留变量，任何情况下都不要
-        //      从外部修改它的值，它会在渲染时被图形库自动更新为正确的NDC缩放值
-        uint32_t m_builtin_uniform_ndc_scale;
-
-        uint32_t m_builtin_uniform_m;
-        uint32_t m_builtin_uniform_mv;
-        uint32_t m_builtin_uniform_mvp;
-
-        uint32_t m_builtin_uniform_local_scale;
-
-        uint32_t m_builtin_uniform_tiling;
-        uint32_t m_builtin_uniform_offset;
-
-        uint32_t m_builtin_uniform_color;
-
-        uint32_t m_builtin_uniform_light2d_resolution;
-        uint32_t m_builtin_uniform_light2d_decay;
-
-        // SpriteShadow 接触椭圆参数：x=长轴全长，y=短轴全长，
-        // z=背光尾迹延伸长度，w=有效消隐距离（视图空间长度）
-        uint32_t m_builtin_uniform_shadow_ellipse;
-    };
-
-    struct unifrom_variables
-    {
-        const char* m_name;
-        // Backend-resolved location, kept for the legacy immediate API.
-        // PENDING_UNIFORM_LOCATION until the shader blob is initialized.
-        uint32_t m_index;
-        // Canonical std140 byte offset/size inside the shader uniform block.
-        // Computed once when the shader source is generated (or loaded from
-        // cache) and shared by every backend and the command-buffer recorder.
-        uint32_t m_offset;
-        uint32_t m_size;
-        uniform_type m_uniform_type;
-        uniform_mask m_uniform_mask;
-        bool m_updated;
-        union value
-        {
-            int m_int;
-            int m_int2[2];
-            int m_int3[3];
-            int m_int4[4];
-            float m_float;
-            float m_float2[2];
-            float m_float3[3];
-            float m_float4[4];
-            float m_float2x2[2][2];
-            float m_float3x3[3][3];
-            float m_float4x4[4][4];
-        };
-        static_assert(0 == offsetof(value, m_int));
-        static_assert(0 == offsetof(value, m_int2));
-        static_assert(0 == offsetof(value, m_int3));
-        static_assert(0 == offsetof(value, m_int4));
-        static_assert(0 == offsetof(value, m_float));
-        static_assert(0 == offsetof(value, m_float2));
-        static_assert(0 == offsetof(value, m_float3));
-        static_assert(0 == offsetof(value, m_float4));
-        static_assert(0 == offsetof(value, m_float2x2));
-        static_assert(0 == offsetof(value, m_float3x3));
-        static_assert(0 == offsetof(value, m_float4x4));
-
-        unifrom_variables* m_next;
-        value m_value;
-    };
-    struct uniform_blocks
-    {
-        const char* m_name;
-        uint32_t m_specify_binding_place;
-
-        uniform_blocks* m_next;
-    };
-
-    enum class depth_test_method : int8_t
-    {
-        INVALID = -1,
-
-        NEVER,
-        LESS, /* DEFAULT */
-        EQUAL,
-        LESS_EQUAL,
-        GREATER,
-        NOT_EQUAL,
-        GREATER_EQUAL,
-        ALWAYS,
-    };
-    enum class depth_mask_method : int8_t
-    {
-        INVALID = -1,
-
-        DISABLE,
-        ENABLE, /* DEFAULT */
-    };
-    enum class blend_equation : int8_t
-    {
-        INVALID = -1,
-
-        DISABLED, /* DEFAULT */
-        ADD,
-        SUBTRACT,
-        REVERSE_SUBTRACT,
-        MIN,
-        MAX,
-    };
-    enum class blend_method : int8_t
-    {
-        INVALID = -1,
-
-        ZERO, /* DEFAULT SRC = ONE, DST = ZERO */
-        ONE,
-
-        SRC_COLOR,
-        SRC_ALPHA,
-
-        ONE_MINUS_SRC_ALPHA,
-        ONE_MINUS_SRC_COLOR,
-
-        DST_COLOR,
-        DST_ALPHA,
-
-        ONE_MINUS_DST_ALPHA,
-        ONE_MINUS_DST_COLOR,
-
-        // CONST_COLOR,
-        // ONE_MINUS_CONST_COLOR,
-
-        // CONST_ALPHA,
-        // ONE_MINUS_CONST_ALPHA,
-    };
-    enum class cull_mode : int8_t
-    {
-        INVALID = -1,
-
-        NONE, /* DEFAULT */
-        FRONT,
-        BACK,
-    };
-
-    using spir_v_code_t = uint32_t;
+    je_gl_resource_handle_t m_handle;
 
     const char* m_vertex_hlsl_src;
     const char* m_fragment_hlsl_src;
@@ -3250,74 +3366,73 @@ struct jegl_shader
     const char* m_fragment_msl_mac_src;
 
     size_t m_vertex_spirv_count;
-    const spir_v_code_t* m_vertex_spirv_codes;
+    const je_gl_shader_spirv_code_t* m_vertex_spirv_codes;
 
     size_t m_fragment_spirv_count;
-    const spir_v_code_t* m_fragment_spirv_codes;
+    const je_gl_shader_spirv_code_t* m_fragment_spirv_codes;
 
     size_t m_vertex_in_count;
-    uniform_type* m_vertex_in;
+    je_gl_shader_uniform_type_t* m_vertex_in;
 
     size_t m_fragment_out_count;
-    uniform_type* m_fragment_out;
+    je_gl_shader_uniform_type_t* m_fragment_out;
 
-    unifrom_variables* m_custom_uniforms;
-    uniform_blocks* m_custom_uniform_blocks;
+    je_gl_shader_uniform_variables_t* m_custom_uniforms;
+    je_gl_shader_uniform_block_t* m_custom_uniform_blocks;
 
     // Canonical std140-aligned size of the shader's per-draw uniform block.
     uint32_t m_uniform_block_size;
 
     // Texture bindings declared by the shader (reflection for the render API).
-    struct texture_decl
-    {
-        const char* m_name;
-        uint32_t m_pass;
-        uint32_t m_sampler_id;
-        jegl_texture_kind m_kind;
-    };
-    texture_decl* m_textures;
+    je_gl_shader_texture_decl_t* m_textures;
     size_t m_texture_count;
 
-    builtin_uniform_location m_builtin_uniforms;
+    je_gl_shader_builtin_uniform_location_t m_builtin_uniforms;
 
     bool m_enable_to_shared;
-    depth_test_method m_depth_test;
-    depth_mask_method m_depth_mask;
-    blend_equation m_blend_equation;
-    blend_method m_blend_src_mode, m_blend_dst_mode;
-    cull_mode m_cull_mode;
+    je_gl_shader_depth_test_method_t m_depth_test;
+    je_gl_shader_depth_mask_method_t m_depth_mask;
+    je_gl_shader_blend_equation_t m_blend_equation;
+    je_gl_shader_blend_method_t m_blend_src_mode, m_blend_dst_mode;
+    je_gl_shader_cull_mode_t m_cull_mode;
 
-    sampler_method* m_sampler_methods;
+    je_gl_shader_sampler_method_t* m_sampler_methods;
     size_t m_sampler_count;
-};
+} je_gl_shader_t;
 static_assert(
-    std::is_trivial_v<jegl_shader> && 0 == offsetof(jegl_shader, m_handle));
+    std::is_trivial_v<je_gl_shader_t> && 0 == offsetof(je_gl_shader_t, m_handle));
 
 /*
-jegl_frame_buffer [类型]
+je_gl_frame_buffer_attachment_t [类型]
+帧缓冲区附件；不透明类型，引擎内部以 resource<texture2d> 持有
+*/
+struct je_gl_frame_buffer_attachment_t;
+typedef struct je_gl_frame_buffer_attachment_t je_gl_frame_buffer_attachment_t;
+
+/*
+je_gl_frame_buffer_t [类型]
 帧缓冲区原始数据，储存有帧大小、附件等信息
 */
-struct jegl_frame_buffer
+typedef struct je_gl_frame_buffer_t
 {
-    jegl_resource_handle m_handle;
+    je_gl_resource_handle_t m_handle;
 
-    // In fact, attachment_t is jeecs::basic::resource<jeecs::graphic::texture2d>
-    typedef struct attachment_t attachment_t;
-    attachment_t* m_output_attachments;
+    // In fact, je_gl_frame_buffer_attachment_t is jeecs::basic::resource<jeecs::graphic::texture2d>
+    je_gl_frame_buffer_attachment_t* m_output_attachments;
     size_t m_attachment_count;
     size_t m_width;
     size_t m_height;
-};
+} je_gl_frame_buffer_t;
 static_assert(
-    std::is_trivial_v<jegl_frame_buffer> && 0 == offsetof(jegl_frame_buffer, m_handle));
+    std::is_trivial_v<je_gl_frame_buffer_t> && 0 == offsetof(je_gl_frame_buffer_t, m_handle));
 
 /*
-jegl_uniform_buffer [类型]
+je_gl_uniform_buffer_t [类型]
 一致变量缓冲区原始数据，储存有一致变量的数据和容量等信息
 */
-struct jegl_uniform_buffer
+typedef struct je_gl_uniform_buffer_t
 {
-    jegl_resource_handle m_handle;
+    je_gl_resource_handle_t m_handle;
 
     size_t m_buffer_binding_place;
     size_t m_buffer_size;
@@ -3326,233 +3441,186 @@ struct jegl_uniform_buffer
     // Used for marking update range;
     size_t m_update_begin_offset;
     size_t m_update_length;
-};
+} je_gl_uniform_buffer_t;
 static_assert(
-    std::is_trivial_v<jegl_uniform_buffer> && 0 == offsetof(jegl_uniform_buffer, m_handle));
+    std::is_trivial_v<je_gl_uniform_buffer_t> && 0 == offsetof(je_gl_uniform_buffer_t, m_handle));
 
 /*
-jegl_frame_buffer_clear_operation [类型]
+je_gl_frame_buffer_clear_type_t [枚举]
+帧缓冲区清除目标类别
+*/
+enum class je_gl_frame_buffer_clear_type_t
+{
+    COLOR,
+    DEPTH,
+};
+
+/*
+je_gl_frame_buffer_clear_color_attachment_t [类型]
+清除指定颜色附件
+*/
+typedef struct je_gl_frame_buffer_clear_color_attachment_t
+{
+    size_t m_color_attachment_idx;
+    float m_clear_color_rgba[4];
+} je_gl_frame_buffer_clear_color_attachment_t;
+
+/*
+je_gl_frame_buffer_clear_depth_attachment_t [类型]
+清除深度附件
+*/
+typedef struct je_gl_frame_buffer_clear_depth_attachment_t
+{
+    float m_clear_depth;
+} je_gl_frame_buffer_clear_depth_attachment_t;
+
+/*
+je_gl_frame_buffer_clear_operation_t [类型]
 帧缓冲区清除操作链表，用于指定清除哪些附件以及清除为何值
 */
-struct jegl_frame_buffer_clear_operation
+typedef struct je_gl_frame_buffer_clear_operation_t
 {
-    enum class clear_type
-    {
-        COLOR,
-        DEPTH,
-    };
-    struct clear_color_attachment
-    {
-        size_t m_color_attachment_idx;
-        float m_clear_color_rgba[4];
-    };
-    struct clear_depth_attachment
-    {
-        float m_clear_depth;
-    };
-
-    clear_type m_type;
+    je_gl_frame_buffer_clear_type_t m_type;
     union
     {
-        clear_color_attachment m_color;
-        clear_depth_attachment m_depth;
+        je_gl_frame_buffer_clear_color_attachment_t m_color;
+        je_gl_frame_buffer_clear_depth_attachment_t m_depth;
     };
-    const jegl_frame_buffer_clear_operation* m_next;
-};
+    const je_gl_frame_buffer_clear_operation_t* m_next;
+} je_gl_frame_buffer_clear_operation_t;
 
 /*
-jegl_pipeline / jegl_sampler / jegl_command_buffer [类型]
+je_gl_pipeline_t / je_gl_sampler_t / je_gl_command_buffer_t [类型]
 Render API (v2) 的不透明对象句柄；具体定义由引擎内部持有，
-外部只能通过对应的 jegl_* 接口创建、使用和关闭
-    * jegl_command_buffer 的录制与提交规则见其接口说明
+外部只能通过对应的 `je_graphic_*` 接口创建、使用和关闭
+    * je_gl_command_buffer_t 的录制与提交规则见其接口说明
 */
-struct jegl_pipeline;
-struct jegl_sampler;
-struct jegl_command_buffer;
+typedef struct je_gl_pipeline_t je_gl_pipeline_t;
+typedef struct je_gl_sampler_t je_gl_sampler_t;
+typedef struct je_gl_command_buffer_t je_gl_command_buffer_t;
 
 /*
-jegl_viewport [类型]
+je_gl_viewport_t [类型]
 渲染 pass 的视口范围，单位为像素
     * width 与 height 必须大于 0
 */
-struct jegl_viewport
+typedef struct je_gl_viewport_t
 {
     int32_t x;
     int32_t y;
     uint32_t width;
     uint32_t height;
-};
+} je_gl_viewport_t;
+
+// 图形基本启动和关闭接口
+typedef je_graphic_impl_context_t(*je_gl_graphic_api_startup_func_t)(je_gl_context_t*, const je_gl_interface_config_t*, bool);
+typedef void (*je_gl_graphic_api_shutdown_func_t)(je_gl_context_t*, je_graphic_impl_context_t, bool);
+
+typedef je_gl_update_action_t(*je_gl_graphic_api_update_func_t)(je_graphic_impl_context_t);
+typedef je_gl_update_action_t(*je_gl_graphic_api_commit_func_t)(je_graphic_impl_context_t, je_gl_update_action_t);
+
+// 资源创建相关接口
+typedef je_gl_resource_blob_t(*je_gl_graphic_api_shader_create_blob_func_t)(je_graphic_impl_context_t, je_gl_shader_t*);
+typedef void (*je_gl_graphic_api_shader_close_blob_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t);
+typedef void (*je_gl_graphic_api_shader_init_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_shader_t*);
+typedef void (*je_gl_graphic_api_shader_update_func_t)(je_graphic_impl_context_t, je_gl_shader_t*);
+typedef void (*je_gl_graphic_api_shader_close_func_t)(je_graphic_impl_context_t, je_gl_shader_t*);
+
+// 注意：这些函数指针类型位于 extern "C" 区域内，不允许使用模板别名，
+// 因此各类纹理的函数指针类型均为显式展开
+typedef je_gl_resource_blob_t(*je_gl_graphic_api_texture_2d_create_blob_func_t)(je_graphic_impl_context_t, je_gl_texture_2d_t*);
+typedef je_gl_resource_blob_t(*je_gl_graphic_api_texture_3d_create_blob_func_t)(je_graphic_impl_context_t, je_gl_texture_3d_t*);
+typedef je_gl_resource_blob_t(*je_gl_graphic_api_texture_array_create_blob_func_t)(je_graphic_impl_context_t, je_gl_texture_array_t*);
+typedef je_gl_resource_blob_t(*je_gl_graphic_api_texture_cube_create_blob_func_t)(je_graphic_impl_context_t, je_gl_texture_cube_t*);
+typedef je_gl_resource_blob_t(*je_gl_graphic_api_texture_msaa_create_blob_func_t)(je_graphic_impl_context_t, je_gl_texture_msaa_t*);
+typedef void (*je_gl_graphic_api_texture_close_blob_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t);
+typedef void (*je_gl_graphic_api_texture_2d_init_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_2d_t*);
+typedef void (*je_gl_graphic_api_texture_3d_init_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_3d_t*);
+typedef void (*je_gl_graphic_api_texture_array_init_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_array_t*);
+typedef void (*je_gl_graphic_api_texture_cube_init_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_cube_t*);
+typedef void (*je_gl_graphic_api_texture_msaa_init_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_msaa_t*);
+typedef void (*je_gl_graphic_api_texture_2d_update_func_t)(je_graphic_impl_context_t, je_gl_texture_2d_t*);
+typedef void (*je_gl_graphic_api_texture_3d_update_func_t)(je_graphic_impl_context_t, je_gl_texture_3d_t*);
+typedef void (*je_gl_graphic_api_texture_array_update_func_t)(je_graphic_impl_context_t, je_gl_texture_array_t*);
+typedef void (*je_gl_graphic_api_texture_cube_update_func_t)(je_graphic_impl_context_t, je_gl_texture_cube_t*);
+typedef void (*je_gl_graphic_api_texture_msaa_update_func_t)(je_graphic_impl_context_t, je_gl_texture_msaa_t*);
+typedef void (*je_gl_graphic_api_texture_2d_close_func_t)(je_graphic_impl_context_t, je_gl_texture_2d_t*);
+typedef void (*je_gl_graphic_api_texture_3d_close_func_t)(je_graphic_impl_context_t, je_gl_texture_3d_t*);
+typedef void (*je_gl_graphic_api_texture_array_close_func_t)(je_graphic_impl_context_t, je_gl_texture_array_t*);
+typedef void (*je_gl_graphic_api_texture_cube_close_func_t)(je_graphic_impl_context_t, je_gl_texture_cube_t*);
+typedef void (*je_gl_graphic_api_texture_msaa_close_func_t)(je_graphic_impl_context_t, je_gl_texture_msaa_t*);
+
+typedef je_gl_resource_blob_t(*je_gl_graphic_api_vertex_create_blob_func_t)(je_graphic_impl_context_t, je_gl_vertex_t*);
+typedef void (*je_gl_graphic_api_vertex_close_blob_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t);
+typedef void (*je_gl_graphic_api_vertex_init_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_vertex_t*);
+typedef void (*je_gl_graphic_api_vertex_update_func_t)(je_graphic_impl_context_t, je_gl_vertex_t*);
+typedef void (*je_gl_graphic_api_vertex_close_func_t)(je_graphic_impl_context_t, je_gl_vertex_t*);
+
+typedef void (*je_gl_graphic_api_framebuffer_init_func_t)(je_graphic_impl_context_t, je_gl_frame_buffer_t*);
+typedef void (*je_gl_graphic_api_framebuffer_update_func_t)(je_graphic_impl_context_t, je_gl_frame_buffer_t*);
+typedef void (*je_gl_graphic_api_framebuffer_close_func_t)(je_graphic_impl_context_t, je_gl_frame_buffer_t*);
+
+typedef void (*je_gl_graphic_api_ubuffer_init_func_t)(je_graphic_impl_context_t, je_gl_uniform_buffer_t*);
+typedef void (*je_gl_graphic_api_ubuffer_update_func_t)(je_graphic_impl_context_t, je_gl_uniform_buffer_t*);
+typedef void (*je_gl_graphic_api_ubuffer_close_func_t)(je_graphic_impl_context_t, je_gl_uniform_buffer_t*);
+
+// 渲染接口（pipeline / sampler / render pass / draw）相关接口
+typedef void (*je_gl_graphic_api_pipeline_init_func_t)(je_graphic_impl_context_t, je_gl_pipeline_t*);
+typedef void (*je_gl_graphic_api_pipeline_close_func_t)(je_graphic_impl_context_t, je_gl_pipeline_t*);
+typedef void (*je_gl_graphic_api_pipeline_bind_func_t)(je_graphic_impl_context_t, je_gl_pipeline_t*);
+
+typedef void (*je_gl_graphic_api_sampler_init_func_t)(je_graphic_impl_context_t, je_gl_sampler_t*);
+typedef void (*je_gl_graphic_api_sampler_close_func_t)(je_graphic_impl_context_t, je_gl_sampler_t*);
+typedef void (*je_gl_graphic_api_sampler_bind_func_t)(je_graphic_impl_context_t, uint32_t, je_gl_sampler_t*);
+
+typedef void (*je_gl_graphic_api_begin_pass_func_t)(je_graphic_impl_context_t, je_gl_frame_buffer_t*, const je_gl_viewport_t*);
+typedef void (*je_gl_graphic_api_clear_color_func_t)(je_graphic_impl_context_t, uint32_t, const float*);
+typedef void (*je_gl_graphic_api_clear_depth_func_t)(je_graphic_impl_context_t, float);
+typedef void (*je_gl_graphic_api_end_pass_func_t)(je_graphic_impl_context_t);
+
+typedef void (*je_gl_graphic_api_bind_vertex_func_t)(je_graphic_impl_context_t, je_gl_vertex_t*);
+typedef void (*je_gl_graphic_api_bind_uniform_buffer_func_t)(je_graphic_impl_context_t, je_gl_uniform_buffer_t*);
+typedef void (*je_gl_graphic_api_bind_texture_2d_func_t)(je_graphic_impl_context_t, uint32_t, je_gl_texture_2d_t*);
+typedef void (*je_gl_graphic_api_bind_texture_3d_func_t)(je_graphic_impl_context_t, uint32_t, je_gl_texture_3d_t*);
+typedef void (*je_gl_graphic_api_bind_texture_array_func_t)(je_graphic_impl_context_t, uint32_t, je_gl_texture_array_t*);
+typedef void (*je_gl_graphic_api_bind_texture_cube_func_t)(je_graphic_impl_context_t, uint32_t, je_gl_texture_cube_t*);
+
+typedef void (*je_gl_graphic_api_draw_indexed_func_t)(je_graphic_impl_context_t, uint32_t, uint32_t, uint32_t, const void*, uint32_t);
+typedef void (*je_gl_graphic_api_draw_func_t)(je_graphic_impl_context_t, uint32_t, uint32_t, uint32_t, const void*, uint32_t);
+
+typedef void (*je_gl_graphic_api_commit_begin_func_t)(je_graphic_impl_context_t);
+typedef void (*je_gl_graphic_api_commit_end_func_t)(je_graphic_impl_context_t);
 
 /*
-jegl_graphic_api [类型]
+je_gl_graphic_api_t [类型]
 图形接口，包含底层使用的各项基本函数
 */
-struct jegl_graphic_api
+struct je_gl_graphic_api_t
 {
-    // 图形基本启动和关闭接口
-    using startup_func_t =
-        je_GraphicImplContext(*)(jegl_context*, const jegl_interface_config*, bool);
-    using shutdown_func_t =
-        void (*)(jegl_context*, je_GraphicImplContext, bool);
-
-    using update_func_t =
-        jegl_update_action(*)(je_GraphicImplContext);
-    using commit_func_t =
-        jegl_update_action(*)(je_GraphicImplContext, jegl_update_action);
-
-    // 资源创建相关接口
-    using shader_create_blob_func_t =
-        jegl_resource_blob(*)(je_GraphicImplContext, jegl_shader*);
-    using shader_close_blob_func_t =
-        void (*)(je_GraphicImplContext, jegl_resource_blob);
-    using shader_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_shader*);
-    using shader_update_func_t =
-        void (*)(je_GraphicImplContext, jegl_shader*);
-    using shader_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_shader*);
-
-    // 注意：本结构体位于 extern "C" 区域内，不允许使用模板别名，
-    // 因此各类纹理的函数指针类型均为显式展开
-    using texture_2d_create_blob_func_t =
-        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_2d*);
-    using texture_3d_create_blob_func_t =
-        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_3d*);
-    using texture_array_create_blob_func_t =
-        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_array*);
-    using texture_cube_create_blob_func_t =
-        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_cube*);
-    using texture_msaa_create_blob_func_t =
-        jegl_resource_blob(*)(je_GraphicImplContext, jegl_texture_msaa*);
-    using texture_close_blob_func_t =
-        void (*)(je_GraphicImplContext, jegl_resource_blob);
-    using texture_2d_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_2d*);
-    using texture_3d_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_3d*);
-    using texture_array_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_array*);
-    using texture_cube_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_cube*);
-    using texture_msaa_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_texture_msaa*);
-    using texture_2d_update_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_2d*);
-    using texture_3d_update_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_3d*);
-    using texture_array_update_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_array*);
-    using texture_cube_update_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_cube*);
-    using texture_msaa_update_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_msaa*);
-    using texture_2d_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_2d*);
-    using texture_3d_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_3d*);
-    using texture_array_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_array*);
-    using texture_cube_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_cube*);
-    using texture_msaa_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_texture_msaa*);
-
-    using vertex_create_blob_func_t =
-        jegl_resource_blob(*)(je_GraphicImplContext, jegl_vertex*);
-    using vertex_close_blob_func_t =
-        void (*)(je_GraphicImplContext, jegl_resource_blob);
-    using vertex_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_resource_blob, jegl_vertex*);
-    using vertex_update_func_t =
-        void (*)(je_GraphicImplContext, jegl_vertex*);
-    using vertex_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_vertex*);
-
-    using framebuffer_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_frame_buffer*);
-    using framebuffer_update_func_t =
-        void (*)(je_GraphicImplContext, jegl_frame_buffer*);
-    using framebuffer_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_frame_buffer*);
-
-    using ubuffer_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
-    using ubuffer_update_func_t =
-        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
-    using ubuffer_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
-
-    // 渲染接口（pipeline / sampler / render pass / draw）相关接口
-    using pipeline_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_pipeline*);
-    using pipeline_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_pipeline*);
-    using pipeline_bind_func_t =
-        void (*)(je_GraphicImplContext, jegl_pipeline*);
-
-    using sampler_init_func_t =
-        void (*)(je_GraphicImplContext, jegl_sampler*);
-    using sampler_close_func_t =
-        void (*)(je_GraphicImplContext, jegl_sampler*);
-    using sampler_bind_func_t =
-        void (*)(je_GraphicImplContext, uint32_t, jegl_sampler*);
-
-    using begin_pass_func_t =
-        void (*)(je_GraphicImplContext, jegl_frame_buffer*, const jegl_viewport*);
-    using clear_color_func_t =
-        void (*)(je_GraphicImplContext, uint32_t, const float*);
-    using clear_depth_func_t =
-        void (*)(je_GraphicImplContext, float);
-    using end_pass_func_t =
-        void (*)(je_GraphicImplContext);
-
-    using bind_vertex_func_t =
-        void (*)(je_GraphicImplContext, jegl_vertex*);
-    using bind_uniform_buffer_func_t =
-        void (*)(je_GraphicImplContext, jegl_uniform_buffer*);
-    using bind_texture_2d_func_t =
-        void (*)(je_GraphicImplContext, uint32_t, jegl_texture_2d*);
-    using bind_texture_3d_func_t =
-        void (*)(je_GraphicImplContext, uint32_t, jegl_texture_3d*);
-    using bind_texture_array_func_t =
-        void (*)(je_GraphicImplContext, uint32_t, jegl_texture_array*);
-    using bind_texture_cube_func_t =
-        void (*)(je_GraphicImplContext, uint32_t, jegl_texture_cube*);
-
-    using draw_indexed_func_t =
-        void (*)(je_GraphicImplContext, uint32_t, uint32_t, uint32_t, const void*, uint32_t);
-    using draw_func_t =
-        void (*)(je_GraphicImplContext, uint32_t, uint32_t, uint32_t, const void*, uint32_t);
-
-    using commit_begin_func_t =
-        void (*)(je_GraphicImplContext);
-    using commit_end_func_t =
-        void (*)(je_GraphicImplContext);
-
     /*
-    jegl_graphic_api::interface_startup [成员]
+    je_gl_graphic_api_t::interface_startup [成员]
     图形接口在初始化或者被请求重新启动时调用，按照JoyEngine的约定，图形实现应当在此处创建窗口，并完成渲染所需
     的初始化工作。
         * 请求重新启动通常是因为需要变更图形设置、例如MSAA设置或窗口标题、帧率等，因此建议图形实现在处理重新启动
             时，应当保留可以保留的资源以节约开销；若不提供对此的优化支持，也可以直接忽略，按照默认的启停规则进行操作。
         * 当图形上下文被请求重新启动时，会再次调用此函数，此时第3个参数将被设置为true，否则为 false 。
     */
-    startup_func_t interface_startup;
+    je_gl_graphic_api_startup_func_t interface_startup;
 
     /*
-    jegl_graphic_api::interface_shutdown_before_resource_release [成员]
+    je_gl_graphic_api_t::interface_shutdown_before_resource_release [成员]
     图形接口在被关闭或请求重新启动时调用，按照JoyEngine的约定，所有申请而暂未释放的图形资源将在调用此函数完成之后
     执行释放，然后调用 interface_shutdown；因此图形实现应当在此做好释放图形资源的准备，例如让渲染设备进入暂停状态。
         * 请求重新启动通常是因为需要变更图形设置、例如MSAA设置或窗口标题、帧率等，因此建议图形实现在处理重新启动
             时，应当保留可以保留的资源以节约开销；若不提供对此的优化支持，也可以直接忽略，按照默认的启停规则进行操作。
         * 当图形上下文被请求重新启动时，第3个参数将被设置为true，否则为 false。
     请参见：
-        jegl_graphic_api::interface_post_shutdown
+        je_gl_graphic_api_t::interface_post_shutdown
     */
-    shutdown_func_t interface_shutdown_before_resource_release;
+    je_gl_graphic_api_shutdown_func_t interface_shutdown_before_resource_release;
 
     /*
-    jegl_graphic_api::interface_shutdown [成员]
+    je_gl_graphic_api_t::interface_shutdown [成员]
     图形接口在被关闭或请求重新启动时调用，按照JoyEngine的约定，图形接口应当在此函数中完成所有资源、设备和窗口的释放。
         * 此接口将在图形接口被请求关闭之后，在完成调用interface_shutdown_before_resource_release接口、进而释放全部
             未释放的图形资源，最后调用interface_shutdown。
@@ -3560,35 +3628,35 @@ struct jegl_graphic_api
             时，应当保留可以保留的资源以节约开销；若不提供对此的优化支持，也可以直接忽略，按照默认的启停规则进行操作。
         * 当图形上下文被请求重新启动时，第3个参数将被设置为true，否则为 false。
     请参见：
-        jegl_graphic_api::interface_pre_shutdown
+        je_gl_graphic_api_t::interface_pre_shutdown
     */
-    shutdown_func_t interface_shutdown;
+    je_gl_graphic_api_shutdown_func_t interface_shutdown;
 
     /*
-    jegl_graphic_api::update_frame_ready [成员]
+    je_gl_graphic_api_t::update_frame_ready [成员]
     图形接口在更新一帧画面的起始位置会调用的接口，图形实现应当在此接口的开头完成前一帧画面的交换以呈现在屏幕上（这样可
     以获得最佳的画面流畅度），然后做好其他准备：正式的主要渲染任务会在此接口返回后开始。
-        * 接口若返回 jegl_update_action::STOP，则表示图形实现请求关闭渲染
+        * 接口若返回 je_gl_update_action_t::STOP，则表示图形实现请求关闭渲染
             创建图形线程时指示的绘制任务将被跳过，在帧同步工作完成后进入图形线程的退出流程。
-        * 接口若返回 jegl_update_action::SKIP，则表示图形实现请求跳过本帧的渲染，
+        * 接口若返回 je_gl_update_action_t::SKIP，则表示图形实现请求跳过本帧的渲染，
             通常这种情况是由于窗口被切换至后台、最小化等情况导致的，
             创建图形线程时指示的绘制任务将被跳过，但 **不会** 进入图形线程的退出流程。
         无论如何，update_draw_commit 都会被执行（目的是能正确执行 gui 的逻辑），update_draw_commit将通过参数
         获知渲染任务是否被执行
     */
-    update_func_t update_frame_ready;
+    je_gl_graphic_api_update_func_t update_frame_ready;
 
     /*
-    jegl_graphic_api::update_draw_commit [成员]
+    je_gl_graphic_api_t::update_draw_commit [成员]
     图形接口在完成指示的渲染操作之后会调用的接口，图形实现应当在此接口中，将既存的提交任务提交到图形设备中（以最大化利用
     设备空闲），如果可以，渲染GUI的任务也应当在此处实现，然后一并提交。
-        * 接口若返回 jegl_update_action::STOP，则表示图形实现请求关闭渲染，在帧同步工作完成后进入图形线程的退出流程。
-        * 接口若返回 jegl_update_action::SKIP，由于并没有后续的渲染任务可被跳过，因此事实上如同返回 jegl_update_action::CONTINUE。
+        * 接口若返回 je_gl_update_action_t::STOP，则表示图形实现请求关闭渲染，在帧同步工作完成后进入图形线程的退出流程。
+        * 接口若返回 je_gl_update_action_t::SKIP，由于并没有后续的渲染任务可被跳过，因此事实上如同返回 je_gl_update_action_t::CONTINUE。
     */
-    commit_func_t update_draw_commit;
+    je_gl_graphic_api_commit_func_t update_draw_commit;
 
     /*
-    jegl_graphic_api::shader_create_blob [成员]
+    je_gl_graphic_api_t::shader_create_blob [成员]
     图形接口创建着色器资源的底层数据块，je_graphic_shader_source_load 和 je_graphic_shader_load 在调用 shader_init 之前，会调用此接口创建 blob，
     对于具有相同路径的着色器资源，在先前创建的 blob 失效之前，不会重复调用此接口。
     图形实现可以利用 blob 加速着色器的创建流程。
@@ -3596,12 +3664,12 @@ struct jegl_graphic_api
         * 如果接口返回 nullptr，shader_init 将收到一个 nullptr 作为 blob 参数。
         * 如果接口返回 nullptr，对应的 shader_close_blob 将不会被调用。
     */
-    shader_create_blob_func_t shader_create_blob;
+    je_gl_graphic_api_shader_create_blob_func_t shader_create_blob;
 
     /*
-    jegl_graphic_api::texture_2d_create_blob / texture_3d_create_blob / texture_array_create_blob /
+    je_gl_graphic_api_t::texture_2d_create_blob / texture_3d_create_blob / texture_array_create_blob /
     texture_cube_create_blob / texture_msaa_create_blob [成员]
-    图形接口创建对应类别纹理资源的底层数据块，je_graphic_texture_2d_load 和 jegl_create_texture_* 在调用对应的
+    图形接口创建对应类别纹理资源的底层数据块，je_graphic_texture_2d_load 和 je_graphic_texture_*_create 在调用对应的
     texture_*_init 之前，会调用此接口创建 blob，对于具有相同路径的纹理资源，在先前创建的 blob 失效之前，
     不会重复调用此接口。图形实现可以利用 blob 加速纹理的创建流程。
         * 可以返回 nullptr，即便如此，在对应资源失效之前，此接口依然只被调用一次。
@@ -3609,14 +3677,14 @@ struct jegl_graphic_api
         * 如果接口返回 nullptr，对应的 texture_close_blob 将不会被调用。
         * 若图形实现不支持某一纹理类别，可以将对应的函数指针置空，引擎中间层将拒绝创建该类纹理并记录日志。
     */
-    texture_2d_create_blob_func_t texture_2d_create_blob;
-    texture_3d_create_blob_func_t texture_3d_create_blob;
-    texture_array_create_blob_func_t texture_array_create_blob;
-    texture_cube_create_blob_func_t texture_cube_create_blob;
-    texture_msaa_create_blob_func_t texture_msaa_create_blob;
+    je_gl_graphic_api_texture_2d_create_blob_func_t texture_2d_create_blob;
+    je_gl_graphic_api_texture_3d_create_blob_func_t texture_3d_create_blob;
+    je_gl_graphic_api_texture_array_create_blob_func_t texture_array_create_blob;
+    je_gl_graphic_api_texture_cube_create_blob_func_t texture_cube_create_blob;
+    je_gl_graphic_api_texture_msaa_create_blob_func_t texture_msaa_create_blob;
 
     /*
-    jegl_graphic_api::vertex_create_blob [成员]
+    je_gl_graphic_api_t::vertex_create_blob [成员]
     图形接口创建顶点资源的底层数据块，je_graphic_vertex_load 在调用 vertex_init 之前，会调用此接口创建 blob，
     对于具有相同路径的顶点资源，在先前创建的 blob 失效之前，不会重复调用此接口。
     图形实现可以利用 blob 加速顶点数据的创建流程。
@@ -3624,157 +3692,157 @@ struct jegl_graphic_api
         * 如果接口返回 nullptr，vertex_init 将收到一个 nullptr 作为 blob 参数。
         * 如果接口返回 nullptr，对应的 vertex_close_blob 将不会被调用。
     */
-    vertex_create_blob_func_t vertex_create_blob;
+    je_gl_graphic_api_vertex_create_blob_func_t vertex_create_blob;
 
     /*
-    jegl_graphic_api::shader_close_blob [成员]
+    je_gl_graphic_api_t::shader_close_blob [成员]
     图形接口关闭着色器资源的底层数据块，当一个资源失效或者图形上下文退出时，由引擎的中间层负责在适当的
     时机调用此接口释放对应的 blob。
         * 仅当所需释放的 blob 不是 nullptr 时，此接口才会被调用。
     */
-    shader_close_blob_func_t shader_close_blob;
+    je_gl_graphic_api_shader_close_blob_func_t shader_close_blob;
 
     /*
-    jegl_graphic_api::texture_close_blob [成员]
+    je_gl_graphic_api_t::texture_close_blob [成员]
     图形接口关闭纹理资源的底层数据块，当一个资源失效或者图形上下文退出时，由引擎的中间层负责在适当的
     时机调用此接口释放对应的 blob。
         * 仅当所需释放的 blob 不是 nullptr 时，此接口才会被调用。
     */
-    texture_close_blob_func_t texture_close_blob;
+    je_gl_graphic_api_texture_close_blob_func_t texture_close_blob;
 
     /*
-    jegl_graphic_api::vertex_close_blob [成员]
+    je_gl_graphic_api_t::vertex_close_blob [成员]
     图形接口关闭顶点资源的底层数据块，当一个资源失效或者图形上下文退出时，由引擎的中间层负责在适当的
     时机调用此接口释放对应的 blob。
         * 仅当所需释放的 blob 不是 nullptr 时，此接口才会被调用。
     */
-    vertex_close_blob_func_t vertex_close_blob;
+    je_gl_graphic_api_vertex_close_blob_func_t vertex_close_blob;
 
     /*
-    jegl_graphic_api::shader_init [成员]
+    je_gl_graphic_api_t::shader_init [成员]
     初始化并创建着色器在图形层对应的资源，此接口将在资源被首次使用时由渲染 API 的
     pipeline 准备阶段调用，图形实现应当在此接口中完成所需的准备工作。
     */
-    shader_init_func_t shader_init;
+    je_gl_graphic_api_shader_init_func_t shader_init;
 
     /*
-    jegl_graphic_api::texture_2d_init / texture_3d_init / texture_array_init / texture_cube_init /
+    je_gl_graphic_api_t::texture_2d_init / texture_3d_init / texture_array_init / texture_cube_init /
     texture_msaa_init [成员]
     初始化并创建对应类别纹理在图形层对应的资源，此接口将在资源被首次使用时由渲染 API 的
     纹理绑定准备阶段调用，图形实现应当在此接口中完成所需的准备工作。
     */
-    texture_2d_init_func_t texture_2d_init;
-    texture_3d_init_func_t texture_3d_init;
-    texture_array_init_func_t texture_array_init;
-    texture_cube_init_func_t texture_cube_init;
-    texture_msaa_init_func_t texture_msaa_init;
+    je_gl_graphic_api_texture_2d_init_func_t texture_2d_init;
+    je_gl_graphic_api_texture_3d_init_func_t texture_3d_init;
+    je_gl_graphic_api_texture_array_init_func_t texture_array_init;
+    je_gl_graphic_api_texture_cube_init_func_t texture_cube_init;
+    je_gl_graphic_api_texture_msaa_init_func_t texture_msaa_init;
 
     /*
-    jegl_graphic_api::vertex_init [成员]
+    je_gl_graphic_api_t::vertex_init [成员]
     初始化并创建顶点在图形层对应的资源，此接口将在资源被首次使用时由渲染 API 的
     绘制准备阶段调用，图形实现应当在此接口中完成所需的准备工作。
     */
-    vertex_init_func_t vertex_init;
+    je_gl_graphic_api_vertex_init_func_t vertex_init;
 
     /*
-    jegl_graphic_api::framebuffer_init [成员]
+    je_gl_graphic_api_t::framebuffer_init [成员]
     初始化并创建帧缓冲区在图形层对应的资源，此接口将在资源被首次使用时由渲染 API 的
     pass 准备阶段调用，图形实现应当在此接口中完成所需的准备工作。
 
     引擎的中间层在创建 frambuffer 实例时，已经创建了对应的附件纹理资源（m_output_attachments），图形实现应
     当通过内部资源准备接口确保这些附件纹理资源已经被正确创建和初始化。
     */
-    framebuffer_init_func_t framebuffer_init;
+    je_gl_graphic_api_framebuffer_init_func_t framebuffer_init;
 
     /*
-    jegl_graphic_api::ubuffer_init [成员]
+    je_gl_graphic_api_t::ubuffer_init [成员]
     初始化并创建一致变量缓冲区在图形层对应的资源，此接口将在资源被首次使用时由渲染 API 的
     UBO 绑定准备阶段调用，图形实现应当在此接口中完成所需的准备工作。
     */
-    ubuffer_init_func_t  ubuffer_init;
+    je_gl_graphic_api_ubuffer_init_func_t  ubuffer_init;
 
     /*
-    jegl_graphic_api::shader_update [成员]
+    je_gl_graphic_api_t::shader_update [成员]
     当一个 shader 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
     负责准备好对应的更新工作。
     */
-    shader_update_func_t shader_update;
+    je_gl_graphic_api_shader_update_func_t shader_update;
 
     /*
-    jegl_graphic_api::texture_2d_update / texture_3d_update / texture_array_update / texture_cube_update /
+    je_gl_graphic_api_t::texture_2d_update / texture_3d_update / texture_array_update / texture_cube_update /
     texture_msaa_update [成员]
     当一个对应类别纹理资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此
     接口。图形接口负责准备好对应的更新工作。
     */
-    texture_2d_update_func_t texture_2d_update;
-    texture_3d_update_func_t texture_3d_update;
-    texture_array_update_func_t texture_array_update;
-    texture_cube_update_func_t texture_cube_update;
-    texture_msaa_update_func_t texture_msaa_update;
+    je_gl_graphic_api_texture_2d_update_func_t texture_2d_update;
+    je_gl_graphic_api_texture_3d_update_func_t texture_3d_update;
+    je_gl_graphic_api_texture_array_update_func_t texture_array_update;
+    je_gl_graphic_api_texture_cube_update_func_t texture_cube_update;
+    je_gl_graphic_api_texture_msaa_update_func_t texture_msaa_update;
 
     /*
-    jegl_graphic_api::vertex_update [成员]
+    je_gl_graphic_api_t::vertex_update [成员]
     当一个 vertex 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
     负责准备好对应的更新工作。
     */
-    vertex_update_func_t vertex_update;
+    je_gl_graphic_api_vertex_update_func_t vertex_update;
 
     /*
-    jegl_graphic_api::framebuffer_update [成员]
+    je_gl_graphic_api_t::framebuffer_update [成员]
     当一个 framebuffer 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
     负责准备好对应的更新工作。
     */
-    framebuffer_update_func_t framebuffer_update;
+    je_gl_graphic_api_framebuffer_update_func_t framebuffer_update;
 
     /*
-    jegl_graphic_api::ubuffer_update [成员]
+    je_gl_graphic_api_t::ubuffer_update [成员]
     当一个 ubuffer 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
     负责准备好对应的更新工作。
     */
-    ubuffer_update_func_t  ubuffer_update;
+    je_gl_graphic_api_ubuffer_update_func_t  ubuffer_update;
 
     /*
-    jegl_graphic_api::shader_close [成员]
+    je_gl_graphic_api_t::shader_close [成员]
     图形接口关闭着色器资源，当一个着色器资源被释放时，引擎中间层将调用此接口，图形实现
     应当在此接口中完成着色器资源的释放工作。
     */
-    shader_close_func_t shader_close;
+    je_gl_graphic_api_shader_close_func_t shader_close;
 
     /*
-    jegl_graphic_api::texture_2d_close / texture_3d_close / texture_array_close / texture_cube_close /
+    je_gl_graphic_api_t::texture_2d_close / texture_3d_close / texture_array_close / texture_cube_close /
     texture_msaa_close [成员]
     图形接口关闭对应类别的纹理资源，当一个纹理资源被释放时，引擎中间层将调用此接口，图形实现
     应当在此接口中完成纹理资源的释放工作。
     */
-    texture_2d_close_func_t texture_2d_close;
-    texture_3d_close_func_t texture_3d_close;
-    texture_array_close_func_t texture_array_close;
-    texture_cube_close_func_t texture_cube_close;
-    texture_msaa_close_func_t texture_msaa_close;
+    je_gl_graphic_api_texture_2d_close_func_t texture_2d_close;
+    je_gl_graphic_api_texture_3d_close_func_t texture_3d_close;
+    je_gl_graphic_api_texture_array_close_func_t texture_array_close;
+    je_gl_graphic_api_texture_cube_close_func_t texture_cube_close;
+    je_gl_graphic_api_texture_msaa_close_func_t texture_msaa_close;
 
     /*
-    jegl_graphic_api::vertex_close [成员]
+    je_gl_graphic_api_t::vertex_close [成员]
     图形接口关闭顶点资源，当一个顶点资源被释放时，引擎中间层将调用此接口，图形实现
     应当在此接口中完成顶点资源的释放工作。
     */
-    vertex_close_func_t vertex_close;
+    je_gl_graphic_api_vertex_close_func_t vertex_close;
 
     /*
-    jegl_graphic_api::framebuffer_close [成员]
+    je_gl_graphic_api_t::framebuffer_close [成员]
     图形接口关闭帧缓冲区资源，当一个帧缓冲区资源被释放时，引擎中间层将调用此接口，图形实现
     应当在此接口中完成帧缓冲区资源的释放工作。
     */
-    framebuffer_close_func_t framebuffer_close;
+    je_gl_graphic_api_framebuffer_close_func_t framebuffer_close;
 
     /*
-    jegl_graphic_api::ubuffer_close [成员]
+    je_gl_graphic_api_t::ubuffer_close [成员]
     图形接口关闭一致变量缓冲区资源，当一个一致变量缓冲区资源被释放时，引擎中间层将调用此接口，
     图形实现应当在此接口中完成一致变量缓冲区资源的释放工作。
     */
-    ubuffer_close_func_t ubuffer_close;
+    je_gl_graphic_api_ubuffer_close_func_t ubuffer_close;
 
     /*
-    jegl_graphic_api 的渲染接口（pipeline / sampler / render pass / draw / commit）
+    je_gl_graphic_api_t 的渲染接口（pipeline / sampler / render pass / draw / commit）
         * 与资源接口共用同一张函数表；所有内置后端都必须提供
         * 参数约定与 je_graphic_cmd_* / je_graphic_pipeline_* 公共接口一致
         * 下列接口只在图形线程内、由命令缓冲区的提交过程驱动调用；在进入对应调用前，引擎中间层已经
@@ -3782,61 +3850,61 @@ struct jegl_graphic_api
     */
 
     /*
-    jegl_graphic_api::pipeline_init [成员]
+    je_gl_graphic_api_t::pipeline_init [成员]
     创建 pipeline 在图形层对应的后端对象（深度 / 混合等固定功能状态，或 PSO），图形实现应当将创建结果
     保存到 pipeline 的 m_backend_ptr 中。此接口在 pipeline 首次参与提交，或图形线程重启导致后端状态失效
     后，于 pipeline_bind 之前调用。
         * 调用前引擎已确保 pipeline 对应的 shader 已经初始化 / 更新完成。
         * 返回后引擎会将 pipeline 标记为已初始化，并在 pipeline 释放时调用 pipeline_close。
     */
-    pipeline_init_func_t pipeline_init;
+    je_gl_graphic_api_pipeline_init_func_t pipeline_init;
 
     /*
-    jegl_graphic_api::pipeline_close [成员]
+    je_gl_graphic_api_t::pipeline_close [成员]
     释放 pipeline 在图形层对应的后端对象，即 pipeline_init 中创建的内容。pipeline 被释放时由引擎中间层
     在图形线程中调用此接口。
         * 即使 pipeline 从未参与提交（pipeline_init 未被调用、后端指针为空），此接口也可能被调用，
             实现必须能够安全处理这种情况。
     */
-    pipeline_close_func_t pipeline_close;
+    je_gl_graphic_api_pipeline_close_func_t pipeline_close;
 
     /*
-    jegl_graphic_api::pipeline_bind [成员]
+    je_gl_graphic_api_t::pipeline_bind [成员]
     将 pipeline 绑定为当前绘制状态：绑定其 shader，并应用固定功能状态（顶点输入布局、深度测试 / 写入、
     混合、剔除、绕序、颜色写掩码等）。图元拓扑由顶点资源携带，在 draw 时生效。引擎在提交过程中遇到
     绑定 pipeline 的命令时调用此接口，并保证：
         * 若 pipeline 尚未初始化，会先调用 pipeline_init；
         * 连续的重复绑定会被去重，不会重复调用。
     */
-    pipeline_bind_func_t pipeline_bind;
+    je_gl_graphic_api_pipeline_bind_func_t pipeline_bind;
 
     /*
-    jegl_graphic_api::sampler_init [成员]
-    根据 sampler 的描述（jegl_sampler_desc）创建图形层对应的采样器对象，并保存到 sampler 的后端指针中。
+    je_gl_graphic_api_t::sampler_init [成员]
+    根据 sampler 的描述（je_gl_sampler_desc_t）创建图形层对应的采样器对象，并保存到 sampler 的后端指针中。
     此接口在 sampler 首次参与提交，或图形线程重启导致后端状态失效后，于 sampler_bind 之前调用。
     */
-    sampler_init_func_t sampler_init;
+    je_gl_graphic_api_sampler_init_func_t sampler_init;
 
     /*
-    jegl_graphic_api::sampler_close [成员]
+    je_gl_graphic_api_t::sampler_close [成员]
     释放 sampler 在图形层对应的采样器对象，即 sampler_init 中创建的内容。sampler 被释放时由引擎中间层
     在图形线程中调用此接口。
         * 即使 sampler 从未参与提交（sampler_init 未被调用、后端指针为空），此接口也可能被调用，
             实现必须能够安全处理这种情况。
     */
-    sampler_close_func_t sampler_close;
+    je_gl_graphic_api_sampler_close_func_t sampler_close;
 
     /*
-    jegl_graphic_api::sampler_bind [成员]
+    je_gl_graphic_api_t::sampler_bind [成员]
     为 shader 声明的采样器 sampler_id 绑定独立采样器，覆盖 shader 声明的默认采样器。
-        * sampler_id 取自 shader 反射（jegl_shader::m_sampler_methods），对该采样器声明覆盖的全部
+        * sampler_id 取自 shader 反射（je_gl_shader_t::m_sampler_methods），对该采样器声明覆盖的全部
             纹理 pass 生效，图形实现应当将采样器绑定到这些 pass 对应的纹理单元 / 描述符槽位。
         * 引擎保证 sampler 已经初始化，并会对同一 sampler_id 上连续的重复绑定去重。
     */
-    sampler_bind_func_t sampler_bind;
+    je_gl_graphic_api_sampler_bind_func_t sampler_bind;
 
     /*
-    jegl_graphic_api::begin_pass [成员]
+    je_gl_graphic_api_t::begin_pass [成员]
     开始一个渲染 pass：将后续绘制定向到 target 对应的渲染目标，并应用 viewport。
         * target 为空表示屏幕后备缓冲区。
         * viewport 不得为空，且 width / height 必须大于 0。
@@ -3844,63 +3912,63 @@ struct jegl_graphic_api
         * 图形实现应当在此重置 pass 级的状态缓存（当前 shader、顶点、纹理等绑定），
             引擎侧的绑定去重缓存也会在 begin_pass 时重置。
     */
-    begin_pass_func_t begin_pass;
+    je_gl_graphic_api_begin_pass_func_t begin_pass;
 
     /*
-    jegl_graphic_api::clear_color [成员]
+    je_gl_graphic_api_t::clear_color [成员]
     将当前 pass 的第 attachment 个颜色附件清除为 rgba 指定的颜色。
         * attachment 是颜色附件索引，从 0 开始；屏幕后备缓冲区只有 0 号附件。
         * 只能在 begin_pass 之后、当前 pass 的第一次 draw 之前调用。
     */
-    clear_color_func_t clear_color;
+    je_gl_graphic_api_clear_color_func_t clear_color;
 
     /*
-    jegl_graphic_api::clear_depth [成员]
+    je_gl_graphic_api_t::clear_depth [成员]
     将当前 pass 的深度附件清除为 depth。
         * 只能在 begin_pass 之后、当前 pass 的第一次 draw 之前调用。
         * 若当前渲染目标没有深度附件，图形实现可以忽略此调用。
     */
-    clear_depth_func_t clear_depth;
+    je_gl_graphic_api_clear_depth_func_t clear_depth;
 
     /*
-    jegl_graphic_api::end_pass [成员]
+    je_gl_graphic_api_t::end_pass [成员]
     结束当前 pass。图形实现应当在此完成该 pass 的收尾工作（例如结束渲染编码、解析附件、结束命令录制段）；
     屏幕后备缓冲区的呈现仍由 update_draw_commit 负责。
         * 每个 begin_pass 都有且仅有一个配对的 end_pass；若提交时 pass 尚未显式结束，引擎会在
             commit_begin 之前自动补发 end_pass。
     */
-    end_pass_func_t end_pass;
+    je_gl_graphic_api_end_pass_func_t end_pass;
 
     /*
-    jegl_graphic_api::bind_vertex [成员]
+    je_gl_graphic_api_t::bind_vertex [成员]
     绑定顶点资源（顶点 / 索引缓冲区与顶点格式），作为后续 draw 的数据来源。
         * 顶点拓扑包含在顶点资源中，实际在 draw 时使用。
         * 引擎保证顶点资源在调用前已经初始化 / 更新完成，并会对连续的重复绑定去重。
     */
-    bind_vertex_func_t bind_vertex;
+    je_gl_graphic_api_bind_vertex_func_t bind_vertex;
 
     /*
-    jegl_graphic_api::bind_uniform_buffer [成员]
+    je_gl_graphic_api_t::bind_uniform_buffer [成员]
     绑定 uniform buffer 资源，绑定点使用 uniform buffer 创建时指定的位置，
     避免绘制方与 shader 对 binding 编号的理解不一致。
         * 引擎保证 uniform buffer 在调用前已经初始化 / 更新完成，并会对连续的重复绑定去重。
     */
-    bind_uniform_buffer_func_t bind_uniform_buffer;
+    je_gl_graphic_api_bind_uniform_buffer_func_t bind_uniform_buffer;
 
     /*
-    jegl_graphic_api::bind_texture_2d / bind_texture_3d / bind_texture_array / bind_texture_cube [成员]
+    je_gl_graphic_api_t::bind_texture_2d / bind_texture_3d / bind_texture_array / bind_texture_cube [成员]
     将对应类别的纹理绑定到纹理 pass（即 shader 中声明的纹理槽位）。
         * pass 是 shader 声明的纹理 pass 索引（见 shader 反射的 m_pass_ids），不同类别纹理共用同一套
             pass 编号。
         * 引擎保证纹理资源在调用前已经初始化 / 更新完成，并会按 (pass, 纹理对象) 对连续重复绑定去重。
     */
-    bind_texture_2d_func_t bind_texture_2d;
-    bind_texture_3d_func_t bind_texture_3d;
-    bind_texture_array_func_t bind_texture_array;
-    bind_texture_cube_func_t bind_texture_cube;
+    je_gl_graphic_api_bind_texture_2d_func_t bind_texture_2d;
+    je_gl_graphic_api_bind_texture_3d_func_t bind_texture_3d;
+    je_gl_graphic_api_bind_texture_array_func_t bind_texture_array;
+    je_gl_graphic_api_bind_texture_cube_func_t bind_texture_cube;
 
     /*
-    jegl_graphic_api::draw_indexed [成员]
+    je_gl_graphic_api_t::draw_indexed [成员]
     使用当前绑定的 pipeline / 顶点 / 纹理执行一次索引绘制。
         * index_count、instance_count 均大于 0；索引类型固定为 uint32_t，first_index 是索引元素的
             偏移（不是字节偏移）。
@@ -3909,31 +3977,31 @@ struct jegl_graphic_api
             在绘制前将该数据上传到设备（例如写入每帧 UBO ring）并绑定。
         * 调用前引擎保证 pipeline 与顶点资源已经绑定，且均已初始化。
     */
-    draw_indexed_func_t draw_indexed;
+    je_gl_graphic_api_draw_indexed_func_t draw_indexed;
 
     /*
-    jegl_graphic_api::draw [成员]
+    je_gl_graphic_api_t::draw [成员]
     使用当前绑定的 pipeline / 顶点 / 纹理执行一次非索引绘制。
         * vertex_count、instance_count 均大于 0；first_vertex 是顶点偏移。
         * uniform_data / uniform_size 的约定与 draw_indexed 相同。
     */
-    draw_func_t draw;
+    je_gl_graphic_api_draw_func_t draw;
 
     /*
-    jegl_graphic_api::commit_begin / commit_end [成员]
+    je_gl_graphic_api_t::commit_begin / commit_end [成员]
     提交单个命令缓冲区时，引擎在回放其全部命令的前后各调用一次：
     commit_begin -> [begin_pass / clear / bind / draw ...] -> commit_end。
         * 图形实现可以用它开启 / 结束一次命令录制或提交作用域（例如获取交换链图像、开始 / 结束命令
             列表）；当前内置后端均为空实现。
         * 二者都只在图形线程中调用，且与同一次提交中的其它渲染接口串行执行。
     */
-    commit_begin_func_t commit_begin;
-    commit_end_func_t commit_end;
+    je_gl_graphic_api_commit_begin_func_t commit_begin;
+    je_gl_graphic_api_commit_end_func_t commit_end;
 };
-static_assert(sizeof(jegl_graphic_api) % sizeof(void*) == 0);
+static_assert(sizeof(je_gl_graphic_api_t) % sizeof(void*) == 0);
 
-typedef void  (*jeecs_api_register_func_t)(jegl_graphic_api*);
-typedef void  (*jeecs_sync_callback_func_t)(jegl_context*, void*);
+typedef void  (*je_graphic_api_register_func_t)(je_gl_graphic_api_t*);
+typedef void  (*je_graphic_sync_callback_func_t)(je_gl_context_t*, void*);
 
 /*
 je_graphic_sync_thread_callback_register [基本接口]
@@ -3946,21 +4014,21 @@ je_graphic_sync_thread_callback_register [基本接口]
     je_core_init
 */
 JE_API void je_graphic_sync_thread_callback_register(
-    jeecs_sync_callback_func_t callback,
+    je_graphic_sync_callback_func_t callback,
     /* OPTIONAL */ void* arg);
 
 /*
-jegl_sync_state [类型]
+je_gl_sync_state_t [类型]
 手动同步图形更新时，je_graphic_sync_update 返回的状态
-    * JEGL_SYNC_COMPLETE 表示本帧正常结束
-    * JEGL_SYNC_SHUTDOWN 表示绘制将结束
-    * JEGL_SYNC_REBOOT 表示需要重新初始化图形上下文
+    * JE_GL_SYNC_COMPLETE 表示本帧正常结束
+    * JE_GL_SYNC_SHUTDOWN 表示绘制将结束
+    * JE_GL_SYNC_REBOOT 表示需要重新初始化图形上下文
 */
-enum jegl_sync_state
+enum je_gl_sync_state_t
 {
-    JEGL_SYNC_COMPLETE,
-    JEGL_SYNC_SHUTDOWN,
-    JEGL_SYNC_REBOOT,
+    JE_GL_SYNC_COMPLETE,
+    JE_GL_SYNC_SHUTDOWN,
+    JE_GL_SYNC_REBOOT,
 };
 
 /*
@@ -3971,15 +4039,15 @@ je_graphic_sync_init [基本接口]
 和 je_graphic_sync_shutdown。
     * je_graphic_sync_init 用于图形在首次启动或重启时执行图形
         任务的初始化操作，初始化完成后，则循环执行
-        je_graphic_sync_update 直到其返回 JEGL_SYNC_SHUTDOWN
-        或 JEGL_SYNC_REBOOT 之前，都不需要重新初始化
+        je_graphic_sync_update 直到其返回 JE_GL_SYNC_SHUTDOWN
+        或 JE_GL_SYNC_REBOOT 之前，都不需要重新初始化
 请参见：
     je_graphic_sync_thread_callback_register
     je_graphic_sync_update
     je_graphic_sync_shutdown
 */
 JE_API void je_graphic_sync_init(
-    jegl_context* thread,
+    je_gl_context_t* thread,
     bool isreboot);
 
 /*
@@ -3989,10 +4057,10 @@ je_graphic_sync_update [基本接口]
 注册回调函数，并手动执行 je_graphic_sync_init、je_graphic_sync_update
 和 je_graphic_sync_shutdown。
     * je_graphic_sync_update 用于更新图形图形的一帧
-    * 函数返回 JEGL_SYNC_COMPLETE 表示正常结束
-    * 返回 JEGL_SYNC_SHUTDOWN 表示绘制将结束，请以 isreboot = false
+    * 函数返回 JE_GL_SYNC_COMPLETE 表示正常结束
+    * 返回 JE_GL_SYNC_SHUTDOWN 表示绘制将结束，请以 isreboot = false
         调用 je_graphic_sync_shutdown，结束全部绘制工作
-    * 返回 JEGL_SYNC_REBOOT 表示绘制需要重新初始化，请以
+    * 返回 JE_GL_SYNC_REBOOT 表示绘制需要重新初始化，请以
         isreboot = true 调用 je_graphic_sync_shutdown 释放当前
         上下文，然后以 isreboot = true 调用je_graphic_sync_init
         重新执行初始化
@@ -4001,7 +4069,7 @@ je_graphic_sync_update [基本接口]
     je_graphic_sync_init
     je_graphic_sync_shutdown
 */
-JE_API jegl_sync_state je_graphic_sync_update(jegl_context* thread);
+JE_API je_gl_sync_state_t je_graphic_sync_update(je_gl_context_t* thread);
 
 /*
 je_graphic_sync_shutdown [基本接口]
@@ -4018,7 +4086,7 @@ je_graphic_sync_shutdown [基本接口]
     je_graphic_sync_init
     je_graphic_sync_shutdown
 */
-JE_API bool je_graphic_sync_shutdown(jegl_context* thread, bool isreboot);
+JE_API bool je_graphic_sync_shutdown(je_gl_context_t* thread, bool isreboot);
 
 /*
 je_graphic_thread_start [基本接口]
@@ -4031,11 +4099,11 @@ je_graphic_thread_start [基本接口]
     je_graphic_update
     je_graphic_thread_terminate
 */
-JE_API /* OPTIONAL: If failed to start up */ jegl_context* je_graphic_thread_start(
-    jegl_interface_config config,
-    /* OPTIONAL: If no universe attached */ je_GameUniverse* universe_instance,
-    jeecs_api_register_func_t register_func,
-    jegl_context::frame_job_func_t frame_rend_work,
+JE_API /* OPTIONAL: If failed to start up */ je_gl_context_t* je_graphic_thread_start(
+    je_gl_interface_config_t config,
+    /* OPTIONAL: If no universe attached */ je_game_universe_t* universe_instance,
+    je_graphic_api_register_func_t register_func,
+    je_gl_frame_job_func_t frame_rend_work,
     /* OPTIONAL */ void* arg);
 
 /*
@@ -4045,25 +4113,25 @@ je_graphic_thread_terminate [基本接口]
 请参见：
     je_graphic_thread_start
 */
-JE_API void je_graphic_thread_terminate(jegl_context* thread_handle);
+JE_API void je_graphic_thread_terminate(je_gl_context_t* thread_handle);
 
 /*
-jegl_update_sync_mode [类型]
+je_gl_update_sync_mode_t [类型]
 je_graphic_update 的同步模式
-    * JEGL_WAIT_THIS_FRAME_END 表示阻塞直到当前帧渲染完毕
-    * JEGL_WAIT_LAST_FRAME_END 表示阻塞直到上一帧渲染完毕
+    * JE_GL_WAIT_THIS_FRAME_END 表示阻塞直到当前帧渲染完毕
+    * JE_GL_WAIT_LAST_FRAME_END 表示阻塞直到上一帧渲染完毕
 */
-enum jegl_update_sync_mode
+enum je_gl_update_sync_mode_t
 {
-    JEGL_WAIT_THIS_FRAME_END,
-    JEGL_WAIT_LAST_FRAME_END,
+    JE_GL_WAIT_THIS_FRAME_END,
+    JE_GL_WAIT_LAST_FRAME_END,
 };
 
 /*
-jegl_update_sync_callback_t [类型]
+je_gl_update_sync_callback_t [类型]
 je_graphic_update 完成等待后调用的回调函数类型，参数为注册时传入的 callback_param
 */
-typedef void (*jegl_update_sync_callback_t)(void*);
+typedef void (*je_gl_update_sync_callback_t)(void*);
 
 /*
 je_graphic_update [基本接口]
@@ -4075,9 +4143,9 @@ je_graphic_update [基本接口]
         * 更适合CPU密集操作，但需要更复杂的机制以保证数据完整性
 */
 JE_API bool je_graphic_update(
-    jegl_context* thread_handle,
-    jegl_update_sync_mode mode,
-    /* OPTIONAL */ jegl_update_sync_callback_t callback_after_wait_may_null,
+    je_gl_context_t* thread_handle,
+    je_gl_update_sync_mode_t mode,
+    /* OPTIONAL */ je_gl_update_sync_callback_t callback_after_wait_may_null,
     /* OPTIONAL */ void* callback_param);
 
 /*
@@ -4086,15 +4154,15 @@ je_graphic_thread_reboot [基本接口]
     * 若不需要改变图形配置，请使用nullptr
 */
 JE_API void je_graphic_thread_reboot(
-    jegl_context* thread_handle,
-    /* OPTIONAL: nullptr to keep current config */ const jegl_interface_config* config_may_null);
+    je_gl_context_t* thread_handle,
+    /* OPTIONAL: nullptr to keep current config */ const je_gl_interface_config_t* config_may_null);
 
 /*
 je_graphic_resource_handle_share [基本接口]
 增加指定资源句柄的引用计数，使得对应的图形资源需要额外执行一次 close 操作才能被释放
     * 此函数通常用于实现资源的共享引用
 */
-JE_API void je_graphic_resource_handle_share(jegl_resource_handle* resource_handle);
+JE_API void je_graphic_resource_handle_share(je_gl_resource_handle_t* resource_handle);
 
 /*
 jegl_share_resource [宏]
@@ -4119,8 +4187,8 @@ je_graphic_shader_source_load [基本接口]
     jegl_share_resource
     je_graphic_shader_close
 */
-JE_API /* OPTIONAL */ jegl_shader* je_graphic_shader_source_load(
-    /* OPTIONAL */ jegl_context* context,
+JE_API /* OPTIONAL */ je_gl_shader_t* je_graphic_shader_source_load(
+    /* OPTIONAL */ je_gl_context_t* context,
     const char* path,
     const char* src,
     bool is_virtual_file);
@@ -4135,8 +4203,8 @@ je_graphic_shader_load [基本接口]
     jegl_share_resource
     je_graphic_shader_close
 */
-JE_API /* OPTIONAL */ jegl_shader* je_graphic_shader_load(
-    /* OPTIONAL */ jegl_context* context,
+JE_API /* OPTIONAL */ je_gl_shader_t* je_graphic_shader_load(
+    /* OPTIONAL */ je_gl_context_t* context,
     const char* path);
 
 /*
@@ -4148,7 +4216,7 @@ je_graphic_shader_close [基本接口]
 请参见：
     jegl_share_resource
 */
-JE_API void je_graphic_shader_close(jegl_shader* shader);
+JE_API void je_graphic_shader_close(je_gl_shader_t* shader);
 ///////////////////////////// TEXTURE /////////////////////////////
 /*
 je_graphic_texture_2d_load [基本接口]
@@ -4162,8 +4230,8 @@ je_graphic_texture_2d_load [基本接口]
     jegl_share_resource
     je_graphic_texture_2d_close
 */
-JE_API /* OPTIONAL */ jegl_texture_2d* je_graphic_texture_2d_load(
-    /* OPTIONAL */ jegl_context* context,
+JE_API /* OPTIONAL */ je_gl_texture_2d_t* je_graphic_texture_2d_load(
+    /* OPTIONAL */ je_gl_context_t* context,
     const char* path);
 
 /*
@@ -4181,10 +4249,10 @@ je_graphic_texture_2d_create [基本接口]
     jegl_share_resource
     je_graphic_texture_2d_close
 */
-JE_API jegl_texture_2d* /* NOT NULL */ je_graphic_texture_2d_create(
+JE_API je_gl_texture_2d_t* /* NOT NULL */ je_graphic_texture_2d_create(
     size_t width,
     size_t height,
-    jegl_texture_common::format format);
+    je_gl_texture_format_t format);
 
 /*
 je_graphic_texture_3d_create [基本接口]
@@ -4196,11 +4264,11 @@ je_graphic_texture_3d_create [基本接口]
     jegl_share_resource
     je_graphic_texture_3d_close
 */
-JE_API jegl_texture_3d* /* NOT NULL */ je_graphic_texture_3d_create(
+JE_API je_gl_texture_3d_t* /* NOT NULL */ je_graphic_texture_3d_create(
     size_t width,
     size_t height,
     size_t depth,
-    jegl_texture_common::format format);
+    je_gl_texture_format_t format);
 
 /*
 je_graphic_texture_array_create [基本接口]
@@ -4212,11 +4280,11 @@ je_graphic_texture_array_create [基本接口]
     jegl_share_resource
     je_graphic_texture_array_close
 */
-JE_API jegl_texture_array* /* NOT NULL */ je_graphic_texture_array_create(
+JE_API je_gl_texture_array_t* /* NOT NULL */ je_graphic_texture_array_create(
     size_t width,
     size_t height,
     size_t layers,
-    jegl_texture_common::format format);
+    je_gl_texture_format_t format);
 
 /*
 je_graphic_texture_cube_create [基本接口]
@@ -4228,10 +4296,10 @@ je_graphic_texture_cube_create [基本接口]
     jegl_share_resource
     je_graphic_texture_cube_close
 */
-JE_API jegl_texture_cube* /* NOT NULL */ je_graphic_texture_cube_create(
+JE_API je_gl_texture_cube_t* /* NOT NULL */ je_graphic_texture_cube_create(
     size_t width,
     size_t height,
-    jegl_texture_common::format format);
+    je_gl_texture_format_t format);
 
 /*
 je_graphic_texture_msaa_create [基本接口]
@@ -4242,11 +4310,11 @@ je_graphic_texture_msaa_create [基本接口]
     jegl_share_resource
     je_graphic_texture_msaa_close
 */
-JE_API jegl_texture_msaa* /* NOT NULL */ je_graphic_texture_msaa_create(
+JE_API je_gl_texture_msaa_t* /* NOT NULL */ je_graphic_texture_msaa_create(
     size_t width,
     size_t height,
     size_t samples,
-    jegl_texture_common::format format);
+    je_gl_texture_format_t format);
 
 /*
 je_graphic_texture_2d_close / je_graphic_texture_3d_close / je_graphic_texture_array_close /
@@ -4258,11 +4326,11 @@ je_graphic_texture_cube_close / je_graphic_texture_msaa_close [基本接口]
 请参见：
     jegl_share_resource
 */
-JE_API void je_graphic_texture_2d_close(jegl_texture_2d* texture);
-JE_API void je_graphic_texture_3d_close(jegl_texture_3d* texture);
-JE_API void je_graphic_texture_array_close(jegl_texture_array* texture);
-JE_API void je_graphic_texture_cube_close(jegl_texture_cube* texture);
-JE_API void je_graphic_texture_msaa_close(jegl_texture_msaa* texture);
+JE_API void je_graphic_texture_2d_close(je_gl_texture_2d_t* texture);
+JE_API void je_graphic_texture_3d_close(je_gl_texture_3d_t* texture);
+JE_API void je_graphic_texture_array_close(je_gl_texture_array_t* texture);
+JE_API void je_graphic_texture_cube_close(je_gl_texture_cube_t* texture);
+JE_API void je_graphic_texture_msaa_close(je_gl_texture_msaa_t* texture);
 
 ///////////////////////////// VERTEX /////////////////////////////
 /*
@@ -4284,8 +4352,8 @@ je_graphic_vertex_load [基本接口]
     jegl_share_resource
     je_graphic_vertex_close
 */
-JE_API /* OPTIONAL */ jegl_vertex* je_graphic_vertex_load(
-    /* OPTIONAL */ jegl_context* context,
+JE_API /* OPTIONAL */ je_gl_vertex_t* je_graphic_vertex_load(
+    /* OPTIONAL */ je_gl_context_t* context,
     const char* path);
 
 /*
@@ -4299,13 +4367,13 @@ je_graphic_vertex_create [基本接口]
     jegl_share_resource
     je_graphic_vertex_close
 */
-JE_API /* OPTIONAL: If bad format or no completed vertex point */ jegl_vertex* je_graphic_vertex_create(
-    jegl_vertex::type type,
+JE_API /* OPTIONAL: If bad format or no completed vertex point */ je_gl_vertex_t* je_graphic_vertex_create(
+    je_gl_vertex_type_t type,
     const void* datas,
     size_t data_length,
     const uint32_t* indices,
     size_t index_count,
-    const jegl_vertex::data_layout* format,
+    const je_gl_vertex_data_layout_t* format,
     size_t format_count);
 
 /*
@@ -4326,7 +4394,7 @@ je_graphic_vertex_buffer_update [基本接口]
     je_graphic_uniformbuf_update
 */
 JE_API void je_graphic_vertex_buffer_update(
-    jegl_vertex* vertex,
+    je_gl_vertex_t* vertex,
     /* OPTIONAL */ const void* vertex_data,
     size_t vertex_length,
     size_t active_index_count);
@@ -4340,7 +4408,7 @@ je_graphic_vertex_close [基本接口]
 请参见：
     jegl_share_resource
 */
-JE_API void je_graphic_vertex_close(jegl_vertex* vertex);
+JE_API void je_graphic_vertex_close(je_gl_vertex_t* vertex);
 
 ///////////////////////////// FRAMEBUFFER /////////////////////////////
 
@@ -4355,10 +4423,10 @@ je_graphic_framebuf_create [基本接口]
     jegl_share_resource
     je_graphic_framebuf_close
 */
-JE_API /* OPTIONAL: If size or color_attachment_count is zero */ jegl_frame_buffer* je_graphic_framebuf_create(
+JE_API /* OPTIONAL: If size or color_attachment_count is zero */ je_gl_frame_buffer_t* je_graphic_framebuf_create(
     size_t width,
     size_t height,
-    const jegl_texture_common::format* color_attachment_formats,
+    const je_gl_texture_format_t* color_attachment_formats,
     size_t color_attachment_count,
     bool contain_depth_attachment);
 
@@ -4371,7 +4439,7 @@ je_graphic_framebuf_close [基本接口]
 请参见：
     jegl_share_resource
 */
-JE_API void je_graphic_framebuf_close(jegl_frame_buffer* framebuffer);
+JE_API void je_graphic_framebuf_close(je_gl_frame_buffer_t* framebuffer);
 
 ///////////////////////////// UNIFORM BUFFER /////////////////////////////
 
@@ -4386,7 +4454,7 @@ je_graphic_uniformbuf_create [基本接口]
     jegl_share_resource
     je_graphic_uniformbuf_close
 */
-JE_API jegl_uniform_buffer* je_graphic_uniformbuf_create(
+JE_API je_gl_uniform_buffer_t* je_graphic_uniformbuf_create(
     size_t binding_place,
     size_t length);
 
@@ -4395,7 +4463,7 @@ je_graphic_uniformbuf_update [基本接口]
 更新一个一致变量缓冲区中，指定位置起，若干长度的数据
 */
 JE_API void je_graphic_uniformbuf_update(
-    jegl_uniform_buffer* uniformbuf,
+    je_gl_uniform_buffer_t* uniformbuf,
     /* OPTIONAL: If update_length == 0 */ const void* buf,
     size_t update_offset,
     size_t update_length);
@@ -4409,14 +4477,14 @@ je_graphic_uniformbuf_close [基本接口]
 请参见：
     jegl_share_resource
 */
-JE_API void je_graphic_uniformbuf_close(jegl_uniform_buffer* uniformbuf);
+JE_API void je_graphic_uniformbuf_close(je_gl_uniform_buffer_t* uniformbuf);
 
 //////////////////////////////////////////////////////////
 
-struct je_stb_font_data;
-typedef void (*je_font_char_updater_t)(jegl_texture_common::pixel_data_t*, size_t, size_t);
+typedef struct je_stb_font_data_t je_stb_font_data_t;
+typedef void (*je_font_char_updater_t)(je_gl_texture_pixel_data_t*, size_t, size_t);
 
-struct je_font
+typedef struct je_font_t
 {
     const char* m_path;
     uint8_t* m_font_file_buf;
@@ -4430,8 +4498,8 @@ struct je_font
     int32_t m_line_gap;
     int32_t m_line_space;
 
-    je_stb_font_data* m_stb_font_data;
-};
+    je_stb_font_data_t* m_stb_font_data;
+} je_font_t;
 
 /*
 je_font_load [基本接口]
@@ -4444,7 +4512,7 @@ char_texture_updater 用于指示文字纹理创建后所需的预处理方法�
     je_font_free
     je_font_char_get
 */
-JE_API /* OPTIONAL */ je_font* je_font_load(
+JE_API /* OPTIONAL */ je_font_t* je_font_load(
     const char* font_path,
     size_t board_blank_size_x,
     size_t board_blank_size_y,
@@ -4454,7 +4522,7 @@ JE_API /* OPTIONAL */ je_font* je_font_load(
 je_font_free [基本接口]
 关闭一个字体
 */
-JE_API void je_font_free(je_font* font);
+JE_API void je_font_free(je_font_t* font);
 
 /*
 je_font_char_get [基本接口]
@@ -4464,7 +4532,7 @@ je_font_char_get [基本接口]
     jeecs::graphic::character
 */
 JE_API const jeecs::graphic::character* je_font_char_get(
-    je_font* font,
+    je_font_t* font,
     float size,
     char32_t unicode32_char);
 
@@ -4477,14 +4545,14 @@ je_graphic_shared_resources_mark_outdated [基本接口]
     je_graphic_shared_resources_mark_outdated
 */
 JE_API bool je_graphic_shared_resources_mark_outdated(
-    jegl_context* context, const char* path);
+    je_gl_context_t* context, const char* path);
 
 /*
-jegl_graphic_api_entry [类型]
+je_gl_graphic_api_entry_t [类型]
 基础图形库的入口类型
 指向一个用于初始化基础图形接口的入口函数
 */
-typedef void (*jegl_graphic_api_entry)(jegl_graphic_api*);
+typedef void (*je_gl_graphic_api_entry_t)(je_gl_graphic_api_t*);
 
 /*
 je_graphic_host_api_set [基本接口]
@@ -4493,7 +4561,7 @@ je_graphic_host_api_set [基本接口]
     * 若不设置或设置为 nullptr，引擎将使用默认的图形接口、
     * 请在je_core_init之后设置，引擎的初始化操作将重置此设置
 */
-JE_API void je_graphic_host_api_set(/* OPTIONAL: nullptr to use platform default */ jegl_graphic_api_entry api);
+JE_API void je_graphic_host_api_set(/* OPTIONAL: nullptr to use platform default */ je_gl_graphic_api_entry_t api);
 
 /*
 je_graphic_host_api_get [基本接口]
@@ -4502,7 +4570,7 @@ je_graphic_host_api_get [基本接口]
         则返回引擎根据平台决定使用的默认使用的图形库
     * 否则返回 je_graphic_host_api_set 设置的接口
 */
-JE_API jegl_graphic_api_entry je_graphic_host_api_get(void);
+JE_API je_gl_graphic_api_entry_t je_graphic_host_api_get(void);
 
 /*
 je_graphic_using_none_apis [基本接口]
@@ -4511,7 +4579,7 @@ je_graphic_using_none_apis [基本接口]
 请参见：
     je_graphic_thread_start
 */
-JE_API void je_graphic_using_none_apis(jegl_graphic_api* write_to_apis);
+JE_API void je_graphic_using_none_apis(je_gl_graphic_api_t* write_to_apis);
 
 /*
 je_graphic_using_opengl3_apis [基本接口]
@@ -4520,7 +4588,7 @@ je_graphic_using_opengl3_apis [基本接口]
 请参见：
     je_graphic_thread_start
 */
-JE_API void je_graphic_using_opengl3_apis(jegl_graphic_api* write_to_apis);
+JE_API void je_graphic_using_opengl3_apis(je_gl_graphic_api_t* write_to_apis);
 
 /*
 je_graphic_using_vk120_apis [基本接口]
@@ -4529,7 +4597,7 @@ je_graphic_using_vk120_apis [基本接口]
 请参见：
     je_graphic_thread_start
 */
-JE_API void je_graphic_using_vk120_apis(jegl_graphic_api* write_to_apis);
+JE_API void je_graphic_using_vk120_apis(je_gl_graphic_api_t* write_to_apis);
 
 /*
 je_graphic_using_metal_apis [基本接口]
@@ -4538,7 +4606,7 @@ je_graphic_using_metal_apis [基本接口]
 请参见：
     je_graphic_thread_start
 */
-JE_API void je_graphic_using_metal_apis(jegl_graphic_api* write_to_apis);
+JE_API void je_graphic_using_metal_apis(je_gl_graphic_api_t* write_to_apis);
 
 /*
 je_graphic_using_dx11_apis [基本接口]
@@ -4547,7 +4615,7 @@ je_graphic_using_dx11_apis [基本接口]
 请参见：
     je_graphic_thread_start
 */
-JE_API void je_graphic_using_dx11_apis(jegl_graphic_api* write_to_apis);
+JE_API void je_graphic_using_dx11_apis(je_gl_graphic_api_t* write_to_apis);
 
 ///////////////////////////// RENDER API (V2) /////////////////////////////
 
@@ -4563,10 +4631,10 @@ JE_API void je_graphic_using_dx11_apis(jegl_graphic_api* write_to_apis);
 */
 
 /*
-jegl_topology [类型]
+je_gl_topology_t [类型]
 图元拓扑；与 pipeline 绑定，绘制时使用 pipeline 的拓扑
 */
-enum class jegl_topology : uint8_t
+enum class je_gl_topology_t : uint8_t
 {
     POINTS,
     LINES,
@@ -4576,96 +4644,96 @@ enum class jegl_topology : uint8_t
 };
 
 /*
-jegl_front_face [类型]
+je_gl_front_face_t [类型]
 正面绕序。后端会根据渲染目标（屏幕/离屏）自行处理 NDC 翻转。
 */
-enum class jegl_front_face : uint8_t
+enum class je_gl_front_face_t : uint8_t
 {
     COUNTER_CLOCKWISE,
     CLOCKWISE,
 };
 
 /*
-jegl_pipeline_state [类型]
+je_gl_pipeline_state_t [类型]
 pipeline 的固定功能状态。所有字段都必须显式初始化；
 如需基于 shader 的 ZTEST/ZWRITE/BLEND/CULL 配置，请使用
 je_graphic_pipeline_state_from_shader 或向 je_graphic_pipeline_create 传入空的 state。
 */
-struct jegl_pipeline_state
+typedef struct je_gl_pipeline_state_t
 {
-    jegl_topology m_topology;
+    je_gl_topology_t m_topology;
 
     bool m_depth_test;
-    jegl_shader::depth_test_method m_depth_func;
+    je_gl_shader_depth_test_method_t m_depth_func;
     bool m_depth_write;
 
     bool m_blend;
-    jegl_shader::blend_equation m_blend_equation;
-    jegl_shader::blend_method m_blend_src_color;
-    jegl_shader::blend_method m_blend_dst_color;
-    jegl_shader::blend_method m_blend_src_alpha;
-    jegl_shader::blend_method m_blend_dst_alpha;
+    je_gl_shader_blend_equation_t m_blend_equation;
+    je_gl_shader_blend_method_t m_blend_src_color;
+    je_gl_shader_blend_method_t m_blend_dst_color;
+    je_gl_shader_blend_method_t m_blend_src_alpha;
+    je_gl_shader_blend_method_t m_blend_dst_alpha;
 
-    jegl_shader::cull_mode m_cull;
-    jegl_front_face m_front_face;
+    je_gl_shader_cull_mode_t m_cull;
+    je_gl_front_face_t m_front_face;
 
     // bit0..3 = R,G,B,A；0xF 表示全部写入
     uint8_t m_color_write_mask;
-};
+} je_gl_pipeline_state_t;
 
 /*
-jegl_pipeline_desc [类型]
+je_gl_pipeline_desc_t [类型]
 pipeline 的创建描述
     * m_shader 不得为空，pipeline 会持有其引用
     * m_state 为空时，使用 shader 的 ZTEST/ZWRITE/BLEND/CULL 配置
 请参见：
     je_graphic_pipeline_create
 */
-struct jegl_pipeline_desc
+typedef struct je_gl_pipeline_desc_t
 {
-    jegl_shader* m_shader;
+    je_gl_shader_t* m_shader;
     /* OPTIONAL: nullptr 表示使用 shader 的 ZTEST/ZWRITE/BLEND/CULL 配置 */
-    const jegl_pipeline_state* m_state;
-};
+    const je_gl_pipeline_state_t* m_state;
+} je_gl_pipeline_desc_t;
 
 /*
-jegl_uniform_slot [类型]
+je_gl_uniform_slot_t [类型]
 单次绘制的 uniform 在 shader uniform block 内的规范化位置。
-    * m_offset == JEGL_UNIFORM_SLOT_NONE 表示 shader 未声明该 uniform
+    * m_offset == JE_GL_UNIFORM_SLOT_NONE 表示 shader 未声明该 uniform
     * 通过 je_graphic_pipeline_uniform_slot / je_graphic_pipeline_builtin_uniform_slots 获取一次后缓存
 */
-#define JEGL_UNIFORM_SLOT_NONE ((uint32_t)0xFFFFFFFFu)
+#define JE_GL_UNIFORM_SLOT_NONE ((uint32_t)0xFFFFFFFFu)
 
-struct jegl_uniform_slot
+typedef struct je_gl_uniform_slot_t
 {
     uint32_t m_offset;
     uint32_t m_size;
-};
+} je_gl_uniform_slot_t;
 
 /*
-jegl_builtin_uniform_slots [类型]
+je_gl_builtin_uniform_slots_t [类型]
 pipeline 在创建时缓存的内建 uniform 位置表
-    * 未在 shader 中声明的项，其 m_offset 为 JEGL_UNIFORM_SLOT_NONE
+    * 未在 shader 中声明的项，其 m_offset 为 JE_GL_UNIFORM_SLOT_NONE
 */
-struct jegl_builtin_uniform_slots
+typedef struct je_gl_builtin_uniform_slots_t
 {
-    jegl_uniform_slot m_model;
-    jegl_uniform_slot m_model_view;
-    jegl_uniform_slot m_model_view_projection;
+    je_gl_uniform_slot_t m_model;
+    je_gl_uniform_slot_t m_model_view;
+    je_gl_uniform_slot_t m_model_view_projection;
 
-    jegl_uniform_slot m_local_scale;
-    jegl_uniform_slot m_uv_tiling;
-    jegl_uniform_slot m_uv_offset;
-    jegl_uniform_slot m_color;
+    je_gl_uniform_slot_t m_local_scale;
+    je_gl_uniform_slot_t m_uv_tiling;
+    je_gl_uniform_slot_t m_uv_offset;
+    je_gl_uniform_slot_t m_color;
 
-    jegl_uniform_slot m_light2d_resolution;
-    jegl_uniform_slot m_light2d_decay;
-    jegl_uniform_slot m_shadow_ellipse;
+    je_gl_uniform_slot_t m_light2d_resolution;
+    je_gl_uniform_slot_t m_light2d_decay;
+    je_gl_uniform_slot_t m_shadow_ellipse;
 
     // DeferLight2D 阴影逐像素排序：x=key，y=缩放，z=偏移，w=模式位。
     // 仅 shadow pass 的 shader 声明该 uniform，其余 shader 解析为 NONE。
-    jegl_uniform_slot m_shadow_key;
-};
+    je_gl_uniform_slot_t m_shadow_key;
+} je_gl_builtin_uniform_slots_t;
 
 /*
 je_graphic_pipeline_create [基本接口]
@@ -4673,8 +4741,8 @@ je_graphic_pipeline_create [基本接口]
     * 返回的 pipeline 持有 shader 的引用
     * 必须在对应图形线程的 context 生命周期内使用
 */
-JE_API jegl_pipeline* /* NOT NULL */ je_graphic_pipeline_create(
-    jegl_context* context, const jegl_pipeline_desc* desc);
+JE_API je_gl_pipeline_t* /* NOT NULL */ je_graphic_pipeline_create(
+    je_gl_context_t* context, const je_gl_pipeline_desc_t* desc);
 
 /*
 je_graphic_pipeline_close [基本接口]
@@ -4686,53 +4754,53 @@ je_graphic_pipeline_close [基本接口]
     je_graphic_pipeline_create
     jegl_share_resource
 */
-JE_API void je_graphic_pipeline_close(jegl_pipeline* pipeline);
+JE_API void je_graphic_pipeline_close(je_gl_pipeline_t* pipeline);
 
 /*
 je_graphic_pipeline_state_from_shader [基本接口]
 用 shader 的 ZTEST/ZWRITE/BLEND/CULL 配置填充一份 pipeline 状态。
 */
-JE_API jegl_pipeline_state je_graphic_pipeline_state_from_shader(
-    jegl_shader* shader);
+JE_API je_gl_pipeline_state_t je_graphic_pipeline_state_from_shader(
+    je_gl_shader_t* shader);
 
 /*
 je_graphic_pipeline_uniform_slot [基本接口]
 按名字查询 per-draw uniform 的规范化位置。
-    * 返回值的 m_offset == JEGL_UNIFORM_SLOT_NONE 表示未声明
+    * 返回值的 m_offset == JE_GL_UNIFORM_SLOT_NONE 表示未声明
     * name 不得为空
 */
-JE_API /* OPTIONAL: m_offset == JEGL_UNIFORM_SLOT_NONE if absent */
-jegl_uniform_slot je_graphic_pipeline_uniform_slot(
-    jegl_pipeline* pipeline, const char* name);
+JE_API /* OPTIONAL: m_offset == JE_GL_UNIFORM_SLOT_NONE if absent */
+je_gl_uniform_slot_t je_graphic_pipeline_uniform_slot(
+    je_gl_pipeline_t* pipeline, const char* name);
 
 /*
 je_graphic_pipeline_builtin_uniform_slots [基本接口]
 返回 pipeline 缓存的内建 uniform 位置表；指针由 pipeline 持有，生命周期同 pipeline。
 */
-JE_API const jegl_builtin_uniform_slots* /* NOT NULL */
-je_graphic_pipeline_builtin_uniform_slots(jegl_pipeline* pipeline);
+JE_API const je_gl_builtin_uniform_slots_t* /* NOT NULL */
+je_graphic_pipeline_builtin_uniform_slots(je_gl_pipeline_t* pipeline);
 
 /*
-jegl_filter / jegl_mip_filter [类型]
+je_gl_filter_t / je_gl_mip_filter_t [类型]
 采样器的缩小/放大过滤与 mipmap 过滤模式
 */
-enum class jegl_filter : uint8_t
+enum class je_gl_filter_t : uint8_t
 {
     NEAREST,
     LINEAR,
 };
 
-enum class jegl_mip_filter : uint8_t
+enum class je_gl_mip_filter_t : uint8_t
 {
     NEAREST,
     LINEAR,
 };
 
 /*
-jegl_wrap_mode [类型]
+je_gl_wrap_mode_t [类型]
 采样器在 U/V/W 方向上的寻址模式
 */
-enum class jegl_wrap_mode : uint8_t
+enum class je_gl_wrap_mode_t : uint8_t
 {
     CLAMP_TO_EDGE,
     REPEAT,
@@ -4740,21 +4808,21 @@ enum class jegl_wrap_mode : uint8_t
 };
 
 /*
-jegl_sampler_desc [类型]
+je_gl_sampler_desc_t [类型]
 独立采样器的创建描述，所有字段都必须显式初始化
     * 未通过 je_graphic_cmd_bind_sampler 显式绑定时，使用 shader 声明的默认采样器
 请参见：
     je_graphic_sampler_create
 */
-struct jegl_sampler_desc
+typedef struct je_gl_sampler_desc_t
 {
-    jegl_filter m_min_filter;
-    jegl_filter m_mag_filter;
-    jegl_mip_filter m_mip_filter;
-    jegl_wrap_mode m_u_wrap;
-    jegl_wrap_mode m_v_wrap;
-    jegl_wrap_mode m_w_wrap;
-};
+    je_gl_filter_t m_min_filter;
+    je_gl_filter_t m_mag_filter;
+    je_gl_mip_filter_t m_mip_filter;
+    je_gl_wrap_mode_t m_u_wrap;
+    je_gl_wrap_mode_t m_v_wrap;
+    je_gl_wrap_mode_t m_w_wrap;
+} je_gl_sampler_desc_t;
 
 /*
 je_graphic_sampler_create [基本接口]
@@ -4762,12 +4830,12 @@ je_graphic_sampler_create [基本接口]
     * 返回的采样器持有引用计数，需要使用 je_graphic_sampler_close 减少引用计数
     * 未通过 je_graphic_cmd_bind_sampler 显式绑定时，使用 shader 声明的默认采样器
 请参见：
-    jegl_sampler_desc
+    je_gl_sampler_desc_t
     je_graphic_sampler_close
     je_graphic_cmd_bind_sampler
 */
-JE_API jegl_sampler* /* NOT NULL */ je_graphic_sampler_create(
-    jegl_context* context, const jegl_sampler_desc* desc);
+JE_API je_gl_sampler_t* /* NOT NULL */ je_graphic_sampler_create(
+    je_gl_context_t* context, const je_gl_sampler_desc_t* desc);
 
 /*
 je_graphic_sampler_close [基本接口]
@@ -4779,10 +4847,10 @@ je_graphic_sampler_close [基本接口]
     je_graphic_sampler_create
     jegl_share_resource
 */
-JE_API void je_graphic_sampler_close(jegl_sampler* sampler);
+JE_API void je_graphic_sampler_close(je_gl_sampler_t* sampler);
 
 /*
-jegl_command_buffer [类型]
+je_gl_command_buffer_t [类型]
 在任意线程录制、在图形线程提交的绘制命令缓冲区。
     * reset 后可以重复使用；begin_pass 之前不需要额外的 begin
     * commit 只允许在创建时指定的图形线程中调用
@@ -4799,8 +4867,8 @@ je_graphic_cmd_create [基本接口]
     je_graphic_cmd_reset
     je_graphic_cmd_commit
 */
-JE_API jegl_command_buffer* /* NOT NULL */ je_graphic_cmd_create(
-    jegl_context* context);
+JE_API je_gl_command_buffer_t* /* NOT NULL */ je_graphic_cmd_create(
+    je_gl_context_t* context);
 
 /*
 je_graphic_cmd_close [基本接口]
@@ -4809,7 +4877,7 @@ je_graphic_cmd_close [基本接口]
 请参见：
     je_graphic_cmd_create
 */
-JE_API void je_graphic_cmd_close(jegl_command_buffer* cmd);
+JE_API void je_graphic_cmd_close(je_gl_command_buffer_t* cmd);
 
 /*
 je_graphic_cmd_reset [基本接口]
@@ -4819,7 +4887,7 @@ je_graphic_cmd_reset [基本接口]
     je_graphic_cmd_create
     je_graphic_cmd_commit
 */
-JE_API void je_graphic_cmd_reset(jegl_command_buffer* cmd);
+JE_API void je_graphic_cmd_reset(je_gl_command_buffer_t* cmd);
 
 /*
 je_graphic_cmd_get_context [基本接口]
@@ -4829,8 +4897,8 @@ je_graphic_cmd_get_context [基本接口]
     je_graphic_cmd_create
     je_graphic_cmd_commit
 */
-JE_API jegl_context* /* NOT NULL */ je_graphic_cmd_get_context(
-    jegl_command_buffer* cmd);
+JE_API je_gl_context_t* /* NOT NULL */ je_graphic_cmd_get_context(
+    je_gl_command_buffer_t* cmd);
 
 /*
 je_graphic_cmd_begin_pass [基本接口]
@@ -4839,18 +4907,18 @@ je_graphic_cmd_begin_pass [基本接口]
     * viewport 的 width/height 必须大于 0
 */
 JE_API void je_graphic_cmd_begin_pass(
-    jegl_command_buffer* cmd,
-    /* OPTIONAL: nullptr 表示屏幕后备缓冲区 */ jegl_frame_buffer* target,
-    const jegl_viewport* viewport);
+    je_gl_command_buffer_t* cmd,
+    /* OPTIONAL: nullptr 表示屏幕后备缓冲区 */ je_gl_frame_buffer_t* target,
+    const je_gl_viewport_t* viewport);
 
 /*
 je_graphic_cmd_clear_color / je_graphic_cmd_clear_depth [基本接口]
 只能在 begin_pass 之后、该 pass 的第一次 draw 之前调用。
 */
 JE_API void je_graphic_cmd_clear_color(
-    jegl_command_buffer* cmd, uint32_t attachment, const float rgba[4]);
+    je_gl_command_buffer_t* cmd, uint32_t attachment, const float rgba[4]);
 JE_API void je_graphic_cmd_clear_depth(
-    jegl_command_buffer* cmd, float depth);
+    je_gl_command_buffer_t* cmd, float depth);
 
 /*
 je_graphic_cmd_end_pass [基本接口]
@@ -4860,7 +4928,7 @@ je_graphic_cmd_end_pass [基本接口]
     je_graphic_cmd_begin_pass
     je_graphic_cmd_commit
 */
-JE_API void je_graphic_cmd_end_pass(jegl_command_buffer* cmd);
+JE_API void je_graphic_cmd_end_pass(je_gl_command_buffer_t* cmd);
 
 /*
 je_graphic_cmd_bind_pipeline [基本接口]
@@ -4873,7 +4941,7 @@ je_graphic_cmd_bind_pipeline [基本接口]
     je_graphic_cmd_set_uniform
 */
 JE_API void je_graphic_cmd_bind_pipeline(
-    jegl_command_buffer* cmd, jegl_pipeline* pipeline);
+    je_gl_command_buffer_t* cmd, je_gl_pipeline_t* pipeline);
 
 /*
 je_graphic_cmd_bind_vertex [基本接口]
@@ -4885,7 +4953,7 @@ je_graphic_cmd_bind_vertex [基本接口]
     je_graphic_cmd_draw_indexed
 */
 JE_API void je_graphic_cmd_bind_vertex(
-    jegl_command_buffer* cmd, jegl_vertex* vertex);
+    je_gl_command_buffer_t* cmd, je_gl_vertex_t* vertex);
 
 /*
 je_graphic_cmd_bind_uniform_buffer [基本接口]
@@ -4897,50 +4965,50 @@ je_graphic_cmd_bind_uniform_buffer [基本接口]
     je_graphic_uniformbuf_update
 */
 JE_API void je_graphic_cmd_bind_uniform_buffer(
-    jegl_command_buffer* cmd, jegl_uniform_buffer* buffer);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_buffer_t* buffer);
 
 /*
 je_graphic_cmd_bind_texture_2d / je_graphic_cmd_bind_texture_3d / je_graphic_cmd_bind_texture_array /
 je_graphic_cmd_bind_texture_cube [基本接口]
 将指定类别的纹理绑定到 shader 的纹理声明（pass）上
     * 必须在 pass 内调用
-    * pass 取自 shader 反射（jegl_shader::m_sampler_methods）
+    * pass 取自 shader 反射（je_gl_shader_t::m_sampler_methods）
     * 同一 pass 重复绑定会覆盖此前的纹理
 请参见：
     je_graphic_cmd_bind_sampler
-    jegl_shader
+    je_gl_shader_t
 */
 JE_API void je_graphic_cmd_bind_texture_2d(
-    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_2d* texture);
+    je_gl_command_buffer_t* cmd, uint32_t pass, je_gl_texture_2d_t* texture);
 JE_API void je_graphic_cmd_bind_texture_3d(
-    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_3d* texture);
+    je_gl_command_buffer_t* cmd, uint32_t pass, je_gl_texture_3d_t* texture);
 JE_API void je_graphic_cmd_bind_texture_array(
-    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_array* texture);
+    je_gl_command_buffer_t* cmd, uint32_t pass, je_gl_texture_array_t* texture);
 JE_API void je_graphic_cmd_bind_texture_cube(
-    jegl_command_buffer* cmd, uint32_t pass, jegl_texture_cube* texture);
+    je_gl_command_buffer_t* cmd, uint32_t pass, je_gl_texture_cube_t* texture);
 
 /*
 je_graphic_cmd_bind_sampler [基本接口]
 为指定的采样器声明绑定独立采样器
     * 必须在 pass 内且已绑定 pipeline 后调用
-    * sampler_id 取自 shader 反射（jegl_shader::m_sampler_methods）
+    * sampler_id 取自 shader 反射（je_gl_shader_t::m_sampler_methods）
     * 未绑定采样器的声明使用 shader 的默认采样器
 请参见：
     je_graphic_sampler_create
     je_graphic_cmd_bind_texture_2d
 */
 JE_API void je_graphic_cmd_bind_sampler(
-    jegl_command_buffer* cmd, uint32_t sampler_id, jegl_sampler* sampler);
+    je_gl_command_buffer_t* cmd, uint32_t sampler_id, je_gl_sampler_t* sampler);
 
 /*
 je_graphic_cmd_set_uniform [基本接口]
 设置当前 pipeline 的 per-draw uniform。
     * 必须先绑定 pipeline
-    * slot.m_offset 不得为 JEGL_UNIFORM_SLOT_NONE
+    * slot.m_offset 不得为 JE_GL_UNIFORM_SLOT_NONE
     * size 必须等于 slot.m_size；原始接口要求 data 非空
 */
 JE_API void je_graphic_cmd_set_uniform(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot,
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot,
     const void* data, uint32_t size);
 
 /*
@@ -4953,13 +5021,13 @@ je_graphic_cmd_set_uniform_float3 / je_graphic_cmd_set_uniform_float4 [基本接
     je_graphic_cmd_set_uniform
 */
 JE_API void je_graphic_cmd_set_uniform_float(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, float value);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, float value);
 JE_API void je_graphic_cmd_set_uniform_float2(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, float x, float y);
 JE_API void je_graphic_cmd_set_uniform_float3(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y, float z);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, float x, float y, float z);
 JE_API void je_graphic_cmd_set_uniform_float4(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, float x, float y, float z, float w);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, float x, float y, float z, float w);
 
 /*
 je_graphic_cmd_set_uniform_int / je_graphic_cmd_set_uniform_int2 /
@@ -4971,13 +5039,13 @@ je_graphic_cmd_set_uniform_int3 / je_graphic_cmd_set_uniform_int4 [基本接口]
     je_graphic_cmd_set_uniform
 */
 JE_API void je_graphic_cmd_set_uniform_int(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, int value);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, int value);
 JE_API void je_graphic_cmd_set_uniform_int2(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, int x, int y);
 JE_API void je_graphic_cmd_set_uniform_int3(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y, int z);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, int x, int y, int z);
 JE_API void je_graphic_cmd_set_uniform_int4(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, int x, int y, int z, int w);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, int x, int y, int z, int w);
 
 /*
 je_graphic_cmd_set_uniform_float2x2 / je_graphic_cmd_set_uniform_float3x3 /
@@ -4991,11 +5059,11 @@ je_graphic_cmd_set_uniform_float4x4 [基本接口]
     je_graphic_cmd_set_uniform
 */
 JE_API void je_graphic_cmd_set_uniform_float2x2(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[2]);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, const float (*mat)[2]);
 JE_API void je_graphic_cmd_set_uniform_float3x3(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[3]);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, const float (*mat)[3]);
 JE_API void je_graphic_cmd_set_uniform_float4x4(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[4]);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, const float (*mat)[4]);
 
 /*
 je_graphic_cmd_draw_indexed / je_graphic_cmd_draw [基本接口]
@@ -5004,10 +5072,10 @@ je_graphic_cmd_draw_indexed / je_graphic_cmd_draw [基本接口]
     * 索引类型固定为 uint32_t
 */
 JE_API void je_graphic_cmd_draw_indexed(
-    jegl_command_buffer* cmd,
+    je_gl_command_buffer_t* cmd,
     uint32_t index_count, uint32_t first_index, uint32_t instance_count);
 JE_API void je_graphic_cmd_draw(
-    jegl_command_buffer* cmd,
+    je_gl_command_buffer_t* cmd,
     uint32_t vertex_count, uint32_t first_vertex, uint32_t instance_count);
 
 /*
@@ -5016,16 +5084,16 @@ je_graphic_cmd_commit [基本接口]
     * 若仍有未结束的 pass，commit 会自动结束它
     * 提交完成后命令缓冲区保留已录制的命令，需要复用请先调用 je_graphic_cmd_reset
 */
-JE_API void je_graphic_cmd_commit(jegl_command_buffer* cmd);
+JE_API void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd);
 
 /*
 je_graphic_branch_new_command_buffer [基本接口]
 从绘制组申请一个已经 reset 的命令缓冲区；屏幕目标传 nullptr。
 */
-JE_API jegl_command_buffer* /* NOT NULL */ je_graphic_branch_new_command_buffer(
-    je_RenderBranch* branch,
-    /* OPTIONAL: nullptr 表示屏幕 */ jegl_frame_buffer* framebuffer,
-    const jegl_viewport* viewport);
+JE_API je_gl_command_buffer_t* /* NOT NULL */ je_graphic_branch_new_command_buffer(
+    je_render_branch_t* branch,
+    /* OPTIONAL: nullptr 表示屏幕 */ je_gl_frame_buffer_t* framebuffer,
+    const je_gl_viewport_t* viewport);
 
 /*
 je_graphic_uhost_get_or_create_for_universe [基本接口]
@@ -5039,16 +5107,16 @@ je_graphic_uhost_get_or_create_for_universe [基本接口]
     je_graphic_thread_reboot
     je_ecs_universe_exit_callback_register
 */
-JE_API je_GraphicUhost* je_graphic_uhost_get_or_create_for_universe(
-    je_GameUniverse* universe,
-    /* OPTIONAL: nullptr to use default config */ const jegl_interface_config* config);
+JE_API je_graphic_uhost_t* je_graphic_uhost_get_or_create_for_universe(
+    je_game_universe_t* universe,
+    /* OPTIONAL: nullptr to use default config */ const je_gl_interface_config_t* config);
 
 /*
 je_graphic_uhost_get_context [基本接口]
 从指定的可编程图形上下文接口获取图形线程的正式描述符
 */
-JE_API /* OPTIONAL: If graphic thread failed to start up */ jegl_context* je_graphic_uhost_get_context(
-    je_GraphicUhost* host);
+JE_API /* OPTIONAL: If graphic thread failed to start up */ je_gl_context_t* je_graphic_uhost_get_context(
+    je_graphic_uhost_t* host);
 
 /*
 je_graphic_uhost_set_skip_behavior [基本接口]
@@ -5057,7 +5125,7 @@ je_graphic_uhost_set_skip_behavior [基本接口]
     * uhost 实例创建时默认为真
 */
 JE_API void je_graphic_uhost_set_skip_behavior(
-    je_GraphicUhost* host, bool skip_all_draw);
+    je_graphic_uhost_t* host, bool skip_all_draw);
 
 /*
 je_graphic_uhost_alloc_branch [基本接口]
@@ -5066,26 +5134,24 @@ je_graphic_uhost_alloc_branch [基本接口]
 请参见：
     je_graphic_uhost_free_branch
 */
-JE_API je_RenderBranch* je_graphic_uhost_alloc_branch(
-    je_GraphicUhost* host);
+JE_API je_render_branch_t* je_graphic_uhost_alloc_branch(
+    je_graphic_uhost_t* host);
 
 /*
 je_graphic_uhost_free_branch [基本接口]
 从指定的可编程图形上下文接口释放一个绘制组
 */
 JE_API void je_graphic_uhost_free_branch(
-    je_GraphicUhost* host,
-    je_RenderBranch* free_branch);
+    je_graphic_uhost_t* host,
+    je_render_branch_t* free_branch);
 
 /*
 je_graphic_branch_new_frame [基本接口]
 在绘制开始之前，指示绘制组开始新的一帧，并指定优先级
 */
 JE_API void je_graphic_branch_new_frame(
-    je_RenderBranch* branch,
+    je_render_branch_t* branch,
     int priority);
-
-
 
 /*
 je_gui_backend_font_set [基本接口]
@@ -5102,9 +5168,9 @@ JE_API void je_gui_backend_font_set(
     /* OPTIONAL */ const char* latin_font_path,
     size_t size);
 
-typedef uint64_t jegui_user_image_handle_t;
-typedef jegui_user_image_handle_t(*jegui_user_image_loader_t)(jegl_context*, jegl_texture_2d*);
-typedef void  (*jegui_user_sampler_loader_t)(jegl_context*, jegl_shader*);
+typedef uint64_t je_gui_user_image_handle_t;
+typedef je_gui_user_image_handle_t(*je_gui_user_image_loader_t)(je_gl_context_t*, je_gl_texture_2d_t*);
+typedef void  (*je_gui_user_sampler_loader_t)(je_gl_context_t*, je_gl_shader_t*);
 
 /*
 je_gui_backend_init [基本接口]
@@ -5115,11 +5181,11 @@ je_gui_backend_init [基本接口]
     * 此接口仅适合用于对接自定义渲染API时使用
 */
 JE_API void je_gui_backend_init(
-    jegl_context* gl_context,
-    jegui_user_image_loader_t get_img_res,
-    jegui_user_sampler_loader_t apply_shader_sampler);
+    je_gl_context_t* gl_context,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler);
 
-typedef void (*jegui_platform_draw_callback_t)(void*);
+typedef void (*je_gui_platform_draw_callback_t)(void*);
 
 /*
 je_gui_backend_update [基本接口]
@@ -5127,7 +5193,7 @@ je_gui_backend_update [基本接口]
     * 此接口仅适合用于对接自定义渲染API时使用
 */
 JE_API void je_gui_backend_update(
-    jegui_platform_draw_callback_t platform_draw_callback,
+    je_gui_platform_draw_callback_t platform_draw_callback,
     /* OPTIONAL */ void* data);
 
 /*
@@ -5149,7 +5215,7 @@ JE_API bool je_gui_backend_shutdown_callback(void);
 je_io_key_state_update [基本接口]
 更新指定键的状态信息
 */
-JE_API void je_io_key_state_update(je_Keycode je_Keycode, bool keydown);
+JE_API void je_io_key_state_update(je_keycode_t keycode, bool keydown);
 
 /*
 je_io_mouse_pos_update [基本接口]
@@ -5162,7 +5228,7 @@ JE_API void je_io_mouse_pos_update(size_t group, int x, int y);
 je_io_mouse_state_update [基本接口]
 更新鼠标（或触摸点）的状态
 */
-JE_API void je_io_mouse_state_update(size_t group, je_Mousecode key, bool keydown);
+JE_API void je_io_mouse_state_update(size_t group, je_mousecode_t key, bool keydown);
 
 /*
 je_io_window_size_update [基本接口]
@@ -5188,7 +5254,7 @@ JE_API void je_io_wheel_update(size_t group, float x, float y);
 je_io_key_down_get [基本接口]
 获取指定的按键是否被按下
 */
-JE_API bool je_io_key_down_get(je_Keycode je_Keycode);
+JE_API bool je_io_key_down_get(je_keycode_t keycode);
 
 /*
 je_io_mouse_pos_get [基本接口]
@@ -5200,7 +5266,7 @@ JE_API void je_io_mouse_pos_get(size_t group, int* out_x, int* out_y);
 je_io_mouse_state_get [基本接口]
 获取鼠标的按键状态
 */
-JE_API bool je_io_mouse_state_get(size_t group, je_Mousecode key);
+JE_API bool je_io_mouse_state_get(size_t group, je_mousecode_t key);
 
 /*
 je_io_window_size_get [基本接口]
@@ -5260,7 +5326,7 @@ JE_API bool je_io_window_title_fetch_update(const char** out_title);
 je_io_gamepad_handle_t [类型]
 指示虚拟手柄实例
 */
-typedef struct _je_gamepad_state* je_io_gamepad_handle_t;
+typedef struct je_gamepad_state_t* je_io_gamepad_handle_t;
 
 /*
 je_io_gamepad_create [基本接口]
@@ -5316,7 +5382,7 @@ je_io_gamepad_is_active [基本接口]
 */
 JE_API bool je_io_gamepad_is_active(
     je_io_gamepad_handle_t gamepad,
-    /* OPTIONAL */ je_TimestampMs* out_last_pushed_time_may_null);
+    /* OPTIONAL */ je_timestamp_ms_t* out_last_pushed_time_may_null);
 /*
 je_io_gamepad_button_down_get [基本接口]
 获取指定虚拟手柄的指定按键是否被按下
@@ -5327,7 +5393,7 @@ je_io_gamepad_button_down_get [基本接口]
     je_io_gamepad_close
 */
 JE_API bool je_io_gamepad_button_down_get(
-    je_io_gamepad_handle_t gamepad, je_Gamepadcode code);
+    je_io_gamepad_handle_t gamepad, je_gamepadcode_t code);
 /*
 je_io_gamepad_button_state_update [基本接口]
 更新指定的虚拟手柄按键状态，可以被 je_io_gamepad_button_down_get 获取
@@ -5339,7 +5405,7 @@ je_io_gamepad_button_state_update [基本接口]
     je_io_gamepad_close
 */
 JE_API void je_io_gamepad_button_state_update(
-    je_io_gamepad_handle_t gamepad, je_Gamepadcode code, bool down);
+    je_io_gamepad_handle_t gamepad, je_gamepadcode_t code, bool down);
 
 /*
 je_io_gamepad_stick_get [基本接口]
@@ -5352,7 +5418,7 @@ je_io_gamepad_stick_get [基本接口]
     je_io_gamepad_close
 */
 JE_API void je_io_gamepad_stick_get(
-    je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float* out_x, float* out_y);
+    je_io_gamepad_handle_t gamepad, je_joystickcode_t stickid, float* out_x, float* out_y);
 /*
 je_io_gamepad_stick_update [基本接口]
 更新指定虚拟手柄的指定摇杆的坐标
@@ -5366,7 +5432,7 @@ je_io_gamepad_stick_update [基本接口]
     je_io_gamepad_close
 */
 JE_API void je_io_gamepad_stick_update(
-    je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float x, float y);
+    je_io_gamepad_handle_t gamepad, je_joystickcode_t stickid, float x, float y);
 
 /*
 je_io_gamepad_stick_deadzone_set [基本接口]
@@ -5375,7 +5441,7 @@ je_io_gamepad_stick_deadzone_set [基本接口]
     * 当设置摇杆的坐标（je_io_gamepad_stick_update）时，如果坐标的模长小于死区，则坐标将被视为0
 */
 JE_API void je_io_gamepad_stick_deadzone_set(
-    je_io_gamepad_handle_t gamepad, je_Joystickcode stickid, float deadzone);
+    je_io_gamepad_handle_t gamepad, je_joystickcode_t stickid, float deadzone);
 
 // Library / Module loader
 
@@ -5398,23 +5464,23 @@ je_module_unload [基本接口]
 JE_API void je_module_unload(woort_Dylib* lib);
 
 // Audio
-struct jeal_native_play_device_instance;
-struct jeal_play_device
+typedef struct je_audio_native_play_device_instance_t je_audio_native_play_device_instance_t;
+typedef struct je_audio_play_device_t
 {
-    jeal_native_play_device_instance*
+    je_audio_native_play_device_instance_t*
         m_device_instance;
 
     const char* m_name;        // 设备名称，实现保证唯一性
     bool m_active;             // 是否是当前使用的播放设备
     bool m_is_default;         // 是否是默认播放设备
     int m_max_auxiliary_sends; // 最大辅助发送数量，如果等于0，则不支持
-};
+} je_audio_play_device_t;
 
 /*
-jeal_state [类型]
+je_audio_state_t [类型]
 用于表示当前声源的播放状态，包括停止、播放中和暂停
 */
-enum jeal_state
+enum je_audio_state_t
 {
     JE_AUDIO_STATE_STOPPED,
     JE_AUDIO_STATE_PLAYING,
@@ -5422,10 +5488,10 @@ enum jeal_state
 };
 
 /*
-jeal_format [类型]
+je_audio_format_t [类型]
 用于表示波形的格式
 */
-enum jeal_format
+enum je_audio_format_t
 {
     JE_AUDIO_FORMAT_MONO8,
     JE_AUDIO_FORMAT_MONO16,
@@ -5435,10 +5501,10 @@ enum jeal_format
     JE_AUDIO_FORMAT_STEREO32F,
 };
 
-struct jeal_native_buffer_instance;
-struct jeal_buffer
+typedef struct je_audio_native_buffer_instance_t je_audio_native_buffer_instance_t;
+typedef struct je_audio_buffer_t
 {
-    jeal_native_buffer_instance*
+    je_audio_native_buffer_instance_t*
         m_buffer_instance;
 
     mutable size_t m_references; // 引用计数
@@ -5448,13 +5514,13 @@ struct jeal_buffer
     size_t m_sample_rate;
     size_t m_sample_size;
     size_t m_byte_rate;
-    jeal_format m_format;
-};
+    je_audio_format_t m_format;
+} je_audio_buffer_t;
 
-struct jeal_native_source_instance;
-struct jeal_source
+typedef struct je_audio_native_source_instance_t je_audio_native_source_instance_t;
+typedef struct je_audio_source_t
 {
-    jeal_native_source_instance*
+    je_audio_native_source_instance_t*
         m_source_instance;
 
     bool m_loop;         // 是否循环播放
@@ -5462,9 +5528,9 @@ struct jeal_source
     float m_pitch;       // 播放速度
     float m_location[3]; // 声音位置
     float m_velocity[3]; // 声源自身速度（非播放速度）
-};
+} je_audio_source_t;
 
-struct jeal_listener
+typedef struct je_audio_listener_t
 {
     float m_gain;        // 音量增益，最终起效的是 m_gain * m_global_gain
     float m_global_gain; // 全局增益，最终起效的是 m_gain * m_global_gain
@@ -5472,25 +5538,25 @@ struct jeal_listener
     float m_velocity[3]; // 监听器自身速度（非播放速度）
     float m_forward[3];  // 监听器朝向（前方向）
     float m_upward[3];   // 监听器朝向（顶方向）
-};
+} je_audio_listener_t;
 
-struct jeal_native_effect_slot_instance;
-struct jeal_effect_slot
+typedef struct je_audio_native_effect_slot_instance_t je_audio_native_effect_slot_instance_t;
+typedef struct je_audio_effect_slot_t
 {
-    jeal_native_effect_slot_instance*
+    je_audio_native_effect_slot_instance_t*
         m_effect_slot_instance;
 
     size_t m_references; // 引用计数
 
     float m_gain; // 增益，默认值为 1.0，范围 [0.0, 1.0]
-};
+} je_audio_effect_slot_t;
 
 /*
-jeal_effect_reverb [类型]
+je_audio_effect_reverb_t [类型]
 混响效果
 模拟声音在封闭空间（如房间、大厅）中的反射效果，增加空间感。
 */
-struct jeal_effect_reverb
+typedef struct je_audio_effect_reverb_t
 {
     float m_density;                // 密度, 默认值为 1.0，范围 [0.0, 1.0]
     float m_diffusion;              // 扩散度, 默认值为 1.0，范围 [0.0, 1.0]
@@ -5505,208 +5571,232 @@ struct jeal_effect_reverb
     float m_air_absorption_gain_hf; // 高频吸收, 默认值为 0.994，范围 [0.892, 1.0]
     float m_room_rolloff_factor;    // 房间衰减因子, 默认值为 0.0，范围 [0.0, 10.0]
     bool m_decay_hf_limit;          // 高频衰减限制器, 默认值为 false
-};
+} je_audio_effect_reverb_t;
 
 /*
-jeal_effect_chorus [类型]
+je_audio_effect_chorus_waveform_t [枚举]
+合唱效果的波形类型
+*/
+typedef enum je_audio_effect_chorus_waveform_t
+{
+    JE_AUDIO_EFFECT_CHORUS_WAVEFORM_SINUSOID = 0,
+    JE_AUDIO_EFFECT_CHORUS_WAVEFORM_TRIANGLE = 1,
+} je_audio_effect_chorus_waveform_t;
+
+/*
+je_audio_effect_chorus_t [类型]
 合唱效果
 通过轻微延迟和音高变化复制原始声音，产生多个声部同时发声的合唱效果。
 */
-struct jeal_effect_chorus
+typedef struct je_audio_effect_chorus_t
 {
-    enum waveform
-    {
-        SINUSOID = 0,
-        TRIANGLE = 1,
-    };
-
-    waveform m_waveform; // 波形类型，默认值为 SINUSOID
+    je_audio_effect_chorus_waveform_t m_waveform; // 波形类型，默认值为 SINUSOID
     int m_phase;         // 相位，默认值为 90，范围 [-180, 180]
     float m_rate;        // 速率，默认值为 1.1，范围 [0.0, 10.0]
     float m_depth;       // 深度，默认值为 0.1，范围 [0.0, 1.0]
     float m_feedback;    // 反馈，默认值为 0.25，范围 [-1.0, 1.0]
     float m_delay;       // 延迟，默认值为 0.16，范围 [0.0, 0.016]
-};
+} je_audio_effect_chorus_t;
 
 /*
-jeal_effect_distortion [类型]
+je_audio_effect_distortion_t [类型]
 失真效果
 故意扭曲音频波形，常见于电吉他等乐器，制造粗糙或过载的音色。
 */
-struct jeal_effect_distortion
+typedef struct je_audio_effect_distortion_t
 {
     float m_edge;                  // 边缘，默认值为 0.2，范围 [0.0, 1.0]
     float m_gain;                  // 增益，默认值为 0.05，范围 [0.01, 1.0]
     float m_lowpass_cutoff;        // 低通截止频率，默认值为 8000.0，范围 [80.0, 24000.0]
     float m_equalizer_center_freq; // 均衡器中心频率，默认值为 3600.0，范围 [80.0, 24000.0]
     float m_equalizer_bandwidth;   // 均衡器带宽，默认值为 3600.0，范围 [80.0, 24000.0]
-};
+} je_audio_effect_distortion_t;
 
 /*
-jeal_effect_echo [类型]
+je_audio_effect_echo_t [类型]
 回声效果
 模拟声音在远处反射后延迟返回的效果（如山谷中的回声）。
 */
-struct jeal_effect_echo
+typedef struct je_audio_effect_echo_t
 {
     float m_delay;    // 延迟时间，默认值为 0.1，范围 [0.0, 0.207]
     float m_lr_delay; // 左声道延迟，默认值为 0.1，范围 [0.0, 0.404]
     float m_damping;  // 阻尼，默认值为 0.5，范围 [0.0, 0.99]
     float m_feedback; // 反馈，默认值为 0.5，范围 [0.0, 1.0]
     float m_spread;   // 扩散，默认值为 -1.0，范围 [-1.0, 1.0]
-};
+} je_audio_effect_echo_t;
 
 /*
-jeal_effect_flanger [类型]
+je_audio_effect_flanger_waveform_t [类型别名]
+镶边效果使用与合唱效果相同的波形类型
+*/
+typedef je_audio_effect_chorus_waveform_t je_audio_effect_flanger_waveform_t;
+
+/*
+je_audio_effect_flanger_t [类型]
 镶边效果
 通过混合延迟时间变化的原始信号，产生类似“喷气机”或太空感的波动音效
 */
-struct jeal_effect_flanger
+typedef struct je_audio_effect_flanger_t
 {
-    typedef jeal_effect_chorus::waveform waveform;
-
-    waveform m_waveform; // 波形类型，默认值为 TRIANGLE
+    je_audio_effect_flanger_waveform_t m_waveform; // 波形类型，默认值为 TRIANGLE
     int m_phase;         // 相位，默认值为 0，范围 [-180, 180]
     float m_rate;        // 速率，默认值为 0.27，范围 [0.0, 10.0]
     float m_depth;       // 深度，默认值为 1.0，范围 [0.0, 1.0]
     float m_feedback;    // 反馈，默认值为 -0.5，范围 [-1.0, 1.0]
     float m_delay;       // 延迟，默认值为 0.002，范围 [0.0, 0.004]
-};
+} je_audio_effect_flanger_t;
 
 /*
-jeal_effect_frequency_shifter [类型]
+je_audio_effect_frequency_shifter_direction_t [枚举]
+移频器的方向
+*/
+typedef enum je_audio_effect_frequency_shifter_direction_t
+{
+    JE_AUDIO_EFFECT_FREQUENCY_SHIFTER_DIRECTION_DOWN = 0,
+    JE_AUDIO_EFFECT_FREQUENCY_SHIFTER_DIRECTION_UP = 1,
+    JE_AUDIO_EFFECT_FREQUENCY_SHIFTER_DIRECTION_OFF = 2,
+} je_audio_effect_frequency_shifter_direction_t;
+
+/*
+je_audio_effect_frequency_shifter_t [类型]
 移频器
 改变输入信号的频率，用于创造科幻或非自然的声音效果。
 */
-struct jeal_effect_frequency_shifter
+typedef struct je_audio_effect_frequency_shifter_t
 {
-    enum direction
-    {
-        DOWN = 0,
-        UP = 1,
-        OFF = 2,
-    };
-
     float m_frequency;           // 频率，默认值为 0.0，范围 [0.0, 24000.0]
-    direction m_left_direction;  // 左声道方向，默认值为 DOWN
-    direction m_right_direction; // 右声道方向，默认值为 DOWN
-};
+    je_audio_effect_frequency_shifter_direction_t m_left_direction;  // 左声道方向，默认值为 DOWN
+    je_audio_effect_frequency_shifter_direction_t m_right_direction; // 右声道方向，默认值为 DOWN
+} je_audio_effect_frequency_shifter_t;
 
 /*
-jeal_effect_vocal_morpher [类型]
+je_audio_effect_vocal_morpher_phoneme_t [枚举]
+人声变声器的元音音素
+*/
+typedef enum je_audio_effect_vocal_morpher_phoneme_t
+{
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_A = 0,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_E,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_I,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_O,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_U,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_AA,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_AE,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_AH,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_AO,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_EH,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_ER,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_IH,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_IY,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_UH,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_UW,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_B,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_D,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_F,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_G,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_J,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_K,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_L,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_M,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_N,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_P,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_R,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_S,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_T,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_V,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_PHONEME_Z,
+} je_audio_effect_vocal_morpher_phoneme_t;
+
+/*
+je_audio_effect_vocal_morpher_waveform_t [枚举]
+人声变声器的波形类型
+*/
+typedef enum je_audio_effect_vocal_morpher_waveform_t
+{
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_WAVEFORM_SINUSOID = 0,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_WAVEFORM_TRIANGLE = 1,
+    JE_AUDIO_EFFECT_VOCAL_MORPHER_WAVEFORM_SAWTOOTH = 2,
+} je_audio_effect_vocal_morpher_waveform_t;
+
+/*
+je_audio_effect_vocal_morpher_t [类型]
 人声变声器
 调制人声的某些频段，实现机器人声、电话音效等特殊变声效果。
 */
-struct jeal_effect_vocal_morpher
+typedef struct je_audio_effect_vocal_morpher_t
 {
-    enum phoneme
-    {
-        A = 0,
-        E,
-        I,
-        O,
-        U,
-        AA,
-        AE,
-        AH,
-        AO,
-        EH,
-        ER,
-        IH,
-        IY,
-        UH,
-        UW,
-        B,
-        D,
-        F,
-        G,
-        J,
-        K,
-        L,
-        M,
-        N,
-        P,
-        R,
-        S,
-        T,
-        V,
-        Z,
-    };
-
-    enum waveform
-    {
-        SINUSOID = 0,
-        TRIANGLE = 1,
-        SAWTOOTH = 2,
-    };
-
-    phoneme m_phoneme_a;           // 元音a，默认值为 A
+    je_audio_effect_vocal_morpher_phoneme_t m_phoneme_a;           // 元音a，默认值为 A
     int m_phoneme_a_coarse_tuning; // 元音a粗调，默认值为 0，范围 [-24, 24]
-    phoneme m_phoneme_b;           // 元音b，默认值为 ER
+    je_audio_effect_vocal_morpher_phoneme_t m_phoneme_b;           // 元音b，默认值为 ER
     int m_phoneme_b_coarse_tuning; // 元音b粗调，默认值为 0，范围 [-24, 24]
-    waveform m_waveform;           // 波形类型，默认值为 SINUSOID
+    je_audio_effect_vocal_morpher_waveform_t m_waveform;           // 波形类型，默认值为 SINUSOID
     float m_rate;                  // 速率，默认值为 1.41，范围 [0.0, 10.0]
-};
+} je_audio_effect_vocal_morpher_t;
 
 /*
-jeal_effect_pitch_shifter [类型]
+je_audio_effect_pitch_shifter_t [类型]
 移调器
 实时调整音高（如升高或降低音调），不改变播放速度。
 */
-struct jeal_effect_pitch_shifter
+typedef struct je_audio_effect_pitch_shifter_t
 {
     int m_coarse_tune; // 粗调，默认值为 12，范围 [-12, 12]
     int m_fine_tune;   // 细调，默认值为 0，范围 [-50, 50]
-};
+} je_audio_effect_pitch_shifter_t;
 
 /*
-jeal_effect_ring_modulator [类型]
+je_audio_effect_ring_modulator_waveform_t [枚举]
+环形调制器的波形类型
+*/
+typedef enum je_audio_effect_ring_modulator_waveform_t
+{
+    JE_AUDIO_EFFECT_RING_MODULATOR_WAVEFORM_SINUSOID = 0,
+    JE_AUDIO_EFFECT_RING_MODULATOR_WAVEFORM_SAWTOOTH = 1,
+    JE_AUDIO_EFFECT_RING_MODULATOR_WAVEFORM_SQUARE = 2,
+} je_audio_effect_ring_modulator_waveform_t;
+
+/*
+je_audio_effect_ring_modulator_t [类型]
 环形调制器
 用输入信号与载波频率混合，产生金属感或机器人般的音效。
 */
-struct jeal_effect_ring_modulator
+typedef struct je_audio_effect_ring_modulator_t
 {
-    enum waveform
-    {
-        SINUSOID = 0,
-        SAWTOOTH = 1,
-        SQUARE = 2,
-    };
-
     float m_frequency;       // 频率，默认值为 440.0，范围 [0.0, 8000.0]
     float m_highpass_cutoff; // 高通截止频率，默认值为 800.0，范围 [0.0, 24000.0]
-    waveform m_waveform;     // 波形类型，默认值为 SINUSOID
-};
+    je_audio_effect_ring_modulator_waveform_t m_waveform;     // 波形类型，默认值为 SINUSOID
+} je_audio_effect_ring_modulator_t;
 
 /*
-jeal_effect_autowah [类型]
+je_audio_effect_autowah_t [类型]
 自动哇音效果
 根据输入音量动态调整滤波器频率，产生“哇哇”声（常用于吉他）。
 */
-struct jeal_effect_autowah
+typedef struct je_audio_effect_autowah_t
 {
     float m_attack_time;  // 攻击时间，默认值为 0.06，范围 [0.0001, 1.0]
     float m_release_time; // 释放时间，默认值为 0.06，范围 [0.0001, 1.0]
     float m_resonance;    // 共鸣，默认值为 1000.0，范围 [2.0, 1000]
     float m_peak_gain;    // 峰值增益，默认值为 11.22，范围 [0.00003, 31621.0]
-};
+} je_audio_effect_autowah_t;
 
 /*
-jeal_effect_compressor [类型]
+je_audio_effect_compressor_t [类型]
 压缩器
 减小音频的动态范围，使安静部分更响亮、响亮部分更柔和，平衡音量。
 */
-struct jeal_effect_compressor
+typedef struct je_audio_effect_compressor_t
 {
     bool m_enabled; // 是否启用，默认值为 true
-};
+} je_audio_effect_compressor_t;
 
 /*
-jeal_effect_equalizer [类型]
+je_audio_effect_equalizer_t [类型]
 均衡器
 调整音频频率响应，增强或削弱特定频段的音量，改善音质。
 */
-struct jeal_effect_equalizer
+typedef struct je_audio_effect_equalizer_t
 {
     float m_low_gain;    // 低频增益，默认值为 1.0，范围 [0.126, 7.943]
     float m_low_cutoff;  // 低频截止频率，默认值为 200.0，范围 [50.0, 800.0]
@@ -5718,14 +5808,14 @@ struct jeal_effect_equalizer
     float m_mid2_width;  // 中频2带宽，默认值为 1.0，范围 [0.01, 1.0]
     float m_high_gain;   // 高频增益，默认值为 1.0，范围 [0.126, 7.943]
     float m_high_cutoff; // 高频截止频率，默认值为 6000.0，范围 [4000.0, 160000.0]
-};
+} je_audio_effect_equalizer_t;
 
 /*
-jeal_effect_eaxreverb [类型]
+je_audio_effect_eax_reverb_t [类型]
 拓展EAX混响效果
 扩展的混响效果，支持更复杂的环境模拟（如洞穴、水下），需兼容EAX的硬件支持。
 */
-struct jeal_effect_eaxreverb
+typedef struct je_audio_effect_eax_reverb_t
 {
     float m_density;                // 密度，默认值为 1.0，范围 [0.0, 1.0]
     float m_diffusion;              // 扩散度，默认值为 1.0，范围 [0.0, 1.0]
@@ -5750,7 +5840,7 @@ struct jeal_effect_eaxreverb
     float m_lf_reference;           // 低频反射，默认值为 250.0，范围 [20.0, 1000.0]
     float m_room_rolloff_factor;    // 房间衰减因子，默认值为 0.0，范围 [0.0, 10.0]
     bool m_decay_hf_limit;          // 高频衰减限制器，默认值为 true
-};
+} je_audio_effect_eax_reverb_t;
 
 /*
 je_audio_buffer_create [基本接口]
@@ -5764,11 +5854,11 @@ je_audio_buffer_create [基本接口]
 参见：
     je_audio_buffer_close
 */
-JE_API /* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sample size */ const jeal_buffer* je_audio_buffer_create(
+JE_API /* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sample size */ const je_audio_buffer_t* je_audio_buffer_create(
     const void* data,
     size_t buffer_data_len,
     size_t sample_rate,
-    jeal_format format);
+    je_audio_format_t format);
 
 /*
 je_audio_buffer_load_wav [基本接口]
@@ -5780,57 +5870,57 @@ je_audio_buffer_load_wav [基本接口]
 参见：
     je_audio_buffer_close
 */
-JE_API /* OPTIONAL: If wav file failed to load */ const jeal_buffer* je_audio_buffer_load_wav(const char* path);
+JE_API /* OPTIONAL: If wav file failed to load */ const je_audio_buffer_t* je_audio_buffer_load_wav(const char* path);
 
 /*
 je_audio_buffer_close [基本接口]
 释放一个音频缓冲区
 */
-JE_API void je_audio_buffer_close(const jeal_buffer* buffer);
+JE_API void je_audio_buffer_close(const je_audio_buffer_t* buffer);
 
 
-enum jeal_filter_type
+enum je_audio_filter_type_t
 {
     JE_AUDIO_FILTER_LOWPASS,
     JE_AUDIO_FILTER_HIGHPASS,
     JE_AUDIO_FILTER_BANDPASS,
 };
 
-struct jeal_native_filter_instance;
-struct jeal_filter
+typedef struct je_audio_native_filter_instance_t je_audio_native_filter_instance_t;
+typedef struct je_audio_filter_t
 {
-    jeal_native_filter_instance*
+    je_audio_native_filter_instance_t*
         m_filter_instance;
 
     size_t m_references; // 引用计数
 
     // 滤波器类型, 默认值为 JE_AUDIO_FILTER_LOWPASS
-    jeal_filter_type    m_type;
+    je_audio_filter_type_t    m_type;
     // 增益，默认值为 1.0，范围 [0.0, 1.0]
     float               m_gain;
     // 低频增益（对高通滤波器无效），0 表示完全压制低频部分，默认值为 0.5，范围 [0.0, 1.0]
     float               m_gain_lf;
     // 高频增益（对低通滤波器无效），0 表示完全压制高频部分，默认值为 0.5，范围 [0.0, 1.0]
     float               m_gain_hf;
-};
+} je_audio_filter_t;
 
 /*
 je_audio_filter_create [基本接口]
 创建一个低通滤波器
 */
-jeal_filter* je_audio_filter_create();
+je_audio_filter_t* je_audio_filter_create();
 
 /*
 je_audio_filter_update [基本接口]
-将对 jeal_filter 的参数修改应用到实际的滤波器上
+将对 je_audio_filter_t 的参数修改应用到实际的滤波器上
 */
-void je_audio_filter_update(jeal_filter* filter);
+void je_audio_filter_update(je_audio_filter_t* filter);
 
 /*
 je_audio_filter_close [基本接口]
 关闭一个滤波器
 */
-void je_audio_filter_close(jeal_filter* filter);
+void je_audio_filter_close(je_audio_filter_t* filter);
 
 /*
 je_audio_source_create [基本接口]
@@ -5839,19 +5929,19 @@ je_audio_source_create [基本接口]
 参见：
     je_audio_source_close
 */
-JE_API jeal_source* je_audio_source_create();
+JE_API je_audio_source_t* je_audio_source_create();
 
 /*
 je_audio_source_update [基本接口]
-将对 jeal_source 的参数修改应用到实际的音频源上
+将对 je_audio_source_t 的参数修改应用到实际的音频源上
 */
-JE_API void je_audio_source_update(jeal_source* source);
+JE_API void je_audio_source_update(je_audio_source_t* source);
 
 /*
 je_audio_source_close [基本接口]
 释放一个音频源
 */
-JE_API void je_audio_source_close(jeal_source* source);
+JE_API void je_audio_source_close(je_audio_source_t* source);
 
 /*
 je_audio_source_buffer_set [基本接口]
@@ -5859,7 +5949,7 @@ je_audio_source_buffer_set [基本接口]
     只有音源设置有音频时，其他的播放等动作才会生效
     * 如果设置的音频与先前的音频不同，自动停止播放，返回 true
 */
-JE_API bool je_audio_source_buffer_set(jeal_source* source, const jeal_buffer* buffer);
+JE_API bool je_audio_source_buffer_set(je_audio_source_t* source, const je_audio_buffer_t* buffer);
 
 /*
 je_audio_source_effect_slot_and_filter_set [基本接口]
@@ -5867,16 +5957,16 @@ je_audio_source_effect_slot_and_filter_set [基本接口]
     slot_idx 必须小于 jeecs::audio::MAX_AUXILIARY_SENDS
 */
 JE_API void je_audio_source_effect_slot_and_filter_set(
-    jeal_source* source,
+    je_audio_source_t* source,
     size_t slot_idx,
-    /* OPTIONAL */ jeal_effect_slot* slot_may_null,
-    /* OPTIONAL */ jeal_filter* filter_may_null);
+    /* OPTIONAL */ je_audio_effect_slot_t* slot_may_null,
+    /* OPTIONAL */ je_audio_filter_t* filter_may_null);
 
 /*
 je_audio_source_filter_set [基本接口]
 设置音频源的滤波器
 */
-JE_API void je_audio_source_filter_set(jeal_source* source, /* OPTIONAL */ jeal_filter* filter_may_null);
+JE_API void je_audio_source_filter_set(je_audio_source_t* source, /* OPTIONAL */ je_audio_filter_t* filter_may_null);
 
 /*
 je_audio_source_play [基本接口]
@@ -5885,31 +5975,31 @@ je_audio_source_play [基本接口]
     如果音频源在此前被暂停，则继续播放
     如果音频源被停止，则从音频的起始位置开始播放
 */
-JE_API void je_audio_source_play(jeal_source* source);
+JE_API void je_audio_source_play(je_audio_source_t* source);
 
 /*
 je_audio_source_pause [基本接口]
 暂停音频源的播放
 */
-JE_API void je_audio_source_pause(jeal_source* source);
+JE_API void je_audio_source_pause(je_audio_source_t* source);
 
 /*
 je_audio_source_stop [基本接口]
 停止音频源的播放
 */
-JE_API void je_audio_source_stop(jeal_source* source);
+JE_API void je_audio_source_stop(je_audio_source_t* source);
 
 /*
 je_audio_source_play_state_get [基本接口]
 获取当前音频源的状态（是否播放、暂停或停止）
 */
-JE_API jeal_state je_audio_source_play_state_get(jeal_source* source);
+JE_API je_audio_state_t je_audio_source_play_state_get(je_audio_source_t* source);
 
 /*
 je_audio_source_play_process_get [基本接口]
 获取当前音频源的播放位置，单位是字节
 */
-JE_API size_t je_audio_source_play_process_get(jeal_source* source);
+JE_API size_t je_audio_source_play_process_get(je_audio_source_t* source);
 
 /*
 je_audio_source_play_process_set [基本接口]
@@ -5917,17 +6007,17 @@ je_audio_source_play_process_set [基本接口]
     注意，设置的偏移量应当是目标播放音频的采样大小的整数倍；
     如果未对齐，会被强制对齐。
 */
-JE_API void je_audio_source_play_process_set(jeal_source* source, size_t offset);
+JE_API void je_audio_source_play_process_set(je_audio_source_t* source, size_t offset);
 
 /*
 je_audio_listener_get [基本接口]
 获取监听者的实例
 */
-JE_API jeal_listener* je_audio_listener_get();
+JE_API je_audio_listener_t* je_audio_listener_get();
 
 /*
 je_audio_listener_update [基本接口]
-将对 jeal_listener 的参数修改应用到实际的监听者上
+将对 je_audio_listener_t 的参数修改应用到实际的监听者上
 */
 JE_API void je_audio_listener_update();
 
@@ -5938,104 +6028,104 @@ je_audio_effect_slot_create [基本接口]
     * 一个效果槽可以被添加到多个声源上
     * 一个声源亦可附加多个效果槽，但通常会受到平台限制，单个声源只能附加 1-4 个效果槽
 */
-JE_API jeal_effect_slot* je_audio_effect_slot_create();
+JE_API je_audio_effect_slot_t* je_audio_effect_slot_create();
 
 /*
 je_audio_effect_slot_bind [基本接口]
 绑定一个效果到效果槽
     * 效果传入 nullptr 表示解除绑定
 */
-JE_API void je_audio_effect_slot_bind(jeal_effect_slot* slot, /* OPTIONAL */ void* effect_may_null);
+JE_API void je_audio_effect_slot_bind(je_audio_effect_slot_t* slot, /* OPTIONAL */ void* effect_may_null);
 
 /*
 je_audio_effect_slot_close [基本接口]
 关闭一个效果槽
 */
-JE_API void je_audio_effect_slot_close(jeal_effect_slot* slot);
+JE_API void je_audio_effect_slot_close(je_audio_effect_slot_t* slot);
 
 /*
 je_audio_effect_slot_update [基本接口]
-将对 jeal_effect_slot 的参数修改应用到实际的效果槽上
+将对 je_audio_effect_slot_t 的参数修改应用到实际的效果槽上
 */
-JE_API void je_audio_effect_slot_update(jeal_effect_slot* slot);
+JE_API void je_audio_effect_slot_update(je_audio_effect_slot_t* slot);
 
 /*
 je_audio_effect_reverb_create [基本接口]
 创建一个混响效果实例
 */
-JE_API jeal_effect_reverb* je_audio_effect_reverb_create();
+JE_API je_audio_effect_reverb_t* je_audio_effect_reverb_create();
 
 /*
 je_audio_effect_chorus_create [基本接口]
 创建一个合唱效果实例
 */
-JE_API jeal_effect_chorus* je_audio_effect_chorus_create();
+JE_API je_audio_effect_chorus_t* je_audio_effect_chorus_create();
 
 /*
 je_audio_effect_distortion_create [基本接口]
 创建一个失真效果实例
 */
-JE_API jeal_effect_distortion* je_audio_effect_distortion_create();
+JE_API je_audio_effect_distortion_t* je_audio_effect_distortion_create();
 
 /*
 je_audio_effect_echo_create [基本接口]
 创建一个回声效果实例
 */
-JE_API jeal_effect_echo* je_audio_effect_echo_create();
+JE_API je_audio_effect_echo_t* je_audio_effect_echo_create();
 
 /*
 je_audio_effect_flanger_create [基本接口]
 创建一个镶边效果实例
 */
-JE_API jeal_effect_flanger* je_audio_effect_flanger_create();
+JE_API je_audio_effect_flanger_t* je_audio_effect_flanger_create();
 
 /*
 je_audio_effect_frequency_shifter_create [基本接口]
 创建一个移频效果实例
 */
-JE_API jeal_effect_frequency_shifter* je_audio_effect_frequency_shifter_create();
+JE_API je_audio_effect_frequency_shifter_t* je_audio_effect_frequency_shifter_create();
 
 /*
 je_audio_effect_vocal_morpher_create [基本接口]
 创建一个人声变形效果实例
 */
-JE_API jeal_effect_vocal_morpher* je_audio_effect_vocal_morpher_create();
+JE_API je_audio_effect_vocal_morpher_t* je_audio_effect_vocal_morpher_create();
 
 /*
 je_audio_effect_pitch_shifter_create [基本接口]
 创建一个变调效果实例
 */
-JE_API jeal_effect_pitch_shifter* je_audio_effect_pitch_shifter_create();
+JE_API je_audio_effect_pitch_shifter_t* je_audio_effect_pitch_shifter_create();
 
 /*
 je_audio_effect_ring_modulator_create [基本接口]
 创建一个环形调制效果实例
 */
-JE_API jeal_effect_ring_modulator* je_audio_effect_ring_modulator_create();
+JE_API je_audio_effect_ring_modulator_t* je_audio_effect_ring_modulator_create();
 
 /*
 je_audio_effect_autowah_create [基本接口]
 创建一个自动哇音效果实例
 */
-JE_API jeal_effect_autowah* je_audio_effect_autowah_create();
+JE_API je_audio_effect_autowah_t* je_audio_effect_autowah_create();
 
 /*
 je_audio_effect_compressor_create [基本接口]
 创建一个压缩效果实例
 */
-JE_API jeal_effect_compressor* je_audio_effect_compressor_create();
+JE_API je_audio_effect_compressor_t* je_audio_effect_compressor_create();
 
 /*
 je_audio_effect_equalizer_create [基本接口]
 创建一个均衡效果实例
 */
-JE_API jeal_effect_equalizer* je_audio_effect_equalizer_create();
+JE_API je_audio_effect_equalizer_t* je_audio_effect_equalizer_create();
 
 /*
 je_audio_effect_eaxreverb_create [基本接口]
 创建一个 EAX 混响效果实例
 */
-JE_API jeal_effect_eaxreverb* je_audio_effect_eaxreverb_create();
+JE_API je_audio_effect_eax_reverb_t* je_audio_effect_eaxreverb_create();
 
 /*
 je_audio_effect_close [基本接口]
@@ -6045,7 +6135,7 @@ JE_API void je_audio_effect_close(void* effect);
 
 /*
 je_audio_effect_update [基本接口]
-将对 jeal_effect 的参数修改应用到实际的效果上
+将对音频效果实例的参数修改应用到实际的效果上
     需要注意，对效果的更新不会应用到已经绑定的效果槽和音频源上，
     需要通过 je_audio_effect_slot_bind 重新绑定
 参见：
@@ -6053,9 +6143,9 @@ je_audio_effect_update [基本接口]
 */
 JE_API void je_audio_effect_update(void* effect);
 
-typedef const jeal_play_device* (*
-    jeal_enumerate_device_callback_t)(
-        const jeal_play_device* enumerated_devices,
+typedef const je_audio_play_device_t* (*
+    je_audio_enumerate_device_callback_t)(
+        const je_audio_play_device_t* enumerated_devices,
         size_t enumerated_device_count,
         void* userdata);
 
@@ -6068,7 +6158,7 @@ je_audio_devices_enumerate_and_do [基本接口]
         返回 nullptr 表示不改变当前使用的设备
 */
 JE_API void je_audio_devices_enumerate_and_do(
-    jeal_enumerate_device_callback_t callback, /* OPTIONAL */ void* userdata);
+    je_audio_enumerate_device_callback_t callback, /* OPTIONAL */ void* userdata);
 
 /*
 je_audio_devices_disconnect_all [基本接口]
@@ -6094,7 +6184,7 @@ JE_API bool je_core_main_script_entry();
 // =============================================================================
 // je_tilemap_* —— 瓦片地图 C API
 // 地图(.je4tilemap)与图集(.je4tileset)文档的读写、瓦片/属性查询与自动图块支持。
-// 文档以 je_TilemapDocument* / je_TilesetDocument* 不透明实例指针（nullptr 为
+// 文档以 je_tilemap_document_t* / je_tileset_document_t* 不透明实例指针（nullptr 为
 // 无效值）标识，进程内全局缓存、按路径共享：编辑器经此修改文档后版本号自增，
 // 各世界的 TilemapSystem 下一帧即重建渲染分片（未保存的修改也会实时同步到
 // 世界实例）。
@@ -6113,9 +6203,9 @@ JE_API bool je_core_main_script_entry();
 //     v < 0        按自动拼接类型绘制: -((tileset_idx + 1) * 0x100000 + tile_id)
 // 图集中的每个源纹理格都是一块瓦片（id 由图集源分配、跨保存稳定）；图集
 // 打开时网格按纹理当前尺寸重整，纹理增删一行/一列即增删一行/一列瓦片
-//（已有瓦片 id 不变）。"地形"不是独立实体，而是 je_TileKind 非 PLAIN 的
+//（已有瓦片 id 不变）。"地形"不是独立实体，而是 je_tile_kind_t 非 PLAIN 的
 // 瓦片。属性取值链：逐格覆盖 -> 瓦片默认值 -> 图集 schema 默认值。
-// 属性值为类型化数据（je_PropertyType）：
+// 属性值为类型化数据（je_property_type_t）：
 // 设置/读取都须传入类型枚举并给出对应的数据指针，与实际存储类型不符时
 // 返回 false。
 // 瓦片的名称/通行性/自动拼接类型/顶点法线都是瓦片 id 上的稀疏元数据；法线
@@ -6130,53 +6220,53 @@ namespace jeecs { namespace Tilemap
 }}
 
 /*
-je_TilemapDocument [类型别名]
+je_tilemap_document_t [类型别名]
 地图文档(.je4tilemap)的不透明实例指针，指向全局缓存、按路径共享的
 地图文档对象
     * nullptr 是无效值；open/create 成功返回的指针携带 1 个文档引用，
       引用计数归零后实例销毁、指针随之失效，不得继续使用
 请参见：
-    je_TilesetDocument
+    je_tileset_document_t
     je_tilemap_map_open
 */
-typedef jeecs::Tilemap::MapDocument je_TilemapDocument;
+typedef jeecs::Tilemap::MapDocument je_tilemap_document_t;
 
 /*
-je_TilesetDocument [类型别名]
+je_tileset_document_t [类型别名]
 图集文档(.je4tileset)的不透明实例指针，指向全局缓存、按路径共享的
 图集文档对象
     * nullptr 是无效值；open/create 成功返回的指针携带 1 个文档引用，
       引用计数归零后实例销毁、指针随之失效，不得继续使用
 请参见：
-    je_TilemapDocument
+    je_tilemap_document_t
     je_tilemap_tileset_open
 */
-typedef jeecs::Tilemap::TilesetDocument je_TilesetDocument;
+typedef jeecs::Tilemap::TilesetDocument je_tileset_document_t;
 
 /*
-je_LayerId [类型别名]
+je_layer_id_t [类型别名]
 图层在地图文档内的下标，由 je_tilemap_layer_add 经 out_id 返回
     * 从 0 开始；remove/move 后其余图层下标会前移/重排，跨操作持有的
       下标需按 layer_count 重新校验
 请参见：
-    je_TilemapDocument
+    je_tilemap_document_t
     je_tilemap_layer_add
 */
-typedef int32_t je_LayerId;
+typedef int32_t je_layer_id_t;
 
 /*
-je_SourceId [类型别名]
+je_source_id_t [类型别名]
 源纹理在图集文档内的下标，由 je_tilemap_source_add 经 out_id 返回
     * 从 0 开始；remove 后其余源下标前移，跨操作持有的下标需按
       source_count 重新校验
 请参见：
-    je_TilesetDocument
+    je_tileset_document_t
     je_tilemap_source_add
 */
-typedef int32_t je_SourceId;
+typedef int32_t je_source_id_t;
 
 /*
-je_TileId [类型别名]
+je_tile_id_t [类型别名]
 瓦片在图集文档内的 id。图集的每个源纹理格都是一块瓦片，id 由图集源
 在添加时分配（按行优先连续分配）
     * 从 1 开始，0 是无效值
@@ -6186,13 +6276,13 @@ je_TileId [类型别名]
     * je_tilemap_tile_id_at 由格坐标反查 id，
       je_tilemap_tile_at_index / je_tilemap_tile_count 枚举全部瓦片
 请参见：
-    je_TilesetDocument
+    je_tileset_document_t
     je_tilemap_tile_id_at
 */
-typedef int32_t je_TileId;
+typedef int32_t je_tile_id_t;
 
 /*
-je_TileKind [枚举]
+je_tile_kind_t [枚举]
 瓦片的自动拼接类型（即"地形"行为），取值即 je_tilemap_tile_kind /
 je_tilemap_tile_kind_set 的 kind 参数
     * JE_TILE_KIND_PLAIN        普通瓦片：整块绘制，不参与邻接解析
@@ -6205,7 +6295,7 @@ je_tilemap_tile_kind_set 的 kind 参数
 请参见：
     je_tilemap_tile_kind_set
 */
-enum je_TileKind
+enum je_tile_kind_t
 {
     JE_TILE_KIND_PLAIN = 0,
     JE_TILE_KIND_RPGMAKER_XP = 1,
@@ -6214,7 +6304,7 @@ enum je_TileKind
 };
 
 /*
-je_PropertyType [枚举]
+je_property_type_t [枚举]
 瓦片地图属性值的类型，即属性接口 type 参数的取值。各类型经 void* 传递的
 数据形态：
     * JE_PROPERTY_TYPE_BOOL   bool（1 字节）
@@ -6229,7 +6319,7 @@ je_PropertyType [枚举]
 请参见：
     je_tilemap_cell_property_set
 */
-enum je_PropertyType
+enum je_property_type_t
 {
     JE_PROPERTY_TYPE_BOOL = 0,
     JE_PROPERTY_TYPE_STRING = 1,
@@ -6241,7 +6331,7 @@ enum je_PropertyType
 };
 
 /*
-je_LayerSelfShadow [枚举]
+je_layer_self_shadow_t [枚举]
 图层的 2D 光照自阴影行为（Light2D::SelfShadow 组件的挂载策略），即
 je_tilemap_layer_selfshadow / je_tilemap_layer_selfshadow_set 的取值。
 渲染分片是运行时生成的隐藏实体，无法逐个挂组件，故由图层属性驱动：
@@ -6267,7 +6357,7 @@ Light2D::PerBlockSelfShadow（网格顶点携带块底边高度），格底边�
     je_tilemap_layer_selfshadow_set
     je_tilemap_layer_selfshadow_factor_set
 */
-enum je_LayerSelfShadow
+enum je_layer_self_shadow_t
 {
     JE_LAYER_SELFSHADOW_OFF = 0,
     JE_LAYER_SELFSHADOW_ON = 1,
@@ -6275,7 +6365,7 @@ enum je_LayerSelfShadow
 };
 
 /*
-je_LayerBlockShadow [枚举]
+je_layer_block_shadow_t [枚举]
 图层的 2D 光照遮挡阴影行为（Light2D::BlockShadow 组件的挂载策略），即
 je_tilemap_layer_blockshadow / je_tilemap_layer_blockshadow_set 的取值。
 渲染分片是运行时生成的隐藏实体，无法逐个挂组件，故由图层属性驱动：
@@ -6298,7 +6388,7 @@ TopDown 光源下，轮廓段的逐像素排序 key 取该段自身的最低边�
     je_tilemap_layer_blockshadow_set
     je_tilemap_layer_blockshadow_factor_set
 */
-enum je_LayerBlockShadow
+enum je_layer_block_shadow_t
 {
     JE_LAYER_BLOCKSHADOW_OFF = 0,
     JE_LAYER_BLOCKSHADOW_ON = 1,
@@ -6313,10 +6403,10 @@ je_tilemap_map_open [基本接口]
     * 路径不存在或无法解析时返回 nullptr
     * 每次成功调用为调用方持有 1 个文档引用（见 je_tilemap_map_unload）
 请参见：
-    je_TilemapDocument
+    je_tilemap_document_t
     je_tilemap_map_keep
 */
-JE_API /* OPTIONAL: If path cannot be opened */ je_TilemapDocument* je_tilemap_map_open(const char* path);
+JE_API /* OPTIONAL: If path cannot be opened */ je_tilemap_document_t* je_tilemap_map_open(const char* path);
 
 /*
 je_tilemap_map_create [基本接口]
@@ -6324,9 +6414,9 @@ je_tilemap_map_create [基本接口]
     * 尺寸不合法（<=0 或超过 65536）时返回 nullptr
     * 调用方持有 1 个文档引用（见 je_tilemap_map_unload）
 请参见：
-    je_TilemapDocument
+    je_tilemap_document_t
 */
-JE_API /* OPTIONAL: If size is invalid */ je_TilemapDocument* je_tilemap_map_create(int32_t w, int32_t h, int32_t tile_px);
+JE_API /* OPTIONAL: If size is invalid */ je_tilemap_document_t* je_tilemap_map_create(int32_t w, int32_t h, int32_t tile_px);
 
 /*
 je_tilemap_map_path_bind [基本接口]
@@ -6341,7 +6431,7 @@ je_tilemap_map_path_bind [基本接口]
     je_tilemap_map_open
 */
 JE_API bool je_tilemap_map_path_bind(
-    je_TilemapDocument* map, const char* path);
+    je_tilemap_document_t* map, const char* path);
 
 /*
 je_tilemap_map_reload [基本接口]
@@ -6354,20 +6444,20 @@ je_tilemap_map_size [基本接口]
 取地图文档的尺寸信息，经出参返回 (宽, 高, 瓦片边长像素, 图层数)
     * 各出参均可传 nullptr 跳过
 */
-JE_API void je_tilemap_map_size(je_TilemapDocument* map,
+JE_API void je_tilemap_map_size(je_tilemap_document_t* map,
     /* OPTIONAL */ int32_t* w, /* OPTIONAL */ int32_t* h, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* layer_count);
 
 /*
 je_tilemap_map_path [基本接口]
 取地图文档的登记路径，未保存（新建后未另存）时返回false
 */
-JE_API bool je_tilemap_map_path(je_TilemapDocument* map, const char** out_path);
+JE_API bool je_tilemap_map_path(je_tilemap_document_t* map, const char** out_path);
 
 /*
 je_tilemap_map_version [基本接口]
 取地图文档的修改版本号，任何经本组 API 的修改都会使其自增
 */
-JE_API uint64_t je_tilemap_map_version(je_TilemapDocument* map);
+JE_API uint64_t je_tilemap_map_version(je_tilemap_document_t* map);
 
 /*
 je_tilemap_map_keep [基本接口]
@@ -6378,7 +6468,7 @@ je_tilemap_map_keep [基本接口]
 请参见：
     je_tilemap_map_unload
 */
-JE_API int32_t je_tilemap_map_keep(je_TilemapDocument* map);
+JE_API int32_t je_tilemap_map_keep(je_tilemap_document_t* map);
 
 /*
 je_tilemap_map_unload [基本接口]
@@ -6391,7 +6481,7 @@ je_tilemap_map_unload [基本接口]
     je_tilemap_map_keep
     je_tilemap_map_open
 */
-JE_API int32_t je_tilemap_map_unload(je_TilemapDocument* map);
+JE_API int32_t je_tilemap_map_unload(je_tilemap_document_t* map);
 
 /*
 je_tilemap_loaded_map_count [基本接口]
@@ -6414,46 +6504,46 @@ je_tilemap_loaded_map [基本接口]
 请参见：
     je_tilemap_loaded_map_count
 */
-JE_API /* OPTIONAL: If index is out of range or the slot is empty */ je_TilemapDocument* je_tilemap_loaded_map(int32_t index);
+JE_API /* OPTIONAL: If index is out of range or the slot is empty */ je_tilemap_document_t* je_tilemap_loaded_map(int32_t index);
 
 /*
 je_tilemap_map_resize [基本接口]
 调整地图文档的网格尺寸，越界格子的逐格属性覆盖将被丢弃
     * 新尺寸不合法（<=0 或超过 65536）时不做任何修改
 */
-JE_API void je_tilemap_map_resize(je_TilemapDocument* map, int32_t new_w, int32_t new_h);
+JE_API void je_tilemap_map_resize(je_tilemap_document_t* map, int32_t new_w, int32_t new_h);
 
 // ---- 图层 ----
 
 /*
 je_tilemap_layer_add [基本接口]
-向地图文档末尾追加一个图层，新图层下标（je_LayerId）经 out_id 返回
+向地图文档末尾追加一个图层，新图层下标（je_layer_id_t）经 out_id 返回
     * 失败时不写出下标并返回 false
 请参见：
-    je_LayerId
+    je_layer_id_t
 */
-JE_API bool je_tilemap_layer_add(je_TilemapDocument* map, const char* name,
-    je_LayerId* out_id);
+JE_API bool je_tilemap_layer_add(je_tilemap_document_t* map, const char* name,
+    je_layer_id_t* out_id);
 
 /*
 je_tilemap_layer_remove [基本接口]
 移除指定下标的图层，并重排逐格属性键
     * 下标越界返回 false
 */
-JE_API bool je_tilemap_layer_remove(je_TilemapDocument* map, je_LayerId layer);
+JE_API bool je_tilemap_layer_remove(je_tilemap_document_t* map, je_layer_id_t layer);
 
 /*
 je_tilemap_layer_move [基本接口]
 把图层移动到新下标（自动钳制到 [0, 图层数-1]），并重排逐格属性键
 */
-JE_API bool je_tilemap_layer_move(je_TilemapDocument* map, je_LayerId layer, je_LayerId new_pos);
+JE_API bool je_tilemap_layer_move(je_tilemap_document_t* map, je_layer_id_t layer, je_layer_id_t new_pos);
 
 /*
 je_tilemap_layer_get [基本接口]
 取指定下标图层的信息，经出参返回 (名称, 是否可见, 是否锁定)
     * 各出参均可传 nullptr 跳过；下标越界时名称写出空串、其余写出 0
 */
-JE_API void je_tilemap_layer_get(je_TilemapDocument* map, je_LayerId layer,
+JE_API void je_tilemap_layer_get(je_tilemap_document_t* map, je_layer_id_t layer,
     /* OPTIONAL */ const char** name, /* OPTIONAL */ int32_t* visible, /* OPTIONAL */ int32_t* locked);
 
 /*
@@ -6462,7 +6552,7 @@ je_tilemap_layer_set [基本接口]
     * name 传 nullptr 表示保持名称不变
     * 下标越界时不做任何修改
 */
-JE_API void je_tilemap_layer_set(je_TilemapDocument* map, je_LayerId layer,
+JE_API void je_tilemap_layer_set(je_tilemap_document_t* map, je_layer_id_t layer,
     /* OPTIONAL */ const char* name, int32_t visible, int32_t locked);
 
 /*
@@ -6470,7 +6560,7 @@ je_tilemap_layer_z [基本接口]
 取图层的世界 z 偏移（相对地图根实体；不同层须错开以避免深度冲突，
 旧格式文件缺省为层下标 0,1,2...）
 */
-JE_API float je_tilemap_layer_z(je_TilemapDocument* map, je_LayerId layer);
+JE_API float je_tilemap_layer_z(je_tilemap_document_t* map, je_layer_id_t layer);
 
 /*
 je_tilemap_layer_z_set [基本接口]
@@ -6478,7 +6568,7 @@ je_tilemap_layer_z_set [基本接口]
 请参见：
     je_tilemap_layer_z
 */
-JE_API void je_tilemap_layer_z_set(je_TilemapDocument* map, je_LayerId layer, float z);
+JE_API void je_tilemap_layer_z_set(je_tilemap_document_t* map, je_layer_id_t layer, float z);
 
 /*
 je_tilemap_layer_rend_queue [基本接口]
@@ -6487,7 +6577,7 @@ je_tilemap_layer_rend_queue [基本接口]
 下标（与场景实体常用的小队列值错开）；z 只在该层与写深度的场景
 物体之间参与遮挡裁决
 */
-JE_API int32_t je_tilemap_layer_rend_queue(je_TilemapDocument* map, je_LayerId layer);
+JE_API int32_t je_tilemap_layer_rend_queue(je_tilemap_document_t* map, je_layer_id_t layer);
 
 /*
 je_tilemap_layer_rend_queue_set [基本接口]
@@ -6495,16 +6585,16 @@ je_tilemap_layer_rend_queue_set [基本接口]
 请参见：
     je_tilemap_layer_rend_queue
 */
-JE_API void je_tilemap_layer_rend_queue_set(je_TilemapDocument* map, je_LayerId layer, int32_t rend_queue);
+JE_API void je_tilemap_layer_rend_queue_set(je_tilemap_document_t* map, je_layer_id_t layer, int32_t rend_queue);
 
 /*
 je_tilemap_layer_selfshadow [基本接口]
-取图层的 2D 光照自阴影行为（je_LayerSelfShadow），下标越界时返回
+取图层的 2D 光照自阴影行为（je_layer_self_shadow_t），下标越界时返回
 JE_LAYER_SELFSHADOW_OFF
 请参见：
     je_tilemap_layer_selfshadow_set
 */
-JE_API je_LayerSelfShadow je_tilemap_layer_selfshadow(je_TilemapDocument* map, je_LayerId layer);
+JE_API je_layer_self_shadow_t je_tilemap_layer_selfshadow(je_tilemap_document_t* map, je_layer_id_t layer);
 
 /*
 je_tilemap_layer_selfshadow_set [基本接口]
@@ -6519,11 +6609,11 @@ BlockShadow 落在本层图块上的自遮挡，同时抹掉位于该层之后�
 对齐（走命令缓冲，下一帧迁移生效）；该设置随图层记录落盘
     * 下标越界时不做任何修改
 请参见：
-    je_LayerSelfShadow
+    je_layer_self_shadow_t
     je_tilemap_layer_selfshadow
     je_tilemap_layer_selfshadow_factor_set
 */
-JE_API void je_tilemap_layer_selfshadow_set(je_TilemapDocument* map, je_LayerId layer, je_LayerSelfShadow selfshadow);
+JE_API void je_tilemap_layer_selfshadow_set(je_tilemap_document_t* map, je_layer_id_t layer, je_layer_self_shadow_t selfshadow);
 
 /*
 je_tilemap_layer_selfshadow_factor [基本接口]
@@ -6532,7 +6622,7 @@ RGBA 乘子；仅图层模式为 ON/AUTO 时生效），下标越界时返回 1
 请参见：
     je_tilemap_layer_selfshadow_factor_set
 */
-JE_API float je_tilemap_layer_selfshadow_factor(je_TilemapDocument* map, je_LayerId layer);
+JE_API float je_tilemap_layer_selfshadow_factor(je_tilemap_document_t* map, je_layer_id_t layer);
 
 /*
 je_tilemap_layer_selfshadow_factor_set [基本接口]
@@ -6544,16 +6634,16 @@ TilemapSystem 逐帧对齐到分片组件
     je_tilemap_layer_selfshadow_factor
     je_tilemap_layer_selfshadow_set
 */
-JE_API void je_tilemap_layer_selfshadow_factor_set(je_TilemapDocument* map, je_LayerId layer, float factor);
+JE_API void je_tilemap_layer_selfshadow_factor_set(je_tilemap_document_t* map, je_layer_id_t layer, float factor);
 
 /*
 je_tilemap_layer_blockshadow [基本接口]
-取图层的 2D 光照遮挡阴影行为（je_LayerBlockShadow），下标越界时返回
+取图层的 2D 光照遮挡阴影行为（je_layer_block_shadow_t），下标越界时返回
 JE_LAYER_BLOCKSHADOW_OFF
 请参见：
     je_tilemap_layer_blockshadow_set
 */
-JE_API je_LayerBlockShadow je_tilemap_layer_blockshadow(je_TilemapDocument* map, je_LayerId layer);
+JE_API je_layer_block_shadow_t je_tilemap_layer_blockshadow(je_tilemap_document_t* map, je_layer_id_t layer);
 
 /*
 je_tilemap_layer_blockshadow_set [基本接口]
@@ -6564,11 +6654,11 @@ false / true；阴影浓度由 je_tilemap_layer_blockshadow_factor_set 设置
 TilemapSystem 自动生成并随网格编辑重建；该设置随图层记录落盘
     * 下标越界时不做任何修改
 请参见：
-    je_LayerBlockShadow
+    je_layer_block_shadow_t
     je_tilemap_layer_blockshadow
     je_tilemap_layer_blockshadow_factor_set
 */
-JE_API void je_tilemap_layer_blockshadow_set(je_TilemapDocument* map, je_LayerId layer, je_LayerBlockShadow blockshadow);
+JE_API void je_tilemap_layer_blockshadow_set(je_tilemap_document_t* map, je_layer_id_t layer, je_layer_block_shadow_t blockshadow);
 
 /*
 je_tilemap_layer_blockshadow_factor [基本接口]
@@ -6577,7 +6667,7 @@ je_tilemap_layer_blockshadow_factor [基本接口]
 请参见：
     je_tilemap_layer_blockshadow_factor_set
 */
-JE_API float je_tilemap_layer_blockshadow_factor(je_TilemapDocument* map, je_LayerId layer);
+JE_API float je_tilemap_layer_blockshadow_factor(je_tilemap_document_t* map, je_layer_id_t layer);
 
 /*
 je_tilemap_layer_blockshadow_factor_set [基本接口]
@@ -6589,7 +6679,7 @@ TilemapSystem 逐帧对齐到分片组件
     je_tilemap_layer_blockshadow_factor
     je_tilemap_layer_blockshadow_set
 */
-JE_API void je_tilemap_layer_blockshadow_factor_set(je_TilemapDocument* map, je_LayerId layer, float factor);
+JE_API void je_tilemap_layer_blockshadow_factor_set(je_tilemap_document_t* map, je_layer_id_t layer, float factor);
 
 // ---- 图层着色器样式 ----
 // 每层可直接持有一个专属着色器实例与若干附加纹理槽；图层样式是该层
@@ -6601,20 +6691,20 @@ JE_API void je_tilemap_layer_blockshadow_factor_set(je_TilemapDocument* map, je_
 // 与 .je4entity 保存 Shaders 的口径一致），加载后写回新实例。
 // 样式修改只自增图层样式版本（不走地图版本号），渲染侧做轻量对齐，
 // 不触发网格重扫与顶点重建。
-// 样式资源经下列不透明指针类型跨 C 边界传递（与 jegl_frame_buffer 的
-// attachment_t 同款姿势，C 侧不透明、实现侧按实际类型使用）：
-//     je_tilemap_shader_ref  实为 jeecs::basic::resource<jeecs::graphic::shader>
-//     je_tilemap_texture_ref 实为 jeecs::basic::resource<jeecs::graphic::texture2d>
-typedef struct je_tilemap_shader_ref je_tilemap_shader_ref;
-typedef struct je_tilemap_texture_ref je_tilemap_texture_ref;
+// 样式资源经下列不透明指针类型跨 C 边界传递（与 je_gl_frame_buffer_t 的
+// je_gl_frame_buffer_attachment_t 同款姿势，C 侧不透明、实现侧按实际类型使用）：
+//     je_tilemap_shader_ref_t  实为 jeecs::basic::resource<jeecs::graphic::shader>
+//     je_tilemap_texture_ref_t 实为 jeecs::basic::resource<jeecs::graphic::texture2d>
+typedef struct je_tilemap_shader_ref_t je_tilemap_shader_ref_t;
+typedef struct je_tilemap_texture_ref_t je_tilemap_texture_ref_t;
 
 /*
 je_tilemap_layer_shader [基本接口]
 取图层样式的着色器实例，返回新建引用副本（用 je_tilemap_shader_ref_free 释放）
     * 未指定样式时返回 nullptr
 */
-JE_API /* OPTIONAL: If layer has no shader style */ je_tilemap_shader_ref* je_tilemap_layer_shader(je_TilemapDocument* map,
-    je_LayerId layer);
+JE_API /* OPTIONAL: If layer has no shader style */ je_tilemap_shader_ref_t* je_tilemap_layer_shader(je_tilemap_document_t* map,
+    je_layer_id_t layer);
 
 /*
 je_tilemap_layer_shader_set [基本接口]
@@ -6623,14 +6713,14 @@ je_tilemap_layer_shader_set [基本接口]
     * 样式共享持有传入实例：uniform 值设在实例上，改动下一帧生效
     * 下标越界时不做任何修改
 */
-JE_API void je_tilemap_layer_shader_set(je_TilemapDocument* map, je_LayerId layer,
-    /* OPTIONAL */ je_tilemap_shader_ref* shader);
+JE_API void je_tilemap_layer_shader_set(je_tilemap_document_t* map, je_layer_id_t layer,
+    /* OPTIONAL */ je_tilemap_shader_ref_t* shader);
 
 /*
 je_tilemap_layer_texture_count [基本接口]
 取图层样式配置的附加纹理数量
 */
-JE_API int32_t je_tilemap_layer_texture_count(je_TilemapDocument* map, je_LayerId layer);
+JE_API int32_t je_tilemap_layer_texture_count(je_tilemap_document_t* map, je_layer_id_t layer);
 
 /*
 je_tilemap_layer_texture_set [基本接口]
@@ -6639,8 +6729,8 @@ je_tilemap_layer_texture_set [基本接口]
     * texture 传 nullptr 表示删除该槽位的绑定
     * 同槽位重复设置时替换旧值
 */
-JE_API bool je_tilemap_layer_texture_set(je_TilemapDocument* map, je_LayerId layer,
-    int32_t slot, /* OPTIONAL */ je_tilemap_texture_ref* texture);
+JE_API bool je_tilemap_layer_texture_set(je_tilemap_document_t* map, je_layer_id_t layer,
+    int32_t slot, /* OPTIONAL */ je_tilemap_texture_ref_t* texture);
 
 /*
 je_tilemap_layer_texture_get [基本接口]
@@ -6648,20 +6738,20 @@ je_tilemap_layer_texture_get [基本接口]
     * 纹理实例为新建引用副本（用 je_tilemap_texture_ref_free 释放）
     * 各出参均可传 nullptr 跳过；序号越界返回 false
 */
-JE_API bool je_tilemap_layer_texture_get(je_TilemapDocument* map, je_LayerId layer,
-    int32_t index, /* OPTIONAL */ int32_t* slot, /* OPTIONAL */ je_tilemap_texture_ref** texture);
+JE_API bool je_tilemap_layer_texture_get(je_tilemap_document_t* map, je_layer_id_t layer,
+    int32_t index, /* OPTIONAL */ int32_t* slot, /* OPTIONAL */ je_tilemap_texture_ref_t** texture);
 
 /*
 je_tilemap_shader_ref_free [基本接口]
 释放 je_tilemap_layer_shader 返回的着色器引用副本（传 nullptr 安全）
 */
-JE_API void je_tilemap_shader_ref_free(/* OPTIONAL */ je_tilemap_shader_ref* shader);
+JE_API void je_tilemap_shader_ref_free(/* OPTIONAL */ je_tilemap_shader_ref_t* shader);
 
 /*
 je_tilemap_texture_ref_free [基本接口]
 释放 je_tilemap_layer_texture_get 出参返回的纹理引用副本（传 nullptr 安全）
 */
-JE_API void je_tilemap_texture_ref_free(/* OPTIONAL */ je_tilemap_texture_ref* texture);
+JE_API void je_tilemap_texture_ref_free(/* OPTIONAL */ je_tilemap_texture_ref_t* texture);
 
 // ---- 瓦片读写 ----
 
@@ -6669,7 +6759,7 @@ JE_API void je_tilemap_texture_ref_free(/* OPTIONAL */ je_tilemap_texture_ref* t
 je_tilemap_tile_get [基本接口]
 取指定图层某格的瓦片值（编码见本段说明），越界返回 0（空格值亦为 0）
 */
-JE_API int32_t je_tilemap_tile_get(je_TilemapDocument* map, je_LayerId layer,
+JE_API int32_t je_tilemap_tile_get(je_tilemap_document_t* map, je_layer_id_t layer,
     int32_t x, int32_t y);
 
 /*
@@ -6681,13 +6771,13 @@ je_tilemap_layer_grid [基本接口]
     * 供编辑器序列化等需要遍历整层的场景，避免逐格调用 get_tile
 */
 JE_API /* OPTIONAL: If layer is invalid */ const int32_t* je_tilemap_layer_grid(
-    je_TilemapDocument* map, je_LayerId layer, /* OPTIONAL */ int32_t* out_count);
+    je_tilemap_document_t* map, je_layer_id_t layer, /* OPTIONAL */ int32_t* out_count);
 
 /*
 je_tilemap_tile_set [基本接口]
 设置指定图层某格的瓦片值（编码见本段说明）
 */
-JE_API void je_tilemap_tile_set(je_TilemapDocument* map, je_LayerId layer,
+JE_API void je_tilemap_tile_set(je_tilemap_document_t* map, je_layer_id_t layer,
     int32_t x, int32_t y, int32_t value);
 
 /*
@@ -6695,7 +6785,7 @@ je_tilemap_tile_fill [基本接口]
 把矩形区域内的格子批量设为同一瓦片值，供矩形/填充工具使用
     * 自动跳过越界格子；无实际变化时不自增版本号
 */
-JE_API void je_tilemap_tile_fill(je_TilemapDocument* map, je_LayerId layer,
+JE_API void je_tilemap_tile_fill(je_tilemap_document_t* map, je_layer_id_t layer,
     int32_t x, int32_t y, int32_t w, int32_t h, int32_t value);
 
 // ---- 地图引用的图集 ----
@@ -6704,7 +6794,7 @@ JE_API void je_tilemap_tile_fill(je_TilemapDocument* map, je_LayerId layer,
 je_tilemap_tileset_count [基本接口]
 取地图文档引用的图集数量
 */
-JE_API int32_t je_tilemap_tileset_count(je_TilemapDocument* map);
+JE_API int32_t je_tilemap_tileset_count(je_tilemap_document_t* map);
 
 /*
 je_tilemap_tileset_add [基本接口]
@@ -6713,63 +6803,63 @@ je_tilemap_tileset_add [基本接口]
       返回 false，不写出下标
     * 不要求图集此刻可解析，可先引用后保存图集
 */
-JE_API bool je_tilemap_tileset_add(je_TilemapDocument* map, const char* path,
+JE_API bool je_tilemap_tileset_add(je_tilemap_document_t* map, const char* path,
     int32_t* out_index);
 
 /*
 je_tilemap_tileset_remove [基本接口]
 移除地图文档对指定下标图集的引用，并清除引用该图集的所有格子
 */
-JE_API bool je_tilemap_tileset_remove(je_TilemapDocument* map, int32_t idx);
+JE_API bool je_tilemap_tileset_remove(je_tilemap_document_t* map, int32_t idx);
 
 /*
 je_tilemap_tileset_path [基本接口]
 取地图文档引用的指定下标图集的路径，下标越界返回空串
 */
-JE_API const char* je_tilemap_tileset_path(je_TilemapDocument* map, int32_t idx);
+JE_API const char* je_tilemap_tileset_path(je_tilemap_document_t* map, int32_t idx);
 
 // ---- 属性与查询 ----
 
 /*
 je_tilemap_cell_property_set [基本接口]
-设置某格的属性逐格覆盖值（数据形态见 je_PropertyType）
+设置某格的属性逐格覆盖值（数据形态见 je_property_type_t）
     * value 传 nullptr 表示清除该格此属性的覆盖（此时忽略 type）
     * 该格已有不同类型的覆盖值时返回 false 且不修改
     * 坐标越界返回 false
 请参见：
-    je_PropertyType
+    je_property_type_t
 */
-JE_API bool je_tilemap_cell_property_set(je_TilemapDocument* map, je_LayerId layer,
-    int32_t x, int32_t y, const char* name, je_PropertyType type,
+JE_API bool je_tilemap_cell_property_set(je_tilemap_document_t* map, je_layer_id_t layer,
+    int32_t x, int32_t y, const char* name, je_property_type_t type,
     /* OPTIONAL */ const void* value);
 
 /*
 je_tilemap_cell_property_get [基本接口]
 取某格的属性逐格覆盖值（不沿取值链解析），数据经 out_value 写回
-（形态见 je_PropertyType）
+（形态见 je_property_type_t）
     * 无覆盖或类型与实际存储不符返回 false
 请参见：
     je_tilemap_property_get
-    je_PropertyType
+    je_property_type_t
 */
-JE_API bool je_tilemap_cell_property_get(je_TilemapDocument* map, je_LayerId layer,
-    int32_t x, int32_t y, const char* name, je_PropertyType type,
+JE_API bool je_tilemap_cell_property_get(je_tilemap_document_t* map, je_layer_id_t layer,
+    int32_t x, int32_t y, const char* name, je_property_type_t type,
     /* OPTIONAL */ void* out_value);
 
 /*
 je_tilemap_property_get [基本接口]
 按取值链（逐格覆盖 -> 瓦片默认值 -> 图集 schema 默认值）解析某格属性，
-数据经 out_value 写回（形态见 je_PropertyType）
+数据经 out_value 写回（形态见 je_property_type_t）
     * 无值或类型与实际存储不符返回 false
 请参见：
-    je_PropertyType
+    je_property_type_t
 */
-JE_API bool je_tilemap_property_get(je_TilemapDocument* map, je_LayerId layer,
-    int32_t x, int32_t y, const char* name, je_PropertyType type,
+JE_API bool je_tilemap_property_get(je_tilemap_document_t* map, je_layer_id_t layer,
+    int32_t x, int32_t y, const char* name, je_property_type_t type,
     /* OPTIONAL */ void* out_value);
 
 /*
-je_TilemapCellPropertyEntry [类型]
+je_tilemap_cell_property_entry_t [类型]
 逐格属性覆盖条目的只读索引项，供编辑器序列化枚举
     * m_layer 为图层下标，m_x/m_y 为格子坐标
     * m_property_count 为该格覆盖的属性数量（名称/类型经
@@ -6777,13 +6867,13 @@ je_TilemapCellPropertyEntry [类型]
 请参见：
     je_tilemap_cell_property_entries
 */
-typedef struct je_TilemapCellPropertyEntry
+typedef struct je_tilemap_cell_property_entry_t
 {
-    je_LayerId m_layer;
+    je_layer_id_t m_layer;
     int32_t m_x;
     int32_t m_y;
     int32_t m_property_count;
-} je_TilemapCellPropertyEntry;
+} je_tilemap_cell_property_entry_t;
 
 /*
 je_tilemap_cell_property_entries [基本接口]
@@ -6791,11 +6881,11 @@ je_tilemap_cell_property_entries [基本接口]
     * out_entries 容量不足时只写入前 capacity 项
     * out_entries 为 nullptr 或 capacity <= 0 时仅查询数量
 请参见：
-    je_TilemapCellPropertyEntry
+    je_tilemap_cell_property_entry_t
     je_tilemap_cell_property_entry_property_info
 */
-JE_API int32_t je_tilemap_cell_property_entries(je_TilemapDocument* map,
-    /* OPTIONAL */ je_TilemapCellPropertyEntry* out_entries, int32_t capacity);
+JE_API int32_t je_tilemap_cell_property_entries(je_tilemap_document_t* map,
+    /* OPTIONAL */ je_tilemap_cell_property_entry_t* out_entries, int32_t capacity);
 
 /*
 je_tilemap_cell_property_entry_property_info [基本接口]
@@ -6803,19 +6893,19 @@ je_tilemap_cell_property_entry_property_info [基本接口]
     * index 越界或该格无覆盖时返回 false
 请参见：
     je_tilemap_cell_property_entries
-    je_PropertyType
+    je_property_type_t
 */
 JE_API bool je_tilemap_cell_property_entry_property_info(
-    je_TilemapDocument* map, je_LayerId layer, int32_t x, int32_t y,
+    je_tilemap_document_t* map, je_layer_id_t layer, int32_t x, int32_t y,
     int32_t index, /* OPTIONAL */ const char** name,
-    /* OPTIONAL */ je_PropertyType* type);
+    /* OPTIONAL */ je_property_type_t* type);
 
 /*
 je_tilemap_is_walkable [基本接口]
 取某格全图层合并的通行性（任一图层不可通行即不可通行），出界视为不可通行
     * 返回 1/0
 */
-JE_API int32_t je_tilemap_is_walkable(je_TilemapDocument* map, int32_t x, int32_t y);
+JE_API int32_t je_tilemap_is_walkable(je_tilemap_document_t* map, int32_t x, int32_t y);
 
 /*
 je_tilemap_is_walkable_on [基本接口]
@@ -6824,7 +6914,7 @@ je_tilemap_is_walkable_on [基本接口]
 请参见：
     je_tilemap_is_walkable
 */
-JE_API int32_t je_tilemap_is_walkable_on(je_TilemapDocument* map, je_LayerId layer,
+JE_API int32_t je_tilemap_is_walkable_on(je_tilemap_document_t* map, je_layer_id_t layer,
     int32_t x, int32_t y);
 
 /*
@@ -6834,10 +6924,10 @@ je_tilemap_cell_find [基本接口]
     * name 为 "walkable" 时按通行性匹配，type 须为 BOOL，value 指向 bool
 请参见：
     je_tilemap_cell_find_get
-    je_PropertyType
+    je_property_type_t
 */
-JE_API int32_t je_tilemap_cell_find(je_TilemapDocument* map, je_LayerId layer,
-    const char* name, je_PropertyType type, const void* value);
+JE_API int32_t je_tilemap_cell_find(je_tilemap_document_t* map, je_layer_id_t layer,
+    const char* name, je_property_type_t type, const void* value);
 
 /*
 je_tilemap_cell_find_get [基本接口]
@@ -6846,7 +6936,7 @@ je_tilemap_cell_find_get [基本接口]
 请参见：
     je_tilemap_cell_find
 */
-JE_API bool je_tilemap_cell_find_get(je_TilemapDocument* map, int32_t index, int32_t* x, int32_t* y);
+JE_API bool je_tilemap_cell_find_get(je_tilemap_document_t* map, int32_t index, int32_t* x, int32_t* y);
 
 // ---- 图集文档(.je4tileset) ----
 
@@ -6856,19 +6946,19 @@ je_tilemap_tileset_open [基本接口]
     * 路径不存在或无法解析时返回 nullptr
     * 每次成功调用为调用方持有 1 个文档引用（见 je_tilemap_tileset_unload）
 请参见：
-    je_TilesetDocument
+    je_tileset_document_t
     je_tilemap_tileset_keep
 */
-JE_API /* OPTIONAL: If path cannot be opened */ je_TilesetDocument* je_tilemap_tileset_open(const char* path);
+JE_API /* OPTIONAL: If path cannot be opened */ je_tileset_document_t* je_tilemap_tileset_open(const char* path);
 
 /*
 je_tilemap_tileset_create [基本接口]
 新建一个未保存的图集文档，返回文档实例指针
     * 调用方持有 1 个文档引用（见 je_tilemap_tileset_unload）
 请参见：
-    je_TilesetDocument
+    je_tileset_document_t
 */
-JE_API je_TilesetDocument* je_tilemap_tileset_create(const char* name);
+JE_API je_tileset_document_t* je_tilemap_tileset_create(const char* name);
 
 /*
 je_tilemap_tileset_path_bind [基本接口]
@@ -6883,7 +6973,7 @@ je_tilemap_tileset_path_bind [基本接口]
     je_tilemap_tileset_open
 */
 JE_API bool je_tilemap_tileset_path_bind(
-    je_TilesetDocument* tileset, const char* path);
+    je_tileset_document_t* tileset, const char* path);
 
 /*
 je_tilemap_tileset_reload [基本接口]
@@ -6895,7 +6985,7 @@ JE_API void je_tilemap_tileset_reload(const char* path);
 je_tilemap_tileset_version [基本接口]
 取图集文档的修改版本号，任何经本组 API 的修改都会使其自增
 */
-JE_API uint64_t je_tilemap_tileset_version(je_TilesetDocument* tileset);
+JE_API uint64_t je_tilemap_tileset_version(je_tileset_document_t* tileset);
 
 /*
 je_tilemap_tileset_keep [基本接口]
@@ -6904,7 +6994,7 @@ je_tilemap_tileset_keep [基本接口]
 请参见：
     je_tilemap_tileset_unload
 */
-JE_API int32_t je_tilemap_tileset_keep(je_TilesetDocument* tileset);
+JE_API int32_t je_tilemap_tileset_keep(je_tileset_document_t* tileset);
 
 /*
 je_tilemap_tileset_unload [基本接口]
@@ -6915,25 +7005,25 @@ je_tilemap_tileset_unload [基本接口]
 请参见：
     je_tilemap_tileset_keep
 */
-JE_API int32_t je_tilemap_tileset_unload(je_TilesetDocument* tileset);
+JE_API int32_t je_tilemap_tileset_unload(je_tileset_document_t* tileset);
 
 /*
 je_tilemap_tileset_doc_path [基本接口]
 取图集文档的登记路径，未保存时返回空串
 */
-JE_API const char* je_tilemap_tileset_doc_path(je_TilesetDocument* tileset);
+JE_API const char* je_tilemap_tileset_doc_path(je_tileset_document_t* tileset);
 
 /*
 je_tilemap_tileset_name_set [基本接口]
 设置图集文档的名称
 */
-JE_API void je_tilemap_tileset_name_set(je_TilesetDocument* tileset, const char* name);
+JE_API void je_tilemap_tileset_name_set(je_tileset_document_t* tileset, const char* name);
 
 /*
 je_tilemap_tileset_name [基本接口]
 取图集文档的名称
 */
-JE_API const char* je_tilemap_tileset_name(je_TilesetDocument* tileset);
+JE_API const char* je_tilemap_tileset_name(je_tileset_document_t* tileset);
 
 /*
 je_tilemap_tileset_next_tile_id [基本接口]
@@ -6941,37 +7031,37 @@ je_tilemap_tileset_next_tile_id [基本接口]
 作废，不会被后续新增格复用）
     * 编辑器序列化 .je4tileset 时须原样保存，保证地图按 id 的引用不漂移
 */
-JE_API int32_t je_tilemap_tileset_next_tile_id(je_TilesetDocument* tileset);
+JE_API int32_t je_tilemap_tileset_next_tile_id(je_tileset_document_t* tileset);
 
 // ---- 图集源纹理 ----
 
 /*
 je_tilemap_source_add [基本接口]
 向图集文档添加源纹理，tile_px 为瓦片边长（像素），网格数由纹理尺寸推得，
-源下标（je_SourceId）经 out_id 返回
-    * 源的每个格都会分配稳定的瓦片 id（见 je_TileId），无需再注册瓦片
+源下标（je_source_id_t）经 out_id 返回
+    * 源的每个格都会分配稳定的瓦片 id（见 je_tile_id_t），无需再注册瓦片
     * 图集重新打开时网格按纹理当前尺寸重整（纹理增删一行/一列即增删
       一行/一列瓦片，已有瓦片 id 不变），见 je_tilemap_source_info
     * 已有同路径源时返回 true 且写出其下标；失败（纹理无法加载或参数不合法）
       返回 false，不写出下标
 请参见：
-    je_SourceId
-    je_TileId
+    je_source_id_t
+    je_tile_id_t
 */
-JE_API bool je_tilemap_source_add(je_TilesetDocument* tileset,
-    const char* texture_path, int32_t tile_px, je_SourceId* out_id);
+JE_API bool je_tilemap_source_add(je_tileset_document_t* tileset,
+    const char* texture_path, int32_t tile_px, je_source_id_t* out_id);
 
 /*
 je_tilemap_source_remove [基本接口]
 移除指定下标的源纹理：该源格子的瓦片元数据随之丢弃，其余源下标前移
 */
-JE_API bool je_tilemap_source_remove(je_TilesetDocument* tileset, je_SourceId source_idx);
+JE_API bool je_tilemap_source_remove(je_tileset_document_t* tileset, je_source_id_t source_idx);
 
 /*
 je_tilemap_source_count [基本接口]
 取图集文档的源纹理数量
 */
-JE_API int32_t je_tilemap_source_count(je_TilesetDocument* tileset);
+JE_API int32_t je_tilemap_source_count(je_tileset_document_t* tileset);
 
 /*
 je_tilemap_source_info [基本接口]
@@ -6980,7 +7070,7 @@ je_tilemap_source_info [基本接口]
       纹理增删一行/一列后随之增删
     * 下标越界返回 false
 */
-JE_API bool je_tilemap_source_info(je_TilesetDocument* tileset, je_SourceId source_idx,
+JE_API bool je_tilemap_source_info(je_tileset_document_t* tileset, je_source_id_t source_idx,
     /* OPTIONAL */ const char** texture_path, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* xcount, /* OPTIONAL */ int32_t* ycount);
 
 /*
@@ -6989,8 +7079,8 @@ je_tilemap_source_tex_size [基本接口]
     * 尺寸未知（尚未测量）时写 0；下标越界返回 false
     * 编辑器序列化 .je4tileset 时原样保存（加载时仍会按纹理重测）
 */
-JE_API bool je_tilemap_source_tex_size(je_TilesetDocument* tileset,
-    je_SourceId source_idx,
+JE_API bool je_tilemap_source_tex_size(je_tileset_document_t* tileset,
+    je_source_id_t source_idx,
     /* OPTIONAL */ int32_t* tex_w, /* OPTIONAL */ int32_t* tex_h);
 
 /*
@@ -7003,8 +7093,8 @@ je_tilemap_source_cell_ids [基本接口]
     je_tilemap_tile_id_at
 */
 JE_API /* OPTIONAL: If source_idx is invalid */ const int32_t*
-    je_tilemap_source_cell_ids(je_TilesetDocument* tileset,
-        je_SourceId source_idx, /* OPTIONAL */ int32_t* out_count);
+    je_tilemap_source_cell_ids(je_tileset_document_t* tileset,
+        je_source_id_t source_idx, /* OPTIONAL */ int32_t* out_count);
 
 // ---- 图集源纹理附加层级 ----
 
@@ -7013,8 +7103,8 @@ je_tilemap_source_extra_count [基本接口]
 取指定源纹理的附加层级纹理（如法线图集）数量
     * 下标越界返回 0
 */
-JE_API int32_t je_tilemap_source_extra_count(je_TilesetDocument* tileset,
-    je_SourceId source_idx);
+JE_API int32_t je_tilemap_source_extra_count(je_tileset_document_t* tileset,
+    je_source_id_t source_idx);
 
 /*
 je_tilemap_source_extra_add [基本接口]
@@ -7027,23 +7117,23 @@ je_tilemap_source_extra_add [基本接口]
 请参见：
     je_tilemap_source_info
 */
-JE_API bool je_tilemap_source_extra_add(je_TilesetDocument* tileset,
-    je_SourceId source_idx, const char* texture_path, int32_t pass);
+JE_API bool je_tilemap_source_extra_add(je_tileset_document_t* tileset,
+    je_source_id_t source_idx, const char* texture_path, int32_t pass);
 
 /*
 je_tilemap_source_extra_remove [基本接口]
 移除源纹理的指定附加层级（按层级下标），其余层级下标前移
 */
-JE_API bool je_tilemap_source_extra_remove(je_TilesetDocument* tileset,
-    je_SourceId source_idx, int32_t extra_idx);
+JE_API bool je_tilemap_source_extra_remove(je_tileset_document_t* tileset,
+    je_source_id_t source_idx, int32_t extra_idx);
 
 /*
 je_tilemap_source_extra_info [基本接口]
 取指定附加层级的信息，经出参返回 (绑定通道 id, 纹理路径)
     * 下标越界返回 false
 */
-JE_API bool je_tilemap_source_extra_info(je_TilesetDocument* tileset,
-    je_SourceId source_idx, int32_t extra_idx,
+JE_API bool je_tilemap_source_extra_info(je_tileset_document_t* tileset,
+    je_source_id_t source_idx, int32_t extra_idx,
     /* OPTIONAL */ int32_t* pass, /* OPTIONAL */ const char** texture_path);
 
 /*
@@ -7052,16 +7142,16 @@ je_tilemap_source_extra_tex_size [基本接口]
     * 尺寸未知（尚未测量）时写 0；下标越界返回 false
     * 附加层级 cell 尺寸由该尺寸与主网格推得，编辑器序列化时原样保存
 */
-JE_API bool je_tilemap_source_extra_tex_size(je_TilesetDocument* tileset,
-    je_SourceId source_idx, int32_t extra_idx,
+JE_API bool je_tilemap_source_extra_tex_size(je_tileset_document_t* tileset,
+    je_source_id_t source_idx, int32_t extra_idx,
     /* OPTIONAL */ int32_t* tex_w, /* OPTIONAL */ int32_t* tex_h);
 
 /*
 je_tilemap_source_extra_pass_set [基本接口]
 修改附加层级的绑定通道 id（>= 1，同源内通道唯一），渲染侧逐帧对齐自动重绑
 */
-JE_API bool je_tilemap_source_extra_pass_set(je_TilesetDocument* tileset,
-    je_SourceId source_idx, int32_t extra_idx, int32_t pass);
+JE_API bool je_tilemap_source_extra_pass_set(je_tileset_document_t* tileset,
+    je_source_id_t source_idx, int32_t extra_idx, int32_t pass);
 
 // ---- 瓦片表（图集每个格都是一块瓦片） ----
 
@@ -7071,7 +7161,7 @@ je_tilemap_tile_count [基本接口]
 请参见：
     je_tilemap_tile_at_index
 */
-JE_API int32_t je_tilemap_tile_count(je_TilesetDocument* tileset);
+JE_API int32_t je_tilemap_tile_count(je_tileset_document_t* tileset);
 
 /*
 je_tilemap_tile_at_index [基本接口]
@@ -7080,8 +7170,8 @@ je_tilemap_tile_at_index [基本接口]
 请参见：
     je_tilemap_tile_count
 */
-JE_API bool je_tilemap_tile_at_index(je_TilesetDocument* tileset, int32_t index,
-    je_TileId* out_id);
+JE_API bool je_tilemap_tile_at_index(je_tileset_document_t* tileset, int32_t index,
+    je_tile_id_t* out_id);
 
 /*
 je_tilemap_tile_defs [基本接口]
@@ -7093,15 +7183,15 @@ je_tilemap_tile_defs [基本接口]
 请参见：
     je_tilemap_tile_def_property_info
 */
-JE_API int32_t je_tilemap_tile_defs(je_TilesetDocument* tileset,
-    /* OPTIONAL */ je_TileId* out_ids, int32_t capacity);
+JE_API int32_t je_tilemap_tile_defs(je_tileset_document_t* tileset,
+    /* OPTIONAL */ je_tile_id_t* out_ids, int32_t capacity);
 
 /*
 je_tilemap_tile_def_property_count [基本接口]
 取某瓦片定义的默认属性数量（该瓦片无定义返回 0）
 */
-JE_API int32_t je_tilemap_tile_def_property_count(je_TilesetDocument* tileset,
-    je_TileId tile_id);
+JE_API int32_t je_tilemap_tile_def_property_count(je_tileset_document_t* tileset,
+    je_tile_id_t tile_id);
 
 /*
 je_tilemap_tile_def_property_info [基本接口]
@@ -7109,29 +7199,29 @@ je_tilemap_tile_def_property_info [基本接口]
     * index 越界或该瓦片无定义返回 false
 请参见：
     je_tilemap_tile_defs
-    je_PropertyType
+    je_property_type_t
 */
-JE_API bool je_tilemap_tile_def_property_info(je_TilesetDocument* tileset,
-    je_TileId tile_id, int32_t index,
-    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_PropertyType* type);
+JE_API bool je_tilemap_tile_def_property_info(je_tileset_document_t* tileset,
+    je_tile_id_t tile_id, int32_t index,
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_property_type_t* type);
 
 /*
 je_tilemap_tile_id_at [基本接口]
 取指定源纹理 (ix, iy) 格位的瓦片 id
     * 源/格位越界返回 false；每个格恒有瓦片，无需注册
 请参见：
-    je_TileId
+    je_tile_id_t
 */
-JE_API bool je_tilemap_tile_id_at(je_TilesetDocument* tileset,
-    je_SourceId source_idx, int32_t ix, int32_t iy, je_TileId* out_id);
+JE_API bool je_tilemap_tile_id_at(je_tileset_document_t* tileset,
+    je_source_id_t source_idx, int32_t ix, int32_t iy, je_tile_id_t* out_id);
 
 /*
 je_tilemap_tile_info [基本接口]
 取指定 id 瓦片的信息，经出参返回 (源下标, 源内格位 ix/iy, 是否可通行)
     * id 不属于任何现存源格（越界/源已删除）返回 false
 */
-JE_API bool je_tilemap_tile_info(je_TilesetDocument* tileset, je_TileId tile_id,
-    /* OPTIONAL */ je_SourceId* source_idx, /* OPTIONAL */ int32_t* ix, /* OPTIONAL */ int32_t* iy, /* OPTIONAL */ int32_t* walkable);
+JE_API bool je_tilemap_tile_info(je_tileset_document_t* tileset, je_tile_id_t tile_id,
+    /* OPTIONAL */ je_source_id_t* source_idx, /* OPTIONAL */ int32_t* ix, /* OPTIONAL */ int32_t* iy, /* OPTIONAL */ int32_t* walkable);
 
 /*
 je_tilemap_tile_name [基本接口]
@@ -7140,7 +7230,7 @@ je_tilemap_tile_name [基本接口]
 请参见：
     je_tilemap_tile_name_set
 */
-JE_API const char* je_tilemap_tile_name(je_TilesetDocument* tileset, je_TileId tile_id);
+JE_API const char* je_tilemap_tile_name(je_tileset_document_t* tileset, je_tile_id_t tile_id);
 
 /*
 je_tilemap_tile_name_set [基本接口]
@@ -7149,15 +7239,15 @@ je_tilemap_tile_name_set [基本接口]
 请参见：
     je_tilemap_tile_name
 */
-JE_API bool je_tilemap_tile_name_set(je_TilesetDocument* tileset,
-    je_TileId tile_id, const char* name);
+JE_API bool je_tilemap_tile_name_set(je_tileset_document_t* tileset,
+    je_tile_id_t tile_id, const char* name);
 
 /*
 je_tilemap_tile_walkable_set [基本接口]
 设置指定 id 瓦片的默认通行性
 */
-JE_API void je_tilemap_tile_walkable_set(je_TilesetDocument* tileset,
-    je_TileId tile_id, int32_t walkable);
+JE_API void je_tilemap_tile_walkable_set(je_tileset_document_t* tileset,
+    je_tile_id_t tile_id, int32_t walkable);
 
 // ---- 瓦片法线（参与地图网格顶点生成） ----
 
@@ -7169,7 +7259,7 @@ je_tilemap_tile_normal [基本接口]
 请参见：
     je_tilemap_tile_normal_set
 */
-JE_API bool je_tilemap_tile_normal(je_TilesetDocument* tileset, je_TileId tile_id,
+JE_API bool je_tilemap_tile_normal(je_tileset_document_t* tileset, je_tile_id_t tile_id,
     /* OPTIONAL */ float* out_x, /* OPTIONAL */ float* out_y, /* OPTIONAL */ float* out_z);
 
 /*
@@ -7182,8 +7272,8 @@ je_tilemap_tile_normal_set [基本接口]
 请参见：
     je_tilemap_tile_normal
 */
-JE_API bool je_tilemap_tile_normal_set(je_TilesetDocument* tileset,
-    je_TileId tile_id, float x, float y, float z);
+JE_API bool je_tilemap_tile_normal_set(je_tileset_document_t* tileset,
+    je_tile_id_t tile_id, float x, float y, float z);
 
 // ---- 自动拼接（"地形"行为，是瓦片自身的属性） ----
 
@@ -7191,20 +7281,20 @@ JE_API bool je_tilemap_tile_normal_set(je_TilesetDocument* tileset,
 je_tilemap_tile_kind [基本接口]
 取指定 id 瓦片的自动拼接类型；id 无效按 JE_TILE_KIND_PLAIN 返回
 请参见：
-    je_TileKind
+    je_tile_kind_t
 */
-JE_API je_TileKind je_tilemap_tile_kind(je_TilesetDocument* tileset, je_TileId tile_id);
+JE_API je_tile_kind_t je_tilemap_tile_kind(je_tileset_document_t* tileset, je_tile_id_t tile_id);
 
 /*
 je_tilemap_tile_kind_set [基本接口]
-设置指定 id 瓦片的自动拼接类型（kind 取值见 je_TileKind）
+设置指定 id 瓦片的自动拼接类型（kind 取值见 je_tile_kind_t）
     * id 无效或 kind 非法返回 false
     * 地图格存负值时按该类型解析邻接变体；PLAIN 即普通整块瓦片
 请参见：
-    je_TileKind
+    je_tile_kind_t
 */
-JE_API bool je_tilemap_tile_kind_set(je_TilesetDocument* tileset,
-    je_TileId tile_id, je_TileKind kind);
+JE_API bool je_tilemap_tile_kind_set(je_tileset_document_t* tileset,
+    je_tile_id_t tile_id, je_tile_kind_t kind);
 
 /*
 je_tilemap_tile_variant_count [基本接口]
@@ -7212,7 +7302,7 @@ je_tilemap_tile_variant_count [基本接口]
 请参见：
     je_tilemap_tile_variant
 */
-JE_API int32_t je_tilemap_tile_variant_count(je_TilesetDocument* tileset, je_TileId tile_id);
+JE_API int32_t je_tilemap_tile_variant_count(je_tileset_document_t* tileset, je_tile_id_t tile_id);
 
 /*
 je_tilemap_tile_variant [基本接口]
@@ -7221,8 +7311,8 @@ je_tilemap_tile_variant [基本接口]
 请参见：
     je_tilemap_tile_variant_count
 */
-JE_API bool je_tilemap_tile_variant(je_TilesetDocument* tileset, je_TileId tile_id,
-    int32_t index, je_TileId* out_variant);
+JE_API bool je_tilemap_tile_variant(je_tileset_document_t* tileset, je_tile_id_t tile_id,
+    int32_t index, je_tile_id_t* out_variant);
 
 /*
 je_tilemap_tile_variant_clear [基本接口]
@@ -7230,7 +7320,7 @@ je_tilemap_tile_variant_clear [基本接口]
 请参见：
     je_tilemap_tile_variant_add
 */
-JE_API bool je_tilemap_tile_variant_clear(je_TilesetDocument* tileset, je_TileId tile_id);
+JE_API bool je_tilemap_tile_variant_clear(je_tileset_document_t* tileset, je_tile_id_t tile_id);
 
 /*
 je_tilemap_tile_variant_add [基本接口]
@@ -7239,73 +7329,73 @@ je_tilemap_tile_variant_add [基本接口]
 请参见：
     je_tilemap_tile_variant_clear
 */
-JE_API bool je_tilemap_tile_variant_add(je_TilesetDocument* tileset,
-    je_TileId tile_id, je_TileId variant_tile_id);
+JE_API bool je_tilemap_tile_variant_add(je_tileset_document_t* tileset,
+    je_tile_id_t tile_id, je_tile_id_t variant_tile_id);
 
 // ---- 属性 schema 与默认值 ----
 
 /*
 je_tilemap_property_add [基本接口]
-向图集 schema 添加属性定义（数据形态见 je_PropertyType），属性下标经
+向图集 schema 添加属性定义（数据形态见 je_property_type_t），属性下标经
 out_index 返回
     * 重名、类型非法返回 false，不写出下标
     * default_value 传 nullptr 时按类型取零值（false/""/0/0.0/全 0 向量）
 请参见：
-    je_PropertyType
+    je_property_type_t
 */
-JE_API bool je_tilemap_property_add(je_TilesetDocument* tileset,
-    const char* name, je_PropertyType type,
+JE_API bool je_tilemap_property_add(je_tileset_document_t* tileset,
+    const char* name, je_property_type_t type,
     /* OPTIONAL */ const void* default_value, int32_t* out_index);
 
 /*
 je_tilemap_property_remove [基本接口]
 按名称移除图集 schema 中的属性定义
 */
-JE_API bool je_tilemap_property_remove(je_TilesetDocument* tileset, const char* name);
+JE_API bool je_tilemap_property_remove(je_tileset_document_t* tileset, const char* name);
 
 /*
 je_tilemap_property_count [基本接口]
 取图集 schema 中属性定义的数量
 */
-JE_API int32_t je_tilemap_property_count(je_TilesetDocument* tileset);
+JE_API int32_t je_tilemap_property_count(je_tileset_document_t* tileset);
 
 /*
 je_tilemap_property_info [基本接口]
 取指定下标属性定义的信息，经出参返回 (名称, 类型)
     * 下标越界返回 false
 请参见：
-    je_PropertyType
+    je_property_type_t
 */
-JE_API bool je_tilemap_property_info(je_TilesetDocument* tileset, int32_t index,
-    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_PropertyType* type);
+JE_API bool je_tilemap_property_info(je_tileset_document_t* tileset, int32_t index,
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_property_type_t* type);
 
 /*
 je_tilemap_property_default [基本接口]
 按名称取图集 schema 中属性定义的默认值，数据经 out_value 写回
-（形态见 je_PropertyType）
+（形态见 je_property_type_t）
     * 无此属性或类型与定义不符返回 false
 请参见：
-    je_PropertyType
+    je_property_type_t
 */
-JE_API bool je_tilemap_property_default(je_TilesetDocument* tileset,
-    const char* name, je_PropertyType type, /* OPTIONAL */ void* out_value);
+JE_API bool je_tilemap_property_default(je_tileset_document_t* tileset,
+    const char* name, je_property_type_t type, /* OPTIONAL */ void* out_value);
 
 /*
 je_tilemap_tile_property_set [基本接口]
-设置指定 id 瓦片的属性默认值（数据形态见 je_PropertyType）
+设置指定 id 瓦片的属性默认值（数据形态见 je_property_type_t）
     * value 传 nullptr 表示清除该默认值（此时忽略 type）
     * 已有不同类型的默认值时返回 false 且不修改
 */
-JE_API bool je_tilemap_tile_property_set(je_TilesetDocument* tileset, je_TileId tile_id,
-    const char* name, je_PropertyType type, /* OPTIONAL */ const void* value);
+JE_API bool je_tilemap_tile_property_set(je_tileset_document_t* tileset, je_tile_id_t tile_id,
+    const char* name, je_property_type_t type, /* OPTIONAL */ const void* value);
 
 /*
 je_tilemap_tile_property_get [基本接口]
-取指定 id 瓦片的属性默认值，数据经 out_value 写回（形态见 je_PropertyType）
+取指定 id 瓦片的属性默认值，数据经 out_value 写回（形态见 je_property_type_t）
     * 无值或类型与实际存储不符返回 false
 */
-JE_API bool je_tilemap_tile_property_get(je_TilesetDocument* tileset,
-    je_TileId tile_id, const char* name, je_PropertyType type,
+JE_API bool je_tilemap_tile_property_get(je_tileset_document_t* tileset,
+    je_tile_id_t tile_id, const char* name, je_property_type_t type,
     /* OPTIONAL */ void* out_value);
 
 /*
@@ -7316,7 +7406,7 @@ je_tileset_cache_open_or_create [基本接口]
     je_tilemap_cache_open_or_create
     je_file_close
 */
-JE_API /* OPTIONAL */ jeecs_file* je_tileset_cache_open_or_create(const char* path);
+JE_API /* OPTIONAL */ je_file_t* je_tileset_cache_open_or_create(const char* path);
 
 // ---- 单元格渲染信息（编辑器预览用，与实际渲染一致） ----
 
@@ -7327,8 +7417,8 @@ je_tilemap_cell_quad_count [基本接口]
 请参见：
     je_tilemap_cell_quad
 */
-JE_API int32_t je_tilemap_cell_quad_count(je_TilemapDocument* map,
-    je_LayerId layer, int32_t x, int32_t y);
+JE_API int32_t je_tilemap_cell_quad_count(je_tilemap_document_t* map,
+    je_layer_id_t layer, int32_t x, int32_t y);
 
 /*
 je_tilemap_cell_quad [基本接口]
@@ -7338,7 +7428,7 @@ je_tilemap_cell_quad [基本接口]
 请参见：
     je_tilemap_cell_quad_count
 */
-JE_API bool je_tilemap_cell_quad(je_TilemapDocument* map, je_LayerId layer,
+JE_API bool je_tilemap_cell_quad(je_tilemap_document_t* map, je_layer_id_t layer,
     int32_t x, int32_t y, int32_t idx,
     /* OPTIONAL */ const char** texture_path,
     /* OPTIONAL */ float* u0, /* OPTIONAL */ float* v0, /* OPTIONAL */ float* u1, /* OPTIONAL */ float* v1,
@@ -7352,7 +7442,7 @@ je_tilemap_cache_open_or_create [基本接口]
     je_tileset_cache_open_or_create
     je_file_close
 */
-JE_API /* OPTIONAL */ jeecs_file* je_tilemap_cache_open_or_create(const char* path);
+JE_API /* OPTIONAL */ je_file_t* je_tilemap_cache_open_or_create(const char* path);
 
 // DEBUG API, SHOULD NOT BE USED IN GAME PROJECT, ONLY USED FOR EDITOR
 #ifdef JE_ENABLE_DEBUG_API
@@ -7360,28 +7450,28 @@ JE_API /* OPTIONAL */ jeecs_file* je_tilemap_cache_open_or_create(const char* pa
 // NOTE: need free the return result by 'je_mem_free'
 // will return all alive world pointer in the universe.
 // [world1, world2,..., nullptr]
-JE_API je_GameWorld** je_debug_universe_worlds_get_all(je_GameUniverse* _universes);
+JE_API je_game_world_t** je_debug_universe_worlds_get_all(je_game_universe_t* _universes);
 
-JE_API void je_debug_entity_free(je_GameEntity* _entity_list);
+JE_API void je_debug_entity_free(je_game_entity_t* _entity_list);
 
 // NOTE: need free the return result by 'je_mem_free'(and elem with je_debug_entity_free)
-JE_API je_GameEntity** je_debug_world_entities_get_all(je_GameWorld* _world);
+JE_API je_game_entity_t** je_debug_world_entities_get_all(je_game_world_t* _world);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const je_TypeInfo** je_debug_entity_components_get_all(const je_GameEntity* _entity);
+JE_API const je_type_info_t** je_debug_entity_components_get_all(const je_game_entity_t* _entity);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const je_TypeInfo** je_debug_types_registered_get_all(void);
+JE_API const je_type_info_t** je_debug_types_registered_get_all(void);
 
 // NOTE: need free the return result by 'je_mem_free'
-JE_API const je_TypeInfo** je_debug_world_systems_attached_get_all(je_GameWorld* _world);
+JE_API const je_type_info_t** je_debug_world_systems_attached_get_all(je_game_world_t* _world);
 
-JE_API je_DebugEid je_debug_entity_uid_get(const je_GameEntity* e);
+JE_API je_debug_eid_t je_debug_entity_uid_get(const je_game_entity_t* e);
 
-JE_API void je_debug_entity_uid_set(const je_GameEntity* e, je_DebugEid uid);
+JE_API void je_debug_entity_uid_set(const je_game_entity_t* e, je_debug_eid_t uid);
 
 JE_API void je_debug_entity_arch_information_get(
-    je_GameEntity* _entity,
+    je_game_entity_t* _entity,
     size_t* _out_chunk_size,
     size_t* _out_entity_size,
     size_t* _out_all_entity_count_in_chunk);
@@ -7409,6 +7499,290 @@ JE_DECL_ATOMIC_OPERATOR_API(size_t);
 JE_DECL_ATOMIC_OPERATOR_API(intptr_t);
 
 #undef JE_DECL_ATOMIC_OPERATOR_API
+
+// ============================================================================
+// C-API 类型别名（je_ + 大驼峰）
+// 每个规范类型 je_<domain>_<subject...>_t 都提供等价的 je_<DomainSubject> 别名；
+// 规范声明使用 _t 形式，别名用于偏好大驼峰写法的调用方。
+// ============================================================================
+
+// ---- core / ECS 基础类型 ----
+typedef je_type_hash_t je_TypeHash;
+typedef je_type_id_t je_TypeId;
+typedef je_version_t je_Version;
+typedef je_timestamp_ms_t je_TimestampMs;
+typedef je_debug_eid_t je_DebugEid;
+typedef je_uuid_t je_Uuid;
+typedef je_game_universe_t je_GameUniverse;
+typedef je_game_world_t je_GameWorld;
+typedef je_archtype_t je_Archtype;
+typedef je_chunk_t je_Chunk;
+typedef je_entity_id_in_chunk_t je_EntityIdInChunk;
+typedef je_entity_stat_t je_EntityStat;
+typedef je_game_entity_meta_t je_GameEntityMeta;
+typedef je_game_entity_t je_GameEntity;
+typedef je_mousecode_t je_Mousecode;
+typedef je_keycode_t je_Keycode;
+typedef je_gamepadcode_t je_Gamepadcode;
+typedef je_joystickcode_t je_Joystickcode;
+typedef je_graphic_uhost_t je_GraphicUhost;
+typedef je_render_branch_t je_RenderBranch;
+
+// ---- logging ----
+typedef je_log_regid_t je_LogRegid;
+typedef je_log_callback_t je_LogCallback;
+
+// ---- typing ----
+typedef je_typing_class_t je_TypingClass;
+typedef je_type_info_t je_TypeInfo;
+typedef je_construct_func_t je_ConstructFunc;
+typedef je_destruct_func_t je_DestructFunc;
+typedef je_copy_construct_func_t je_CopyConstructFunc;
+typedef je_move_construct_func_t je_MoveConstructFunc;
+typedef je_on_enable_or_disable_func_t je_OnEnableOrDisableFunc;
+typedef je_update_func_t je_UpdateFunc;
+typedef je_parse_c2w_func_t je_ParseC2WFunc;
+typedef je_parse_w2c_func_t je_ParseW2CFunc;
+typedef je_member_info_t je_MemberInfo;
+typedef je_typeinfo_member_t je_TypeinfoMember;
+typedef je_typeinfo_script_parser_t je_TypeinfoScriptParser;
+typedef je_typeinfo_system_updater_t je_TypeinfoSystemUpdater;
+
+// ---- ecs ----
+typedef je_job_for_worlds_t je_JobForWorlds;
+typedef je_job_call_once_t je_JobCallOnce;
+typedef je_component_requirement_kind_t je_ComponentRequirementKind;
+typedef je_component_requirement_t je_ComponentRequirement;
+typedef je_dependence_arch_infos_t je_DependenceArchInfos;
+typedef je_collected_requirements_t je_CollectedRequirements;
+typedef je_requirement_collection_t je_RequirementCollection;
+typedef je_system_t je_System;
+
+// ---- file / cache ----
+typedef je_file_t je_File;
+typedef je_fimg_archive_t je_FimgArchive;
+typedef je_fimg_writer_t je_FimgWriter;
+typedef je_file_seek_mode_t je_FileSeekMode;
+typedef je_raw_file_t je_RawFile;
+typedef je_read_file_open_func_t je_ReadFileOpenFunc;
+typedef je_read_file_func_t je_ReadFileFunc;
+typedef je_read_file_tell_func_t je_ReadFileTellFunc;
+typedef je_read_file_seek_func_t je_ReadFileSeekFunc;
+typedef je_read_file_close_func_t je_ReadFileCloseFunc;
+typedef je_fimg_writer_options_t je_FimgWriterOptions;
+typedef je_writing_cache_file_t je_WritingCacheFile;
+typedef je_cache_binary_value_type_t je_CacheBinaryValueType;
+typedef je_cache_binary_document_t je_CacheBinaryDocument;
+typedef je_cache_binary_list_t je_CacheBinaryList;
+typedef je_cache_binary_list_iterator_t je_CacheBinaryListIterator;
+typedef je_cache_binary_string_t je_CacheBinaryString;
+typedef je_cache_binary_buffer_t je_CacheBinaryBuffer;
+
+// ---- animation ----
+typedef je_animation_value_type_t je_AnimationValueType;
+typedef je_animation_value_t je_AnimationValue;
+typedef je_animation_component_data_t je_AnimationComponentData;
+typedef je_animation_uniform_data_t je_AnimationUniformData;
+typedef je_animation_frame_data_t je_AnimationFrameData;
+typedef je_animation_action_data_t je_AnimationActionData;
+typedef je_animation_t je_Animation;
+
+// ---- graphic ----
+typedef je_image_texture_color_space_t je_ImageTextureColorSpace;
+typedef je_gl_interface_config_t je_GlInterfaceConfig;
+typedef je_gl_context_notifier_t je_GlContextNotifier;
+typedef je_gl_graphic_api_t je_GlGraphicApi;
+typedef je_gl_context_promise_t je_GlContextPromise;
+typedef je_gl_update_action_t je_GlUpdateAction;
+typedef je_graphic_impl_context_t je_GraphicImplContext;
+typedef je_gl_context_t je_GlContext;
+typedef je_gl_resource_blob_t je_GlResourceBlob;
+typedef je_gl_resource_bind_counter_t je_GlResourceBindCounter;
+typedef je_gl_resource_handle_t je_GlResourceHandle;
+typedef je_gl_texture_kind_t je_GlTextureKind;
+typedef je_gl_texture_common_t je_GlTextureCommon;
+typedef je_gl_texture_2d_t je_GlTexture2D;
+typedef je_gl_texture_3d_t je_GlTexture3D;
+typedef je_gl_texture_array_t je_GlTextureArray;
+typedef je_gl_texture_cube_t je_GlTextureCube;
+typedef je_gl_texture_msaa_t je_GlTextureMsaa;
+typedef je_gl_vertex_t je_GlVertex;
+typedef je_gl_shader_t je_GlShader;
+typedef je_gl_frame_buffer_t je_GlFrameBuffer;
+typedef je_gl_uniform_buffer_t je_GlUniformBuffer;
+typedef je_gl_frame_buffer_clear_operation_t je_GlFrameBufferClearOperation;
+typedef je_gl_pipeline_t je_GlPipeline;
+typedef je_gl_sampler_t je_GlSampler;
+typedef je_gl_command_buffer_t je_GlCommandBuffer;
+typedef je_gl_viewport_t je_GlViewport;
+typedef je_graphic_api_register_func_t je_GraphicApiRegisterFunc;
+typedef je_graphic_sync_callback_func_t je_GraphicSyncCallbackFunc;
+typedef je_gl_sync_state_t je_GlSyncState;
+typedef je_gl_update_sync_mode_t je_GlUpdateSyncMode;
+typedef je_gl_update_sync_callback_t je_GlUpdateSyncCallback;
+typedef je_stb_font_data_t je_StbFontData;
+typedef je_font_char_updater_t je_FontCharUpdater;
+typedef je_font_t je_Font;
+typedef je_gl_graphic_api_entry_t je_GlGraphicApiEntry;
+typedef je_gl_topology_t je_GlTopology;
+typedef je_gl_front_face_t je_GlFrontFace;
+typedef je_gl_pipeline_state_t je_GlPipelineState;
+typedef je_gl_pipeline_desc_t je_GlPipelineDesc;
+typedef je_gl_uniform_slot_t je_GlUniformSlot;
+typedef je_gl_builtin_uniform_slots_t je_GlBuiltinUniformSlots;
+typedef je_gl_filter_t je_GlFilter;
+typedef je_gl_mip_filter_t je_GlMipFilter;
+typedef je_gl_wrap_mode_t je_GlWrapMode;
+typedef je_gl_sampler_desc_t je_GlSamplerDesc;
+typedef je_gl_display_mode_t je_GlDisplayMode;
+typedef je_gl_frame_job_func_t je_GlFrameJobFunc;
+typedef je_gl_texture_pixel_data_t je_GlTexturePixelData;
+typedef je_gl_texture_format_t je_GlTextureFormat;
+typedef je_gl_vertex_type_t je_GlVertexType;
+typedef je_gl_vertex_data_type_t je_GlVertexDataType;
+typedef je_gl_vertex_data_layout_t je_GlVertexDataLayout;
+typedef je_gl_vertex_bone_data_t je_GlVertexBoneData;
+typedef je_gl_shader_filter_mode_t je_GlShaderFilterMode;
+typedef je_gl_shader_wrap_mode_t je_GlShaderWrapMode;
+typedef je_gl_shader_sampler_method_t je_GlShaderSamplerMethod;
+typedef je_gl_shader_uniform_type_t je_GlShaderUniformType;
+typedef je_gl_shader_uniform_mask_t je_GlShaderUniformMask;
+typedef je_gl_shader_script_uniform_variant_t je_GlShaderScriptUniformVariant;
+typedef je_gl_shader_builtin_uniform_location_t je_GlShaderBuiltinUniformLocation;
+typedef je_gl_shader_uniform_value_t je_GlShaderUniformValue;
+typedef je_gl_shader_uniform_variables_t je_GlShaderUniformVariables;
+typedef je_gl_shader_uniform_block_t je_GlShaderUniformBlock;
+typedef je_gl_shader_depth_test_method_t je_GlShaderDepthTestMethod;
+typedef je_gl_shader_depth_mask_method_t je_GlShaderDepthMaskMethod;
+typedef je_gl_shader_blend_equation_t je_GlShaderBlendEquation;
+typedef je_gl_shader_blend_method_t je_GlShaderBlendMethod;
+typedef je_gl_shader_cull_mode_t je_GlShaderCullMode;
+typedef je_gl_shader_spirv_code_t je_GlShaderSpirvCode;
+typedef je_gl_shader_texture_decl_t je_GlShaderTextureDecl;
+typedef je_gl_frame_buffer_attachment_t je_GlFrameBufferAttachment;
+typedef je_gl_frame_buffer_clear_type_t je_GlFrameBufferClearType;
+typedef je_gl_frame_buffer_clear_color_attachment_t je_GlFrameBufferClearColorAttachment;
+typedef je_gl_frame_buffer_clear_depth_attachment_t je_GlFrameBufferClearDepthAttachment;
+typedef je_gl_graphic_api_startup_func_t je_GlGraphicApiStartupFunc;
+typedef je_gl_graphic_api_shutdown_func_t je_GlGraphicApiShutdownFunc;
+typedef je_gl_graphic_api_update_func_t je_GlGraphicApiUpdateFunc;
+typedef je_gl_graphic_api_commit_func_t je_GlGraphicApiCommitFunc;
+typedef je_gl_graphic_api_shader_create_blob_func_t je_GlGraphicApiShaderCreateBlobFunc;
+typedef je_gl_graphic_api_shader_close_blob_func_t je_GlGraphicApiShaderCloseBlobFunc;
+typedef je_gl_graphic_api_shader_init_func_t je_GlGraphicApiShaderInitFunc;
+typedef je_gl_graphic_api_shader_update_func_t je_GlGraphicApiShaderUpdateFunc;
+typedef je_gl_graphic_api_shader_close_func_t je_GlGraphicApiShaderCloseFunc;
+typedef je_gl_graphic_api_texture_2d_create_blob_func_t je_GlGraphicApiTexture2DCreateBlobFunc;
+typedef je_gl_graphic_api_texture_3d_create_blob_func_t je_GlGraphicApiTexture3DCreateBlobFunc;
+typedef je_gl_graphic_api_texture_array_create_blob_func_t je_GlGraphicApiTextureArrayCreateBlobFunc;
+typedef je_gl_graphic_api_texture_cube_create_blob_func_t je_GlGraphicApiTextureCubeCreateBlobFunc;
+typedef je_gl_graphic_api_texture_msaa_create_blob_func_t je_GlGraphicApiTextureMsaaCreateBlobFunc;
+typedef je_gl_graphic_api_texture_close_blob_func_t je_GlGraphicApiTextureCloseBlobFunc;
+typedef je_gl_graphic_api_texture_2d_init_func_t je_GlGraphicApiTexture2DInitFunc;
+typedef je_gl_graphic_api_texture_3d_init_func_t je_GlGraphicApiTexture3DInitFunc;
+typedef je_gl_graphic_api_texture_array_init_func_t je_GlGraphicApiTextureArrayInitFunc;
+typedef je_gl_graphic_api_texture_cube_init_func_t je_GlGraphicApiTextureCubeInitFunc;
+typedef je_gl_graphic_api_texture_msaa_init_func_t je_GlGraphicApiTextureMsaaInitFunc;
+typedef je_gl_graphic_api_texture_2d_update_func_t je_GlGraphicApiTexture2DUpdateFunc;
+typedef je_gl_graphic_api_texture_3d_update_func_t je_GlGraphicApiTexture3DUpdateFunc;
+typedef je_gl_graphic_api_texture_array_update_func_t je_GlGraphicApiTextureArrayUpdateFunc;
+typedef je_gl_graphic_api_texture_cube_update_func_t je_GlGraphicApiTextureCubeUpdateFunc;
+typedef je_gl_graphic_api_texture_msaa_update_func_t je_GlGraphicApiTextureMsaaUpdateFunc;
+typedef je_gl_graphic_api_texture_2d_close_func_t je_GlGraphicApiTexture2DCloseFunc;
+typedef je_gl_graphic_api_texture_3d_close_func_t je_GlGraphicApiTexture3DCloseFunc;
+typedef je_gl_graphic_api_texture_array_close_func_t je_GlGraphicApiTextureArrayCloseFunc;
+typedef je_gl_graphic_api_texture_cube_close_func_t je_GlGraphicApiTextureCubeCloseFunc;
+typedef je_gl_graphic_api_texture_msaa_close_func_t je_GlGraphicApiTextureMsaaCloseFunc;
+typedef je_gl_graphic_api_vertex_create_blob_func_t je_GlGraphicApiVertexCreateBlobFunc;
+typedef je_gl_graphic_api_vertex_close_blob_func_t je_GlGraphicApiVertexCloseBlobFunc;
+typedef je_gl_graphic_api_vertex_init_func_t je_GlGraphicApiVertexInitFunc;
+typedef je_gl_graphic_api_vertex_update_func_t je_GlGraphicApiVertexUpdateFunc;
+typedef je_gl_graphic_api_vertex_close_func_t je_GlGraphicApiVertexCloseFunc;
+typedef je_gl_graphic_api_framebuffer_init_func_t je_GlGraphicApiFrameBufferInitFunc;
+typedef je_gl_graphic_api_framebuffer_update_func_t je_GlGraphicApiFrameBufferUpdateFunc;
+typedef je_gl_graphic_api_framebuffer_close_func_t je_GlGraphicApiFrameBufferCloseFunc;
+typedef je_gl_graphic_api_ubuffer_init_func_t je_GlGraphicApiUBufferInitFunc;
+typedef je_gl_graphic_api_ubuffer_update_func_t je_GlGraphicApiUBufferUpdateFunc;
+typedef je_gl_graphic_api_ubuffer_close_func_t je_GlGraphicApiUBufferCloseFunc;
+typedef je_gl_graphic_api_pipeline_init_func_t je_GlGraphicApiPipelineInitFunc;
+typedef je_gl_graphic_api_pipeline_close_func_t je_GlGraphicApiPipelineCloseFunc;
+typedef je_gl_graphic_api_pipeline_bind_func_t je_GlGraphicApiPipelineBindFunc;
+typedef je_gl_graphic_api_sampler_init_func_t je_GlGraphicApiSamplerInitFunc;
+typedef je_gl_graphic_api_sampler_close_func_t je_GlGraphicApiSamplerCloseFunc;
+typedef je_gl_graphic_api_sampler_bind_func_t je_GlGraphicApiSamplerBindFunc;
+typedef je_gl_graphic_api_begin_pass_func_t je_GlGraphicApiBeginPassFunc;
+typedef je_gl_graphic_api_clear_color_func_t je_GlGraphicApiClearColorFunc;
+typedef je_gl_graphic_api_clear_depth_func_t je_GlGraphicApiClearDepthFunc;
+typedef je_gl_graphic_api_end_pass_func_t je_GlGraphicApiEndPassFunc;
+typedef je_gl_graphic_api_bind_vertex_func_t je_GlGraphicApiBindVertexFunc;
+typedef je_gl_graphic_api_bind_uniform_buffer_func_t je_GlGraphicApiBindUniformBufferFunc;
+typedef je_gl_graphic_api_bind_texture_2d_func_t je_GlGraphicApiBindTexture2DFunc;
+typedef je_gl_graphic_api_bind_texture_3d_func_t je_GlGraphicApiBindTexture3DFunc;
+typedef je_gl_graphic_api_bind_texture_array_func_t je_GlGraphicApiBindTextureArrayFunc;
+typedef je_gl_graphic_api_bind_texture_cube_func_t je_GlGraphicApiBindTextureCubeFunc;
+typedef je_gl_graphic_api_draw_indexed_func_t je_GlGraphicApiDrawIndexedFunc;
+typedef je_gl_graphic_api_draw_func_t je_GlGraphicApiDrawFunc;
+typedef je_gl_graphic_api_commit_begin_func_t je_GlGraphicApiCommitBeginFunc;
+typedef je_gl_graphic_api_commit_end_func_t je_GlGraphicApiCommitEndFunc;
+
+// ---- gui ----
+typedef je_gui_user_image_handle_t je_GuiUserImageHandle;
+typedef je_gui_user_image_loader_t je_GuiUserImageLoader;
+typedef je_gui_user_sampler_loader_t je_GuiUserSamplerLoader;
+typedef je_gui_platform_draw_callback_t je_GuiPlatformDrawCallback;
+
+// ---- io ----
+typedef je_io_gamepad_handle_t je_IoGamepadHandle;
+
+// ---- audio ----
+typedef je_audio_native_play_device_instance_t je_AudioNativePlayDeviceInstance;
+typedef je_audio_play_device_t je_AudioPlayDevice;
+typedef je_audio_state_t je_AudioState;
+typedef je_audio_format_t je_AudioFormat;
+typedef je_audio_native_buffer_instance_t je_AudioNativeBufferInstance;
+typedef je_audio_buffer_t je_AudioBuffer;
+typedef je_audio_native_source_instance_t je_AudioNativeSourceInstance;
+typedef je_audio_source_t je_AudioSource;
+typedef je_audio_listener_t je_AudioListener;
+typedef je_audio_native_effect_slot_instance_t je_AudioNativeEffectSlotInstance;
+typedef je_audio_effect_slot_t je_AudioEffectSlot;
+typedef je_audio_effect_reverb_t je_AudioEffectReverb;
+typedef je_audio_effect_chorus_t je_AudioEffectChorus;
+typedef je_audio_effect_distortion_t je_AudioEffectDistortion;
+typedef je_audio_effect_echo_t je_AudioEffectEcho;
+typedef je_audio_effect_flanger_t je_AudioEffectFlanger;
+typedef je_audio_effect_frequency_shifter_t je_AudioEffectFrequencyShifter;
+typedef je_audio_effect_vocal_morpher_t je_AudioEffectVocalMorpher;
+typedef je_audio_effect_pitch_shifter_t je_AudioEffectPitchShifter;
+typedef je_audio_effect_ring_modulator_t je_AudioEffectRingModulator;
+typedef je_audio_effect_autowah_t je_AudioEffectAutowah;
+typedef je_audio_effect_compressor_t je_AudioEffectCompressor;
+typedef je_audio_effect_equalizer_t je_AudioEffectEqualizer;
+typedef je_audio_effect_eax_reverb_t je_AudioEffectEaxReverb;
+typedef je_audio_filter_type_t je_AudioFilterType;
+typedef je_audio_native_filter_instance_t je_AudioNativeFilterInstance;
+typedef je_audio_filter_t je_AudioFilter;
+typedef je_audio_enumerate_device_callback_t je_AudioEnumerateDeviceCallback;
+typedef je_audio_effect_chorus_waveform_t je_AudioEffectChorusWaveform;
+typedef je_audio_effect_flanger_waveform_t je_AudioEffectFlangerWaveform;
+typedef je_audio_effect_frequency_shifter_direction_t je_AudioEffectFrequencyShifterDirection;
+typedef je_audio_effect_vocal_morpher_phoneme_t je_AudioEffectVocalMorpherPhoneme;
+typedef je_audio_effect_vocal_morpher_waveform_t je_AudioEffectVocalMorpherWaveform;
+typedef je_audio_effect_ring_modulator_waveform_t je_AudioEffectRingModulatorWaveform;
+
+// ---- tilemap ----
+typedef je_tilemap_document_t je_TilemapDocument;
+typedef je_tileset_document_t je_TilesetDocument;
+typedef je_layer_id_t je_LayerId;
+typedef je_source_id_t je_SourceId;
+typedef je_tile_id_t je_TileId;
+typedef je_tile_kind_t je_TileKind;
+typedef je_property_type_t je_PropertyType;
+typedef je_layer_self_shadow_t je_LayerSelfShadow;
+typedef je_layer_block_shadow_t je_LayerBlockShadow;
+typedef je_tilemap_shader_ref_t je_TilemapShaderRef;
+typedef je_tilemap_texture_ref_t je_TilemapTextureRef;
+typedef je_tilemap_cell_property_entry_t je_TilemapCellPropertyEntry;
 
 JE_FORCE_CAPI_END
 
@@ -7514,7 +7888,7 @@ namespace jeecs
                 { ct.JEParseToScriptType(val) } -> std::same_as<void>;
             };
             template <typename U>
-            concept has_pointer_typeinfo_constructor_function = requires(void* ptr, const je_TypeInfo * tinfo)
+            concept has_pointer_typeinfo_constructor_function = requires(void* ptr, const je_type_info_t * tinfo)
             {
                 new U(ptr, tinfo);
             };
@@ -7524,17 +7898,17 @@ namespace jeecs
                 new U(ptr);
             };
             template <typename U>
-            concept has_game_system_typeinfo_constructor_function = requires(je_GameWorld * ptr, const je_TypeInfo * tinfo)
+            concept has_game_system_typeinfo_constructor_function = requires(je_game_world_t * ptr, const je_type_info_t * tinfo)
             {
                 new U(ptr, tinfo);
             };
             template <typename U>
-            concept has_game_system_constructor_function = requires(je_GameWorld * ptr)
+            concept has_game_system_constructor_function = requires(je_game_world_t * ptr)
             {
                 new U(ptr);
             };
             template <typename U>
-            concept has_typeinfo_constructor_function = requires(const je_TypeInfo * tinfo)
+            concept has_typeinfo_constructor_function = requires(const je_type_info_t * tinfo)
             {
                 new U(tinfo);
             };
@@ -7605,16 +7979,16 @@ namespace jeecs
         template <typename T>
         struct default_functions
         {
-            static void constructor(void* _ptr, void* arg_ptr, const je_TypeInfo* tinfo)
+            static void constructor(void* _ptr, void* arg_ptr, const je_type_info_t* tinfo)
             {
                 if constexpr (traits::has_pointer_typeinfo_constructor_function<T>)
                     new (_ptr) T(arg_ptr, tinfo);
                 else if constexpr (traits::has_pointer_constructor_function<T>)
                     new (_ptr) T(arg_ptr);
                 else if constexpr (traits::has_game_system_typeinfo_constructor_function<T>)
-                    new (_ptr) T(static_cast<je_GameWorld*>(arg_ptr), tinfo);
+                    new (_ptr) T(static_cast<je_game_world_t*>(arg_ptr), tinfo);
                 else if constexpr (traits::has_game_system_constructor_function<T>)
-                    new (_ptr) T(static_cast<je_GameWorld*>(arg_ptr));
+                    new (_ptr) T(static_cast<je_game_world_t*>(arg_ptr));
                 else if constexpr (traits::has_typeinfo_constructor_function<T>)
                     new (_ptr) T(tinfo);
                 else
@@ -8109,15 +8483,15 @@ namespace jeecs
             }
         }
 
-        constexpr je_TypeHash prime = (je_TypeHash)0x100000001B3ull;
-        constexpr je_TypeHash basis = (je_TypeHash)0xCBF29CE484222325ull;
+        constexpr je_type_hash_t prime = (je_type_hash_t)0x100000001B3ull;
+        constexpr je_type_hash_t basis = (je_type_hash_t)0xCBF29CE484222325ull;
 
         /*
         jeecs::basic::hash_compile_time [函数]
         可在编译时计算字符串的哈希值的哈希函数
         */
-        constexpr je_TypeHash hash_compile_time(
-            char const* str, je_TypeHash last_value = basis)
+        constexpr je_type_hash_t hash_compile_time(
+            char const* str, je_type_hash_t last_value = basis)
         {
             return *str ? hash_compile_time(str + 1, (*str ^ last_value) * prime) : last_value;
         }
@@ -9219,18 +9593,18 @@ namespace jeecs
             return u;
         }
 
-        /* je_TypeinfoMember / je_TypeinfoScriptParser / je_TypeinfoSystemUpdater
-           已迁移为 C ABI 类型 je_TypeinfoMember / je_TypeinfoScriptParser /
-           je_TypeinfoSystemUpdater（见文件顶部 C ABI 段），C++ 直接使用。 */
+        /* je_typeinfo_member_t / je_typeinfo_script_parser_t / je_typeinfo_system_updater_t
+           已迁移为 C ABI 类型 je_typeinfo_member_t / je_typeinfo_script_parser_t /
+           je_typeinfo_system_updater_t（见文件顶部 C ABI 段），C++ 直接使用。 */
         class type_unregister_guard
         {
 
             using id_typeinfo_map_t = std::unordered_map<
-                je_TypeId,
-                const je_TypeInfo*>;
+                je_type_id_t,
+                const je_type_info_t*>;
             using registered_type_hash_map_t = std::unordered_map<
-                je_TypeHash,
-                je_TypeId>;
+                je_type_hash_t,
+                je_type_id_t>;
 
             mutable std::mutex _m_mx;
 
@@ -9245,7 +9619,7 @@ namespace jeecs
                 assert(_m_self_registed_id_typeinfo.empty());
             }
             template <typename T>
-            bool _register_or_get_local_type_info(const char* _typename, const je_TypeInfo** out_typeinfo)
+            bool _register_or_get_local_type_info(const char* _typename, const je_type_info_t** out_typeinfo)
             {
                 do
                 {
@@ -9266,12 +9640,12 @@ namespace jeecs
                     is_basic_type = true;
                 }
 
-                je_typing_class current_type =
+                je_typing_class_t current_type =
                     is_basic_type
-                    ? je_typing_class::JE_BASIC_TYPE
+                    ? je_typing_class_t::JE_BASIC_TYPE
                     : (std::is_base_of_v<game_system, T>
-                        ? je_typing_class::JE_SYSTEM
-                        : je_typing_class::JE_COMPONENT);
+                        ? je_typing_class_t::JE_SYSTEM
+                        : je_typing_class_t::JE_COMPONENT);
 
                 // store to list for unregister
                 auto* local_type_info = je_typing_register(
@@ -9307,7 +9681,7 @@ namespace jeecs
                 _m_self_registed_id_typeinfo.clear();
                 _m_self_registed_hash.clear();
             }
-            const je_TypeInfo* get_local_type_info(je_TypeId id) const
+            const je_type_info_t* get_local_type_info(je_type_id_t id) const
             {
                 std::lock_guard g1(_m_mx);
                 return _m_self_registed_id_typeinfo.at(id);
@@ -9315,42 +9689,42 @@ namespace jeecs
         };
 
         /*
-        jeecs::typing 自由函数（原 je_TypeInfo 上的便捷方法）
-        这些函数操作 const je_TypeInfo*；je_TypeInfo 的平凡数据布局见文件顶部 C ABI 段的 je_TypeInfo。
+        jeecs::typing 自由函数（原 je_type_info_t 上的便捷方法）
+        这些函数操作 const je_type_info_t*；je_type_info_t 的平凡数据布局见文件顶部 C ABI 段的 je_type_info_t。
         */
         template <typename T>
-        inline const je_TypeInfo* of()
+        inline const je_type_info_t* of()
         {
             return je_typing_info_get_by_hash(typeid(T).hash_code());
         }
-        inline const je_TypeInfo* of(je_TypeId _tid)
+        inline const je_type_info_t* of(je_type_id_t _tid)
         {
             return je_typing_info_get_by_id(_tid);
         }
-        inline const je_TypeInfo* of(const char* name)
+        inline const je_type_info_t* of(const char* name)
         {
             return je_typing_info_get_by_name(name);
         }
 
         template <typename T>
-        inline je_TypeId id()
+        inline je_type_id_t id()
         {
             return of<T>()->m_id;
         }
-        inline je_TypeId id(const je_TypeInfo* _tinfo)
+        inline je_type_id_t id(const je_type_info_t* _tinfo)
         {
             return _tinfo->m_id;
         }
-        inline je_TypeId id(const char* name)
+        inline je_type_id_t id(const char* name)
         {
             return of(name)->m_id;
         }
 
         template <typename T>
-        inline const je_TypeInfo* register_type(
+        inline const je_type_info_t* register_type(
             type_unregister_guard* guard, const char* _typename)
         {
-            const je_TypeInfo* local_type = nullptr;
+            const je_type_info_t* local_type = nullptr;
             if (guard->_register_or_get_local_type_info<T>(_typename, &local_type))
             {
                 if constexpr (traits::has_JERefRegsiter<T>)
@@ -9359,7 +9733,7 @@ namespace jeecs
                 }
             }
 
-            if (local_type->m_type_class == je_typing_class::JE_SYSTEM)
+            if (local_type->m_type_class == je_typing_class_t::JE_SYSTEM)
             {
                 je_typing_system_updater_register(
                     local_type,
@@ -9387,34 +9761,34 @@ namespace jeecs
             return local_type;
         }
 
-        inline void construct(const je_TypeInfo* t, void* addr, void* arg)
+        inline void construct(const je_type_info_t* t, void* addr, void* arg)
         {
             t->m_constructor(addr, arg, t);
         }
-        inline void destruct(const je_TypeInfo* t, void* addr)
+        inline void destruct(const je_type_info_t* t, void* addr)
         {
             t->m_destructor(addr);
         }
-        inline void copy(const je_TypeInfo* t, void* dst_addr, const void* src_addr)
+        inline void copy(const je_type_info_t* t, void* dst_addr, const void* src_addr)
         {
             t->m_copier(dst_addr, src_addr);
         }
-        inline void move(const je_TypeInfo* t, void* dst_addr, void* src_addr)
+        inline void move(const je_type_info_t* t, void* dst_addr, void* src_addr)
         {
             t->m_mover(dst_addr, src_addr);
         }
 
-        inline bool is_system(const je_TypeInfo* t) noexcept
+        inline bool is_system(const je_type_info_t* t) noexcept
         {
-            return t->m_type_class == je_typing_class::JE_SYSTEM;
+            return t->m_type_class == je_typing_class_t::JE_SYSTEM;
         }
 
-        inline bool is_component(const je_TypeInfo* t) noexcept
+        inline bool is_component(const je_type_info_t* t) noexcept
         {
-            return t->m_type_class == je_typing_class::JE_COMPONENT;
+            return t->m_type_class == je_typing_class_t::JE_COMPONENT;
         }
 
-        inline const je_MemberInfo* find_member_by_name(const je_TypeInfo* t, const char* name) noexcept
+        inline const je_member_info_t* find_member_by_name(const je_type_info_t* t, const char* name) noexcept
         {
             if (t->m_member_types == nullptr)
             {
@@ -9435,7 +9809,7 @@ namespace jeecs
             jeecs::debug::logerr("Failed to find member named: '%s' in '%s'.", name, t->m_typename);
             return nullptr;
         }
-        inline const je_TypeinfoScriptParser* get_script_parser(const je_TypeInfo* t)
+        inline const je_typeinfo_script_parser_t* get_script_parser(const je_type_info_t* t)
         {
             if (t->m_script_parsers == nullptr && t->m_next != nullptr)
                 return get_script_parser(t->m_next);
@@ -9449,8 +9823,8 @@ namespace jeecs
             ptrdiff_t member_offset,
             const char* membname)
         {
-            const je_TypeInfo* membt = jeecs::typing::register_type<MemberT>(guard, nullptr);
-            assert(membt->m_type_class == je_typing_class::JE_BASIC_TYPE);
+            const je_type_info_t* membt = jeecs::typing::register_type<MemberT>(guard, nullptr);
+            assert(membt->m_type_class == je_typing_class_t::JE_BASIC_TYPE);
 
             je_typing_member_register(
                 guard->get_local_type_info(jeecs::typing::id<ClassT>()),
@@ -9480,13 +9854,13 @@ namespace jeecs
             const std::string& woolang_typename,
             const std::string& woolang_typedecl)
         {
-            const je_TypeInfo* local_typeinfo = nullptr;
+            const je_type_info_t* local_typeinfo = nullptr;
             guard->_register_or_get_local_type_info<T>(nullptr, &local_typeinfo);
 
             je_typing_script_parser_register(
                 local_typeinfo,
-                reinterpret_cast<je_ParseC2WFunc>(c2w),
-                reinterpret_cast<je_ParseW2CFunc>(w2c),
+                reinterpret_cast<je_parse_c2w_func_t>(c2w),
+                reinterpret_cast<je_parse_w2c_func_t>(w2c),
                 woolang_typename.c_str(),
                 woolang_typedecl.c_str());
         }
@@ -9496,10 +9870,10 @@ namespace jeecs
 
     class game_world
     {
-        je_GameWorld* _m_ecs_world_addr;
+        je_game_world_t* _m_ecs_world_addr;
 
     public:
-        game_world(je_GameWorld* ecs_world_addr)
+        game_world(je_game_world_t* ecs_world_addr)
             : _m_ecs_world_addr(ecs_world_addr)
         {
         }
@@ -9508,7 +9882,7 @@ namespace jeecs
         friend class game_system;
 
     public:
-        inline je_GameWorld* handle() const noexcept
+        inline je_game_world_t* handle() const noexcept
         {
             return _m_ecs_world_addr;
         }
@@ -9516,7 +9890,7 @@ namespace jeecs
         template <typename FirstCompT, typename... CompTs>
         inline game_entity add_entity()
         {
-            const je_TypeId component_ids[] = {
+            const je_type_id_t component_ids[] = {
                 typing::id<FirstCompT>(),
                 typing::id<CompTs>()...,
             };
@@ -9525,7 +9899,7 @@ namespace jeecs
 
             je_ecs_world_entity_create_with_components(
                 handle(), &gentity._m_raw, component_ids,
-                sizeof(component_ids) / sizeof(je_TypeId));
+                sizeof(component_ids) / sizeof(je_type_id_t));
 
             return gentity;
         }
@@ -9540,7 +9914,7 @@ namespace jeecs
         template <typename FirstCompT, typename... CompTs>
         inline game_entity add_prefab()
         {
-            const je_TypeId component_ids[] = {
+            const je_type_id_t component_ids[] = {
                 typing::id<FirstCompT>(),
                 typing::id<CompTs>()...,
             };
@@ -9549,7 +9923,7 @@ namespace jeecs
 
             je_ecs_world_prefab_create_with_components(
                 handle(), &gentity._m_raw, component_ids,
-                sizeof(component_ids) / sizeof(je_TypeId));
+                sizeof(component_ids) / sizeof(je_type_id_t));
 
             return gentity;
         }
@@ -9587,7 +9961,7 @@ namespace jeecs
         }
 
         // This function only used for editor.
-        inline std::optional<game_entity> _add_entity(const std::vector<je_TypeId>& components)
+        inline std::optional<game_entity> _add_entity(const std::vector<je_type_id_t>& components)
         {
             if (components.empty())
                 return std::nullopt;
@@ -9599,7 +9973,7 @@ namespace jeecs
             return gentity;
         }
         // This function only used for editor.
-        inline std::optional<game_entity> _add_prefab(const std::vector<je_TypeId>& components)
+        inline std::optional<game_entity> _add_prefab(const std::vector<je_type_id_t>& components)
         {
             if (components.empty())
                 return std::nullopt;
@@ -9634,9 +10008,9 @@ namespace jeecs
         inline game_universe get_universe() const noexcept;
     };
 
-    // 组件筛选要求现在直接使用 C ABI 的 je_ComponentRequirement（见文件顶部 C ABI 段），
+    // 组件筛选要求现在直接使用 C ABI 的 je_component_requirement_t（见文件顶部 C ABI 段），
     // 字段对应：m_kind / m_group_id / m_typeid，枚举值 JE_COMPONENT_REQUIRE_*。
-    static_assert(std::is_trivial_v<je_ComponentRequirement>);
+    static_assert(std::is_trivial_v<je_component_requirement_t>);
 
     namespace slice_requirement
     {
@@ -9654,8 +10028,8 @@ namespace jeecs
                 // 接收预缓存的单个 component_info，避免每次解引用都走扁平偏移数组的双重间接。
                 inline static void* get_component_by_cached_info(
                     const component_info* info,
-                    je_Chunk* chunkbuf,
-                    je_EntityIdInChunk entity_id)
+                    je_chunk_t* chunkbuf,
+                    je_entity_id_in_chunk_t entity_id)
                 {
                     if (info->m_component_offset_of_unit != 0)
                     {
@@ -9672,8 +10046,8 @@ namespace jeecs
                 template <typename ComponentT, typename... ArgTs>
                 inline static ComponentT get_component_from_archchunk(
                     const component_info* cached_infos,
-                    je_Chunk* chunkbuf,
-                    je_EntityIdInChunk entity_id)
+                    je_chunk_t* chunkbuf,
+                    je_entity_id_in_chunk_t entity_id)
                 {
                     constexpr size_t cid = typing::pack_index_v<ComponentT, ArgTs...>;
                     static_assert(cid != SIZE_MAX, "ComponentT must be one of ArgTs...");
@@ -9705,13 +10079,13 @@ namespace jeecs
                 }
             protected:
                 template<typename T, typename ... Ts>
-                static void _apply_dependence_impl(basic::vector<je_ComponentRequirement>* out_requirements)
+                static void _apply_dependence_impl(basic::vector<je_component_requirement_t>* out_requirements)
                 {
                     static_assert(
                         std::is_pointer_v<T> || std::is_reference_v<T>);
 
                     out_requirements->push_back(
-                        je_ComponentRequirement{
+                        je_component_requirement_t{
                             std::is_pointer_v<T>
                                 ? JE_COMPONENT_REQUIRE_MAYNOT
                                 : JE_COMPONENT_REQUIRE_CONTAINS,
@@ -9722,21 +10096,21 @@ namespace jeecs
                 }
 
                 template<typename ... Ts>
-                static void _apply_dependence(basic::vector<je_ComponentRequirement>* out_requirements)
+                static void _apply_dependence(basic::vector<je_component_requirement_t>* out_requirements)
                 {
                     if constexpr (sizeof...(Ts) > 0)
                         _apply_dependence_impl<Ts...>(out_requirements);
                 }
             };
 
-            template<je_ComponentRequirementKind RequireType>
+            template<je_component_requirement_kind_t RequireType>
             struct requirement_base
             {
                 template<typename T, typename ... Ts>
-                static void _apply_dependence_impl(int group, basic::vector<je_ComponentRequirement>* out_requirements)
+                static void _apply_dependence_impl(int group, basic::vector<je_component_requirement_t>* out_requirements)
                 {
                     out_requirements->push_back(
-                        je_ComponentRequirement{
+                        je_component_requirement_t{
                             RequireType >= JE_COMPONENT_REQUIRE_ANYOF_0
                                 ? RequireType + group
                                 : RequireType,
@@ -9747,7 +10121,7 @@ namespace jeecs
                 }
 
                 template<typename ... Ts>
-                static void _apply_dependence(int group, basic::vector<je_ComponentRequirement>* out_requirements)
+                static void _apply_dependence(int group, basic::vector<je_component_requirement_t>* out_requirements)
                 {
                     if constexpr (sizeof...(Ts) > 0)
                         _apply_dependence_impl<Ts...>(group, out_requirements);
@@ -9763,15 +10137,15 @@ namespace jeecs
         {
             using components = std::tuple<Components...>;
             using entity_with_components = std::tuple<const game_entity, Components...>;
-            static void apply_dependence(basic::vector<je_ComponentRequirement>* out_requirements)
+            static void apply_dependence(basic::vector<je_component_requirement_t>* out_requirements)
             {
                 _apply_dependence<Components...>(out_requirements);
             }
 
             static components fetch_component_slice_from_chunk(
                 const component_info* cached_infos,
-                je_Chunk* chunkbuf,
-                je_EntityIdInChunk entity_id)
+                je_chunk_t* chunkbuf,
+                je_entity_id_in_chunk_t entity_id)
             {
                 return components{
                     get_component_from_archchunk<Components, Components...>(
@@ -9779,9 +10153,9 @@ namespace jeecs
             }
             static entity_with_components fetch_entity_and_component_slice_from_chunk(
                 const component_info* cached_infos,
-                je_Chunk* chunkbuf,
-                je_EntityIdInChunk entity_id,
-                je_Version entity_version)
+                je_chunk_t* chunkbuf,
+                je_entity_id_in_chunk_t entity_id,
+                je_version_t entity_version)
             {
                 return entity_with_components{
                     game_entity{
@@ -9797,7 +10171,7 @@ namespace jeecs
         struct contains : base::contains_base
         {
             using components = std::tuple<Components...>;
-            static void apply_dependence(int group, basic::vector<je_ComponentRequirement>* out_requirements)
+            static void apply_dependence(int group, basic::vector<je_component_requirement_t>* out_requirements)
             {
                 _apply_dependence<Components...>(group, out_requirements);
             }
@@ -9806,7 +10180,7 @@ namespace jeecs
         struct except : base::except_base
         {
             using components = std::tuple<Components...>;
-            static void apply_dependence(int group, basic::vector<je_ComponentRequirement>* out_requirements)
+            static void apply_dependence(int group, basic::vector<je_component_requirement_t>* out_requirements)
             {
                 _apply_dependence<Components...>(group, out_requirements);
             }
@@ -9815,7 +10189,7 @@ namespace jeecs
         struct anyof : base::anyof_base
         {
             using components = std::tuple<Components...>;
-            static void apply_dependence(int group, basic::vector<je_ComponentRequirement>* out_requirements)
+            static void apply_dependence(int group, basic::vector<je_component_requirement_t>* out_requirements)
             {
                 _apply_dependence<Components...>(group, out_requirements);
             }
@@ -9877,7 +10251,7 @@ namespace jeecs
     class collection
     {
         template<int Group, typename T, typename ... Ts>
-        static void _apply_requirements_impl(basic::vector<je_ComponentRequirement>* reqs)
+        static void _apply_requirements_impl(basic::vector<je_component_requirement_t>* reqs)
         {
             static_assert(
                 std::is_base_of_v<slice_requirement::base::contains_base, T>
@@ -9890,21 +10264,21 @@ namespace jeecs
                 _apply_requirements_impl<Group + 1, Ts...>(reqs);
         }
         template<int Group, typename ... Ts>
-        static void _apply_requirements(basic::vector<je_ComponentRequirement>* reqs)
+        static void _apply_requirements(basic::vector<je_component_requirement_t>* reqs)
         {
             if constexpr (sizeof...(Ts) > 0)
                 _apply_requirements_impl<Group, Ts...>(reqs);
         }
     public:
         // 首次初始化：收集视图需求（CONTAINS/MAYNOT）与其它需求（contain/except/anyof），
-        // 交由 C ABI 的 je_ecs_requirements_collect 生成不透明的 je_CollectedRequirements
+        // 交由 C ABI 的 je_ecs_requirements_collect 生成不透明的 je_collected_requirements_t
         // 并挂到 collection->m_collected_requirement 上。视图需求必须排在最前。
-        static void apply_requirements(je_RequirementCollection* collection)
+        static void apply_requirements(je_requirement_collection_t* collection)
         {
             static_assert(std::is_base_of_v<slice_requirement::base::view_base, SliceView>,
                 "First template argument of collection must be collection::view.");
 
-            basic::vector<je_ComponentRequirement> reqs;
+            basic::vector<je_component_requirement_t> reqs;
             SliceView::apply_dependence(&reqs);
             const size_t view_requirement_count = reqs.size();
             _apply_requirements<1, SliceRequirements...>(&reqs);
@@ -9918,7 +10292,7 @@ namespace jeecs
     public:
         // CRTP 基类：封装 slice / entity_slice 共享的迭代逻辑与状态。
         // 派生类只需提供 value_type、iterator typedefs、operator* 以及接受
-        // const je_RequirementCollection* / const je_DependenceArchInfos* 的构造函数。
+        // const je_requirement_collection_t* / const je_dependence_arch_infos_t* 的构造函数。
         template <typename Derived>
         class slice_base
         {
@@ -9927,22 +10301,22 @@ namespace jeecs
                 std::tuple_size_v<typename SliceView::components>;
 
         protected:
-            const je_DependenceArchInfos* m_archs_current;
-            const je_DependenceArchInfos* m_archs_end;
+            const je_dependence_arch_infos_t* m_archs_current;
+            const je_dependence_arch_infos_t* m_archs_end;
 
-            je_Chunk* m_chunk_current;
-            const je_GameEntityMeta* m_chunk_current_entity_meta;
-            je_EntityIdInChunk m_chunk_entity_current_index;
+            je_chunk_t* m_chunk_current;
+            const je_game_entity_meta_t* m_chunk_current_entity_meta;
+            je_entity_id_in_chunk_t m_chunk_entity_current_index;
 
             // 预缓存本视图所需的 component_info（按 SliceView::Components... 顺序）。
-            // 在进入新 arch 时一次性刷新，避免每次解引用都走 je_DependenceArchInfos 的
+            // 在进入新 arch 时一次性刷新，避免每次解引用都走 je_dependence_arch_infos_t 的
             // m_view_component_offset / m_view_component_size 双重间接。
             std::array<typename SliceView::component_info, _component_count> m_cached_infos{};
 
             slice_base() = default;
 
             // For `end()` only.
-            explicit slice_base(const je_DependenceArchInfos* _archs_end)
+            explicit slice_base(const je_dependence_arch_infos_t* _archs_end)
                 : m_archs_current(_archs_end)
                 , m_archs_end(_archs_end)
                 , m_chunk_current(nullptr)
@@ -10005,7 +10379,7 @@ namespace jeecs
             }
 
             // 由派生类的 collection 构造函数调用，统一初始化路径。
-            void _init_from_collection(const je_RequirementCollection* collection)
+            void _init_from_collection(const je_requirement_collection_t* collection)
             {
                 m_archs_current = collection->m_cached_archs;
                 m_archs_end = collection->m_cached_archs + collection->m_cached_arch_count;
@@ -10087,10 +10461,10 @@ namespace jeecs
             slice& operator=(const slice&) = default;
             slice& operator=(slice&&) = default;
 
-            explicit slice(const je_DependenceArchInfos* _archs_end)
+            explicit slice(const je_dependence_arch_infos_t* _archs_end)
                 : base_t(_archs_end) {
             }
-            explicit slice(const je_RequirementCollection* collection)
+            explicit slice(const je_requirement_collection_t* collection)
             {
                 this->_init_from_collection(collection);
             }
@@ -10120,10 +10494,10 @@ namespace jeecs
             entity_slice& operator=(const entity_slice&) = default;
             entity_slice& operator=(entity_slice&&) = default;
 
-            explicit entity_slice(const je_DependenceArchInfos* _archs_end)
+            explicit entity_slice(const je_dependence_arch_infos_t* _archs_end)
                 : base_t(_archs_end) {
             }
-            explicit entity_slice(const je_RequirementCollection* collection)
+            explicit entity_slice(const je_requirement_collection_t* collection)
             {
                 this->_init_from_collection(collection);
             }
@@ -10141,14 +10515,14 @@ namespace jeecs
 
     class game_universe
     {
-        je_GameUniverse* _m_universe_addr;
+        je_game_universe_t* _m_universe_addr;
 
     public:
-        game_universe(je_GameUniverse* universe_addr)
+        game_universe(je_game_universe_t* universe_addr)
             : _m_universe_addr(universe_addr)
         {
         }
-        inline je_GameUniverse* handle() const noexcept
+        inline je_game_universe_t* handle() const noexcept
         {
             return _m_universe_addr;
         }
@@ -10227,10 +10601,10 @@ namespace jeecs
         template<
             slice_requirement::traits::is_view SliceView,
             slice_requirement::traits::is_requirement... SliceRequirements>
-        je_RequirementCollection* _fetch_query_slice_cache()
+        je_requirement_collection_t* _fetch_query_slice_cache()
         {
-            je_RequirementCollection* requirement_collection;
-            je_GameWorld* const world_inst = get_world().handle();
+            je_requirement_collection_t* requirement_collection;
+            je_game_world_t* const world_inst = get_world().handle();
 
             if (!je_ecs_world_slice_dependence_query(
                 world_inst,
@@ -11645,18 +12019,18 @@ namespace jeecs
         {
             template<typename T>
             concept basic_graphic_resource =
-                std::same_as<T, jegl_shader> ||
-                std::same_as<T, jegl_texture_2d> ||
-                std::same_as<T, jegl_texture_3d> ||
-                std::same_as<T, jegl_texture_array> ||
-                std::same_as<T, jegl_texture_cube> ||
-                std::same_as<T, jegl_texture_msaa> ||
-                std::same_as<T, jegl_vertex> ||
-                std::same_as<T, jegl_frame_buffer> ||
-                std::same_as<T, jegl_uniform_buffer> ||
-                std::same_as<T, jegl_pipeline> ||
-                std::same_as<T, jegl_sampler> ||
-                std::same_as<T, je_animation>;
+                std::same_as<T, je_gl_shader_t> ||
+                std::same_as<T, je_gl_texture_2d_t> ||
+                std::same_as<T, je_gl_texture_3d_t> ||
+                std::same_as<T, je_gl_texture_array_t> ||
+                std::same_as<T, je_gl_texture_cube_t> ||
+                std::same_as<T, je_gl_texture_msaa_t> ||
+                std::same_as<T, je_gl_vertex_t> ||
+                std::same_as<T, je_gl_frame_buffer_t> ||
+                std::same_as<T, je_gl_uniform_buffer_t> ||
+                std::same_as<T, je_gl_pipeline_t> ||
+                std::same_as<T, je_gl_sampler_t> ||
+                std::same_as<T, je_animation_t>;
         }
 
         template<requirements::basic_graphic_resource T>
@@ -11674,29 +12048,29 @@ namespace jeecs
             }
             ~resource_basic()noexcept
             {
-                if constexpr (std::is_same_v<T, jegl_shader>)
+                if constexpr (std::is_same_v<T, je_gl_shader_t>)
                     je_graphic_shader_close(_m_resource);
-                else if constexpr (std::is_same_v<T, jegl_texture_2d>)
+                else if constexpr (std::is_same_v<T, je_gl_texture_2d_t>)
                     je_graphic_texture_2d_close(_m_resource);
-                else if constexpr (std::is_same_v<T, jegl_texture_3d>)
+                else if constexpr (std::is_same_v<T, je_gl_texture_3d_t>)
                     je_graphic_texture_3d_close(_m_resource);
-                else if constexpr (std::is_same_v<T, jegl_texture_array>)
+                else if constexpr (std::is_same_v<T, je_gl_texture_array_t>)
                     je_graphic_texture_array_close(_m_resource);
-                else if constexpr (std::is_same_v<T, jegl_texture_cube>)
+                else if constexpr (std::is_same_v<T, je_gl_texture_cube_t>)
                     je_graphic_texture_cube_close(_m_resource);
-                else if constexpr (std::is_same_v<T, jegl_texture_msaa>)
+                else if constexpr (std::is_same_v<T, je_gl_texture_msaa_t>)
                     je_graphic_texture_msaa_close(_m_resource);
-                else if constexpr (std::is_same_v<T, jegl_vertex>)
+                else if constexpr (std::is_same_v<T, je_gl_vertex_t>)
                     je_graphic_vertex_close(_m_resource);
-                else if constexpr (std::is_same_v<T, jegl_frame_buffer>)
+                else if constexpr (std::is_same_v<T, je_gl_frame_buffer_t>)
                     je_graphic_framebuf_close(_m_resource);
-                else if constexpr (std::is_same_v<T, jegl_uniform_buffer>)
+                else if constexpr (std::is_same_v<T, je_gl_uniform_buffer_t>)
                     je_graphic_uniformbuf_close(_m_resource);
-                else if constexpr (std::is_same_v<T, jegl_pipeline>)
+                else if constexpr (std::is_same_v<T, je_gl_pipeline_t>)
                     je_graphic_pipeline_close(_m_resource);
-                else if constexpr (std::is_same_v<T, jegl_sampler>)
+                else if constexpr (std::is_same_v<T, je_gl_sampler_t>)
                     je_graphic_sampler_close(_m_resource);
-                else if constexpr (std::is_same_v<T, je_animation>)
+                else if constexpr (std::is_same_v<T, je_animation_t>)
                     je_animation_close(_m_resource);
                 else
                 {
@@ -11711,24 +12085,24 @@ namespace jeecs
                 return _m_resource;
             }
         };
-        class texture2d : public resource_basic<jegl_texture_2d>
+        class texture2d : public resource_basic<je_gl_texture_2d_t>
         {
-            explicit texture2d(jegl_texture_2d* res)
+            explicit texture2d(je_gl_texture_2d_t* res)
                 : resource_basic(res)
             {
             }
 
         public:
-            static std::optional<basic::resource<texture2d>> load(jegl_context* context, const std::string& str)
+            static std::optional<basic::resource<texture2d>> load(je_gl_context_t* context, const std::string& str)
             {
-                jegl_texture_2d* res = je_graphic_texture_2d_load(context, str.c_str());
+                je_gl_texture_2d_t* res = je_graphic_texture_2d_load(context, str.c_str());
                 if (res != nullptr)
                     return basic::resource<texture2d>(new texture2d(res));
                 return std::nullopt;
             }
-            static basic::resource<texture2d> create(size_t width, size_t height, jegl_texture_common::format format)
+            static basic::resource<texture2d> create(size_t width, size_t height, je_gl_texture_format_t format)
             {
-                jegl_texture_2d* res = je_graphic_texture_2d_create(width, height, format);
+                je_gl_texture_2d_t* res = je_graphic_texture_2d_create(width, height, format);
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
@@ -11737,13 +12111,13 @@ namespace jeecs
             static basic::resource<texture2d> clip(
                 const basic::resource<texture2d>& src, size_t x, size_t y, size_t w, size_t h)
             {
-                jegl_texture_common::format new_texture_format =
-                    (jegl_texture_common::format)(
+                je_gl_texture_format_t new_texture_format =
+                    (je_gl_texture_format_t)(
                         src->resource()->m_format
-                        & (jegl_texture_common::format::COLOR_DEPTH_MASK
-                            | jegl_texture_common::format::SRGB));
+                        & (JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK
+                            | JE_GL_TEXTURE_FORMAT_SRGB));
 
-                jegl_texture_2d* res =
+                je_gl_texture_2d_t* res =
                     je_graphic_texture_2d_create(w, h, new_texture_format);
 
                 // Create texture must be successfully.
@@ -11762,7 +12136,7 @@ namespace jeecs
                 }
 #else
                 auto color_depth = (int)(new_texture_format
-                    & jegl_texture_common::format::COLOR_DEPTH_MASK);
+                    & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
                 auto* dst_pixels = new_texture->resource()->m_pixels;
                 auto* src_pixels = src->resource()->m_pixels;
 
@@ -11782,19 +12156,19 @@ namespace jeecs
 
             class pixel
             {
-                jegl_texture_2d* _m_texture;
-                jegl_texture_common::pixel_data_t*
+                je_gl_texture_2d_t* _m_texture;
+                je_gl_texture_pixel_data_t*
                     _m_pixel;
                 size_t _m_x, _m_y;
 
             public:
-                pixel(jegl_texture_2d* _texture, size_t x, size_t y) noexcept
+                pixel(je_gl_texture_2d_t* _texture, size_t x, size_t y) noexcept
                     : _m_texture(_texture), _m_x(x), _m_y(y)
                 {
-                    assert(sizeof(jegl_texture_common::pixel_data_t) == 1);
+                    assert(sizeof(je_gl_texture_pixel_data_t) == 1);
 
                     auto color_depth =
-                        _m_texture->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK;
+                        _m_texture->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK;
 
                     if (x < _m_texture->m_width && y < _m_texture->m_height)
                         _m_pixel = _m_texture->m_pixels + y * _m_texture->m_width * color_depth + x * color_depth;
@@ -11806,15 +12180,15 @@ namespace jeecs
                     if (_m_pixel == nullptr)
                         return {};
                     switch (_m_texture->m_format
-                        & jegl_texture_common::format::COLOR_DEPTH_MASK)
+                        & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK)
                     {
-                    case jegl_texture_common::format::MONO:
+                    case JE_GL_TEXTURE_FORMAT_MONO:
                         return math::vec4{
                             _m_pixel[0] / 255.0f,
                             _m_pixel[0] / 255.0f,
                             _m_pixel[0] / 255.0f,
                             _m_pixel[0] / 255.0f };
-                    case jegl_texture_common::format::RGBA:
+                    case JE_GL_TEXTURE_FORMAT_RGBA:
                         return math::vec4{
                             _m_pixel[0] / 255.0f,
                             _m_pixel[1] / 255.0f,
@@ -11858,16 +12232,16 @@ namespace jeecs
                     }
 
                     switch (raw_texture_data->m_format
-                        & jegl_texture_common::format::COLOR_DEPTH_MASK)
+                        & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK)
                     {
-                    case jegl_texture_common::format::MONO:
-                        _m_pixel[0] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
+                    case JE_GL_TEXTURE_FORMAT_MONO:
+                        _m_pixel[0] = (je_gl_texture_pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
                         break;
-                    case jegl_texture_common::format::RGBA:
-                        _m_pixel[0] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
-                        _m_pixel[1] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.y, 0.f, 1.f) * 255.0f);
-                        _m_pixel[2] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.z, 0.f, 1.f) * 255.0f);
-                        _m_pixel[3] = (jegl_texture_common::pixel_data_t)round(math::clamp(value.w, 0.f, 1.f) * 255.0f);
+                    case JE_GL_TEXTURE_FORMAT_RGBA:
+                        _m_pixel[0] = (je_gl_texture_pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
+                        _m_pixel[1] = (je_gl_texture_pixel_data_t)round(math::clamp(value.y, 0.f, 1.f) * 255.0f);
+                        _m_pixel[2] = (je_gl_texture_pixel_data_t)round(math::clamp(value.z, 0.f, 1.f) * 255.0f);
+                        _m_pixel[3] = (je_gl_texture_pixel_data_t)round(math::clamp(value.w, 0.f, 1.f) * 255.0f);
                         break;
                     default:
                         assert(0);
@@ -11911,7 +12285,7 @@ namespace jeecs
         {
             // 标记 CPU 侧像素被整体改写，供不含像素代理的类型在直接写
             // m_pixels 之后触发重上传使用
-            inline void mark_texture_modified(jegl_texture_common* texture) noexcept
+            inline void mark_texture_modified(je_gl_texture_common_t* texture) noexcept
             {
                 if (!texture->m_handle.m_modified)
                 {
@@ -11924,18 +12298,18 @@ namespace jeecs
             }
         }
 
-        class texture3d : public resource_basic<jegl_texture_3d>
+        class texture3d : public resource_basic<je_gl_texture_3d_t>
         {
-            explicit texture3d(jegl_texture_3d* res)
+            explicit texture3d(je_gl_texture_3d_t* res)
                 : resource_basic(res)
             {
             }
 
         public:
             static basic::resource<texture3d> create(
-                size_t width, size_t height, size_t depth, jegl_texture_common::format format)
+                size_t width, size_t height, size_t depth, je_gl_texture_format_t format)
             {
-                jegl_texture_3d* res = je_graphic_texture_3d_create(width, height, depth, format);
+                je_gl_texture_3d_t* res = je_graphic_texture_3d_create(width, height, depth, format);
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
@@ -11947,7 +12321,7 @@ namespace jeecs
             {
                 detail::mark_texture_modified(resource());
             }
-            inline jegl_texture_common::pixel_data_t* pixels() const noexcept
+            inline je_gl_texture_pixel_data_t* pixels() const noexcept
             {
                 return resource()->m_pixels;
             }
@@ -11956,18 +12330,18 @@ namespace jeecs
             inline size_t depth() const noexcept { return resource()->m_depth; }
         };
 
-        class texture_array : public resource_basic<jegl_texture_array>
+        class texture_array : public resource_basic<je_gl_texture_array_t>
         {
-            explicit texture_array(jegl_texture_array* res)
+            explicit texture_array(je_gl_texture_array_t* res)
                 : resource_basic(res)
             {
             }
 
         public:
             static basic::resource<texture_array> create(
-                size_t width, size_t height, size_t layers, jegl_texture_common::format format)
+                size_t width, size_t height, size_t layers, je_gl_texture_format_t format)
             {
-                jegl_texture_array* res = je_graphic_texture_array_create(width, height, layers, format);
+                je_gl_texture_array_t* res = je_graphic_texture_array_create(width, height, layers, format);
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
@@ -11979,15 +12353,15 @@ namespace jeecs
             {
                 detail::mark_texture_modified(resource());
             }
-            inline jegl_texture_common::pixel_data_t* pixels() const noexcept
+            inline je_gl_texture_pixel_data_t* pixels() const noexcept
             {
                 return resource()->m_pixels;
             }
             // 返回第 layer 层像素数据的起始指针
-            inline jegl_texture_common::pixel_data_t* layer_pixels(size_t layer) const noexcept
+            inline je_gl_texture_pixel_data_t* layer_pixels(size_t layer) const noexcept
             {
                 auto color_depth =
-                    resource()->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK;
+                    resource()->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK;
                 return resource()->m_pixels
                     + layer * resource()->m_width * resource()->m_height * color_depth;
             }
@@ -11996,18 +12370,18 @@ namespace jeecs
             inline size_t layers() const noexcept { return resource()->m_layers; }
         };
 
-        class texture_cube : public resource_basic<jegl_texture_cube>
+        class texture_cube : public resource_basic<je_gl_texture_cube_t>
         {
-            explicit texture_cube(jegl_texture_cube* res)
+            explicit texture_cube(je_gl_texture_cube_t* res)
                 : resource_basic(res)
             {
             }
 
         public:
             static basic::resource<texture_cube> create(
-                size_t width, size_t height, jegl_texture_common::format format)
+                size_t width, size_t height, je_gl_texture_format_t format)
             {
-                jegl_texture_cube* res = je_graphic_texture_cube_create(width, height, format);
+                je_gl_texture_cube_t* res = je_graphic_texture_cube_create(width, height, format);
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
@@ -12018,7 +12392,7 @@ namespace jeecs
             {
                 detail::mark_texture_modified(resource());
             }
-            inline jegl_texture_common::pixel_data_t* pixels() const noexcept
+            inline je_gl_texture_pixel_data_t* pixels() const noexcept
             {
                 return resource()->m_pixels;
             }
@@ -12026,18 +12400,18 @@ namespace jeecs
             inline size_t width() const noexcept { return resource()->m_width; }
         };
 
-        class texture_msaa : public resource_basic<jegl_texture_msaa>
+        class texture_msaa : public resource_basic<je_gl_texture_msaa_t>
         {
-            explicit texture_msaa(jegl_texture_msaa* res)
+            explicit texture_msaa(je_gl_texture_msaa_t* res)
                 : resource_basic(res)
             {
             }
 
         public:
             static basic::resource<texture_msaa> create(
-                size_t width, size_t height, size_t samples, jegl_texture_common::format format)
+                size_t width, size_t height, size_t samples, je_gl_texture_format_t format)
             {
-                jegl_texture_msaa* res = je_graphic_texture_msaa_create(width, height, samples, format);
+                je_gl_texture_msaa_t* res = je_graphic_texture_msaa_create(width, height, samples, format);
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
@@ -12048,29 +12422,29 @@ namespace jeecs
             inline size_t width() const noexcept { return resource()->m_width; }
             inline size_t samples() const noexcept { return resource()->m_samples; }
         };
-        class shader : public resource_basic<jegl_shader>
+        class shader : public resource_basic<je_gl_shader_t>
         {
         private:
-            explicit shader(jegl_shader* res)
+            explicit shader(je_gl_shader_t* res)
                 : resource_basic(res), m_builtin(nullptr)
             {
                 m_builtin = &this->resource()->m_builtin_uniforms;
             }
 
         public:
-            jegl_shader::builtin_uniform_location* m_builtin;
+            je_gl_shader_builtin_uniform_location_t* m_builtin;
 
             static std::optional<basic::resource<shader>> create(
-                jegl_context* context_may_null, const std::string& name_path, const std::string& src)
+                je_gl_context_t* context_may_null, const std::string& name_path, const std::string& src)
             {
-                jegl_shader* res = je_graphic_shader_source_load(context_may_null, name_path.c_str(), src.c_str(), true);
+                je_gl_shader_t* res = je_graphic_shader_source_load(context_may_null, name_path.c_str(), src.c_str(), true);
                 if (res != nullptr)
                     return basic::resource<shader>(new shader(res));
                 return std::nullopt;
             }
-            static std::optional<basic::resource<shader>> load(jegl_context* context, const std::string& src_path)
+            static std::optional<basic::resource<shader>> load(je_gl_context_t* context, const std::string& src_path)
             {
-                jegl_shader* res = je_graphic_shader_load(context, src_path.c_str());
+                je_gl_shader_t* res = je_graphic_shader_load(context, src_path.c_str());
                 if (res != nullptr)
                     return basic::resource<shader>(new shader(res));
                 return std::nullopt;
@@ -12086,7 +12460,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::INT)
+                            JE_GL_SHADER_UNIFORM_TYPE_INT)
                             debug::logerr(
                                 "Trying set uniform('%s' = %d) to shader(%p), but current uniform type is not 'INT'.",
                                 name.c_str(), val, this);
@@ -12112,7 +12486,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::INT2)
+                            JE_GL_SHADER_UNIFORM_TYPE_INT2)
                             debug::logerr(
                                 "Trying set uniform('%s' = %d, %d) to shader(%p), but current uniform type is not 'INT2'.",
                                 name.c_str(), x, y, this);
@@ -12139,7 +12513,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::INT3)
+                            JE_GL_SHADER_UNIFORM_TYPE_INT3)
                             debug::logerr(
                                 "Trying set uniform('%s' = %d, %d, %d) to shader(%p), but current uniform type is not 'INT3'.",
                                 name.c_str(), x, y, z, this);
@@ -12167,7 +12541,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::INT4)
+                            JE_GL_SHADER_UNIFORM_TYPE_INT4)
                             debug::logerr(
                                 "Trying set uniform('%s' = %d, %d, %d, %d) to shader(%p), but current uniform type is not 'INT4'.",
                                 name.c_str(), x, y, z, w, this);
@@ -12196,7 +12570,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::FLOAT)
+                            JE_GL_SHADER_UNIFORM_TYPE_FLOAT)
                             debug::logerr(
                                 "Trying set uniform('%s' = %f) to shader(%p), but current uniform type is not 'FLOAT'.",
                                 name.c_str(), val, this);
@@ -12222,7 +12596,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::FLOAT2)
+                            JE_GL_SHADER_UNIFORM_TYPE_FLOAT2)
                             debug::logerr(
                                 "Trying set uniform('%s' = (%f, %f)) to shader(%p), but current uniform type is not 'FLOAT2'.",
                                 name.c_str(), val.x, val.y, this);
@@ -12249,7 +12623,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::FLOAT3)
+                            JE_GL_SHADER_UNIFORM_TYPE_FLOAT3)
                             debug::logerr(
                                 "Trying set uniform('%s' = (%f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT3'.",
                                 name.c_str(), val.x, val.y, val.z, this);
@@ -12277,7 +12651,7 @@ namespace jeecs
                     if (jegl_shad_uniforms->m_name == name)
                     {
                         if (jegl_shad_uniforms->m_uniform_type !=
-                            jegl_shader::uniform_type::FLOAT4)
+                            JE_GL_SHADER_UNIFORM_TYPE_FLOAT4)
                             debug::logerr(
                                 "Trying set uniform('%s' = (%f, %f, %f, %f)) to shader(%p), but current uniform type is not 'FLOAT4'.",
                                 name.c_str(), val.x, val.y, val.z, val.w, this);
@@ -12314,9 +12688,9 @@ namespace jeecs
                 return nullptr;
             }
         };
-        class animation : public resource_basic<je_animation>
+        class animation : public resource_basic<je_animation_t>
         {
-            explicit animation(je_animation* res)
+            explicit animation(je_animation_t* res)
                 : resource_basic(res)
             {
             }
@@ -12326,28 +12700,28 @@ namespace jeecs
             // 保证 animation_list 的条目下标始终与脚本数据对齐。
             static basic::resource<animation> load(const std::string& path)
             {
-                je_animation* res = je_animation_open(path.c_str());
+                je_animation_t* res = je_animation_open(path.c_str());
                 if (res == nullptr)
                     res = je_animation_open("");
 
                 assert(res != nullptr);
                 return basic::resource<animation>(new animation(res));
             }
-            const je_animation_action_data* find_action(const char* name) const
+            const je_animation_action_data_t* find_action(const char* name) const
             {
                 return je_animation_action_find(resource(), name);
             }
         };
-        class vertex : public resource_basic<jegl_vertex>
+        class vertex : public resource_basic<je_gl_vertex_t>
         {
-            explicit vertex(jegl_vertex* res)
+            explicit vertex(je_gl_vertex_t* res)
                 : resource_basic(res)
             {
             }
 
         public:
             static std::optional<basic::resource<vertex>> load(
-                jegl_context* context,
+                je_gl_context_t* context,
                 const std::string& str)
             {
                 auto* res = je_graphic_vertex_load(context, str.c_str());
@@ -12356,11 +12730,11 @@ namespace jeecs
                 return std::nullopt;
             }
             static std::optional<basic::resource<vertex>> create(
-                jegl_vertex::type type,
+                je_gl_vertex_type_t type,
                 const void* pdatas,
                 size_t pdatalen,
                 const std::vector<uint32_t>& idatas, // EBO indices
-                const std::vector<jegl_vertex::data_layout>& fdatas)
+                const std::vector<je_gl_vertex_data_layout_t>& fdatas)
             {
                 auto* res = je_graphic_vertex_create(
                     type,
@@ -12382,9 +12756,9 @@ namespace jeecs
                 je_graphic_vertex_buffer_update(resource(), pdatas, pdatalen, active_index_count);
             }
         };
-        class framebuffer : public resource_basic<jegl_frame_buffer>
+        class framebuffer : public resource_basic<je_gl_frame_buffer_t>
         {
-            explicit framebuffer(jegl_frame_buffer* res)
+            explicit framebuffer(je_gl_frame_buffer_t* res)
                 : resource_basic(res)
             {
             }
@@ -12393,7 +12767,7 @@ namespace jeecs
             static std::optional<basic::resource<framebuffer>> create(
                 size_t reso_w,
                 size_t reso_h,
-                const std::vector<jegl_texture_common::format>& color_attachment_formats,
+                const std::vector<je_gl_texture_format_t>& color_attachment_formats,
                 bool contain_depth_attachment)
             {
                 auto* res = je_graphic_framebuf_create(
@@ -12434,9 +12808,9 @@ namespace jeecs
                     (int)resource()->m_height);
             }
         };
-        class uniformbuffer : public resource_basic<jegl_uniform_buffer>
+        class uniformbuffer : public resource_basic<je_gl_uniform_buffer_t>
         {
-            explicit uniformbuffer(jegl_uniform_buffer* res)
+            explicit uniformbuffer(je_gl_uniform_buffer_t* res)
                 : resource_basic(res)
             {
             }
@@ -12445,7 +12819,7 @@ namespace jeecs
             static std::optional<basic::resource<uniformbuffer>> create(
                 size_t binding_place, size_t buffersize)
             {
-                jegl_uniform_buffer* res = je_graphic_uniformbuf_create(binding_place, buffersize);
+                je_gl_uniform_buffer_t* res = je_graphic_uniformbuf_create(binding_place, buffersize);
                 if (res != nullptr)
                     return basic::resource<uniformbuffer>(new uniformbuffer(res));
                 return std::nullopt;
@@ -12628,10 +13002,10 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY(font);
 
-            je_font* m_font;
+            je_font_t* m_font;
 
         private:
-            font(je_font* font_resource) noexcept
+            font(je_font_t* font_resource) noexcept
                 : m_font(font_resource)
             {
             }
@@ -12660,7 +13034,7 @@ namespace jeecs
             {
                 return je_font_char_get(m_font, size, wcharacter);
             }
-            je_font* resource() const noexcept
+            je_font_t* resource() const noexcept
             {
                 return m_font;
             }
@@ -12684,11 +13058,11 @@ namespace jeecs
                 float m_time[4];
             };
 
-            je_GraphicUhost* _m_graphic_host;
-            std::vector<je_RenderBranch*> _m_render_branches;
+            je_graphic_uhost_t* _m_graphic_host;
+            std::vector<je_render_branch_t*> _m_render_branches;
             size_t _m_this_frame_allocate_render_branch_count;
 
-            BasePipelineInterface(game_world w, const jegl_interface_config* config)
+            BasePipelineInterface(game_world w, const je_gl_interface_config_t* config)
                 : game_system(w)
                 , _m_graphic_host(je_graphic_uhost_get_or_create_for_universe(w.get_universe().handle(), config))
                 , _m_this_frame_allocate_render_branch_count(0)
@@ -12713,7 +13087,7 @@ namespace jeecs
             {
                 _m_this_frame_allocate_render_branch_count = 0;
             }
-            je_RenderBranch* allocate_branch(int priority)
+            je_render_branch_t* allocate_branch(int priority)
             {
                 if (_m_this_frame_allocate_render_branch_count >= _m_render_branches.size())
                 {
@@ -12742,11 +13116,11 @@ namespace jeecs
             std::optional<std::thread> entry_script_thread;
 
             bool entry_script_ended = false;
-            std::optional<jegl_context*> graphic_context = std::nullopt;
+            std::optional<je_gl_context_t*> graphic_context = std::nullopt;
 
-            jegl_context* in_frame_current_context = nullptr;
+            je_gl_context_t* in_frame_current_context = nullptr;
 
-            static void callback(jegl_context* context, void* p)
+            static void callback(je_gl_context_t* context, void* p)
             {
                 graphic_syncer_host* self =
                     static_cast<graphic_syncer_host*>(p);
@@ -12774,7 +13148,7 @@ namespace jeecs
             // 
             // NOTE: 必须在 check_context_ready_block 或 check_context_ready_noblock 确认上下文已
             //      就绪后才能调用
-            jegl_context* get_graphic_context_after_context_ready() const
+            je_gl_context_t* get_graphic_context_after_context_ready() const
             {
                 assert(in_frame_current_context != nullptr);
                 return in_frame_current_context;
@@ -12809,15 +13183,15 @@ namespace jeecs
                 assert(in_frame_current_context != nullptr);
                 switch (je_graphic_sync_update(in_frame_current_context))
                 {
-                case jegl_sync_state::JEGL_SYNC_COMPLETE:
+                case je_gl_sync_state_t::JE_GL_SYNC_COMPLETE:
                     // Normal frame end, do nothing.
                     break;
-                case jegl_sync_state::JEGL_SYNC_REBOOT:
+                case je_gl_sync_state_t::JE_GL_SYNC_REBOOT:
                     // Require to reboot graphic thread.
                     je_graphic_sync_shutdown(in_frame_current_context, true);
                     je_graphic_sync_init(in_frame_current_context, true);
                     break;
-                case jegl_sync_state::JEGL_SYNC_SHUTDOWN:
+                case je_gl_sync_state_t::JE_GL_SYNC_SHUTDOWN:
                     // Graphic thread want to shutdown, exit the loop.
                     je_graphic_sync_shutdown(in_frame_current_context, false);
                     in_frame_current_context = nullptr;
@@ -12886,31 +13260,31 @@ namespace jeecs
             static basic::resource<effect<T>> create()
             {
                 T* instance;
-                if constexpr (std::is_same_v<T, jeal_effect_reverb>)
+                if constexpr (std::is_same_v<T, je_audio_effect_reverb_t>)
                     instance = je_audio_effect_reverb_create();
-                else if constexpr (std::is_same_v<T, jeal_effect_chorus>)
+                else if constexpr (std::is_same_v<T, je_audio_effect_chorus_t>)
                     instance = je_audio_effect_chorus_create();
-                else if constexpr (std::is_same_v<T, jeal_effect_distortion>)
+                else if constexpr (std::is_same_v<T, je_audio_effect_distortion_t>)
                     instance = je_audio_effect_distortion_create();
-                else if constexpr (std::is_same_v<T, jeal_effect_echo>)
+                else if constexpr (std::is_same_v<T, je_audio_effect_echo_t>)
                     instance = je_audio_effect_echo_create();
-                else if constexpr (std::is_same_v<T, jeal_effect_flanger>)
+                else if constexpr (std::is_same_v<T, je_audio_effect_flanger_t>)
                     instance = je_audio_effect_flanger_create();
-                else if constexpr (std::is_same_v<T, jeal_effect_frequency_shifter>)
+                else if constexpr (std::is_same_v<T, je_audio_effect_frequency_shifter_t>)
                     instance = je_audio_effect_frequency_shifter_create();
-                else if constexpr (std::is_same_v<T, jeal_effect_vocal_morpher>)
+                else if constexpr (std::is_same_v<T, je_audio_effect_vocal_morpher_t>)
                     instance = je_audio_effect_vocal_morpher_create();
-                else if constexpr (std::is_same_v<T, jeal_effect_pitch_shifter>)
+                else if constexpr (std::is_same_v<T, je_audio_effect_pitch_shifter_t>)
                     instance = je_audio_effect_pitch_shifter_create();
-                else if constexpr (std::is_same_v<T, jeal_effect_ring_modulator>)
+                else if constexpr (std::is_same_v<T, je_audio_effect_ring_modulator_t>)
                     instance = je_audio_effect_ring_modulator_create();
-                else if constexpr (std::is_same_v<T, jeal_effect_autowah>)
+                else if constexpr (std::is_same_v<T, je_audio_effect_autowah_t>)
                     instance = je_audio_effect_autowah_create();
-                else if constexpr (std::is_same_v<T, jeal_effect_compressor>)
+                else if constexpr (std::is_same_v<T, je_audio_effect_compressor_t>)
                     instance = je_audio_effect_compressor_create();
-                else if constexpr (std::is_same_v<T, jeal_effect_equalizer>)
+                else if constexpr (std::is_same_v<T, je_audio_effect_equalizer_t>)
                     instance = je_audio_effect_equalizer_create();
-                else if constexpr (std::is_same_v<T, jeal_effect_eaxreverb>)
+                else if constexpr (std::is_same_v<T, je_audio_effect_eax_reverb_t>)
                     instance = je_audio_effect_eaxreverb_create();
                 else
                     static_assert(
@@ -12933,8 +13307,8 @@ namespace jeecs
         class effect_slot
         {
             JECS_DISABLE_MOVE_AND_COPY(effect_slot);
-            jeal_effect_slot* m_effect_slot;
-            effect_slot(jeal_effect_slot* effect_slot)
+            je_audio_effect_slot_t* m_effect_slot;
+            effect_slot(je_audio_effect_slot_t* effect_slot)
                 : m_effect_slot(effect_slot)
             {
                 assert(m_effect_slot != nullptr);
@@ -12957,11 +13331,11 @@ namespace jeecs
                 assert(slot != nullptr);
                 return basic::resource<effect_slot>(new effect_slot(slot));
             }
-            jeal_effect_slot* handle() const
+            je_audio_effect_slot_t* handle() const
             {
                 return m_effect_slot;
             }
-            void update(const std::function<void(jeal_effect_slot*)>& func)
+            void update(const std::function<void(je_audio_effect_slot_t*)>& func)
             {
                 func(m_effect_slot);
                 je_audio_effect_slot_update(m_effect_slot);
@@ -12971,9 +13345,9 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY(filter);
 
-            jeal_filter* _m_audio_filter;
+            je_audio_filter_t* _m_audio_filter;
 
-            filter(jeal_filter* audio_filter)
+            filter(je_audio_filter_t* audio_filter)
                 : _m_audio_filter(audio_filter)
             {
                 assert(_m_audio_filter != nullptr);
@@ -12989,11 +13363,11 @@ namespace jeecs
                 return basic::resource<filter>(new filter(je_audio_filter_create()));
             }
 
-            jeal_filter* handle() const
+            je_audio_filter_t* handle() const
             {
                 return _m_audio_filter;
             }
-            void update(const std::function<void(jeal_filter*)>& func)
+            void update(const std::function<void(je_audio_filter_t*)>& func)
             {
                 func(_m_audio_filter);
                 je_audio_filter_update(_m_audio_filter);
@@ -13003,8 +13377,8 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY(buffer);
 
-            const jeal_buffer* _m_audio_buffer;
-            buffer(const jeal_buffer* audio_buffer)
+            const je_audio_buffer_t* _m_audio_buffer;
+            buffer(const je_audio_buffer_t* audio_buffer)
                 : _m_audio_buffer(audio_buffer)
             {
                 assert(_m_audio_buffer != nullptr);
@@ -13019,7 +13393,7 @@ namespace jeecs
                 const void* data,
                 size_t length,
                 size_t samplerate,
-                jeal_format format)
+                je_audio_format_t format)
             {
                 auto* buf = je_audio_buffer_create(data, length, samplerate, format);
                 if (buf != nullptr)
@@ -13033,7 +13407,7 @@ namespace jeecs
                     return basic::resource<buffer>(new buffer(buf));
                 return std::nullopt;
             }
-            const jeal_buffer* handle() const
+            const je_audio_buffer_t* handle() const
             {
                 return _m_audio_buffer;
             }
@@ -13042,9 +13416,9 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY(source);
 
-            jeal_source* _m_audio_source;
+            je_audio_source_t* _m_audio_source;
 
-            source(jeal_source* audio_source)
+            source(je_audio_source_t* audio_source)
                 : _m_audio_source(audio_source)
             {
                 assert(_m_audio_source != nullptr);
@@ -13056,7 +13430,7 @@ namespace jeecs
                 stop();
                 je_audio_source_close(_m_audio_source);
             }
-            inline jeal_state get_state() const
+            inline je_audio_state_t get_state() const
             {
                 return je_audio_source_play_state_get(_m_audio_source);
             }
@@ -13068,7 +13442,7 @@ namespace jeecs
             {
                 return je_audio_source_buffer_set(_m_audio_source, buffer->handle());
             }
-            jeal_source* handle() const
+            je_audio_source_t* handle() const
             {
                 return _m_audio_source;
             }
@@ -13092,7 +13466,7 @@ namespace jeecs
             {
                 je_audio_source_play_process_set(_m_audio_source, offset);
             }
-            void update(const std::function<void(jeal_source*)>& func)
+            void update(const std::function<void(je_audio_source_t*)>& func)
             {
                 func(_m_audio_source);
                 je_audio_source_update(_m_audio_source);
@@ -13119,11 +13493,11 @@ namespace jeecs
         class listener
         {
         public:
-            static jeal_listener* handle()
+            static je_audio_listener_t* handle()
             {
                 return je_audio_listener_get();
             }
-            static void update(const std::function<void(jeal_listener*)>& func)
+            static void update(const std::function<void(je_audio_listener_t*)>& func)
             {
                 func(je_audio_listener_get());
                 je_audio_listener_update();
@@ -13714,7 +14088,7 @@ namespace jeecs
             {
                 // ---- 脏检查键 ----
                 bool valid = false;
-                const void* key_font = nullptr; // je_font*（图集条目持有字体引用，键存活期内稳定）
+                const void* key_font = nullptr; // je_font_t*（图集条目持有字体引用，键存活期内稳定）
                 int32_t key_font_px = 0;
                 int32_t key_wrap_width_px = 0;  // -1 = 不折行
                 uint32_t key_alignment = 0;
@@ -15438,7 +15812,7 @@ namespace jeecs
         {
             int32_t tileset_index;  // 所属图集在地图中的下标（0 起）
             bool is_auto;           // 是否按瓦片的自动拼接类型绘制（值为负）
-            int32_t tile_id;        // 瓦片 id（je_TileId，从 1 起）
+            int32_t tile_id;        // 瓦片 id（je_tile_id_t，从 1 起）
         };
 
         /*
@@ -15517,7 +15891,7 @@ namespace jeecs
             int32_t ix;            // 源纹理内格位（列）
             int32_t iy;            // 源纹理内格位（行）
             bool walkable;         // 默认通行性
-            je_TileKind kind;      // 自动拼接类型（PLAIN = 普通瓦片）
+            je_tile_kind_t kind;      // 自动拼接类型（PLAIN = 普通瓦片）
             int32_t variant_count; // blob47 显式变体数
             math::vec3 normal;     // 顶点法线（局部空间；默认 (0,0,-1)）
         };
@@ -15529,7 +15903,7 @@ namespace jeecs
         struct property_def
         {
             const char* name;
-            je_PropertyType type;
+            je_property_type_t type;
         };
 
         /*
@@ -15552,7 +15926,7 @@ namespace jeecs
         /*
         tilemap::property_traits [类模板]
         属性值 C++ 类型（bool / const char* / int32_t / float / math::vec2/3/4）
-        与 je_PropertyType 的映射。const char* 读取到的指针指向文档内部存储，
+        与 je_property_type_t 的映射。const char* 读取到的指针指向文档内部存储，
         文档下次修改前有效
         */
         template <typename T>
@@ -15566,7 +15940,7 @@ namespace jeecs
         template <>
         struct property_traits<bool> : detail::value_by_address<bool>
         {
-            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_BOOL;
+            static constexpr je_property_type_t TYPE = JE_PROPERTY_TYPE_BOOL;
             using buffer_t = bool;
             static std::optional<bool> take(const buffer_t& buffer) noexcept
             {
@@ -15577,7 +15951,7 @@ namespace jeecs
         template <>
         struct property_traits<const char*>
         {
-            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_STRING;
+            static constexpr je_property_type_t TYPE = JE_PROPERTY_TYPE_STRING;
             using buffer_t = const char*;
             static std::optional<const char*> take(const buffer_t& buffer) noexcept
             {
@@ -15593,7 +15967,7 @@ namespace jeecs
         template <>
         struct property_traits<int32_t> : detail::value_by_address<int32_t>
         {
-            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_INT;
+            static constexpr je_property_type_t TYPE = JE_PROPERTY_TYPE_INT;
             using buffer_t = int32_t;
             static std::optional<int32_t> take(const buffer_t& buffer) noexcept
             {
@@ -15604,7 +15978,7 @@ namespace jeecs
         template <>
         struct property_traits<float> : detail::value_by_address<float>
         {
-            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_FLOAT;
+            static constexpr je_property_type_t TYPE = JE_PROPERTY_TYPE_FLOAT;
             using buffer_t = float;
             static std::optional<float> take(const buffer_t& buffer) noexcept
             {
@@ -15615,7 +15989,7 @@ namespace jeecs
         template <>
         struct property_traits<math::vec2> : detail::value_by_address<math::vec2>
         {
-            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_VEC2;
+            static constexpr je_property_type_t TYPE = JE_PROPERTY_TYPE_VEC2;
             using buffer_t = float[2];
             static std::optional<math::vec2> take(const buffer_t& buffer) noexcept
             {
@@ -15626,7 +16000,7 @@ namespace jeecs
         template <>
         struct property_traits<math::vec3> : detail::value_by_address<math::vec3>
         {
-            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_VEC3;
+            static constexpr je_property_type_t TYPE = JE_PROPERTY_TYPE_VEC3;
             using buffer_t = float[3];
             static std::optional<math::vec3> take(const buffer_t& buffer) noexcept
             {
@@ -15637,7 +16011,7 @@ namespace jeecs
         template <>
         struct property_traits<math::vec4> : detail::value_by_address<math::vec4>
         {
-            static constexpr je_PropertyType TYPE = JE_PROPERTY_TYPE_VEC4;
+            static constexpr je_property_type_t TYPE = JE_PROPERTY_TYPE_VEC4;
             using buffer_t = float[4];
             static std::optional<math::vec4> take(const buffer_t& buffer) noexcept
             {
@@ -15655,9 +16029,9 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY(tileset_document);
 
-            je_TilesetDocument* _m_doc;
+            je_tileset_document_t* _m_doc;
 
-            tileset_document(je_TilesetDocument* doc)
+            tileset_document(je_tileset_document_t* doc)
                 : _m_doc(doc)
             {
                 assert(_m_doc != nullptr);
@@ -15675,14 +16049,14 @@ namespace jeecs
             */
             static std::optional<basic::resource<tileset_document>> open(const char* path)
             {
-                je_TilesetDocument* doc = je_tilemap_tileset_open(path);
+                je_tileset_document_t* doc = je_tilemap_tileset_open(path);
                 if (doc == nullptr)
                     return std::nullopt;
                 return basic::resource<tileset_document>(new tileset_document(doc));
             }
 
             // 底层 C API 文档指针（逃生口）
-            je_TilesetDocument* handle() const noexcept
+            je_tileset_document_t* handle() const noexcept
             {
                 return _m_doc;
             }
@@ -15715,7 +16089,7 @@ namespace jeecs
                 return je_tilemap_source_count(_m_doc);
             }
             // 取指定下标源纹理信息；下标越界返回 std::nullopt
-            std::optional<source_info> source(je_SourceId index) const
+            std::optional<source_info> source(je_source_id_t index) const
             {
                 assert(_m_doc != nullptr);
                 source_info info;
@@ -15734,26 +16108,26 @@ namespace jeecs
                 return je_tilemap_tile_count(_m_doc);
             }
             // 按枚举下标取瓦片 id；越界返回 std::nullopt
-            std::optional<je_TileId> tile_at_index(int32_t index) const
+            std::optional<je_tile_id_t> tile_at_index(int32_t index) const
             {
                 assert(_m_doc != nullptr);
-                je_TileId id = 0;
+                je_tile_id_t id = 0;
                 if (!je_tilemap_tile_at_index(_m_doc, index, &id))
                     return std::nullopt;
                 return id;
             }
             // 取指定源纹理格位的瓦片 id；越界返回 std::nullopt
-            std::optional<je_TileId> tile_id_at(je_SourceId source_index,
+            std::optional<je_tile_id_t> tile_id_at(je_source_id_t source_index,
                 int32_t ix, int32_t iy) const
             {
                 assert(_m_doc != nullptr);
-                je_TileId id = 0;
+                je_tile_id_t id = 0;
                 if (!je_tilemap_tile_id_at(_m_doc, source_index, ix, iy, &id))
                     return std::nullopt;
                 return id;
             }
             // 取指定 id 瓦片信息；id 不属于任何现存源格返回 std::nullopt
-            std::optional<tile_info> tile(je_TileId id) const
+            std::optional<tile_info> tile(je_tile_id_t id) const
             {
                 assert(_m_doc != nullptr);
                 tile_info info;
@@ -15813,9 +16187,9 @@ namespace jeecs
         {
             JECS_DISABLE_MOVE_AND_COPY(map_document);
 
-            je_TilemapDocument* _m_doc;
+            je_tilemap_document_t* _m_doc;
 
-            map_document(je_TilemapDocument* doc)
+            map_document(je_tilemap_document_t* doc)
                 : _m_doc(doc)
             {
                 assert(_m_doc != nullptr);
@@ -15833,14 +16207,14 @@ namespace jeecs
             */
             static std::optional<basic::resource<map_document>> open(const char* path)
             {
-                je_TilemapDocument* doc = je_tilemap_map_open(path);
+                je_tilemap_document_t* doc = je_tilemap_map_open(path);
                 if (doc == nullptr)
                     return std::nullopt;
                 return basic::resource<map_document>(new map_document(doc));
             }
 
             // 底层 C API 文档指针（逃生口）
-            je_TilemapDocument* handle() const noexcept
+            je_tilemap_document_t* handle() const noexcept
             {
                 return _m_doc;
             }
@@ -15882,7 +16256,7 @@ namespace jeecs
             // ---- 图层 ----
 
             // 取指定下标图层信息；越界返回 std::nullopt
-            std::optional<layer_info> layer(je_LayerId index) const
+            std::optional<layer_info> layer(je_layer_id_t index) const
             {
                 assert(_m_doc != nullptr);
                 if (index < 0 || index >= layer_count())
@@ -15900,7 +16274,7 @@ namespace jeecs
             // ---- 格子查询 ----
 
             // 取指定图层某格的瓦片值（越界与空格均为 nullopt）
-            std::optional<cell> tile(je_LayerId layer_index, int32_t x, int32_t y) const noexcept
+            std::optional<cell> tile(je_layer_id_t layer_index, int32_t x, int32_t y) const noexcept
             {
                 assert(_m_doc != nullptr);
                 return decode_cell(je_tilemap_tile_get(_m_doc, layer_index, x, y));
@@ -15912,7 +16286,7 @@ namespace jeecs
                 return je_tilemap_is_walkable(_m_doc, x, y) != 0;
             }
             // 某格在指定图层上的通行性
-            bool walkable(je_LayerId layer_index, int32_t x, int32_t y) const noexcept
+            bool walkable(je_layer_id_t layer_index, int32_t x, int32_t y) const noexcept
             {
                 assert(_m_doc != nullptr);
                 return je_tilemap_is_walkable_on(_m_doc, layer_index, x, y) != 0;
@@ -15923,7 +16297,7 @@ namespace jeecs
             存储不符返回 std::nullopt
             */
             template <typename T>
-            std::optional<T> get_property(je_LayerId layer_index, int32_t x, int32_t y,
+            std::optional<T> get_property(je_layer_id_t layer_index, int32_t x, int32_t y,
                 const char* name) const
             {
                 assert(_m_doc != nullptr);
@@ -15939,7 +16313,7 @@ namespace jeecs
             此时 T 须为 bool
             */
             template <typename T>
-            std::vector<cell_coord> find_cells(je_LayerId layer_index, const char* name,
+            std::vector<cell_coord> find_cells(je_layer_id_t layer_index, const char* name,
                 const T& value) const
             {
                 assert(_m_doc != nullptr);
@@ -15955,7 +16329,7 @@ namespace jeecs
                 return result;
             }
             // find_cells 的字符串匹配重载（按 const char* 内容匹配）
-            std::vector<cell_coord> find_cells(je_LayerId layer_index, const char* name,
+            std::vector<cell_coord> find_cells(je_layer_id_t layer_index, const char* name,
                 const char* value) const
             {
                 return find_cells<const char*>(layer_index, name, value);
@@ -16054,7 +16428,7 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(WallPart);
             JECS_DEFAULT_CONSTRUCTOR(WallPart);
 
-            uint32_t owner_id = 0;   // 所属地图根实体 id（je_GameEntity::_m_id）
+            uint32_t owner_id = 0;   // 所属地图根实体 id（je_game_entity_t::_m_id）
             float center_x = 0.f;    // 矩形中心（地图局部空间，1 格 = 1 单位）
             float center_y = 0.f;
             float size_x = 0.f;      // 矩形尺寸（格数）
@@ -16073,7 +16447,7 @@ namespace jeecs
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(RenderPart);
             JECS_DEFAULT_CONSTRUCTOR(RenderPart);
 
-            uint32_t owner_id = 0;   // 所属地图根实体 id（je_GameEntity::_m_id）
+            uint32_t owner_id = 0;   // 所属地图根实体 id（je_game_entity_t::_m_id）
             int32_t layer = 0;       // 图层下标
             int32_t chunk_x = 0;     // 分块列
             int32_t chunk_y = 0;     // 分块行
@@ -16184,8 +16558,8 @@ namespace jeecs
 
             je_io_gamepad_handle_t gamepad;
 
-            basic::map<je_Keycode, je_Gamepadcode> keymap;
-            je_Keycode left_stick_up_left_down_right[4];
+            basic::map<je_keycode_t, je_gamepadcode_t> keymap;
+            je_keycode_t left_stick_up_left_down_right[4];
 
             VirtualGamepad()
                 : gamepad(je_io_gamepad_create(nullptr, nullptr))
@@ -16451,14 +16825,14 @@ namespace jeecs
                 const quat& rotation,
                 const vec3& scale) const
             {
-                jegl_vertex* raw_vertex_data = mesh->resource();
+                je_gl_vertex_t* raw_vertex_data = mesh->resource();
 
                 intersect_result minResult = false;
                 minResult.distance = INFINITY;
 
                 switch (raw_vertex_data->m_type)
                 {
-                case jegl_vertex::type::TRIANGLES:
+                case JE_GL_VERTEX_TYPE_TRIANGLES:
                     for (size_t i = 0; i + 2 < raw_vertex_data->m_index_count; i += 3)
                     {
                         const float* point_0 =
@@ -16485,7 +16859,7 @@ namespace jeecs
                             minResult = f;
                     }
                     break;
-                case jegl_vertex::type::TRIANGLESTRIP:
+                case JE_GL_VERTEX_TYPE_TRIANGLESTRIP:
                 {
                     const float* point_0 =
                         reinterpret_cast<const float*>(
@@ -16910,11 +17284,11 @@ namespace jeecs
     }
     namespace input
     {
-        inline bool keydown(je_Keycode key)
+        inline bool keydown(je_keycode_t key)
         {
             return je_io_key_down_get(key);
         }
-        inline bool mousedown(size_t group, je_Mousecode key)
+        inline bool mousedown(size_t group, je_mousecode_t key)
         {
             return je_io_mouse_state_get(group, key);
         }
@@ -16950,7 +17324,7 @@ namespace jeecs
             return { x, y };
         }
 
-        template <je_TypeHash hash_v1, int v2>
+        template <je_type_hash_t hash_v1, int v2>
         static bool _isUp(bool keystate)
         {
             static bool lastframekeydown;
@@ -16958,7 +17332,7 @@ namespace jeecs
             lastframekeydown = keystate;
             return res;
         }
-        template <je_TypeHash hash_v1, int v2>
+        template <je_type_hash_t hash_v1, int v2>
         static bool _firstDown(bool keystate)
         {
             static bool lastframekeydown;
@@ -16966,10 +17340,10 @@ namespace jeecs
             lastframekeydown = keystate;
             return res;
         }
-        template <je_TypeHash hash_v1, int v2>
+        template <je_type_hash_t hash_v1, int v2>
         static bool _doubleClick(bool keystate, float i = 0.1f)
         {
-            static je_TimestampMs lact_click_tm = je_clock_time_stamp();
+            static je_timestamp_ms_t lact_click_tm = je_clock_time_stamp();
             static bool release_for_next_click = false;
 
             auto cur_time = je_clock_time_stamp();
@@ -16977,7 +17351,7 @@ namespace jeecs
             // 1. first click.
             if (keystate)
             {
-                if (release_for_next_click && cur_time - lact_click_tm < (je_TimestampMs)(i * 1000.f))
+                if (release_for_next_click && cur_time - lact_click_tm < (je_timestamp_ms_t)(i * 1000.f))
                 {
                     // Is Double click!
                     lact_click_tm = 0; // reset the time.
@@ -16985,7 +17359,7 @@ namespace jeecs
                     return true;
                 }
                 // Release for a long time, re calc the time
-                if (!release_for_next_click || cur_time - lact_click_tm > (je_TimestampMs)(i * 1000.f))
+                if (!release_for_next_click || cur_time - lact_click_tm > (je_timestamp_ms_t)(i * 1000.f))
                 {
                     lact_click_tm = cur_time;
                     release_for_next_click = false;
@@ -16993,7 +17367,7 @@ namespace jeecs
             }
             else
             {
-                if (!release_for_next_click && cur_time - lact_click_tm < (je_TimestampMs)(i * 1000.f))
+                if (!release_for_next_click && cur_time - lact_click_tm < (je_timestamp_ms_t)(i * 1000.f))
                     release_for_next_click = true;
             }
             return false;
@@ -17018,17 +17392,17 @@ namespace jeecs
             gamepad& operator=(gamepad&&) = default;
             ~gamepad() = default;
 
-            bool button(je_Gamepadcode button) const
+            bool button(je_gamepadcode_t button) const
             {
                 return je_io_gamepad_button_down_get(m_gamepad_handle, button);
             }
-            math::vec2 stick(je_Joystickcode stick) const
+            math::vec2 stick(je_joystickcode_t stick) const
             {
                 float x, y;
                 je_io_gamepad_stick_get(m_gamepad_handle, stick, &x, &y);
                 return { x, y };
             }
-            bool actived(je_TimestampMs* out_last_update_time_may_null) const
+            bool actived(je_timestamp_ms_t* out_last_update_time_may_null) const
             {
                 return je_io_gamepad_is_active(
                     m_gamepad_handle, out_last_update_time_may_null);
@@ -17062,7 +17436,7 @@ namespace jeecs
             {
                 auto gamepad_handles = _get_all_handle();
 
-                je_TimestampMs last_update_time = 0;
+                je_timestamp_ms_t last_update_time = 0;
                 size_t last_index = SIZE_MAX;
 
                 const size_t size = gamepad_handles.size();
@@ -17070,7 +17444,7 @@ namespace jeecs
 
                 for (size_t i = 0; i < size; ++i)
                 {
-                    je_TimestampMs cur_time;
+                    je_timestamp_ms_t cur_time;
                     if (je_io_gamepad_is_active(data[i], &cur_time))
                     {
                         if (cur_time > last_update_time)

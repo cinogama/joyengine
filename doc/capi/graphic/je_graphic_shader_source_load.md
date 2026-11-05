@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API jegl_shader* je_graphic_shader_source_load(
-    jegl_context* context,
+JE_API je_gl_shader_t* je_graphic_shader_source_load(
+    je_gl_context_t* context,
     const char* path,
     const char* src,
     bool is_virtual_file);
@@ -18,7 +18,7 @@ JE_API jegl_shader* je_graphic_shader_source_load(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `context` | `jegl_context*` | 图形上下文指针 |
+| `context` | `je_gl_context_t*` | 图形上下文指针 |
 | `path` | `const char*` | 着色器路径（用于缓存和标识） |
 | `src` | `const char*` | 着色器源代码 |
 | `is_virtual_file` | `bool` | 是否为虚拟文件（是否创建缓存） |
@@ -27,7 +27,7 @@ JE_API jegl_shader* je_graphic_shader_source_load(
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_shader*` | 着色器资源指针；若加载失败返回 `nullptr` |
+| `je_gl_shader_t*` | 着色器资源指针；若加载失败返回 `nullptr` |
 
 ## 用法
 
@@ -52,7 +52,7 @@ shader main
 }
 )";
 
-jegl_shader* shader = je_graphic_shader_source_load(
+je_gl_shader_t* shader = je_graphic_shader_source_load(
     ctx,
     "@/shaders/custom.shader",
     shader_src,

@@ -3,11 +3,11 @@
 ## 函数签名
 
 ```cpp
-JE_API const jeal_buffer* je_audio_buffer_create(
+JE_API const je_audio_buffer_t* je_audio_buffer_create(
     const void* data,
     size_t buffer_data_len,
     size_t sample_rate,
-    jeal_format format);
+    je_audio_format_t format);
 ```
 
 ## 描述
@@ -21,9 +21,9 @@ JE_API const jeal_buffer* je_audio_buffer_create(
 | data | const void* | 音频数据的指针 |
 | buffer_data_len | size_t | 音频数据的长度（字节数） |
 | sample_rate | size_t | 采样率（Hz） |
-| format | jeal_format | 音频格式枚举值 |
+| format | je_audio_format_t | 音频格式枚举值 |
 
-### jeal_format 枚举值
+### je_audio_format_t 枚举值
 
 | 值 | 描述 |
 |----|------|
@@ -38,7 +38,7 @@ JE_API const jeal_buffer* je_audio_buffer_create(
 
 | 类型 | 描述 |
 |------|------|
-| const jeal_buffer* | 指向音频缓冲区的指针 |
+| const je_audio_buffer_t* | 指向音频缓冲区的指针 |
 
 ## 用法示例
 
@@ -53,7 +53,7 @@ for (size_t i = 0; i < sample_count; ++i) {
     data[i] = (int16_t)(32767 * sin(2 * 3.14159 * 440 * i / sample_rate));
 }
 
-const jeal_buffer* buffer = je_audio_buffer_create(
+const je_audio_buffer_t* buffer = je_audio_buffer_create(
     data,
     sample_count * sizeof(int16_t),
     sample_rate,

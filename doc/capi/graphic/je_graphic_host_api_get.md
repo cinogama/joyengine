@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API jegl_graphic_api_entry je_graphic_host_api_get(void);
+JE_API je_gl_graphic_api_entry_t je_graphic_host_api_get(void);
 ```
 
 ## 描述
@@ -18,7 +18,7 @@ JE_API jegl_graphic_api_entry je_graphic_host_api_get(void);
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_graphic_api_entry` | 当前图形 API 入口函数指针 |
+| `je_gl_graphic_api_entry_t` | 当前图形 API 入口函数指针 |
 
 ## 用法
 
@@ -27,7 +27,7 @@ JE_API jegl_graphic_api_entry je_graphic_host_api_get(void);
 ### 示例
 
 ```cpp
-jegl_graphic_api_entry api = je_graphic_host_api_get();
+je_gl_graphic_api_entry_t api = je_graphic_host_api_get();
 
 if (api == je_graphic_using_opengl3_apis) {
     printf("Using OpenGL 3\n");

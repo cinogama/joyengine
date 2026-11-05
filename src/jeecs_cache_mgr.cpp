@@ -36,7 +36,7 @@ uint64_t _crc64_of_file(const char* filepath)
     return crc64_result;
 }
 
-/* OPTIONAL */ jeecs_file* je_cache_file_load(
+/* OPTIONAL */ je_file_t* je_cache_file_load(
     const char* filepath, uint32_t format_version, uint64_t virtual_crc64)
 {
     using namespace std;
@@ -100,7 +100,7 @@ uint64_t _crc64_of_file(const char* filepath)
     return nullptr;
 }
 
-/* OPTIONAL */ je_writing_cache_file* je_cache_file_create(
+/* OPTIONAL */ je_writing_cache_file_t* je_cache_file_create(
     const char* filepath, uint32_t format_version, uint64_t usecrc64)
 {
     using namespace std;
@@ -133,19 +133,19 @@ uint64_t _crc64_of_file(const char* filepath)
     fwrite(&format_version, sizeof(uint32_t), 1, f);
     fwrite(&crc64_result, sizeof(uint64_t), 1, f);
 
-    return reinterpret_cast<je_writing_cache_file*>(f);
+    return reinterpret_cast<je_writing_cache_file_t*>(f);
 }
 
 size_t je_cache_file_write(
     const void* write_buffer, 
     size_t elem_size, 
     size_t count, 
-    je_writing_cache_file* file)
+    je_writing_cache_file_t* file)
 {
     return fwrite(write_buffer, elem_size, count, reinterpret_cast<FILE*>(file));
 }
 
-void je_cache_file_close(je_writing_cache_file* file)
+void je_cache_file_close(je_writing_cache_file_t* file)
 {
     fclose(reinterpret_cast<FILE*>(file));
 }

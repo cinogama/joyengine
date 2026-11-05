@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API bool je_graphic_sync_shutdown(jegl_context* thread, bool isreboot);
+JE_API bool je_graphic_sync_shutdown(je_gl_context_t* thread, bool isreboot);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API bool je_graphic_sync_shutdown(jegl_context* thread, bool isreboot);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `thread` | `jegl_context*` | 图形上下文指针 |
+| `thread` | `je_gl_context_t*` | 图形上下文指针 |
 | `isreboot` | `bool` | 是否为重启（`true`）还是完全关闭（`false`） |
 
 ## 返回值
@@ -30,13 +30,13 @@ JE_API bool je_graphic_sync_shutdown(jegl_context* thread, bool isreboot);
 ### 示例
 
 ```cpp
-jegl_sync_state state = je_graphic_sync_update(ctx);
+je_gl_sync_state_t state = je_graphic_sync_update(ctx);
 
-if (state == JEGL_SYNC_SHUTDOWN) {
+if (state == JE_GL_SYNC_SHUTDOWN) {
     // 完全关闭
     bool exited = je_graphic_sync_shutdown(ctx, false);
     // exited 应为 true
-} else if (state == JEGL_SYNC_REBOOT) {
+} else if (state == JE_GL_SYNC_REBOOT) {
     // 重启
     bool exited = je_graphic_sync_shutdown(ctx, true);
     // exited 应为 false，需要重新初始化

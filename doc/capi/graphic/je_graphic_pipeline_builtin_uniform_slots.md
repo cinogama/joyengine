@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API const jegl_builtin_uniform_slots* /* NOT NULL */
-je_graphic_pipeline_builtin_uniform_slots(jegl_pipeline* pipeline);
+JE_API const je_gl_builtin_uniform_slots_t* /* NOT NULL */
+je_graphic_pipeline_builtin_uniform_slots(je_gl_pipeline_t* pipeline);
 ```
 
 ## 描述
@@ -15,10 +15,10 @@ je_graphic_pipeline_builtin_uniform_slots(jegl_pipeline* pipeline);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `pipeline` | `jegl_pipeline*` | — |
+| `pipeline` | `je_gl_pipeline_t*` | — |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `const jegl_builtin_uniform_slots*` | 见描述。 |
+| `const je_gl_builtin_uniform_slots_t*` | 见描述。 |

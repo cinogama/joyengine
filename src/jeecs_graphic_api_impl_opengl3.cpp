@@ -147,11 +147,11 @@ namespace jeecs::graphic::api::gl3
 
         GLuint m_texture_id;
         GLenum m_target; // GL_TEXTURE_2D / _3D / _2D_ARRAY / _CUBE_MAP / _2D_MULTISAMPLE
-        jegl_texture_common::format m_texture_format;
+        je_gl_texture_format_t m_texture_format;
         size_t m_width;
         size_t m_height;
 
-        jegl_gl3_texture(GLuint id, GLenum target, jegl_texture_common::format fmt, size_t w, size_t h)
+        jegl_gl3_texture(GLuint id, GLenum target, je_gl_texture_format_t fmt, size_t w, size_t h)
             : m_texture_id(id)
             , m_target(target)
             , m_texture_format(fmt)
@@ -207,7 +207,7 @@ namespace jeecs::graphic::api::gl3
         GLintptr m_render_uniform_ring_offset = 0;
         GLint m_render_uniform_alignment = 256;
 
-        jegl_shader* m_render_current_shader_resource = nullptr;
+        je_gl_shader_t* m_render_current_shader_resource = nullptr;
         jegl3_vertex_data* m_render_current_vertex = nullptr;
 
         // Clears of the default framebuffer need an explicit sRGB encode on
@@ -240,7 +240,7 @@ namespace jeecs::graphic::api::gl3
 
         JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_context);
 
-        jegl_gl3_context(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
+        jegl_gl3_context(je_gl_context_t* gthread, const je_gl_interface_config_t* config, bool reboot)
         {
             m_interface =
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
@@ -279,7 +279,7 @@ namespace jeecs::graphic::api::gl3
         GLuint m_binding_place;
         GLsizeiptr m_uniform_buffer_size;
 
-        jegl_gl3_uniformbuf(jegl_uniform_buffer* resource)
+        jegl_gl3_uniformbuf(je_gl_uniform_buffer_t* resource)
         {
             glGenBuffers(1, &m_uniform_buffer_object);
             glBindBuffer(GL_UNIFORM_BUFFER, m_uniform_buffer_object);
@@ -452,7 +452,7 @@ namespace jeecs::graphic::api::gl3
 
         auto created = jeecs::graphic::framebuffer::create(
             (size_t)width, (size_t)height,
-            { jegl_texture_common::format::RGBA },
+            { JE_GL_TEXTURE_FORMAT_RGBA },
             true);
         if (!created.has_value()
             || !_jegl_prepare_framebuffer_resource(
@@ -480,7 +480,7 @@ namespace jeecs::graphic::api::gl3
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
-    static jegl_texture_2d* _gl_srgb_encode_source(
+    static je_gl_texture_2d_t* _gl_srgb_encode_source(
         jegl_gl3_context* context)
     {
         auto& target = context->m_srgb_encode_screen_target;
@@ -493,7 +493,7 @@ namespace jeecs::graphic::api::gl3
             : nullptr;
     }
 
-    je_GraphicImplContext gl_startup(jegl_context* gthread, const jegl_interface_config* config, bool reboot)
+    je_graphic_impl_context_t gl_startup(je_gl_context_t* gthread, const je_gl_interface_config_t* config, bool reboot)
     {
         jegl_gl3_context* context = new jegl_gl3_context(gthread, config, reboot);
 
@@ -550,14 +550,14 @@ namespace jeecs::graphic::api::gl3
 #endif
         jegui_init_gl330(
             gthread,
-            [](jegl_context*, jegl_texture_2d* res)
+            [](je_gl_context_t*, je_gl_texture_2d_t* res)
             {
                 jegl_gl3_texture* texture_instance =
                     static_cast<jegl_gl3_texture*>(res->m_handle.m_ptr);
 
                 return (uint64_t)texture_instance->m_texture_id;
             },
-            [](jegl_context* jctx, jegl_shader* res)
+            [](je_gl_context_t* jctx, je_gl_shader_t* res)
             {
                 jegl_gl3_shader* shader_instance =
                     static_cast<jegl_gl3_shader*>(res->m_handle.m_ptr);
@@ -580,7 +580,7 @@ namespace jeecs::graphic::api::gl3
         return context;
     }
 
-    jegl_update_action gl_pre_update(je_GraphicImplContext ctx)
+    je_gl_update_action_t gl_pre_update(je_graphic_impl_context_t ctx)
     {
         jegl_gl3_context* context = static_cast<jegl_gl3_context*>(ctx);
 
@@ -588,10 +588,10 @@ namespace jeecs::graphic::api::gl3
         {
         case basic_interface::update_result::CLOSE:
             if (je_gui_backend_shutdown_callback())
-                return jegl_update_action::JEGL_UPDATE_STOP;
+                return je_gl_update_action_t::JE_GL_UPDATE_STOP;
             goto _label_jegl_gl3_normal_job;
         case basic_interface::update_result::PAUSE:
-            return jegl_update_action::JEGL_UPDATE_SKIP;
+            return je_gl_update_action_t::JE_GL_UPDATE_SKIP;
         case basic_interface::update_result::RESIZE:
         {
             int width, height;
@@ -608,14 +608,14 @@ namespace jeecs::graphic::api::gl3
 
             // Reset current_active_shader_may_null to make sure bind correctly.
             context->current_active_shader_may_null = nullptr;
-            return jegl_update_action::JEGL_UPDATE_CONTINUE;
+            return je_gl_update_action_t::JE_GL_UPDATE_CONTINUE;
         default:
             abort();
         }
     }
 
-    jegl_update_action gl_commit_update(
-        je_GraphicImplContext ctx, jegl_update_action)
+    je_gl_update_action_t gl_commit_update(
+        je_graphic_impl_context_t ctx, je_gl_update_action_t)
     {
         auto* context = static_cast<jegl_gl3_context*>(ctx);
         const bool encode_pass = context->is_srgb_encode_pass();
@@ -638,17 +638,17 @@ namespace jeecs::graphic::api::gl3
 
         // 将绘制命令异步地提交给GPU
         glFlush();
-        return jegl_update_action::JEGL_UPDATE_CONTINUE;
+        return je_gl_update_action_t::JE_GL_UPDATE_CONTINUE;
     }
     void gl_pre_shutdown(
-        jegl_context*, je_GraphicImplContext userdata, bool)
+        je_gl_context_t*, je_graphic_impl_context_t userdata, bool)
     {
         // 该目标是上下文自持的 framebuffer，在资源层释放前显式释放，
         // 让颜色/深度附件与资源句柄走正常的回收流程。
         static_cast<jegl_gl3_context*>(userdata)
             ->m_srgb_encode_screen_target.reset();
     }
-    void gl_shutdown(jegl_context*, je_GraphicImplContext userdata, bool reboot)
+    void gl_shutdown(je_gl_context_t*, je_graphic_impl_context_t userdata, bool reboot)
     {
         jegl_gl3_context* context = static_cast<jegl_gl3_context*>(userdata);
 
@@ -660,8 +660,8 @@ namespace jeecs::graphic::api::gl3
         context->m_interface->shutdown(reboot);
         delete context;
     }
-        jegl_resource_blob shader_create_resource_blob(
-        je_GraphicImplContext ctx, jegl_shader* resource)
+        je_gl_resource_blob_t shader_create_resource_blob(
+        je_graphic_impl_context_t ctx, je_gl_shader_t* resource)
     {
         GLuint vs = glCreateShader(GL_VERTEX_SHADER);
         GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
@@ -769,10 +769,10 @@ namespace jeecs::graphic::api::gl3
 
                 switch (sampler_config.m_mag)
                 {
-                case jegl_shader::fliter_mode::LINEAR:
+                case JE_GL_SHADER_FILTER_MODE_LINEAR:
                     glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                     break;
-                case jegl_shader::fliter_mode::NEAREST:
+                case JE_GL_SHADER_FILTER_MODE_NEAREST:
                     glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                     break;
                 default:
@@ -780,10 +780,10 @@ namespace jeecs::graphic::api::gl3
                 }
                 switch (sampler_config.m_min)
                 {
-                case jegl_shader::fliter_mode::LINEAR:
+                case JE_GL_SHADER_FILTER_MODE_LINEAR:
                     glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                     break;
-                case jegl_shader::fliter_mode::NEAREST:
+                case JE_GL_SHADER_FILTER_MODE_NEAREST:
                     glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                     break;
                 default:
@@ -791,10 +791,10 @@ namespace jeecs::graphic::api::gl3
                 }
                 switch (sampler_config.m_uwrap)
                 {
-                case jegl_shader::wrap_mode::CLAMP:
+                case JE_GL_SHADER_WRAP_MODE_CLAMP:
                     glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                     break;
-                case jegl_shader::wrap_mode::REPEAT:
+                case JE_GL_SHADER_WRAP_MODE_REPEAT:
                     glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_WRAP_S, GL_REPEAT);
                     break;
                 default:
@@ -802,10 +802,10 @@ namespace jeecs::graphic::api::gl3
                 }
                 switch (sampler_config.m_vwrap)
                 {
-                case jegl_shader::wrap_mode::CLAMP:
+                case JE_GL_SHADER_WRAP_MODE_CLAMP:
                     glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
                     break;
-                case jegl_shader::wrap_mode::REPEAT:
+                case JE_GL_SHADER_WRAP_MODE_REPEAT:
                     glSamplerParameteri(samplers.m_sampler, GL_TEXTURE_WRAP_T, GL_REPEAT);
                     break;
                 default:
@@ -825,39 +825,39 @@ namespace jeecs::graphic::api::gl3
                 size_t allign_base = 0;
                 switch (uniforms->m_uniform_type)
                 {
-                case jegl_shader::uniform_type::INT:
-                case jegl_shader::uniform_type::FLOAT:
+                case JE_GL_SHADER_UNIFORM_TYPE_INT:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT:
                     unit_size = 4;
                     allign_base = 4;
                     break;
-                case jegl_shader::uniform_type::INT2:
-                case jegl_shader::uniform_type::FLOAT2:
+                case JE_GL_SHADER_UNIFORM_TYPE_INT2:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2:
                     unit_size = 8;
                     allign_base = 8;
                     break;
-                case jegl_shader::uniform_type::INT3:
-                case jegl_shader::uniform_type::FLOAT3:
+                case JE_GL_SHADER_UNIFORM_TYPE_INT3:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3:
                     unit_size = 12;
                     allign_base = 16;
                     break;
-                case jegl_shader::uniform_type::INT4:
-                case jegl_shader::uniform_type::FLOAT4:
+                case JE_GL_SHADER_UNIFORM_TYPE_INT4:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4:
                     unit_size = 16;
                     allign_base = 16;
                     break;
-                case jegl_shader::uniform_type::FLOAT2X2:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2X2:
                     unit_size = 16;
                     allign_base = 8;
                     break;
-                case jegl_shader::uniform_type::FLOAT3X3:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3X3:
                     unit_size = 48;
                     allign_base = 16;
                     break;
-                case jegl_shader::uniform_type::FLOAT4X4:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4X4:
                     unit_size = 64;
                     allign_base = 16;
                     break;
-                case jegl_shader::uniform_type::TEXTURE:
+                case JE_GL_SHADER_UNIFORM_TYPE_TEXTURE:
                     break;
                 }
 
@@ -872,28 +872,28 @@ namespace jeecs::graphic::api::gl3
 
             switch (resource->m_depth_test)
             {
-            case jegl_shader::depth_test_method::NEVER:
+            case je_gl_shader_depth_test_method_t::NEVER:
                 shared_blob->m_depth_test_method = GL_NEVER;
                 break;
-            case jegl_shader::depth_test_method::LESS:
+            case je_gl_shader_depth_test_method_t::LESS:
                 shared_blob->m_depth_test_method = GL_LESS;
                 break;
-            case jegl_shader::depth_test_method::EQUAL:
+            case je_gl_shader_depth_test_method_t::EQUAL:
                 shared_blob->m_depth_test_method = GL_EQUAL;
                 break;
-            case jegl_shader::depth_test_method::LESS_EQUAL:
+            case je_gl_shader_depth_test_method_t::LESS_EQUAL:
                 shared_blob->m_depth_test_method = GL_LEQUAL;
                 break;
-            case jegl_shader::depth_test_method::GREATER:
+            case je_gl_shader_depth_test_method_t::GREATER:
                 shared_blob->m_depth_test_method = GL_GREATER;
                 break;
-            case jegl_shader::depth_test_method::NOT_EQUAL:
+            case je_gl_shader_depth_test_method_t::NOT_EQUAL:
                 shared_blob->m_depth_test_method = GL_NOTEQUAL;
                 break;
-            case jegl_shader::depth_test_method::GREATER_EQUAL:
+            case je_gl_shader_depth_test_method_t::GREATER_EQUAL:
                 shared_blob->m_depth_test_method = GL_GEQUAL;
                 break;
-            case jegl_shader::depth_test_method::ALWAYS:
+            case je_gl_shader_depth_test_method_t::ALWAYS:
                 shared_blob->m_depth_test_method = GL_ALWAYS;
                 break;
             default:
@@ -903,10 +903,10 @@ namespace jeecs::graphic::api::gl3
 
             switch (resource->m_depth_mask)
             {
-            case jegl_shader::depth_mask_method::DISABLE:
+            case je_gl_shader_depth_mask_method_t::DISABLE:
                 shared_blob->m_depth_write_mask = GL_FALSE;
                 break;
-            case jegl_shader::depth_mask_method::ENABLE:
+            case je_gl_shader_depth_mask_method_t::ENABLE:
                 shared_blob->m_depth_write_mask = GL_TRUE;
                 break;
             default:
@@ -916,22 +916,22 @@ namespace jeecs::graphic::api::gl3
 
             switch (resource->m_blend_equation)
             {
-            case jegl_shader::blend_equation::DISABLED:
+            case je_gl_shader_blend_equation_t::DISABLED:
                 shared_blob->m_blend_equation = GL_INVALID_ENUM;
                 break;
-            case jegl_shader::blend_equation::ADD:
+            case je_gl_shader_blend_equation_t::ADD:
                 shared_blob->m_blend_equation = GL_FUNC_ADD;
                 break;
-            case jegl_shader::blend_equation::SUBTRACT:
+            case je_gl_shader_blend_equation_t::SUBTRACT:
                 shared_blob->m_blend_equation = GL_FUNC_SUBTRACT;
                 break;
-            case jegl_shader::blend_equation::REVERSE_SUBTRACT:
+            case je_gl_shader_blend_equation_t::REVERSE_SUBTRACT:
                 shared_blob->m_blend_equation = GL_FUNC_REVERSE_SUBTRACT;
                 break;
-            case jegl_shader::blend_equation::MIN:
+            case je_gl_shader_blend_equation_t::MIN:
                 shared_blob->m_blend_equation = GL_MIN;
                 break;
-            case jegl_shader::blend_equation::MAX:
+            case je_gl_shader_blend_equation_t::MAX:
                 shared_blob->m_blend_equation = GL_MAX;
                 break;
             default:
@@ -940,20 +940,20 @@ namespace jeecs::graphic::api::gl3
             }
 
             auto cast_to_gl_blend_factor =
-                [](jegl_shader::blend_method mode)
+                [](je_gl_shader_blend_method_t mode)
                 {
                     switch (mode)
                     {
-                    case jegl_shader::blend_method::ZERO: return GL_ZERO;
-                    case jegl_shader::blend_method::ONE: return GL_ONE;
-                    case jegl_shader::blend_method::SRC_COLOR: return GL_SRC_COLOR;
-                    case jegl_shader::blend_method::SRC_ALPHA: return GL_SRC_ALPHA;
-                    case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA: return GL_ONE_MINUS_SRC_ALPHA;
-                    case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR: return  GL_ONE_MINUS_SRC_COLOR;
-                    case jegl_shader::blend_method::DST_COLOR: return GL_DST_COLOR;
-                    case jegl_shader::blend_method::DST_ALPHA: return GL_DST_ALPHA;
-                    case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA: return GL_ONE_MINUS_DST_ALPHA;
-                    case jegl_shader::blend_method::ONE_MINUS_DST_COLOR: return GL_ONE_MINUS_DST_COLOR;
+                    case je_gl_shader_blend_method_t::ZERO: return GL_ZERO;
+                    case je_gl_shader_blend_method_t::ONE: return GL_ONE;
+                    case je_gl_shader_blend_method_t::SRC_COLOR: return GL_SRC_COLOR;
+                    case je_gl_shader_blend_method_t::SRC_ALPHA: return GL_SRC_ALPHA;
+                    case je_gl_shader_blend_method_t::ONE_MINUS_SRC_ALPHA: return GL_ONE_MINUS_SRC_ALPHA;
+                    case je_gl_shader_blend_method_t::ONE_MINUS_SRC_COLOR: return  GL_ONE_MINUS_SRC_COLOR;
+                    case je_gl_shader_blend_method_t::DST_COLOR: return GL_DST_COLOR;
+                    case je_gl_shader_blend_method_t::DST_ALPHA: return GL_DST_ALPHA;
+                    case je_gl_shader_blend_method_t::ONE_MINUS_DST_ALPHA: return GL_ONE_MINUS_DST_ALPHA;
+                    case je_gl_shader_blend_method_t::ONE_MINUS_DST_COLOR: return GL_ONE_MINUS_DST_COLOR;
                     default:
                         jeecs::debug::logerr("Invalid blend src method.");
                         return GL_ONE;
@@ -967,13 +967,13 @@ namespace jeecs::graphic::api::gl3
 
             switch (resource->m_cull_mode)
             {
-            case jegl_shader::cull_mode::NONE:
+            case je_gl_shader_cull_mode_t::NONE:
                 shared_blob->m_cull_face_method = GL_NONE;
                 break;
-            case jegl_shader::cull_mode::FRONT:
+            case je_gl_shader_cull_mode_t::FRONT:
                 shared_blob->m_cull_face_method = GL_FRONT;
                 break;
-            case jegl_shader::cull_mode::BACK:
+            case je_gl_shader_cull_mode_t::BACK:
                 shared_blob->m_cull_face_method = GL_BACK;
                 break;
             default:
@@ -987,34 +987,34 @@ namespace jeecs::graphic::api::gl3
         }
     }
     void shader_close_resource_blob(
-        je_GraphicImplContext ctx, jegl_resource_blob blob)
+        je_graphic_impl_context_t ctx, je_gl_resource_blob_t blob)
     {
         delete static_cast<jegl3_shader_blob*>(blob);
     }
 
     template<typename TexT>
-    jegl_resource_blob texture_create_resource_blob(
-        je_GraphicImplContext ctx, TexT* resource)
+    je_gl_resource_blob_t texture_create_resource_blob(
+        je_graphic_impl_context_t ctx, TexT* resource)
     {
         return nullptr;
     }
     void texture_close_resource_blob(
-        je_GraphicImplContext ctx, jegl_resource_blob blob)
+        je_graphic_impl_context_t ctx, je_gl_resource_blob_t blob)
     {}
 
-    jegl_resource_blob vertex_create_resource_blob(
-        je_GraphicImplContext ctx, jegl_vertex* resource)
+    je_gl_resource_blob_t vertex_create_resource_blob(
+        je_graphic_impl_context_t ctx, je_gl_vertex_t* resource)
     {
         return nullptr;
     }
     void vertex_close_resource_blob(
-        je_GraphicImplContext ctx, jegl_resource_blob blob)
+        je_graphic_impl_context_t ctx, je_gl_resource_blob_t blob)
     {}
 
     void shader_init(
-        je_GraphicImplContext ctx,
-        jegl_resource_blob blob,
-        jegl_shader* resource)
+        je_graphic_impl_context_t ctx,
+        je_gl_resource_blob_t blob,
+        je_gl_shader_t* resource)
     {
         resource->m_handle.m_ptr = nullptr;
         if (blob != nullptr)
@@ -1070,7 +1070,7 @@ namespace jeecs::graphic::api::gl3
             auto* uniform_var = resource->m_custom_uniforms;
             while (uniform_var)
             {
-                if (uniform_var->m_uniform_type == jegl_shader::uniform_type::TEXTURE)
+                if (uniform_var->m_uniform_type == JE_GL_SHADER_UNIFORM_TYPE_TEXTURE)
                 {
                     uniform_var->m_index = jeecs::graphic::INVALID_UNIFORM_LOCATION;
 
@@ -1108,12 +1108,12 @@ namespace jeecs::graphic::api::gl3
         }
     }
     void shader_update(
-        je_GraphicImplContext,
-        jegl_shader* resource)
+        je_graphic_impl_context_t,
+        je_gl_shader_t* resource)
     {}
     void shader_close(
-        je_GraphicImplContext,
-        jegl_shader* resource)
+        je_graphic_impl_context_t,
+        je_gl_shader_t* resource)
     {
         jegl_gl3_shader* shader_instance =
             static_cast<jegl_gl3_shader*>(resource->m_handle.m_ptr);
@@ -1125,18 +1125,18 @@ namespace jeecs::graphic::api::gl3
     // 根据纹理颜色格式选取 GL 的内部格式与源数据格式，
     // 返回 false 表示无法识别的格式
     static bool _gl3_pick_color_formats(
-        jegl_texture_common::format fmt, bool is_16bit,
+        je_gl_texture_format_t fmt, bool is_16bit,
         GLint& texture_src_format, GLint& texture_aim_format)
     {
         const bool is_srgb =
-            0 != (fmt & jegl_texture_common::format::SRGB);
-        switch (fmt & jegl_texture_common::format::COLOR_DEPTH_MASK)
+            0 != (fmt & JE_GL_TEXTURE_FORMAT_SRGB);
+        switch (fmt & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK)
         {
-        case jegl_texture_common::format::MONO:
+        case JE_GL_TEXTURE_FORMAT_MONO:
             texture_src_format = GL_RED;
             texture_aim_format = is_16bit ? GL_R16F : GL_R8;
             return true;
-        case jegl_texture_common::format::RGBA:
+        case JE_GL_TEXTURE_FORMAT_RGBA:
             texture_src_format = GL_RGBA;
             texture_aim_format = is_16bit
                 ? GL_RGBA16F
@@ -1149,16 +1149,16 @@ namespace jeecs::graphic::api::gl3
     }
 
     void texture_2d_init(
-        je_GraphicImplContext,
-        jegl_resource_blob,
-        jegl_texture_2d* resource)
+        je_graphic_impl_context_t,
+        je_gl_resource_blob_t,
+        je_gl_texture_2d_t* resource)
     {
         GLuint texture;
         glGenTextures(1, &texture);
         glBindTexture(GL_TEXTURE_2D, texture);
 
-        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
-        const bool is_depth = 0 != (resource->m_format & jegl_texture_common::format::DEPTH);
+        const bool is_16bit = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
+        const bool is_depth = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH);
 
         if (is_depth)
         {
@@ -1199,17 +1199,17 @@ namespace jeecs::graphic::api::gl3
     }
 
     void texture_3d_init(
-        je_GraphicImplContext,
-        jegl_resource_blob,
-        jegl_texture_3d* resource)
+        je_graphic_impl_context_t,
+        je_gl_resource_blob_t,
+        je_gl_texture_3d_t* resource)
     {
-        if (0 != (resource->m_format & jegl_texture_common::format::DEPTH))
+        if (0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH))
         {
             jeecs::debug::logerr("3D depth texture is not supported.");
             return;
         }
 
-        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+        const bool is_16bit = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
         GLint texture_aim_format = GL_RGBA;
         GLint texture_src_format = GL_RGBA;
         if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
@@ -1233,17 +1233,17 @@ namespace jeecs::graphic::api::gl3
     }
 
     void texture_array_init(
-        je_GraphicImplContext,
-        jegl_resource_blob,
-        jegl_texture_array* resource)
+        je_graphic_impl_context_t,
+        je_gl_resource_blob_t,
+        je_gl_texture_array_t* resource)
     {
-        if (0 != (resource->m_format & jegl_texture_common::format::DEPTH))
+        if (0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH))
         {
             jeecs::debug::logerr("Texture array of depth format is not supported.");
             return;
         }
 
-        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+        const bool is_16bit = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
         GLint texture_aim_format = GL_RGBA;
         GLint texture_src_format = GL_RGBA;
         if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
@@ -1267,9 +1267,9 @@ namespace jeecs::graphic::api::gl3
     }
 
     void texture_cube_init(
-        je_GraphicImplContext,
-        jegl_resource_blob,
-        jegl_texture_cube* resource)
+        je_graphic_impl_context_t,
+        je_gl_resource_blob_t,
+        je_gl_texture_cube_t* resource)
     {
         const GLenum jegl_texture_cube_map_ways[] = {
             GL_TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -1279,11 +1279,11 @@ namespace jeecs::graphic::api::gl3
             GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
             GL_TEXTURE_CUBE_MAP_NEGATIVE_Z };
 
-        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
-        const bool is_depth = 0 != (resource->m_format & jegl_texture_common::format::DEPTH);
+        const bool is_16bit = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
+        const bool is_depth = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH);
         const size_t face_pixels =
             resource->m_width * resource->m_height
-            * (resource->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK);
+            * (resource->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
 
         GLuint texture;
         glGenTextures(1, &texture);
@@ -1334,16 +1334,16 @@ namespace jeecs::graphic::api::gl3
     }
 
     void texture_msaa_init(
-        je_GraphicImplContext,
-        jegl_resource_blob,
-        jegl_texture_msaa* resource)
+        je_graphic_impl_context_t,
+        je_gl_resource_blob_t,
+        je_gl_texture_msaa_t* resource)
     {
 #if defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
         (void)resource;
         jeecs::debug::logerr("MSAA texture is not supported by OpenGLES3/WebGL2.");
 #else
-        const bool is_depth = 0 != (resource->m_format & jegl_texture_common::format::DEPTH);
-        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+        const bool is_depth = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH);
+        const bool is_16bit = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
 
         GLint texture_aim_format = GL_RGBA;
         GLint texture_src_format = GL_RGBA;
@@ -1371,15 +1371,15 @@ namespace jeecs::graphic::api::gl3
     }
 
     void texture_2d_update(
-        je_GraphicImplContext,
-        jegl_texture_2d* resource)
+        je_graphic_impl_context_t,
+        je_gl_texture_2d_t* resource)
     {
         jegl_gl3_texture* texture_instance =
             static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
 
         // Update texture's pixels, only normal pixel data will be updated.
         // NOTE: 深度纹理不支持更新
-        if (0 != (resource->m_format & jegl_texture_common::format::DEPTH))
+        if (0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH))
         {
             jeecs::debug::logerr("Depth texture update is not supported.");
             return;
@@ -1387,7 +1387,7 @@ namespace jeecs::graphic::api::gl3
 
         glBindTexture(GL_TEXTURE_2D, texture_instance->m_texture_id);
 
-        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+        const bool is_16bit = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
         GLint texture_aim_format = GL_RGBA;
         GLint texture_src_format = GL_RGBA;
 
@@ -1438,7 +1438,7 @@ namespace jeecs::graphic::api::gl3
         jegl_gl3_texture* texture_instance =
             static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
 
-        if (0 != (resource->m_format & jegl_texture_common::format::DEPTH))
+        if (0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH))
         {
             jeecs::debug::logerr("Depth texture update is not supported.");
             return;
@@ -1446,7 +1446,7 @@ namespace jeecs::graphic::api::gl3
 
         glBindTexture(target, texture_instance->m_texture_id);
 
-        const bool is_16bit = 0 != (resource->m_format & jegl_texture_common::format::FLOAT16);
+        const bool is_16bit = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
         GLint texture_aim_format = GL_RGBA;
         GLint texture_src_format = GL_RGBA;
 
@@ -1490,22 +1490,22 @@ namespace jeecs::graphic::api::gl3
     }
 
     void texture_3d_update(
-        je_GraphicImplContext,
-        jegl_texture_3d* resource)
+        je_graphic_impl_context_t,
+        je_gl_texture_3d_t* resource)
     {
         _gl3_update_texture_3d_like(resource, GL_TEXTURE_3D, (GLsizei)resource->m_depth);
     }
 
     void texture_array_update(
-        je_GraphicImplContext,
-        jegl_texture_array* resource)
+        je_graphic_impl_context_t,
+        je_gl_texture_array_t* resource)
     {
         _gl3_update_texture_3d_like(resource, GL_TEXTURE_2D_ARRAY, (GLsizei)resource->m_layers);
     }
 
     void texture_cube_update(
-        je_GraphicImplContext,
-        jegl_texture_cube* resource)
+        je_graphic_impl_context_t,
+        je_gl_texture_cube_t* resource)
     {
         (void)resource;
         // NOTE: Cube 纹理不支持更新
@@ -1513,8 +1513,8 @@ namespace jeecs::graphic::api::gl3
     }
 
     void texture_msaa_update(
-        je_GraphicImplContext,
-        jegl_texture_msaa* resource)
+        je_graphic_impl_context_t,
+        je_gl_texture_msaa_t* resource)
     {
         (void)resource;
         // NOTE: MSAA 纹理只存在于 GPU 侧，不支持 CPU 侧像素更新
@@ -1523,16 +1523,16 @@ namespace jeecs::graphic::api::gl3
 
     template<typename TexT>
     void texture_close(
-        je_GraphicImplContext,
+        je_graphic_impl_context_t,
         TexT* resource)
     {
         delete static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
     }
 
     void vertex_init(
-        je_GraphicImplContext,
-        jegl_resource_blob,
-        jegl_vertex* resource)
+        je_graphic_impl_context_t,
+        je_gl_resource_blob_t,
+        je_gl_vertex_t* resource)
     {
         GLuint vao, vbo, ebo;
         glGenVertexArrays(1, &vao);
@@ -1564,14 +1564,14 @@ namespace jeecs::graphic::api::gl3
 
             switch (resource->m_formats[i].m_type)
             {
-            case jegl_vertex::data_type::FLOAT32:
+            case JE_GL_VERTEX_DATA_TYPE_FLOAT32:
                 format_size = sizeof(float);
                 glVertexAttribPointer(i, (GLint)resource->m_formats[i].m_count,
                     GL_FLOAT, GL_FALSE,
                     (GLsizei)(resource->m_data_size_per_point),
                     (void*)offset);
                 break;
-            case jegl_vertex::data_type::INT32:
+            case JE_GL_VERTEX_DATA_TYPE_INT32:
                 format_size = sizeof(int);
                 glVertexAttribIPointer(i, (GLint)resource->m_formats[i].m_count,
                     GL_INT,
@@ -1602,8 +1602,8 @@ namespace jeecs::graphic::api::gl3
         resource->m_handle.m_ptr = vertex_data;
     }
     void vertex_update(
-        je_GraphicImplContext,
-        jegl_vertex* resource)
+        je_graphic_impl_context_t,
+        je_gl_vertex_t* resource)
     {
         jegl3_vertex_data* vertex_data =
             static_cast<jegl3_vertex_data*>(resource->m_handle.m_ptr);
@@ -1622,21 +1622,21 @@ namespace jeecs::graphic::api::gl3
         vertex_data->m_pointcount = (GLsizei)resource->m_index_count;
     }
     void vertex_close(
-        je_GraphicImplContext,
-        jegl_vertex* resource)
+        je_graphic_impl_context_t,
+        je_gl_vertex_t* resource)
     {
         delete static_cast<jegl3_vertex_data*>(resource->m_handle.m_ptr);
     }
 
     void ubuffer_init(
-        je_GraphicImplContext,
-        jegl_uniform_buffer* resource)
+        je_graphic_impl_context_t,
+        je_gl_uniform_buffer_t* resource)
     {
         resource->m_handle.m_ptr = new jegl_gl3_uniformbuf(resource);
     }
     void ubuffer_update(
-        je_GraphicImplContext,
-        jegl_uniform_buffer* resource)
+        je_graphic_impl_context_t,
+        je_gl_uniform_buffer_t* resource)
     {
         jegl_gl3_uniformbuf* ubuf =
             static_cast<jegl_gl3_uniformbuf*>(resource->m_handle.m_ptr);
@@ -1652,15 +1652,15 @@ namespace jeecs::graphic::api::gl3
             resource->m_buffer + resource->m_update_begin_offset);
     }
     void ubuffer_close(
-        je_GraphicImplContext,
-        jegl_uniform_buffer* resource)
+        je_graphic_impl_context_t,
+        je_gl_uniform_buffer_t* resource)
     {
         delete static_cast<jegl_gl3_uniformbuf*>(resource->m_handle.m_ptr);
     }
 
     void framebuffer_init(
-        je_GraphicImplContext,
-        jegl_frame_buffer* resource)
+        je_graphic_impl_context_t,
+        je_gl_frame_buffer_t* resource)
     {
         GLuint fbo;
         glGenFramebuffers(1, &fbo);
@@ -1676,7 +1676,7 @@ namespace jeecs::graphic::api::gl3
 
         for (size_t i = 0; i < resource->m_attachment_count; ++i)
         {
-            jegl_texture_2d* frame_texture = attachments[i]->resource();
+            je_gl_texture_2d_t* frame_texture = attachments[i]->resource();
 
             // Ensure the attachment texture has a lazy-initialized GL object
             // before glFramebufferTexture2D.
@@ -1685,7 +1685,7 @@ namespace jeecs::graphic::api::gl3
             GLenum using_attachment = attachment;
             GLenum buffer_texture_type = GL_TEXTURE_2D;
 
-            if (0 != (frame_texture->m_format & jegl_texture_common::format::DEPTH))
+            if (0 != (frame_texture->m_format & JE_GL_TEXTURE_FORMAT_DEPTH))
             {
                 if (already_has_attached_depth)
                     jeecs::debug::logerr("Framebuffer(%p) attach depth buffer repeatedly.", resource);
@@ -1727,12 +1727,12 @@ namespace jeecs::graphic::api::gl3
             fbo);
     }
     void framebuffer_update(
-        je_GraphicImplContext,
-        jegl_frame_buffer* resource)
+        je_graphic_impl_context_t,
+        je_gl_frame_buffer_t* resource)
     {}
     void framebuffer_close(
-        je_GraphicImplContext,
-        jegl_frame_buffer* resource)
+        je_graphic_impl_context_t,
+        je_gl_frame_buffer_t* resource)
     {
         delete static_cast<jegl_gl3_framebuf*>(resource->m_handle.m_ptr);
     }
@@ -1803,7 +1803,7 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    void gl_bind_uniform_buffer(je_GraphicImplContext, jegl_uniform_buffer* uniformbuf)
+    void gl_bind_uniform_buffer(je_graphic_impl_context_t, je_gl_uniform_buffer_t* uniformbuf)
     {
         jegl_gl3_uniformbuf* ubuf =
             static_cast<jegl_gl3_uniformbuf*>(uniformbuf->m_handle.m_ptr);
@@ -1817,7 +1817,7 @@ namespace jeecs::graphic::api::gl3
     }
 
     template<typename TexT>
-    void gl_bind_texture(je_GraphicImplContext ctx, TexT* texture, size_t pass)
+    void gl_bind_texture(je_graphic_impl_context_t ctx, TexT* texture, size_t pass)
     {
         jegl_gl3_context* context = static_cast<jegl_gl3_context*>(ctx);
         jegl_gl3_texture* texture_instance =
@@ -1838,80 +1838,80 @@ namespace jeecs::graphic::api::gl3
         GLuint m_sampler;
     };
 
-    GLenum gl_render_depth_func(jegl_shader::depth_test_method method)
+    GLenum gl_render_depth_func(je_gl_shader_depth_test_method_t method)
     {
         switch (method)
         {
-        case jegl_shader::depth_test_method::NEVER: return GL_NEVER;
-        case jegl_shader::depth_test_method::LESS: return GL_LESS;
-        case jegl_shader::depth_test_method::EQUAL: return GL_EQUAL;
-        case jegl_shader::depth_test_method::LESS_EQUAL: return GL_LEQUAL;
-        case jegl_shader::depth_test_method::GREATER: return GL_GREATER;
-        case jegl_shader::depth_test_method::NOT_EQUAL: return GL_NOTEQUAL;
-        case jegl_shader::depth_test_method::GREATER_EQUAL: return GL_GEQUAL;
-        case jegl_shader::depth_test_method::ALWAYS: return GL_ALWAYS;
+        case je_gl_shader_depth_test_method_t::NEVER: return GL_NEVER;
+        case je_gl_shader_depth_test_method_t::LESS: return GL_LESS;
+        case je_gl_shader_depth_test_method_t::EQUAL: return GL_EQUAL;
+        case je_gl_shader_depth_test_method_t::LESS_EQUAL: return GL_LEQUAL;
+        case je_gl_shader_depth_test_method_t::GREATER: return GL_GREATER;
+        case je_gl_shader_depth_test_method_t::NOT_EQUAL: return GL_NOTEQUAL;
+        case je_gl_shader_depth_test_method_t::GREATER_EQUAL: return GL_GEQUAL;
+        case je_gl_shader_depth_test_method_t::ALWAYS: return GL_ALWAYS;
         default:
             assert(false);
             return GL_LESS;
         }
     }
 
-    GLenum gl_render_blend_equation(jegl_shader::blend_equation equation)
+    GLenum gl_render_blend_equation(je_gl_shader_blend_equation_t equation)
     {
         switch (equation)
         {
-        case jegl_shader::blend_equation::ADD: return GL_FUNC_ADD;
-        case jegl_shader::blend_equation::SUBTRACT: return GL_FUNC_SUBTRACT;
-        case jegl_shader::blend_equation::REVERSE_SUBTRACT: return GL_FUNC_REVERSE_SUBTRACT;
-        case jegl_shader::blend_equation::MIN: return GL_MIN;
-        case jegl_shader::blend_equation::MAX: return GL_MAX;
+        case je_gl_shader_blend_equation_t::ADD: return GL_FUNC_ADD;
+        case je_gl_shader_blend_equation_t::SUBTRACT: return GL_FUNC_SUBTRACT;
+        case je_gl_shader_blend_equation_t::REVERSE_SUBTRACT: return GL_FUNC_REVERSE_SUBTRACT;
+        case je_gl_shader_blend_equation_t::MIN: return GL_MIN;
+        case je_gl_shader_blend_equation_t::MAX: return GL_MAX;
         default:
             assert(false);
             return GL_FUNC_ADD;
         }
     }
 
-    GLenum gl_render_blend_factor(jegl_shader::blend_method method)
+    GLenum gl_render_blend_factor(je_gl_shader_blend_method_t method)
     {
         switch (method)
         {
-        case jegl_shader::blend_method::ZERO: return GL_ZERO;
-        case jegl_shader::blend_method::ONE: return GL_ONE;
-        case jegl_shader::blend_method::SRC_COLOR: return GL_SRC_COLOR;
-        case jegl_shader::blend_method::SRC_ALPHA: return GL_SRC_ALPHA;
-        case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA: return GL_ONE_MINUS_SRC_ALPHA;
-        case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR: return GL_ONE_MINUS_SRC_COLOR;
-        case jegl_shader::blend_method::DST_COLOR: return GL_DST_COLOR;
-        case jegl_shader::blend_method::DST_ALPHA: return GL_DST_ALPHA;
-        case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA: return GL_ONE_MINUS_DST_ALPHA;
-        case jegl_shader::blend_method::ONE_MINUS_DST_COLOR: return GL_ONE_MINUS_DST_COLOR;
+        case je_gl_shader_blend_method_t::ZERO: return GL_ZERO;
+        case je_gl_shader_blend_method_t::ONE: return GL_ONE;
+        case je_gl_shader_blend_method_t::SRC_COLOR: return GL_SRC_COLOR;
+        case je_gl_shader_blend_method_t::SRC_ALPHA: return GL_SRC_ALPHA;
+        case je_gl_shader_blend_method_t::ONE_MINUS_SRC_ALPHA: return GL_ONE_MINUS_SRC_ALPHA;
+        case je_gl_shader_blend_method_t::ONE_MINUS_SRC_COLOR: return GL_ONE_MINUS_SRC_COLOR;
+        case je_gl_shader_blend_method_t::DST_COLOR: return GL_DST_COLOR;
+        case je_gl_shader_blend_method_t::DST_ALPHA: return GL_DST_ALPHA;
+        case je_gl_shader_blend_method_t::ONE_MINUS_DST_ALPHA: return GL_ONE_MINUS_DST_ALPHA;
+        case je_gl_shader_blend_method_t::ONE_MINUS_DST_COLOR: return GL_ONE_MINUS_DST_COLOR;
         default:
             assert(false);
             return GL_ONE;
         }
     }
 
-    GLenum gl_render_cull_mode(jegl_shader::cull_mode mode)
+    GLenum gl_render_cull_mode(je_gl_shader_cull_mode_t mode)
     {
         switch (mode)
         {
-        case jegl_shader::cull_mode::NONE: return GL_NONE;
-        case jegl_shader::cull_mode::FRONT: return GL_FRONT;
-        case jegl_shader::cull_mode::BACK: return GL_BACK;
+        case je_gl_shader_cull_mode_t::NONE: return GL_NONE;
+        case je_gl_shader_cull_mode_t::FRONT: return GL_FRONT;
+        case je_gl_shader_cull_mode_t::BACK: return GL_BACK;
         default:
             assert(false);
             return GL_NONE;
         }
     }
 
-    void gl_render_pipeline_init(je_GraphicImplContext, jegl_pipeline*)
+    void gl_render_pipeline_init(je_graphic_impl_context_t, je_gl_pipeline_t*)
     {}
 
-    void gl_render_pipeline_close(je_GraphicImplContext, jegl_pipeline*)
+    void gl_render_pipeline_close(je_graphic_impl_context_t, je_gl_pipeline_t*)
     {}
 
     void gl_render_pipeline_bind(
-        je_GraphicImplContext ctx, jegl_pipeline* pipeline)
+        je_graphic_impl_context_t ctx, je_gl_pipeline_t* pipeline)
     {
         auto* context = static_cast<jegl_gl3_context*>(ctx);
         auto* shader_instance = static_cast<jegl_gl3_shader*>(
@@ -1923,9 +1923,9 @@ namespace jeecs::graphic::api::gl3
         // The canonical layout must agree with the layout computed by the GL
         // backend from the same uniform list.
         auto check_builtin_offset =
-            [](jegl_uniform_slot slot, uint32_t backend_offset)
+            [](je_gl_uniform_slot_t slot, uint32_t backend_offset)
             {
-                if (slot.m_offset != JEGL_UNIFORM_SLOT_NONE
+                if (slot.m_offset != JE_GL_UNIFORM_SLOT_NONE
                     && backend_offset != jeecs::graphic::INVALID_UNIFORM_LOCATION)
                     assert(slot.m_offset == backend_offset);
             };
@@ -1989,7 +1989,7 @@ namespace jeecs::graphic::api::gl3
             context, gl_render_cull_mode(state.m_cull));
 
         glFrontFace(
-            state.m_front_face == jegl_front_face::CLOCKWISE
+            state.m_front_face == je_gl_front_face_t::CLOCKWISE
             ? GL_CW
             : GL_CCW);
         glColorMask(
@@ -2000,22 +2000,22 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_render_sampler_init(
-        je_GraphicImplContext, jegl_sampler* sampler)
+        je_graphic_impl_context_t, je_gl_sampler_t* sampler)
     {
         auto* native = new jegl_gl3_render_sampler{ 0 };
         glGenSamplers(1, &native->m_sampler);
 
-        auto cvt_filter = [](jegl_filter filter) -> GLint
+        auto cvt_filter = [](je_gl_filter_t filter) -> GLint
         {
-            return filter == jegl_filter::LINEAR ? GL_LINEAR : GL_NEAREST;
+            return filter == je_gl_filter_t::LINEAR ? GL_LINEAR : GL_NEAREST;
         };
-        auto cvt_wrap = [](jegl_wrap_mode wrap) -> GLint
+        auto cvt_wrap = [](je_gl_wrap_mode_t wrap) -> GLint
         {
             switch (wrap)
             {
-            case jegl_wrap_mode::CLAMP_TO_EDGE: return GL_CLAMP_TO_EDGE;
-            case jegl_wrap_mode::REPEAT: return GL_REPEAT;
-            case jegl_wrap_mode::MIRRORED_REPEAT: return GL_MIRRORED_REPEAT;
+            case je_gl_wrap_mode_t::CLAMP_TO_EDGE: return GL_CLAMP_TO_EDGE;
+            case je_gl_wrap_mode_t::REPEAT: return GL_REPEAT;
+            case je_gl_wrap_mode_t::MIRRORED_REPEAT: return GL_MIRRORED_REPEAT;
             default:
                 assert(false);
                 return GL_CLAMP_TO_EDGE;
@@ -2038,7 +2038,7 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_render_sampler_close(
-        je_GraphicImplContext, jegl_sampler* sampler)
+        je_graphic_impl_context_t, je_gl_sampler_t* sampler)
     {
         auto* native = static_cast<jegl_gl3_render_sampler*>(
             sampler->m_backend_ptr);
@@ -2052,7 +2052,7 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_render_sampler_bind(
-        je_GraphicImplContext ctx, uint32_t sampler_id, jegl_sampler* sampler)
+        je_graphic_impl_context_t ctx, uint32_t sampler_id, je_gl_sampler_t* sampler)
     {
         auto* context = static_cast<jegl_gl3_context*>(ctx);
         auto* native = static_cast<jegl_gl3_render_sampler*>(
@@ -2080,9 +2080,9 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_render_begin_pass(
-        je_GraphicImplContext ctx,
-        /* OPTIONAL */ jegl_frame_buffer* target,
-        const jegl_viewport* viewport)
+        je_graphic_impl_context_t ctx,
+        /* OPTIONAL */ je_gl_frame_buffer_t* target,
+        const je_gl_viewport_t* viewport)
     {
         auto* context = static_cast<jegl_gl3_context*>(ctx);
 
@@ -2120,7 +2120,7 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_render_clear_color(
-        je_GraphicImplContext ctx, uint32_t attachment, const float rgba[4])
+        je_graphic_impl_context_t ctx, uint32_t attachment, const float rgba[4])
     {
         auto* context = static_cast<jegl_gl3_context*>(ctx);
         if (context->m_render_target_is_default
@@ -2138,18 +2138,18 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_render_clear_depth(
-        je_GraphicImplContext ctx, float depth)
+        je_graphic_impl_context_t ctx, float depth)
     {
         auto* context = static_cast<jegl_gl3_context*>(ctx);
         _gl_update_depth_mask_method(context, GL_TRUE);
         glClearBufferfv(GL_DEPTH, 0, &depth);
     }
 
-    void gl_render_end_pass(je_GraphicImplContext)
+    void gl_render_end_pass(je_graphic_impl_context_t)
     {}
 
     void gl_render_bind_vertex(
-        je_GraphicImplContext ctx, jegl_vertex* vertex)
+        je_graphic_impl_context_t ctx, je_gl_vertex_t* vertex)
     {
         auto* context = static_cast<jegl_gl3_context*>(ctx);
         auto* vertex_data = static_cast<jegl3_vertex_data*>(
@@ -2161,33 +2161,33 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_render_bind_uniform_buffer(
-        je_GraphicImplContext ctx, jegl_uniform_buffer* uniform_buffer)
+        je_graphic_impl_context_t ctx, je_gl_uniform_buffer_t* uniform_buffer)
     {
         gl_bind_uniform_buffer(ctx, uniform_buffer);
     }
 
     void gl_render_bind_texture_2d(
-        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_2d* texture)
+        je_graphic_impl_context_t ctx, uint32_t pass, je_gl_texture_2d_t* texture)
     {
-        gl_bind_texture<jegl_texture_2d>(ctx, texture, pass);
+        gl_bind_texture<je_gl_texture_2d_t>(ctx, texture, pass);
     }
 
     void gl_render_bind_texture_3d(
-        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_3d* texture)
+        je_graphic_impl_context_t ctx, uint32_t pass, je_gl_texture_3d_t* texture)
     {
-        gl_bind_texture<jegl_texture_3d>(ctx, texture, pass);
+        gl_bind_texture<je_gl_texture_3d_t>(ctx, texture, pass);
     }
 
     void gl_render_bind_texture_array(
-        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_array* texture)
+        je_graphic_impl_context_t ctx, uint32_t pass, je_gl_texture_array_t* texture)
     {
-        gl_bind_texture<jegl_texture_array>(ctx, texture, pass);
+        gl_bind_texture<je_gl_texture_array_t>(ctx, texture, pass);
     }
 
     void gl_render_bind_texture_cube(
-        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_cube* texture)
+        je_graphic_impl_context_t ctx, uint32_t pass, je_gl_texture_cube_t* texture)
     {
-        gl_bind_texture<jegl_texture_cube>(ctx, texture, pass);
+        gl_bind_texture<je_gl_texture_cube_t>(ctx, texture, pass);
     }
 
     void gl_render_upload_uniform_block(
@@ -2229,7 +2229,7 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_render_draw_indexed(
-        je_GraphicImplContext ctx,
+        je_graphic_impl_context_t ctx,
         uint32_t index_count,
         uint32_t first_index,
         uint32_t instance_count,
@@ -2275,7 +2275,7 @@ namespace jeecs::graphic::api::gl3
     }
 
     void gl_render_draw(
-        je_GraphicImplContext ctx,
+        je_graphic_impl_context_t ctx,
         uint32_t vertex_count,
         uint32_t first_vertex,
         uint32_t instance_count,
@@ -2315,7 +2315,7 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
-    void gl_render_commit_begin(je_GraphicImplContext ctx)
+    void gl_render_commit_begin(je_graphic_impl_context_t ctx)
     {
         auto* context = static_cast<jegl_gl3_context*>(ctx);
 
@@ -2348,7 +2348,7 @@ namespace jeecs::graphic::api::gl3
         context->m_render_uniform_ring_offset = 0;
     }
 
-    void gl_render_commit_end(je_GraphicImplContext)
+    void gl_render_commit_end(je_graphic_impl_context_t)
     {
         // Restore the assumptions of the legacy immediate path.
         glEnable(GL_DEPTH_TEST);
@@ -2358,7 +2358,7 @@ namespace jeecs::graphic::api::gl3
     }
 }
 
-void je_graphic_using_opengl3_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_opengl3_apis(je_gl_graphic_api_t* write_to_apis)
 {
     using namespace jeecs::graphic::api::gl3;
 
@@ -2370,11 +2370,11 @@ void je_graphic_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->update_draw_commit = gl_commit_update;
 
     write_to_apis->shader_create_blob = shader_create_resource_blob;
-    write_to_apis->texture_2d_create_blob = texture_create_resource_blob<jegl_texture_2d>;
-    write_to_apis->texture_3d_create_blob = texture_create_resource_blob<jegl_texture_3d>;
-    write_to_apis->texture_array_create_blob = texture_create_resource_blob<jegl_texture_array>;
-    write_to_apis->texture_cube_create_blob = texture_create_resource_blob<jegl_texture_cube>;
-    write_to_apis->texture_msaa_create_blob = texture_create_resource_blob<jegl_texture_msaa>;
+    write_to_apis->texture_2d_create_blob = texture_create_resource_blob<je_gl_texture_2d_t>;
+    write_to_apis->texture_3d_create_blob = texture_create_resource_blob<je_gl_texture_3d_t>;
+    write_to_apis->texture_array_create_blob = texture_create_resource_blob<je_gl_texture_array_t>;
+    write_to_apis->texture_cube_create_blob = texture_create_resource_blob<je_gl_texture_cube_t>;
+    write_to_apis->texture_msaa_create_blob = texture_create_resource_blob<je_gl_texture_msaa_t>;
     write_to_apis->vertex_create_blob = vertex_create_resource_blob;
 
     write_to_apis->shader_close_blob = shader_close_resource_blob;
@@ -2402,11 +2402,11 @@ void je_graphic_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->ubuffer_update = ubuffer_update;
 
     write_to_apis->shader_close = shader_close;
-    write_to_apis->texture_2d_close = texture_close<jegl_texture_2d>;
-    write_to_apis->texture_3d_close = texture_close<jegl_texture_3d>;
-    write_to_apis->texture_array_close = texture_close<jegl_texture_array>;
-    write_to_apis->texture_cube_close = texture_close<jegl_texture_cube>;
-    write_to_apis->texture_msaa_close = texture_close<jegl_texture_msaa>;
+    write_to_apis->texture_2d_close = texture_close<je_gl_texture_2d_t>;
+    write_to_apis->texture_3d_close = texture_close<je_gl_texture_3d_t>;
+    write_to_apis->texture_array_close = texture_close<je_gl_texture_array_t>;
+    write_to_apis->texture_cube_close = texture_close<je_gl_texture_cube_t>;
+    write_to_apis->texture_msaa_close = texture_close<je_gl_texture_msaa_t>;
     write_to_apis->vertex_close = vertex_close;
     write_to_apis->framebuffer_close = framebuffer_close;
     write_to_apis->ubuffer_close = ubuffer_close;
@@ -2438,7 +2438,7 @@ void je_graphic_using_opengl3_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->commit_end = gl_render_commit_end;
 }
 #else
-void je_graphic_using_opengl3_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_opengl3_apis(je_gl_graphic_api_t* write_to_apis)
 {
     jeecs::debug::logfatal("GL3 not available.");
 }

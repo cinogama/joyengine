@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API void je_audio_source_close(jeal_source* source);
+JE_API void je_audio_source_close(je_audio_source_t* source);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_audio_source_close(jeal_source* source);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| source | jeal_source* | 要释放的音频源指针 |
+| source | je_audio_source_t* | 要释放的音频源指针 |
 
 ## 返回值
 
@@ -23,7 +23,7 @@ JE_API void je_audio_source_close(jeal_source* source);
 ## 用法示例
 
 ```cpp
-jeal_source* source = je_audio_source_create();
+je_audio_source_t* source = je_audio_source_create();
 
 // 使用音频源...
 

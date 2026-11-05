@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_using_none_apis(jegl_graphic_api* write_to_apis);
+JE_API void je_graphic_using_none_apis(je_gl_graphic_api_t* write_to_apis);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_using_none_apis(jegl_graphic_api* write_to_apis);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `write_to_apis` | `jegl_graphic_api*` | 用于写入 API 函数指针的结构体指针 |
+| `write_to_apis` | `je_gl_graphic_api_t*` | 用于写入 API 函数指针的结构体指针 |
 
 ## 返回值
 
@@ -27,11 +27,11 @@ JE_API void je_graphic_using_none_apis(jegl_graphic_api* write_to_apis);
 ### 示例
 
 ```cpp
-jegl_graphic_api apis;
+je_gl_graphic_api_t apis;
 je_graphic_using_none_apis(&apis);
 
 // 使用空后端创建图形线程（不会实际渲染）
-jegl_context* ctx = je_graphic_thread_start(
+je_gl_context_t* ctx = je_graphic_thread_start(
     config,
     universe,
     je_graphic_using_none_apis,

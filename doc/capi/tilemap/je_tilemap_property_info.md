@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_property_info(je_TilesetDocument* tileset, int32_t index,
-    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_PropertyType* type);
+JE_API bool je_tilemap_property_info(je_tileset_document_t* tileset, int32_t index,
+    /* OPTIONAL */ const char** name, /* OPTIONAL */ je_property_type_t* type);
 ```
 
 ## 描述
@@ -15,10 +15,10 @@ JE_API bool je_tilemap_property_info(je_TilesetDocument* tileset, int32_t index,
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
+| `tileset` | `je_tileset_document_t*` | — |
 | `index` | `int32_t` | — |
 | `name` | `const char**` | 可选。 |
-| `type` | `je_PropertyType*` | 可选。 |
+| `type` | `je_property_type_t*` | 可选。 |
 
 ## 返回值
 

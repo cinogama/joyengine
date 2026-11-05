@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_branch_new_frame(
-    je_RenderBranch* branch,
+    je_render_branch_t* branch,
     int priority);
 ```
 
@@ -16,7 +16,7 @@ JE_API void je_graphic_branch_new_frame(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `branch` | `je_RenderBranch*` | 绘制组指针 |
+| `branch` | `je_render_branch_t*` | 绘制组指针 |
 | `priority` | `int` | 绘制优先级 |
 
 ## 返回值
@@ -30,7 +30,7 @@ JE_API void je_graphic_branch_new_frame(
 ### 示例
 
 ```cpp
-je_RenderBranch* branch = je_graphic_uhost_alloc_branch(host);
+je_render_branch_t* branch = je_graphic_uhost_alloc_branch(host);
 
 // 每帧开始时调用
 je_graphic_branch_new_frame(branch, 0);  // 优先级 0

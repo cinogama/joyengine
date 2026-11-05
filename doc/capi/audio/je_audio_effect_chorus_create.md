@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_effect_chorus* je_audio_effect_chorus_create();
+JE_API je_audio_effect_chorus_t* je_audio_effect_chorus_create();
 ```
 
 ## 描述
@@ -18,26 +18,30 @@ JE_API jeal_effect_chorus* je_audio_effect_chorus_create();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_effect_chorus* | 合唱效果实例指针 |
+| je_audio_effect_chorus_t* | 合唱效果实例指针 |
 
-### jeal_effect_chorus 结构体
+### je_audio_effect_chorus_t 结构体
 
 ```cpp
-struct jeal_effect_chorus {
-    enum waveform { SINUSOID = 0, TRIANGLE = 1 };
-    waveform m_waveform; // 波形类型，默认 SINUSOID
+typedef enum je_audio_effect_chorus_waveform_t {
+    JE_AUDIO_EFFECT_CHORUS_WAVEFORM_SINUSOID = 0,
+    JE_AUDIO_EFFECT_CHORUS_WAVEFORM_TRIANGLE = 1,
+} je_audio_effect_chorus_waveform_t;
+
+typedef struct je_audio_effect_chorus_t {
+    je_audio_effect_chorus_waveform_t m_waveform; // 波形类型，默认 SINUSOID
     int m_phase;         // 相位，默认 90，范围 [-180, 180]
     float m_rate;        // 速率，默认 1.1，范围 [0.0, 10.0]
     float m_depth;       // 深度，默认 0.1，范围 [0.0, 1.0]
     float m_feedback;    // 反馈，默认 0.25，范围 [-1.0, 1.0]
     float m_delay;       // 延迟，默认 0.16，范围 [0.0, 0.016]
-};
+} je_audio_effect_chorus_t;
 ```
 
 ## 用法示例
 
 ```cpp
-jeal_effect_chorus* chorus = je_audio_effect_chorus_create();
+je_audio_effect_chorus_t* chorus = je_audio_effect_chorus_create();
 
 // 调整合唱参数
 chorus->m_depth = 0.2f;

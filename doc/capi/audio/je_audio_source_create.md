@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_source* je_audio_source_create();
+JE_API je_audio_source_t* je_audio_source_create();
 ```
 
 ## 描述
@@ -18,13 +18,13 @@ JE_API jeal_source* je_audio_source_create();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_source* | 指向音频源的指针 |
+| je_audio_source_t* | 指向音频源的指针 |
 
-### jeal_source 结构体
+### je_audio_source_t 结构体
 
 ```cpp
-struct jeal_source {
-    jeal_native_source_instance* m_source_instance;
+struct je_audio_source_t {
+    je_audio_native_source_instance_t* m_source_instance;
     bool m_loop;         // 是否循环播放
     float m_gain;        // 音量增益
     float m_pitch;       // 播放速度
@@ -37,7 +37,7 @@ struct jeal_source {
 
 ```cpp
 // 创建音频源
-jeal_source* source = je_audio_source_create();
+je_audio_source_t* source = je_audio_source_create();
 
 // 设置属性
 source->m_loop = true;      // 循环播放

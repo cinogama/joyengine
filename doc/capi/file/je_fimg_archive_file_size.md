@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API size_t je_fimg_archive_file_size(const jeecs_fimg_archive* archive, const char* path);
+JE_API size_t je_fimg_archive_file_size(const je_fimg_archive_t* archive, const char* path);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API size_t je_fimg_archive_file_size(const jeecs_fimg_archive* archive, const
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `archive` | `const jeecs_fimg_archive*` | 镜像句柄 |
+| `archive` | `const je_fimg_archive_t*` | 镜像句柄 |
 | `path` | `const char*` | 镜像内的键 |
 
 ## 返回值

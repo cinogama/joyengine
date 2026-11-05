@@ -19,7 +19,7 @@ JE_API const char* je_fimg_default_skip_extensions();
 ## 示例
 
 ```cpp
-jeecs_fimg_writer_options options;
+je_fimg_writer_options_t options;
 options.compression_level = 6;
 options.min_compress_size = 1024;
 options.skip_extensions = je_fimg_default_skip_extensions();

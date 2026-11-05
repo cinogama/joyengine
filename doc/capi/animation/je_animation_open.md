@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API /* OPTIONAL */ je_animation* je_animation_open(const char* path);
+JE_API /* OPTIONAL */ je_animation_t* je_animation_open(const char* path);
 ```
 
 ## 描述
@@ -20,7 +20,7 @@ JE_API /* OPTIONAL */ je_animation* je_animation_open(const char* path);
 
 | 类型 | 描述 |
 |------|------|
-| `je_animation*` | 见描述。 |
+| `je_animation_t*` | 见描述。 |
 
 ## 注意事项
 

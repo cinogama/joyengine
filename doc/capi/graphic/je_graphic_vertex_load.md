@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API jegl_vertex* je_graphic_vertex_load(
-    jegl_context* context,
+JE_API je_gl_vertex_t* je_graphic_vertex_load(
+    je_gl_context_t* context,
     const char* path);
 ```
 
@@ -16,14 +16,14 @@ JE_API jegl_vertex* je_graphic_vertex_load(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `context` | `jegl_context*` | 图形上下文指针 |
+| `context` | `je_gl_context_t*` | 图形上下文指针 |
 | `path` | `const char*` | 模型文件路径 |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_vertex*` | 顶点资源指针；若加载失败返回 `nullptr` |
+| `je_gl_vertex_t*` | 顶点资源指针；若加载失败返回 `nullptr` |
 
 ## 用法
 
@@ -44,7 +44,7 @@ JE_API jegl_vertex* je_graphic_vertex_load(
 ### 示例
 
 ```cpp
-jegl_vertex* mesh = je_graphic_vertex_load(ctx, "@/models/character.obj");
+je_gl_vertex_t* mesh = je_graphic_vertex_load(ctx, "@/models/character.obj");
 
 if (mesh != nullptr) {
     // 绑定顶点，并通过命令缓冲区提交绘制

@@ -161,7 +161,7 @@ namespace je
     }
 
     // A persistent selector over the entities of a world, backed by a cached
-    // je_RequirementCollection. It is iterable: iter() returns an
+    // je_requirement_collection_t. It is iterable: iter() returns an
     // entity_selector_iter. The cached arch info is refreshed in native code
     // when the iterator is created (only if the world's arch-type set changed).
     public using entity_selector = gchandle;

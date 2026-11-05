@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_fimg_archive_close(jeecs_fimg_archive* archive);
+JE_API void je_fimg_archive_close(je_fimg_archive_t* archive);
 ```
 
 ## 描述
@@ -14,11 +14,11 @@ JE_API void je_fimg_archive_close(jeecs_fimg_archive* archive);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `archive` | `jeecs_fimg_archive*` | 镜像句柄 |
+| `archive` | `je_fimg_archive_t*` | 镜像句柄 |
 
 ## 注意事项
 
-- 关闭镜像不会影响已经打开的 `jeecs_file` 句柄，它们持有自己的分片句柄
+- 关闭镜像不会影响已经打开的 `je_file_t` 句柄，它们持有自己的分片句柄
 - 关闭后不要再使用该镜像句柄
 
 ## 相关接口

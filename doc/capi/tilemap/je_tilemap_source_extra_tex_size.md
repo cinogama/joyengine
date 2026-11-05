@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_source_extra_tex_size(je_TilesetDocument* tileset,
-    je_SourceId source_idx, int32_t extra_idx,
+JE_API bool je_tilemap_source_extra_tex_size(je_tileset_document_t* tileset,
+    je_source_id_t source_idx, int32_t extra_idx,
     /* OPTIONAL */ int32_t* tex_w, /* OPTIONAL */ int32_t* tex_h);
 ```
 
@@ -16,8 +16,8 @@ JE_API bool je_tilemap_source_extra_tex_size(je_TilesetDocument* tileset,
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
-| `source_idx` | `je_SourceId` | — |
+| `tileset` | `je_tileset_document_t*` | — |
+| `source_idx` | `je_source_id_t` | — |
 | `extra_idx` | `int32_t` | — |
 | `tex_w` | `int32_t*` | 可选。 |
 | `tex_h` | `int32_t*` | 可选。 |

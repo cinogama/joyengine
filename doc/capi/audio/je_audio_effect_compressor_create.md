@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_effect_compressor* je_audio_effect_compressor_create();
+JE_API je_audio_effect_compressor_t* je_audio_effect_compressor_create();
 ```
 
 ## 描述
@@ -18,7 +18,7 @@ JE_API jeal_effect_compressor* je_audio_effect_compressor_create();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_effect_compressor* | 压缩器效果实例指针 |
+| je_audio_effect_compressor_t* | 压缩器效果实例指针 |
 
 ## 注意事项
 

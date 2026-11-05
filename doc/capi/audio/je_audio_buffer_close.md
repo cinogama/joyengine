@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API void je_audio_buffer_close(const jeal_buffer* buffer);
+JE_API void je_audio_buffer_close(const je_audio_buffer_t* buffer);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_audio_buffer_close(const jeal_buffer* buffer);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| buffer | const jeal_buffer* | 要释放的音频缓冲区指针 |
+| buffer | const je_audio_buffer_t* | 要释放的音频缓冲区指针 |
 
 ## 返回值
 
@@ -23,7 +23,7 @@ JE_API void je_audio_buffer_close(const jeal_buffer* buffer);
 ## 用法示例
 
 ```cpp
-const jeal_buffer* buffer = je_audio_buffer_load_wav("@/sounds/effect.wav");
+const je_audio_buffer_t* buffer = je_audio_buffer_load_wav("@/sounds/effect.wav");
 
 // 使用缓冲区...
 

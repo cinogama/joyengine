@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_effect_slot* je_audio_effect_slot_create();
+JE_API je_audio_effect_slot_t* je_audio_effect_slot_create();
 ```
 
 ## 描述
@@ -18,13 +18,13 @@ JE_API jeal_effect_slot* je_audio_effect_slot_create();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_effect_slot* | 效果槽实例指针 |
+| je_audio_effect_slot_t* | 效果槽实例指针 |
 
-### jeal_effect_slot 结构体
+### je_audio_effect_slot_t 结构体
 
 ```cpp
-struct jeal_effect_slot {
-    jeal_native_effect_slot_instance* m_effect_slot_instance;
+struct je_audio_effect_slot_t {
+    je_audio_native_effect_slot_instance_t* m_effect_slot_instance;
     size_t m_references; // 引用计数
     float m_gain;        // 增益，默认值为 1.0，范围 [0.0, 1.0]
 };
@@ -34,10 +34,10 @@ struct jeal_effect_slot {
 
 ```cpp
 // 创建效果槽
-jeal_effect_slot* slot = je_audio_effect_slot_create();
+je_audio_effect_slot_t* slot = je_audio_effect_slot_create();
 
 // 创建混响效果
-jeal_effect_reverb* reverb = je_audio_effect_reverb_create();
+je_audio_effect_reverb_t* reverb = je_audio_effect_reverb_create();
 
 // 绑定效果到效果槽
 je_audio_effect_slot_bind(slot, reverb);

@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API je_writing_cache_file* je_cache_file_create(
+JE_API je_writing_cache_file_t* je_cache_file_create(
     const char* filepath,
     uint32_t format_version,
     wo_integer_t usecrc64);
@@ -32,7 +32,7 @@ JE_API je_writing_cache_file* je_cache_file_create(
 
 | 类型 | 描述 |
 |------|------|
-| `je_writing_cache_file*` | 缓存文件句柄；若创建失败返回 `nullptr` |
+| `je_writing_cache_file_t*` | 缓存文件句柄；若创建失败返回 `nullptr` |
 
 ## 用法
 

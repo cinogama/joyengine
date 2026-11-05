@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_layer_texture_set(je_TilemapDocument* map, je_LayerId layer,
-    int32_t slot, /* OPTIONAL */ je_tilemap_texture_ref* texture);
+JE_API bool je_tilemap_layer_texture_set(je_tilemap_document_t* map, je_layer_id_t layer,
+    int32_t slot, /* OPTIONAL */ je_tilemap_texture_ref_t* texture);
 ```
 
 ## 描述
@@ -15,10 +15,10 @@ JE_API bool je_tilemap_layer_texture_set(je_TilemapDocument* map, je_LayerId lay
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | — |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | — |
 | `slot` | `int32_t` | — |
-| `texture` | `je_tilemap_texture_ref*` | 可选。 texture 传 nullptr 表示删除该槽位的绑定 |
+| `texture` | `je_tilemap_texture_ref_t*` | 可选。 texture 传 nullptr 表示删除该槽位的绑定 |
 
 ## 返回值
 

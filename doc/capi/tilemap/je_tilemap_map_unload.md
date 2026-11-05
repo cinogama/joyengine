@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API int32_t je_tilemap_map_unload(je_TilemapDocument* map);
+JE_API int32_t je_tilemap_map_unload(je_tilemap_document_t* map);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API int32_t je_tilemap_map_unload(je_TilemapDocument* map);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
+| `map` | `je_tilemap_document_t*` | — |
 
 ## 返回值
 

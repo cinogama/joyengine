@@ -5,7 +5,7 @@
 ```c
 JE_API bool je_image_texture_color_space_set(
     const char* path,
-    je_image_texture_color_space color_space);
+    je_image_texture_color_space_t color_space);
 ```
 
 ## 描述
@@ -17,7 +17,7 @@ JE_API bool je_image_texture_color_space_set(
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
 | `path` | `const char*` | — |
-| `color_space` | `je_image_texture_color_space` | — |
+| `color_space` | `je_image_texture_color_space_t` | — |
 
 ## 返回值
 

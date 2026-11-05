@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_texture_3d_close(jegl_texture_3d* texture);
+JE_API void je_graphic_texture_3d_close(je_gl_texture_3d_t* texture);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_texture_3d_close(jegl_texture_3d* texture);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `texture` | `jegl_texture_3d*` | — |
+| `texture` | `je_gl_texture_3d_t*` | — |
 
 ## 返回值
 

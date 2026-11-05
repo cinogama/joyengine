@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API void je_audio_source_pause(jeal_source* source);
+JE_API void je_audio_source_pause(je_audio_source_t* source);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_audio_source_pause(jeal_source* source);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| source | jeal_source* | 音频源指针 |
+| source | je_audio_source_t* | 音频源指针 |
 
 ## 返回值
 

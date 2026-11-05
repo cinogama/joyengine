@@ -3,11 +3,11 @@
 ## 函数签名
 
 ```c
-JE_API jegl_texture_array* je_graphic_texture_array_create(
+JE_API je_gl_texture_array_t* je_graphic_texture_array_create(
     size_t width,
     size_t height,
     size_t layers,
-    jegl_texture_common::format format);
+    je_gl_texture_format_t format);
 ```
 
 ## 描述
@@ -21,13 +21,13 @@ JE_API jegl_texture_array* je_graphic_texture_array_create(
 | `width` | `size_t` | 每层纹理宽度（为 0 时视为 1） |
 | `height` | `size_t` | 每层纹理高度（为 0 时视为 1） |
 | `layers` | `size_t` | 数组中的二维纹理层数（为 0 时视为 1） |
-| `format` | `jegl_texture_common::format` | 像素格式 |
+| `format` | `je_gl_texture_format_t` | 像素格式 |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_texture_array*` | 纹理数组资源指针，始终非空 |
+| `je_gl_texture_array_t*` | 纹理数组资源指针，始终非空 |
 
 ## 用法
 

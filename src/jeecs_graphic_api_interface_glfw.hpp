@@ -125,7 +125,7 @@ namespace jeecs::graphic
                     state.axes[GLFW_GAMEPAD_AXIS_LEFT_X], state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]);
                 je_io_gamepad_stick_update(handle, JE_JOY_R,
                     state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X], state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y]);
-                // Triggers are reported by GLFW in [0,1]; store as x-only per je_Joystickcode semantics.
+                // Triggers are reported by GLFW in [0,1]; store as x-only per je_joystickcode_t semantics.
                 je_io_gamepad_stick_update(handle, JE_JOY_LT,
                     state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER], 0.f);
                 je_io_gamepad_stick_update(handle, JE_JOY_RT,
@@ -169,7 +169,7 @@ namespace jeecs::graphic
         }
         static void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
         {
-            je_Mousecode code;
+            je_mousecode_t code;
             switch (key)
             {
             case GLFW_MOUSE_BUTTON_LEFT:
@@ -198,7 +198,7 @@ namespace jeecs::graphic
             static_assert(GLFW_KEY_A == 'A');
             static_assert(GLFW_KEY_0 == '0');
 
-            je_Keycode code;
+            je_keycode_t code;
 
             switch (key)
             {
@@ -242,7 +242,7 @@ namespace jeecs::graphic
             case GLFW_KEY_KP_7:
             case GLFW_KEY_KP_8:
             case GLFW_KEY_KP_9:
-                code = (je_Keycode)(
+                code = (je_keycode_t)(
                     (uint16_t)JE_KEY_NP_0 + (key - GLFW_KEY_KP_0));
                 break;
             case GLFW_KEY_KP_ADD:
@@ -291,12 +291,12 @@ namespace jeecs::graphic
             case GLFW_KEY_F14:
             case GLFW_KEY_F15:
             case GLFW_KEY_F16:
-                code = (je_Keycode)(
+                code = (je_keycode_t)(
                     (uint16_t)JE_KEY_F1 + (key - GLFW_KEY_F1));
                 break;
             default:
                 if (key >= 0 && key <= 127)
-                    code = (je_Keycode)key;
+                    code = (je_keycode_t)key;
                 else
                     return;
                 break;
@@ -376,7 +376,7 @@ namespace jeecs::graphic
 #endif
         }
 
-        virtual void create_interface(const jegl_interface_config* config) override
+        virtual void create_interface(const je_gl_interface_config_t* config) override
         {
             _m_mouse_locked = mouse_lock_state_t::NO_SPECIFY;
 
@@ -389,7 +389,7 @@ namespace jeecs::graphic
             interface_width = config->m_width;
             interface_height = config->m_height;
 
-            display_mode = jegl_interface_config::display_mode::WINDOWED;
+            display_mode = JE_GL_DISPLAY_MODE_WINDOWED;
 
             assert(config->m_width != 0 && config->m_height != 0);
 #else
@@ -413,19 +413,19 @@ namespace jeecs::graphic
 
             switch (display_mode)
             {
-            case jegl_interface_config::display_mode::BOARDLESS:
+            case JE_GL_DISPLAY_MODE_BOARDLESS:
                 glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
                 /*fallthrough*/
                 [[fallthrough]];
-            case jegl_interface_config::display_mode::WINDOWED:
+            case JE_GL_DISPLAY_MODE_WINDOWED:
                 _m_windows = glfwCreateWindow(
                     (int)interface_width,
                     (int)interface_height,
                     config->m_title,
                     NULL, NULL);
                 break;
-            case jegl_interface_config::display_mode::FULLSCREEN:
+            case JE_GL_DISPLAY_MODE_FULLSCREEN:
                 _m_windows = glfwCreateWindow(
                     (int)interface_width,
                     (int)interface_height,

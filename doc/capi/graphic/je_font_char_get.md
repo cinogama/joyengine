@@ -4,7 +4,7 @@
 
 ```cpp
 JE_API const jeecs::graphic::character* je_font_char_get(
-    je_font* font,
+    je_font_t* font,
     float size,
     char32_t unicode32_char);
 ```
@@ -17,7 +17,7 @@ JE_API const jeecs::graphic::character* je_font_char_get(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| font | je_font* | 字体对象 |
+| font | je_font_t* | 字体对象 |
 | size | float | 字号，单位像素，必须大于 0 |
 | unicode32_char | char32_t | Unicode32 编码的字符 |
 

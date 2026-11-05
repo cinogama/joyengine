@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_vertex_buffer_update(
-    jegl_vertex* vertex,
+    je_gl_vertex_t* vertex,
     /* OPTIONAL */ const void* vertex_data,
     size_t vertex_length,
     size_t active_index_count);
@@ -18,7 +18,7 @@ JE_API void je_graphic_vertex_buffer_update(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `vertex` | `jegl_vertex*` | — |
+| `vertex` | `je_gl_vertex_t*` | — |
 | `vertex_data` | `const void*` | 可选。 vertex_data 与 vertex_length 描述一份完整的顶点数据，将被拷贝替换掉资源中原有的顶点数据；vertex_data 传入 nullptr 时只调整激活的索引数量 |
 | `vertex_length` | `size_t` | — |
 | `active_index_count` | `size_t` | active_index_count 为本次更新后实际参与绘制的索引数量（不能超过资源创建时的索引总数），用于在容量固定的缓冲区上收缩绘制范围；传入 0 时会被钳制为 1——0 长度的绘制调用与 0 字节的缓冲区分配在部分后端上非法，而 1 个索引的 TRIANGLES 绘制不产生任何图元 |

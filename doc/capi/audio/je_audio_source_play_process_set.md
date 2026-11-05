@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API void je_audio_source_play_process_set(jeal_source* source, size_t offset);
+JE_API void je_audio_source_play_process_set(je_audio_source_t* source, size_t offset);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_audio_source_play_process_set(jeal_source* source, size_t offset)
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| source | jeal_source* | 音频源指针 |
+| source | je_audio_source_t* | 音频源指针 |
 | offset | size_t | 目标播放位置（字节偏移） |
 
 ## 返回值

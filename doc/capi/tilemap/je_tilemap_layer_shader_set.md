@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API void je_tilemap_layer_shader_set(je_TilemapDocument* map, je_LayerId layer,
-    /* OPTIONAL */ je_tilemap_shader_ref* shader);
+JE_API void je_tilemap_layer_shader_set(je_tilemap_document_t* map, je_layer_id_t layer,
+    /* OPTIONAL */ je_tilemap_shader_ref_t* shader);
 ```
 
 ## 描述
@@ -15,9 +15,9 @@ JE_API void je_tilemap_layer_shader_set(je_TilemapDocument* map, je_LayerId laye
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | — |
-| `shader` | `je_tilemap_shader_ref*` | 可选。 shader 传 nullptr 表示清除样式（该层分片着色器列表被清空） |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | — |
+| `shader` | `je_tilemap_shader_ref_t*` | 可选。 shader 传 nullptr 表示清除样式（该层分片着色器列表被清空） |
 
 ## 返回值
 

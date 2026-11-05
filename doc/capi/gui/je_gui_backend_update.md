@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_gui_backend_update(
-    jegui_platform_draw_callback_t platform_draw_callback,
+    je_gui_platform_draw_callback_t platform_draw_callback,
     void* data);
 ```
 
@@ -16,13 +16,13 @@ JE_API void je_gui_backend_update(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `platform_draw_callback` | `jegui_platform_draw_callback_t` | 平台绘制回调函数 |
+| `platform_draw_callback` | `je_gui_platform_draw_callback_t` | 平台绘制回调函数 |
 | `data` | `void*` | 传递给回调函数的用户数据 |
 
 ### 回调函数类型
 
 ```cpp
-typedef void (*jegui_platform_draw_callback_t)(void*);
+typedef void (*je_gui_platform_draw_callback_t)(void*);
 ```
 
 ## 返回值

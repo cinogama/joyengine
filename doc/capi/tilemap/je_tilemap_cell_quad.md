@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_cell_quad(je_TilemapDocument* map, je_LayerId layer,
+JE_API bool je_tilemap_cell_quad(je_tilemap_document_t* map, je_layer_id_t layer,
     int32_t x, int32_t y, int32_t idx,
     /* OPTIONAL */ const char** texture_path,
     /* OPTIONAL */ float* u0, /* OPTIONAL */ float* v0, /* OPTIONAL */ float* u1, /* OPTIONAL */ float* v1,
@@ -18,8 +18,8 @@ JE_API bool je_tilemap_cell_quad(je_TilemapDocument* map, je_LayerId layer,
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | — |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | — |
 | `x` | `int32_t` | — |
 | `y` | `int32_t` | — |
 | `idx` | `int32_t` | idx 越界或格子为空返回 false |

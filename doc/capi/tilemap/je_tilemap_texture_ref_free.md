@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_tilemap_texture_ref_free(/* OPTIONAL */ je_tilemap_texture_ref* texture);
+JE_API void je_tilemap_texture_ref_free(/* OPTIONAL */ je_tilemap_texture_ref_t* texture);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_tilemap_texture_ref_free(/* OPTIONAL */ je_tilemap_texture_ref* t
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `texture` | `je_tilemap_texture_ref*` | 可选。 |
+| `texture` | `je_tilemap_texture_ref_t*` | 可选。 |
 
 ## 返回值
 

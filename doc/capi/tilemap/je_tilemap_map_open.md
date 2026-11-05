@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API /* OPTIONAL: If path cannot be opened */ je_TilemapDocument* je_tilemap_map_open(const char* path);
+JE_API /* OPTIONAL: If path cannot be opened */ je_tilemap_document_t* je_tilemap_map_open(const char* path);
 ```
 
 ## 描述
@@ -20,7 +20,7 @@ JE_API /* OPTIONAL: If path cannot be opened */ je_TilemapDocument* je_tilemap_m
 
 | 类型 | 描述 |
 |------|------|
-| `je_TilemapDocument*` | 见描述。 |
+| `je_tilemap_document_t*` | 见描述。 |
 
 ## 注意事项
 

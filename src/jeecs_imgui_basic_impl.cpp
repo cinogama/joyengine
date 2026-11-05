@@ -38,11 +38,11 @@ jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
 
 struct _jegui_thread_local_context
 {
-    jegl_context* _jegl_context = nullptr;
+    je_gl_context_t* _jegl_context = nullptr;
     bool _jegui_stop_work_flag = false;
 
-    jegui_user_image_loader_t _jegl_get_native_texture = nullptr;
-    jegui_user_sampler_loader_t _jegl_bind_shader_sampler_state = nullptr;
+    je_gui_user_image_loader_t _jegl_get_native_texture = nullptr;
+    je_gui_user_sampler_loader_t _jegl_bind_shader_sampler_state = nullptr;
 
     std::string _jegui_imgui_config_path;
     std::optional<jeecs::basic::resource<jeecs::graphic::shader>>
@@ -54,8 +54,8 @@ struct _jegui_thread_local_context
         _jegl_srgb_encode_shader;
     std::optional<jeecs::basic::resource<jeecs::graphic::vertex>>
         _jegl_srgb_encode_quad;
-    jegl_pipeline* _jegl_srgb_encode_pipeline = nullptr;
-    jegl_command_buffer* _jegl_srgb_encode_cmd = nullptr;
+    je_gl_pipeline_t* _jegl_srgb_encode_pipeline = nullptr;
+    je_gl_command_buffer_t* _jegl_srgb_encode_cmd = nullptr;
 };
 thread_local _jegui_thread_local_context _je_gui_tls_ctx;
 
@@ -2853,9 +2853,9 @@ WOORT_API woort_api je_gui_close_current_popup(void) { ImGui::CloseCurrentPopup(
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 void je_gui_backend_init(
-    jegl_context* gl_context,
-    jegui_user_image_loader_t get_img_res,
-    jegui_user_sampler_loader_t apply_shader_sampler)
+    je_gl_context_t* gl_context,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler)
 {
     _je_gui_tls_ctx._jegl_context = gl_context;
     _je_gui_tls_ctx._jegl_get_native_texture = get_img_res;
@@ -2882,7 +2882,7 @@ void je_gui_backend_init(
 
 #ifndef JE_GL_USE_EGL_INSTEAD_GLFW
     // 仅普通窗口模式下启用多视口支持
-    if (gl_context->m_config.m_display_mode == jegl_interface_config::display_mode::WINDOWED)
+    if (gl_context->m_config.m_display_mode == JE_GL_DISPLAY_MODE_WINDOWED)
         io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 #endif
 
@@ -2974,7 +2974,7 @@ void je_gui_backend_init(
     }
 }
 
-void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
+void jegui_commit_srgb_encode_pass(je_gl_texture_2d_t* source_texture)
 {
     if (source_texture == nullptr)
         return;
@@ -3014,13 +3014,13 @@ void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
              1.f,  1.f, 0.f,  1.f, 1.f,
         };
         auto quad = jeecs::graphic::vertex::create(
-            jegl_vertex::TRIANGLESTRIP,
+            JE_GL_VERTEX_TYPE_TRIANGLESTRIP,
             quad_data,
             sizeof(quad_data),
             { 0, 1, 2, 3 },
             {
-                { jegl_vertex::data_type::FLOAT32, 3 },
-                { jegl_vertex::data_type::FLOAT32, 2 },
+                { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3 },
+                { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 2 },
             });
         if (!quad.has_value())
         {
@@ -3030,12 +3030,12 @@ void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
         }
         _je_gui_tls_ctx._jegl_srgb_encode_quad = quad.value();
 
-        jegl_pipeline_state state = je_graphic_pipeline_state_from_shader(
+        je_gl_pipeline_state_t state = je_graphic_pipeline_state_from_shader(
             _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource());
-        state.m_topology = jegl_topology::TRIANGLE_STRIP;
+        state.m_topology = je_gl_topology_t::TRIANGLE_STRIP;
         state.m_depth_test = false;
 
-        jegl_pipeline_desc desc{};
+        je_gl_pipeline_desc_t desc{};
         desc.m_shader =
             _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource();
         desc.m_state = &state;
@@ -3051,7 +3051,7 @@ void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture)
             je_graphic_cmd_create(_je_gui_tls_ctx._jegl_context);
     je_graphic_cmd_reset(cmd);
 
-    const jegl_viewport viewport{
+    const je_gl_viewport_t viewport{
         0, 0,
         (uint32_t)source_texture->m_width,
         (uint32_t)source_texture->m_height };
@@ -3131,10 +3131,10 @@ namespace
 #endif
 
 void je_gui_backend_update(
-    jegui_platform_draw_callback_t platform_draw_callback,
+    je_gui_platform_draw_callback_t platform_draw_callback,
     /* OPTIONAL */ void* data)
 {
-    jegl_shader* imgui_shader =
+    je_gl_shader_t* imgui_shader =
         _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource();
     const auto prepare_result = _jegl_prepare_shader_resource(imgui_shader);
     assert(prepare_result != jegl_resource_prepare_result::INVALID);

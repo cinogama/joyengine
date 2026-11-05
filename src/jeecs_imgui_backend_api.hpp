@@ -8,15 +8,15 @@
 // 当默认帧缓冲不支持硬件 sRGB 写入控制时，由后端在 ImGui 绘制结束后调用：
 // 使用 srgb_encode.shader 把 source_texture（本帧的线性离屏画面）编码后
 // 绘制到真正的默认帧缓冲。纵向方向由后端通过内建 JE_NDC_SCALE 处理。
-void jegui_commit_srgb_encode_pass(jegl_texture_2d* source_texture);
+void jegui_commit_srgb_encode_pass(je_gl_texture_2d_t* source_texture);
 
 #ifdef JE_ENABLE_DX11_GAPI
 #include <Windows.h>
 
 void jegui_init_dx11(
-    jegl_context *ctx,
-    jegui_user_image_loader_t get_img_res,
-    jegui_user_sampler_loader_t apply_shader_sampler,
+    je_gl_context_t *ctx,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler,
     void *window_handle,
     void *d11device,
     void *d11context,
@@ -32,9 +32,9 @@ void jegui_shutdown_dx11(bool reboot);
 #endif
 
 void jegui_init_gl330(
-    jegl_context *ctx,
-    jegui_user_image_loader_t get_img_res,
-    jegui_user_sampler_loader_t apply_shader_sampler,
+    je_gl_context_t *ctx,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler,
     void *window_handle,
     bool reboot);
 void jegui_update_gl330();
@@ -46,9 +46,9 @@ void jegui_shutdown_gl330(bool reboot);
 
 typedef PFN_vkVoidFunction(*jegui_vkapi_loader_func_t)(const char*, void*);
 void jegui_init_vk120(
-    jegl_context *ctx,
-    jegui_user_image_loader_t get_img_res,
-    jegui_user_sampler_loader_t apply_shader_sampler,
+    je_gl_context_t *ctx,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler,
     void *window_handle,
     ImGui_ImplVulkan_InitInfo *vkinfo,
     VkRenderPass pass,
@@ -70,9 +70,9 @@ namespace MTL
 }
 
 void jegui_init_metal(
-    jegl_context* ctx,
-    jegui_user_image_loader_t get_img_res,
-    jegui_user_sampler_loader_t apply_shader_sampler,
+    je_gl_context_t* ctx,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler,
     void* window_handle,
     MTL::Device* device);
 void jegui_update_metal(
@@ -84,8 +84,8 @@ void jegui_shutdown_metal(bool reboot);
 #endif
 
 void jegui_init_none(
-    jegl_context *ctx,
-    jegui_user_image_loader_t get_img_res,
-    jegui_user_sampler_loader_t apply_shader_sampler);
+    je_gl_context_t *ctx,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler);
 void jegui_update_none();
 void jegui_shutdown_none(bool reboot);

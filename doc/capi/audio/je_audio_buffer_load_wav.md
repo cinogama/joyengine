@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API const jeal_buffer* je_audio_buffer_load_wav(const char* path);
+JE_API const je_audio_buffer_t* je_audio_buffer_load_wav(const char* path);
 ```
 
 ## 描述
@@ -20,17 +20,17 @@ JE_API const jeal_buffer* je_audio_buffer_load_wav(const char* path);
 
 | 类型 | 描述 |
 |------|------|
-| const jeal_buffer* | 指向音频缓冲区的指针，如果加载失败则返回 nullptr |
+| const je_audio_buffer_t* | 指向音频缓冲区的指针，如果加载失败则返回 nullptr |
 
 ## 用法示例
 
 ```cpp
 // 加载 WAV 文件
-const jeal_buffer* buffer = je_audio_buffer_load_wav("@/sounds/effect.wav");
+const je_audio_buffer_t* buffer = je_audio_buffer_load_wav("@/sounds/effect.wav");
 
 if (buffer != nullptr) {
     // 创建音频源并设置缓冲区
-    jeal_source* source = je_audio_source_create();
+    je_audio_source_t* source = je_audio_source_create();
     je_audio_source_buffer_set(source, buffer);
     
     // 播放

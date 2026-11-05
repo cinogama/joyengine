@@ -6,9 +6,9 @@
 #include <imgui.h>
 
 void jegui_init_none(
-    jegl_context *ctx,
-    jegui_user_image_loader_t get_img_res,
-    jegui_user_sampler_loader_t apply_shader_sampler)
+    je_gl_context_t *ctx,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler)
 {
     je_gui_backend_init(ctx, get_img_res, apply_shader_sampler);
     ImGuiIO &io = ImGui::GetIO();

@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_tilemap_map_size(je_TilemapDocument* map,
+JE_API void je_tilemap_map_size(je_tilemap_document_t* map,
     /* OPTIONAL */ int32_t* w, /* OPTIONAL */ int32_t* h, /* OPTIONAL */ int32_t* tile_px, /* OPTIONAL */ int32_t* layer_count);
 ```
 
@@ -15,7 +15,7 @@ JE_API void je_tilemap_map_size(je_TilemapDocument* map,
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
+| `map` | `je_tilemap_document_t*` | — |
 | `w` | `int32_t*` | 可选。 |
 | `h` | `int32_t*` | 可选。 |
 | `tile_px` | `int32_t*` | 可选。 |

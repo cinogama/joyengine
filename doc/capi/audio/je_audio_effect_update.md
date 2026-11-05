@@ -23,7 +23,7 @@ JE_API void je_audio_effect_update(void* effect);
 ## 用法示例
 
 ```cpp
-jeal_effect_reverb* reverb = je_audio_effect_reverb_create();
+je_audio_effect_reverb_t* reverb = je_audio_effect_reverb_create();
 
 // 修改参数
 reverb->m_decay_time = 2.5f;

@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API const char* je_tilemap_tileset_name(je_TilesetDocument* tileset);
+JE_API const char* je_tilemap_tileset_name(je_tileset_document_t* tileset);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API const char* je_tilemap_tileset_name(je_TilesetDocument* tileset);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
+| `tileset` | `je_tileset_document_t*` | — |
 
 ## 返回值
 

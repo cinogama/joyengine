@@ -4,7 +4,7 @@
 
 ```c
 JE_API /* OPTIONAL: If layer is invalid */ const int32_t* je_tilemap_layer_grid(
-    je_TilemapDocument* map, je_LayerId layer, /* OPTIONAL */ int32_t* out_count);
+    je_tilemap_document_t* map, je_layer_id_t layer, /* OPTIONAL */ int32_t* out_count);
 ```
 
 ## 描述
@@ -15,8 +15,8 @@ JE_API /* OPTIONAL: If layer is invalid */ const int32_t* je_tilemap_layer_grid(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | — |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | — |
 | `out_count` | `int32_t*` | 可选。 out_count 返回元素数量（可为 nullptr） |
 
 ## 返回值

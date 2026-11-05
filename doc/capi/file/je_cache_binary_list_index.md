@@ -4,9 +4,9 @@
 
 ```c
 JE_API bool je_cache_binary_list_index(
-    const jeecs_cache_binary_list* list,
+    const je_cache_binary_list_t* list,
     size_t index,
-    jeecs_cache_binary_value_type expected_type,
+    je_cache_binary_value_type_t expected_type,
     void* out_value);
 ```
 
@@ -18,9 +18,9 @@ JE_API bool je_cache_binary_list_index(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `list` | `const jeecs_cache_binary_list*` | — |
+| `list` | `const je_cache_binary_list_t*` | — |
 | `index` | `size_t` | — |
-| `expected_type` | `jeecs_cache_binary_value_type` | expected_type 和 out_value 的约定与 je_cache_binary_document_index 相同 |
+| `expected_type` | `je_cache_binary_value_type_t` | expected_type 和 out_value 的约定与 je_cache_binary_document_index 相同 |
 | `out_value` | `void*` | — |
 
 ## 返回值

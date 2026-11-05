@@ -3,25 +3,25 @@
 ## 函数签名
 
 ```c
-JE_API je_LayerSelfShadow je_tilemap_layer_selfshadow(je_TilemapDocument* map, je_LayerId layer);
+JE_API je_layer_self_shadow_t je_tilemap_layer_selfshadow(je_tilemap_document_t* map, je_layer_id_t layer);
 ```
 
 ## 描述
 
-取图层的 2D 光照自阴影行为（je_LayerSelfShadow），下标越界时返回JE_LAYER_SELFSHADOW_OFF
+取图层的 2D 光照自阴影行为（je_layer_self_shadow_t），下标越界时返回JE_LAYER_SELFSHADOW_OFF
 
 ## 参数
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | — |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | — |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `je_LayerSelfShadow` | 见描述。 |
+| `je_layer_self_shadow_t` | 见描述。 |
 
 ## 相关接口
 

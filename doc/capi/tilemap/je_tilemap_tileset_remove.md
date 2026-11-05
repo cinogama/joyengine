@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_tileset_remove(je_TilemapDocument* map, int32_t idx);
+JE_API bool je_tilemap_tileset_remove(je_tilemap_document_t* map, int32_t idx);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API bool je_tilemap_tileset_remove(je_TilemapDocument* map, int32_t idx);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
+| `map` | `je_tilemap_document_t*` | — |
 | `idx` | `int32_t` | — |
 
 ## 返回值

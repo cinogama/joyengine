@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API bool je_cache_binary_append_end(je_writing_cache_file* file);
+JE_API bool je_cache_binary_append_end(je_writing_cache_file_t* file);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API bool je_cache_binary_append_end(je_writing_cache_file* file);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `file` | `je_writing_cache_file*` | — |
+| `file` | `je_writing_cache_file_t*` | — |
 
 ## 返回值
 

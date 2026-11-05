@@ -4,8 +4,8 @@
 
 ```c
 JE_API void je_graphic_thread_reboot(
-    jegl_context* thread_handle,
-    const jegl_interface_config* config_may_null);
+    je_gl_context_t* thread_handle,
+    const je_gl_interface_config_t* config_may_null);
 ```
 
 ## 描述
@@ -16,8 +16,8 @@ JE_API void je_graphic_thread_reboot(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `thread_handle` | `jegl_context*` | 图形上下文指针 |
-| `config_may_null` | `const jegl_interface_config*` | 新的配置（可为 `nullptr`） |
+| `thread_handle` | `je_gl_context_t*` | 图形上下文指针 |
+| `config_may_null` | `const je_gl_interface_config_t*` | 新的配置（可为 `nullptr`） |
 
 ## 返回值
 
@@ -34,8 +34,8 @@ JE_API void je_graphic_thread_reboot(
 je_graphic_thread_reboot(ctx, nullptr);
 
 // 切换到全屏模式
-jegl_interface_config new_config = current_config;
-new_config.m_display_mode = jegl_interface_config::FULLSCREEN;
+je_gl_interface_config_t new_config = current_config;
+new_config.m_display_mode = JE_GL_DISPLAY_MODE_FULLSCREEN;
 new_config.m_width = 1920;
 new_config.m_height = 1080;
 

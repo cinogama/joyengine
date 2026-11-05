@@ -7,9 +7,9 @@
 
 // 以下类型原位于 namespace jeecs 内，现作为 C ABI 不透明句柄 je_* 定义于全局作用域。
 
-    struct je_RenderBranch
+    struct je_render_branch_t
     {
-        JECS_DISABLE_MOVE_AND_COPY(je_RenderBranch);
+        JECS_DISABLE_MOVE_AND_COPY(je_render_branch_t);
         
         /* 
         NOTE: 尽管 branch 本身支持双缓冲，但是 branch 中的 ubuffer 只有一份实例，
@@ -25,8 +25,8 @@
 
             struct allocated_command_buffer_t
             {
-                jegl_command_buffer* m_command_buffer;
-                jegl_frame_buffer* m_target;
+                je_gl_command_buffer_t* m_command_buffer;
+                je_gl_frame_buffer_t* m_target;
             };
             std::vector<allocated_command_buffer_t> m_allocated_command_buffers;
             size_t m_allocated_command_buffers_count;
@@ -34,14 +34,14 @@
             int m_priority;
         };
 
-        jegl_context* m_context;
+        je_gl_context_t* m_context;
 
         allocated_chain_t m_chain_buffers[BRANCH_CHAIN_POOL_SIZE];
         uint8_t m_writing_chain_buffer_index;
         allocated_chain_t* m_writing_chain_buffer_p;
         allocated_chain_t* m_rendering_chain_buffer_p;
 
-        je_RenderBranch()
+        je_render_branch_t()
             : m_context(nullptr)
             , m_writing_chain_buffer_index(0)
             , m_writing_chain_buffer_p(&m_chain_buffers[0])
@@ -54,7 +54,7 @@
                 chain_buffer.m_priority = 0;
             }
         }
-        ~je_RenderBranch()
+        ~je_render_branch_t()
         {
             for (auto& chain_buffer : m_chain_buffers)
             {
@@ -69,9 +69,9 @@
             chain_buffer.m_allocated_command_buffers_count = 0;
             chain_buffer.m_priority = priority;
         }
-        jegl_command_buffer* allocate_new_command_buffer(
-            /* OPTIONAL */ jegl_frame_buffer* framebuffer,
-            const jegl_viewport* viewport)
+        je_gl_command_buffer_t* allocate_new_command_buffer(
+            /* OPTIONAL */ je_gl_frame_buffer_t* framebuffer,
+            const je_gl_viewport_t* viewport)
         {
             assert(m_context != nullptr);
             assert(viewport != nullptr);
@@ -114,7 +114,7 @@
             m_writing_chain_buffer_p = &m_chain_buffers[++m_writing_chain_buffer_index % BRANCH_CHAIN_POOL_SIZE];
         }
 
-        void _commit_frame(jegl_context* thread, jegl_update_action action)
+        void _commit_frame(je_gl_context_t* thread, je_gl_update_action_t action)
         {
             auto& chain_buffer = get_rendering_chain_buffer();
 
@@ -122,7 +122,7 @@
             {
                 auto& entry = chain_buffer.m_allocated_command_buffers[i];
 
-                if (action != jegl_update_action::JEGL_UPDATE_CONTINUE
+                if (action != je_gl_update_action_t::JE_GL_UPDATE_CONTINUE
                     && entry.m_target == nullptr)
                     continue;
 
@@ -130,39 +130,39 @@
             }
         }
     };
-    struct je_GraphicUhost
+    struct je_graphic_uhost_t
     {
-        JECS_DISABLE_MOVE_AND_COPY(je_GraphicUhost);
+        JECS_DISABLE_MOVE_AND_COPY(je_graphic_uhost_t);
 
-        jegl_context* glthread;
+        je_gl_context_t* glthread;
         jeecs::game_universe universe;
 
         // 当图形实现请求跳过绘制时，是否跳过全部绘制流程
         // * 如果为true，则跳过全部的绘制流程，反之，则仍然绘制以非屏幕缓冲区的绘制操作
         bool m_skip_all_draw;
         bool m_graphic_frame_update;
-        jegl_command_buffer* m_screen_clear_command_buffer;
+        je_gl_command_buffer_t* m_screen_clear_command_buffer;
 
         std::mutex m_je_RenderBranchs_mx;
-        std::vector<je_RenderBranch*> m_je_RenderBranchs;
+        std::vector<je_render_branch_t*> m_je_RenderBranchs;
 
         static void _update_frame_universe_job(void* host)
         {
-            auto* graphic_host = static_cast<je_GraphicUhost*>(host);
+            auto* graphic_host = static_cast<je_graphic_uhost_t*>(host);
 
             if (graphic_host->m_graphic_frame_update)
             {
-                constexpr jegl_update_sync_mode SYNC_MODE =
-                    je_RenderBranch::BRANCH_CHAIN_POOL_SIZE > 1
-                    ? jegl_update_sync_mode::JEGL_WAIT_LAST_FRAME_END
-                    : jegl_update_sync_mode::JEGL_WAIT_THIS_FRAME_END;
+                constexpr je_gl_update_sync_mode_t SYNC_MODE =
+                    je_render_branch_t::BRANCH_CHAIN_POOL_SIZE > 1
+                    ? je_gl_update_sync_mode_t::JE_GL_WAIT_LAST_FRAME_END
+                    : je_gl_update_sync_mode_t::JE_GL_WAIT_THIS_FRAME_END;
 
                 // ATTENTION: 注意，由于渲染线程在此处翻转，因此任何其他的绘制操作都不能与此同时发生
                 //  由于 _update_frame_universe_job 是一个 universe_after_call_once_job，所以此阶段
                 //  同时不能有其他绘制相关操作。
                 if (!je_graphic_update(graphic_host->glthread, SYNC_MODE, [](void* p)
                     {
-                        auto* graphic_host = static_cast<je_GraphicUhost*>(p);
+                        auto* graphic_host = static_cast<je_graphic_uhost_t*>(p);
                         for (auto& branch : graphic_host->m_je_RenderBranchs)
                             branch->flip_chain_buffer();
                     },
@@ -175,9 +175,9 @@
                 }
             }
         }
-        je_RenderBranch* alloc_pipeline()
+        je_render_branch_t* alloc_pipeline()
         {
-            je_RenderBranch* pipe = new je_RenderBranch();
+            je_render_branch_t* pipe = new je_render_branch_t();
             pipe->m_context = glthread;
 
             std::lock_guard g1(m_je_RenderBranchs_mx);
@@ -185,7 +185,7 @@
 
             return pipe;
         }
-        void free_pipeline(je_RenderBranch* pipe)
+        void free_pipeline(je_render_branch_t* pipe)
         {
             std::lock_guard g1(m_je_RenderBranchs_mx);
 
@@ -197,9 +197,9 @@
             delete pipe;
         }
 
-        void _frame_rend_impl(jegl_update_action action)
+        void _frame_rend_impl(je_gl_update_action_t action)
         {
-            if (action == jegl_update_action::JEGL_UPDATE_CONTINUE)
+            if (action == je_gl_update_action_t::JE_GL_UPDATE_CONTINUE)
             {
                 int window_w = 0, window_h = 0;
                 je_io_window_size_get(&window_w, &window_h);
@@ -212,7 +212,7 @@
                     else
                         je_graphic_cmd_reset(m_screen_clear_command_buffer);
 
-                    const jegl_viewport viewport{
+                    const je_gl_viewport_t viewport{
                         0, 0,
                         (uint32_t)window_w, (uint32_t)window_h };
                     const float clear_color[4] = { 0.f, 0.f, 0.f, 0.f };
@@ -236,7 +236,7 @@
                 std::stable_sort(
                     m_je_RenderBranchs.begin(),
                     m_je_RenderBranchs.end(),
-                    [](je_RenderBranch* a, je_RenderBranch* b)
+                    [](je_render_branch_t* a, je_render_branch_t* b)
                     {
                         return a->get_rendering_chain_buffer().m_priority <
                             b->get_rendering_chain_buffer().m_priority;
@@ -249,7 +249,7 @@
 
         }
 
-        je_GraphicUhost(jeecs::game_universe _universe, const jegl_interface_config* _config)
+        je_graphic_uhost_t(jeecs::game_universe _universe, const je_gl_interface_config_t* _config)
             : glthread(nullptr)
             , universe(_universe)
             , m_skip_all_draw(true)
@@ -258,10 +258,10 @@
         {
             auto host_graphic_api = je_graphic_host_api_get();
 
-            jegl_interface_config config = {};
+            je_gl_interface_config_t config = {};
             if (_config == nullptr)
             {
-                config.m_display_mode = jegl_interface_config::display_mode::WINDOWED;
+                config.m_display_mode = JE_GL_DISPLAY_MODE_WINDOWED;
                 config.m_width = 640;
                 config.m_height = 480;
 
@@ -304,9 +304,9 @@
                 config,
                 universe.handle(),
                 je_graphic_host_api_get(),
-                [](jegl_context* glthread, void* ptr, jegl_update_action action)
+                [](je_gl_context_t* glthread, void* ptr, je_gl_update_action_t action)
                 {
-                    static_cast<je_GraphicUhost*>(ptr)->_frame_rend_impl(action);
+                    static_cast<je_graphic_uhost_t*>(ptr)->_frame_rend_impl(action);
                 },
                 this);
 
@@ -318,7 +318,7 @@
                     nullptr);
         }
 
-        ~je_GraphicUhost()
+        ~je_graphic_uhost_t()
         {
             if (m_screen_clear_command_buffer != nullptr)
             {
@@ -337,10 +337,10 @@
         }
 
         inline static std::shared_mutex _m_instance_universe_host_mx;
-        inline static std::unordered_map<je_GameUniverse*, je_GraphicUhost*> _m_instance_universe_host;
+        inline static std::unordered_map<je_game_universe_t*, je_graphic_uhost_t*> _m_instance_universe_host;
 
-        static je_GraphicUhost* get_default_graphic_pipeline_instance(
-            jeecs::game_universe universe, const jegl_interface_config* config)
+        static je_graphic_uhost_t* get_default_graphic_pipeline_instance(
+            jeecs::game_universe universe, const je_gl_interface_config_t* config)
         {
             assert(universe);
             do
@@ -368,13 +368,13 @@
                 return fnd->second;
             }
 
-            auto* instance = new je_GraphicUhost(universe, config);
+            auto* instance = new je_graphic_uhost_t(universe, config);
             _m_instance_universe_host[universe.handle()] = instance;
             je_ecs_universe_exit_callback_register(
                 universe.handle(),
                 [](void* instance)
                 {
-                    auto* host = (je_GraphicUhost*)instance;
+                    auto* host = (je_graphic_uhost_t*)instance;
                     std::lock_guard g1(_m_instance_universe_host_mx);
                     _m_instance_universe_host.erase(host->universe.handle());
                     delete host;
@@ -385,35 +385,35 @@
     };
 
 
-je_GraphicUhost* je_graphic_uhost_get_or_create_for_universe(
-    je_GameUniverse* universe, /* OPTIONAL: nullptr to use default config */ const jegl_interface_config* config)
+je_graphic_uhost_t* je_graphic_uhost_get_or_create_for_universe(
+    je_game_universe_t* universe, /* OPTIONAL: nullptr to use default config */ const je_gl_interface_config_t* config)
 {
-    return je_GraphicUhost::get_default_graphic_pipeline_instance(universe, config);
+    return je_graphic_uhost_t::get_default_graphic_pipeline_instance(universe, config);
 }
-void je_graphic_uhost_set_skip_behavior(je_GraphicUhost* host, bool skip_all_draw)
+void je_graphic_uhost_set_skip_behavior(je_graphic_uhost_t* host, bool skip_all_draw)
 {
     host->m_skip_all_draw = skip_all_draw;
 }
-/* OPTIONAL: If graphic thread failed to start up */ jegl_context* je_graphic_uhost_get_context(je_GraphicUhost* host)
+/* OPTIONAL: If graphic thread failed to start up */ je_gl_context_t* je_graphic_uhost_get_context(je_graphic_uhost_t* host)
 {
     return host->glthread;
 }
-je_RenderBranch* je_graphic_uhost_alloc_branch(je_GraphicUhost* host)
+je_render_branch_t* je_graphic_uhost_alloc_branch(je_graphic_uhost_t* host)
 {
     return host->alloc_pipeline();
 }
-void je_graphic_uhost_free_branch(je_GraphicUhost* host, je_RenderBranch* free_branch)
+void je_graphic_uhost_free_branch(je_graphic_uhost_t* host, je_render_branch_t* free_branch)
 {
     return host->free_pipeline(free_branch);
 }
-jegl_command_buffer* je_graphic_branch_new_command_buffer(
-    je_RenderBranch* branch,
-    /* OPTIONAL: nullptr means screen framebuffer */ jegl_frame_buffer* framebuffer,
-    const jegl_viewport* viewport)
+je_gl_command_buffer_t* je_graphic_branch_new_command_buffer(
+    je_render_branch_t* branch,
+    /* OPTIONAL: nullptr means screen framebuffer */ je_gl_frame_buffer_t* framebuffer,
+    const je_gl_viewport_t* viewport)
 {
     return branch->allocate_new_command_buffer(framebuffer, viewport);
 }
-void je_graphic_branch_new_frame(je_RenderBranch* branch, int priority)
+void je_graphic_branch_new_frame(je_render_branch_t* branch, int priority)
 {
     branch->new_frame(priority);
 }

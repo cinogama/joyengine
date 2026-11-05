@@ -4,10 +4,10 @@
 
 ```cpp
 JE_API bool je_ecs_world_slice_dependence_query(
-    je_GameWorld* world,
+    je_game_world_t* world,
     jeecs::game_system* system_instance,
-    je_TypeHash slice_type_hash,
-    je_RequirementCollection** out_collection);
+    je_type_hash_t slice_type_hash,
+    je_requirement_collection_t** out_collection);
 ```
 
 ## 描述
@@ -18,10 +18,10 @@ JE_API bool je_ecs_world_slice_dependence_query(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `world` | `je_GameWorld*` | World 实例指针 |
+| `world` | `je_game_world_t*` | World 实例指针 |
 | `system_instance` | `jeecs::game_system*` | 系统实例 |
-| `slice_type_hash` | `je_TypeHash` | 切片类型的哈希 |
-| `out_collection` | `je_RequirementCollection**` | 输出切片查询缓存 |
+| `slice_type_hash` | `je_type_hash_t` | 切片类型的哈希 |
+| `out_collection` | `je_requirement_collection_t**` | 输出切片查询缓存 |
 
 ## 返回值
 

@@ -46,22 +46,22 @@ namespace jeecs
         DefaultResources()
             : default_shape_quad{
                   graphic::vertex::create(
-                      jegl_vertex::TRIANGLESTRIP,
+                      JE_GL_VERTEX_TYPE_TRIANGLESTRIP,
                       default_shape_quad_data,
                       sizeof(default_shape_quad_data),
                       {0, 1, 2, 3},
                       {
-                          {jegl_vertex::data_type::FLOAT32, 3},
-                          {jegl_vertex::data_type::FLOAT32, 2},
-                          {jegl_vertex::data_type::FLOAT32, 3},
-                          {jegl_vertex::data_type::FLOAT32, 3},
+                          {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3},
+                          {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 2},
+                          {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3},
+                          {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3},
                       })
                       .value() },
             default_shader{ jeecs::graphic::shader::load(
                                 nullptr,
                                 "!/builtin/shader/internal/builtin_default.shader")
                                 .value() }
-, default_texture{ graphic::texture2d::create(2, 2, jegl_texture_common::format::RGBA) }
+, default_texture{ graphic::texture2d::create(2, 2, JE_GL_TEXTURE_FORMAT_RGBA) }
 , default_shaders_list{ default_shader }
         {
             default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
@@ -80,7 +80,7 @@ namespace jeecs
 
         struct camera_arch
         {
-            je_RenderBranch* branchPipeline;
+            je_render_branch_t* branchPipeline;
 
             const Rendqueue* rendqueue;
             const Projection* projection;
@@ -316,7 +316,7 @@ namespace jeecs
 
         // Pipeline cache keyed by (shader, topology). The engine shaders carry
         // their fixed state; topology comes from the vertex resource.
-        std::map<std::pair<jegl_shader*, uint8_t>, jegl_pipeline*> m_pipeline_cache;
+        std::map<std::pair<je_gl_shader_t*, uint8_t>, je_gl_pipeline_t*> m_pipeline_cache;
 
         ~BaseImpledGraphicPipeline()
         {
@@ -325,31 +325,31 @@ namespace jeecs
             m_pipeline_cache.clear();
         }
 
-        jegl_context* graphic_context() const
+        je_gl_context_t* graphic_context() const
         {
-            jegl_context* context = je_graphic_uhost_get_context(_m_graphic_host);
+            je_gl_context_t* context = je_graphic_uhost_get_context(_m_graphic_host);
             assert(context != nullptr);
             return context;
         }
 
-        static jegl_topology topology_of(const jegl_vertex* vertex)
+        static je_gl_topology_t topology_of(const je_gl_vertex_t* vertex)
         {
             switch (vertex->m_type)
             {
-            case jegl_vertex::type::LINESTRIP:
-                return jegl_topology::LINE_STRIP;
-            case jegl_vertex::type::TRIANGLES:
-                return jegl_topology::TRIANGLES;
-            case jegl_vertex::type::TRIANGLESTRIP:
-                return jegl_topology::TRIANGLE_STRIP;
+            case JE_GL_VERTEX_TYPE_LINESTRIP:
+                return je_gl_topology_t::LINE_STRIP;
+            case JE_GL_VERTEX_TYPE_TRIANGLES:
+                return je_gl_topology_t::TRIANGLES;
+            case JE_GL_VERTEX_TYPE_TRIANGLESTRIP:
+                return je_gl_topology_t::TRIANGLE_STRIP;
             default:
                 assert(false);
-                return jegl_topology::TRIANGLES;
+                return je_gl_topology_t::TRIANGLES;
             }
         }
 
-        jegl_pipeline* pipeline_for(
-            graphic::shader* shader, jegl_vertex* vertex)
+        je_gl_pipeline_t* pipeline_for(
+            graphic::shader* shader, je_gl_vertex_t* vertex)
         {
             assert(shader != nullptr);
             assert(vertex != nullptr);
@@ -362,15 +362,15 @@ namespace jeecs
             if (found != m_pipeline_cache.end())
                 return found->second;
 
-            jegl_pipeline_state state =
+            je_gl_pipeline_state_t state =
                 je_graphic_pipeline_state_from_shader(shader->resource());
             state.m_topology = topology;
 
-            jegl_pipeline_desc desc{};
+            je_gl_pipeline_desc_t desc{};
             desc.m_shader = shader->resource();
             desc.m_state = &state;
 
-            jegl_pipeline* pipeline =
+            je_gl_pipeline_t* pipeline =
                 je_graphic_pipeline_create(graphic_context(), &desc);
             m_pipeline_cache.emplace(key, pipeline);
             return pipeline;
@@ -378,18 +378,18 @@ namespace jeecs
 
         // Allocate a command buffer/pass for a camera; honors optional
         // sub-viewport (normalized rect).
-        jegl_command_buffer* new_rend_chain_for_camera(
-            je_RenderBranch* branch,
+        je_gl_command_buffer_t* new_rend_chain_for_camera(
+            je_render_branch_t* branch,
             const Viewport* viewport,
             graphic::framebuffer* rend_aim_buffer,
             size_t buffer_w, size_t buffer_h)
         {
             assert(buffer_w > 0 && buffer_h > 0);
 
-            jegl_frame_buffer* fb =
+            je_gl_frame_buffer_t* fb =
                 rend_aim_buffer ? rend_aim_buffer->resource() : nullptr;
 
-            jegl_viewport vp{};
+            je_gl_viewport_t vp{};
             if (viewport != nullptr)
             {
                 vp.x = (int32_t)(viewport->viewport.x * (float)buffer_w);
@@ -411,7 +411,7 @@ namespace jeecs
 
         // Clear attachment 0 if the camera requested a clear color.
         void clear_color_if_any(
-            jegl_command_buffer* cmd, const Camera::Clear* clear)
+            je_gl_command_buffer_t* cmd, const Camera::Clear* clear)
         {
             if (clear != nullptr)
             {
@@ -429,7 +429,7 @@ namespace jeecs
             math::vec2 tiling;
             math::vec2 offset;
         };
-        bound_textures_t bind_entity_textures(jegl_command_buffer* cmd, const Textures2D* textures,
+        bound_textures_t bind_entity_textures(je_gl_command_buffer_t* cmd, const Textures2D* textures,
             const Textures2DArray* textures_array)
         {
             bound_textures_t result{
@@ -474,7 +474,7 @@ namespace jeecs
         // Iterate shader passes of `shaders`, falling back to default shader if a pass is not builtin,
         // and upload the standard set of builtin uniforms.
         void draw_shader_passes(
-            jegl_command_buffer* cmd,
+            je_gl_command_buffer_t* cmd,
             const basic::resource<graphic::vertex>& shape,
             const basic::vector<basic::resource<graphic::shader>>& shaders,
             const pass_uniforms_t& u)
@@ -527,7 +527,7 @@ namespace jeecs
         // Takes the frustum-culling handle directly so it works with any camera archetype
         // (camera_arch / l2dcamera_arch / ...) that exposes a `frustumCulling` field.
         void draw_world_renderers(
-            jegl_command_buffer* cmd,
+            je_gl_command_buffer_t* cmd,
             const FrustumCulling* frustum_culling,
             const float(&view)[4][4],
             const float(&vp)[4][4])
@@ -616,7 +616,7 @@ namespace jeecs
         // 当前批（连续同键运行段）状态；发射端逐字追加，键变化/缓冲满/相机
         // 切换时 flush 成一次 command-buffer draw。
         std::vector<float> m_text_quad_data;
-        jegl_texture_2d* m_text_batch_page = nullptr;
+        je_gl_texture_2d_t* m_text_batch_page = nullptr;
         graphic::shader* m_text_batch_shader = nullptr;
         basic::resource<graphic::vertex>* m_text_batch_vb = nullptr;
         size_t m_text_batch_quads = 0;
@@ -823,7 +823,7 @@ namespace jeecs
                 update_default_uniform_buffer(
                     *current_camera.projection, MAT4_UI_VIEW, MAT4_UI_UNIT, MAT4_UI_VIEW, shader_time);
 
-                jegl_command_buffer* rend_chain = new_rend_chain_for_camera(
+                je_gl_command_buffer_t* rend_chain = new_rend_chain_for_camera(
                     current_camera.branchPipeline, current_camera.viewport,
                     rend_aim_buffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
@@ -965,7 +965,7 @@ namespace jeecs
         // 再经与四边形路径完全相同的元素矩阵烘焙成相机像素空间顶点；
         // 颜色 = 逐字标记颜色 × 节点 Renderer::Color 色调。
         void EmitTextGlyphs(
-            jegl_command_buffer* chain,
+            je_gl_command_buffer_t* chain,
             const float(&view)[4][4],
             const float(&model)[4][4],
             const UserInterface::Text& text,
@@ -1082,9 +1082,9 @@ namespace jeecs
         // 批维护：键（图集页, 着色器）变化或当前缓冲写满时冲刷旧批、
         // 从池中取下一块顶点缓冲。
         void PrepareTextBatch(
-            jegl_command_buffer* chain,
+            je_gl_command_buffer_t* chain,
             const float(&view)[4][4],
-            jegl_texture_2d* page,
+            je_gl_texture_2d_t* page,
             graphic::shader* shader_res)
         {
             if (m_text_batch_page == page && m_text_batch_shader == shader_res
@@ -1119,7 +1119,7 @@ namespace jeecs
 
         // 冲刷当前批：一次 je_graphic_vertex_buffer_update + 一次 command-buffer draw。
         // 顶点已烘焙至相机像素空间，M=I、MVP/MV=UI 视图矩阵。
-        void FlushTextBatch(jegl_command_buffer* chain, const float(&view)[4][4])
+        void FlushTextBatch(je_gl_command_buffer_t* chain, const float(&view)[4][4])
         {
             if (m_text_batch_quads == 0 || m_text_batch_vb == nullptr)
             {
@@ -1187,14 +1187,14 @@ namespace jeecs
             }
 
             auto created = graphic::vertex::create(
-                jegl_vertex::TRIANGLES,
+                JE_GL_VERTEX_TYPE_TRIANGLES,
                 m_text_quad_data.data(),
                 m_text_quad_data.size() * sizeof(float),
                 indices,
                 {
-                    { jegl_vertex::data_type::FLOAT32, 3 }, // vertex
-                    { jegl_vertex::data_type::FLOAT32, 2 }, // uv
-                    { jegl_vertex::data_type::FLOAT32, 4 }, // color
+                    { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3 }, // vertex
+                    { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 2 }, // uv
+                    { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 4 }, // color
                 });
 
             // 创建失败即显式失败（引擎资源创建约定，见 DefaultResources）。
@@ -1315,7 +1315,7 @@ namespace jeecs
                 update_default_uniform_buffer(
                     *current_camera.projection, MAT4_VIEW, MAT4_PROJECTION, MAT4_VP, shader_time);
 
-                jegl_command_buffer* rend_chain = new_rend_chain_for_camera(
+                je_gl_command_buffer_t* rend_chain = new_rend_chain_for_camera(
                     current_camera.branchPipeline, current_camera.viewport,
                     rend_aim_buffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
@@ -1444,23 +1444,23 @@ namespace jeecs
             };
             DeferLight2DResource()
                 : _no_shadow{
-                    jeecs::graphic::texture2d::create(1, 1, jegl_texture_common::format::RGBA)
+                    jeecs::graphic::texture2d::create(1, 1, JE_GL_TEXTURE_FORMAT_RGBA)
                 }
                 , _screen_vertex{
                     jeecs::graphic::vertex::create(
-                        jegl_vertex::type::TRIANGLESTRIP,
+                        JE_GL_VERTEX_TYPE_TRIANGLESTRIP,
                         _screen_vertex_data,
                         sizeof(_screen_vertex_data),
                         {0, 1, 2, 3},
                         {
-                            {jegl_vertex::data_type::FLOAT32, 3},
-                            {jegl_vertex::data_type::FLOAT32, 2},
+                            {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3},
+                            {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 2},
                         })
                         .value()
                 }
                 , _wall_shadow_vertex{
                     jeecs::graphic::vertex::create(
-                        jegl_vertex::type::TRIANGLES,
+                        JE_GL_VERTEX_TYPE_TRIANGLES,
                         _wall_shadow_vertex_data,
                         sizeof(_wall_shadow_vertex_data),
                         {0, 1, 2, 1, 3, 2,
@@ -1468,21 +1468,21 @@ namespace jeecs
                         8, 9, 10, 9, 11, 10,
                         12, 13, 14, 13, 15, 14},
                         {
-                            {jegl_vertex::data_type::FLOAT32, 3},
-                            {jegl_vertex::data_type::FLOAT32, 2},
-                            {jegl_vertex::data_type::FLOAT32, 1},
-                            {jegl_vertex::data_type::FLOAT32, 2},
+                            {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3},
+                            {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 2},
+                            {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 1},
+                            {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 2},
                         })
                         .value()
                 }
                 , _sprite_shadow_quad{
                     jeecs::graphic::vertex::create(
-                        jegl_vertex::type::TRIANGLESTRIP,
+                        JE_GL_VERTEX_TYPE_TRIANGLESTRIP,
                         _sprite_shadow_quad_data,
                         sizeof(_sprite_shadow_quad_data),
                         {0, 1, 2, 3},
                         {
-                            {jegl_vertex::data_type::FLOAT32, 3},
+                            {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3},
                         })
                         .value()
                 }
@@ -1537,7 +1537,7 @@ namespace jeecs
 
         struct l2dcamera_arch
         {
-            je_RenderBranch* branchPipeline;
+            je_render_branch_t* branchPipeline;
 
             const Rendqueue* rendqueue;
             const Translation* translation;
@@ -1724,13 +1724,13 @@ namespace jeecs
                                 RENDAIMBUFFER_HEIGHT,
                                 {
                                     // 漫反射颜色
-                                    jegl_texture_common::format::RGBA,
+                                    JE_GL_TEXTURE_FORMAT_RGBA,
                                     // 自发光颜色，用于法线反射或者发光物体的颜色参数，最终混合shader会将此参数用于光照计算
-                                    jegl_texture_common::format(jegl_texture_common::format::RGBA | jegl_texture_common::format::FLOAT16),
+                                    je_gl_texture_format_t(JE_GL_TEXTURE_FORMAT_RGBA | JE_GL_TEXTURE_FORMAT_FLOAT16),
                                     // 视空间坐标(RGB) Alpha通道暂时留空
-                                    jegl_texture_common::format(jegl_texture_common::format::RGBA | jegl_texture_common::format::FLOAT16),
+                                    je_gl_texture_format_t(JE_GL_TEXTURE_FORMAT_RGBA | JE_GL_TEXTURE_FORMAT_FLOAT16),
                                     // 法线空间颜色
-                                    jegl_texture_common::format(jegl_texture_common::format::RGBA | jegl_texture_common::format::FLOAT16),
+                                    je_gl_texture_format_t(JE_GL_TEXTURE_FORMAT_RGBA | JE_GL_TEXTURE_FORMAT_FLOAT16),
                                 },
                                 true).value();
                         light2dpostpass->post_light_target
@@ -1739,7 +1739,7 @@ namespace jeecs
                                 LIGHT_BUFFER_HEIGHT,
                                 {
                                     // 光渲染结果
-                                    (jegl_texture_common::format)(jegl_texture_common::format::RGBA | jegl_texture_common::format::FLOAT16),
+                                    (je_gl_texture_format_t)(JE_GL_TEXTURE_FORMAT_RGBA | JE_GL_TEXTURE_FORMAT_FLOAT16),
                                 },
                                 false).value();
                     }
@@ -1838,7 +1838,7 @@ namespace jeecs
                             std::max((size_t)1, SHADOW_BUFFER_WIDTH),
                             std::max((size_t)1, SHADOW_BUFFER_HEIGHT),
                             {
-                                jegl_texture_common::format::RGBA,
+                                JE_GL_TEXTURE_FORMAT_RGBA,
                                 // R = 世界/遮挡阴影强度（MAX 合并）
                             },
                             // 深度附件：DeferLight2D 的逐像素排序键。
@@ -1927,12 +1927,12 @@ namespace jeecs
                         }
 
                         range->shape.m_light_mesh = jeecs::graphic::vertex::create(
-                            jegl_vertex::type::TRIANGLESTRIP,
+                            JE_GL_VERTEX_TYPE_TRIANGLESTRIP,
                             vertex_datas.data(), vertex_datas.size() * sizeof(float),
                             index_datas,
                             {
-                                {jegl_vertex::data_type::FLOAT32, 3},
-                                {jegl_vertex::data_type::FLOAT32, 1},
+                                {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3},
+                                {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 1},
                             });
                     }
                 }
@@ -1993,13 +1993,13 @@ namespace jeecs
                                     });
                             }
                             blockshadow->shape.m_block_mesh = jeecs::graphic::vertex::create(
-                                jegl_vertex::type::TRIANGLESTRIP,
+                                JE_GL_VERTEX_TYPE_TRIANGLESTRIP,
                                 _vertex_buffer.data(), _vertex_buffer.size() * sizeof(float),
                                 _index_buffer,
                                 {
-                                    {jegl_vertex::data_type::FLOAT32, 3},
-                                    {jegl_vertex::data_type::FLOAT32, 1},
-                                    {jegl_vertex::data_type::FLOAT32, 1},
+                                    {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3},
+                                    {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 1},
+                                    {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 1},
                                 });
                         }
                         else
@@ -2067,7 +2067,7 @@ namespace jeecs
         }
 
         void bind_shadow_texture(
-            jegl_command_buffer* chain, /* OPTIONAL */ const Textures2D* textures)
+            je_gl_command_buffer_t* chain, /* OPTIONAL */ const Textures2D* textures)
         {
             auto main_texture =
                 textures == nullptr ? std::nullopt : textures->get_texture(0);
@@ -2186,7 +2186,7 @@ namespace jeecs
         // (0,-1,0). shadow_cast_pos is the point-light shadow origin
         //（world_position + world_rotation * ShadowOffset，见 DrawFrame）.
         void draw_shadow_occluder(
-            jegl_command_buffer* shadow_chain,
+            je_gl_command_buffer_t* shadow_chain,
             const basic::resource<graphic::shader>& shadow_shader,
             const basic::resource<graphic::vertex>& shape_vertex,
             const Translation* occluder_translation,
@@ -2286,7 +2286,7 @@ namespace jeecs
         //    （顶点着色器计算），MAX 合并；逐块 key 与墙段 key 不可直接
         //    比较，故只加深、不清除。
         void draw_self_shadow(
-            jegl_command_buffer* shadow_chain,
+            je_gl_command_buffer_t* shadow_chain,
             const defer_light2d_shadow_passes_t& passes,
             const block2d_arch& block,
             bool topdown_light,
@@ -2411,7 +2411,7 @@ namespace jeecs
         // →脚底"（而非→实体中心），尾迹从接触点向外延伸；平行光方向由
         // 光源自身朝向决定，与实体位置无关。
         void draw_sprite_shadow(
-            jegl_command_buffer* shadow_chain,
+            je_gl_command_buffer_t* shadow_chain,
             const defer_light2d_shadow_passes_t& passes,
             const block2d_arch& block,
             const light2d_arch& light,
@@ -2531,7 +2531,7 @@ namespace jeecs
                 update_default_uniform_buffer(
                     *current_camera.projection, MAT4_VIEW, MAT4_PROJECTION, MAT4_VP, shader_time);
 
-                jegl_command_buffer* rend_chain = nullptr;
+                je_gl_command_buffer_t* rend_chain = nullptr;
 
                 std::vector<light2d_arch*> _2dlight_after_culling;
                 _2dlight_after_culling.reserve(m_2dlight_list.size());
@@ -2580,7 +2580,7 @@ namespace jeecs
                                         * lightarch.shadowoffset->offset;
 
                             auto& light2d_shadow_aim_buffer = lightarch.shadowbuffer->buffer.value();
-                            jegl_command_buffer* light2d_shadow_rend_chain = new_rend_chain_for_camera(
+                            je_gl_command_buffer_t* light2d_shadow_rend_chain = new_rend_chain_for_camera(
                                 current_camera.branchPipeline,
                                 /*viewport=*/nullptr,
                                 light2d_shadow_aim_buffer.get(),
@@ -2823,7 +2823,7 @@ namespace jeecs
                     // Rend Light result to target buffer.
                     graphic::framebuffer* post_light_target_fb =
                         current_camera.light2DPostPass->post_light_target.value().get();
-                    jegl_command_buffer* light2d_light_effect_rend_chain = new_rend_chain_for_camera(
+                    je_gl_command_buffer_t* light2d_light_effect_rend_chain = new_rend_chain_for_camera(
                         current_camera.branchPipeline, /*viewport=*/nullptr,
                         post_light_target_fb,
                         post_light_target_fb->width(), post_light_target_fb->height());
@@ -2931,7 +2931,7 @@ namespace jeecs
                     }
 
                     // Rend final result color to screen.
-                    jegl_command_buffer* final_target_rend_chain = new_rend_chain_for_camera(
+                    je_gl_command_buffer_t* final_target_rend_chain = new_rend_chain_for_camera(
                         current_camera.branchPipeline, current_camera.viewport,
                         rend_aim_buffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 

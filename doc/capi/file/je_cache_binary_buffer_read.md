@@ -6,7 +6,7 @@
 JE_API bool je_cache_binary_buffer_read(
     /* OPTIONAL: If *inout_dst_len == 0 */ void* dst,
     size_t* inout_dst_len,
-    const jeecs_cache_binary_buffer* buf);
+    const je_cache_binary_buffer_t* buf);
 ```
 
 ## 描述
@@ -19,7 +19,7 @@ JE_API bool je_cache_binary_buffer_read(
 |--------|------|------|
 | `dst` | `void*` | 可选（If *inout_dst_len == 0） dst == nullptr 时 inout_dst_len 必须为 0，此时仅查询缓冲区长度 |
 | `inout_dst_len` | `size_t*` | inout_dst_len 传入 dst 的容量，成功返回时被改写为缓冲区的实际长度 |
-| `buf` | `const jeecs_cache_binary_buffer*` | — |
+| `buf` | `const je_cache_binary_buffer_t*` | — |
 
 ## 返回值
 

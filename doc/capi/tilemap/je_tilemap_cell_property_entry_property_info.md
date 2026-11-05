@@ -4,9 +4,9 @@
 
 ```c
 JE_API bool je_tilemap_cell_property_entry_property_info(
-    je_TilemapDocument* map, je_LayerId layer, int32_t x, int32_t y,
+    je_tilemap_document_t* map, je_layer_id_t layer, int32_t x, int32_t y,
     int32_t index, /* OPTIONAL */ const char** name,
-    /* OPTIONAL */ je_PropertyType* type);
+    /* OPTIONAL */ je_property_type_t* type);
 ```
 
 ## 描述
@@ -17,13 +17,13 @@ JE_API bool je_tilemap_cell_property_entry_property_info(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | — |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | — |
 | `x` | `int32_t` | — |
 | `y` | `int32_t` | — |
 | `index` | `int32_t` | index 越界或该格无覆盖时返回 false |
 | `name` | `const char**` | 可选。 |
-| `type` | `je_PropertyType*` | 可选。 |
+| `type` | `je_property_type_t*` | 可选。 |
 
 ## 返回值
 

@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_tilemap_map_resize(je_TilemapDocument* map, int32_t new_w, int32_t new_h);
+JE_API void je_tilemap_map_resize(je_tilemap_document_t* map, int32_t new_w, int32_t new_h);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_tilemap_map_resize(je_TilemapDocument* map, int32_t new_w, int32_
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
+| `map` | `je_tilemap_document_t*` | — |
 | `new_w` | `int32_t` | — |
 | `new_h` | `int32_t` | — |
 

@@ -30,13 +30,13 @@ je_file_runtime_path_set("/srv/game");
 je_fimg_default_archive_set("/srv/game");
 
 // 实际文件不存在时，从镜像读取
-jeecs_file* f = je_file_open("@/resource/worlds/main.je4world");
+je_file_t* f = je_file_open("@/resource/worlds/main.je4world");
 ```
 
 ## 注意事项
 
 - 无论加载是否成功，之前打开的默认镜像都会被替换/关闭
-- 已打开的 `jeecs_file` 持有自己的分片句柄，不受镜像替换影响
+- 已打开的 `je_file_t` 持有自己的分片句柄，不受镜像替换影响
 - 目录下没有 `fimg.je4index` 时静默返回 `false`，这是开发期加载松散文件的正常情况
 - `je_file_runtime_path_set` 不再自动加载镜像，需要显式调用此函数
 

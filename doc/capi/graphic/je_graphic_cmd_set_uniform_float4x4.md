@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_cmd_set_uniform_float4x4(
-    jegl_command_buffer* cmd, jegl_uniform_slot slot, const float (*mat)[4]);
+    je_gl_command_buffer_t* cmd, je_gl_uniform_slot_t slot, const float (*mat)[4]);
 ```
 
 ## 描述
@@ -15,8 +15,8 @@ JE_API void je_graphic_cmd_set_uniform_float4x4(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `cmd` | `jegl_command_buffer*` | — |
-| `slot` | `jegl_uniform_slot` | — |
+| `cmd` | `je_gl_command_buffer_t*` | — |
+| `slot` | `je_gl_uniform_slot_t` | — |
 | `mat` | `const float (*)[4]` | — |
 
 ## 返回值

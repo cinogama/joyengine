@@ -4,7 +4,7 @@
 #define STB_TRUETYPE_IMPLEMENTATION // force following include to generate implementation
 #include "stb_truetype.h"
 
-struct je_stb_font_data
+struct je_stb_font_data_t
 {
     stbtt_fontinfo m_font;
     std::mutex m_character_set_mx;
@@ -12,14 +12,14 @@ struct je_stb_font_data
     std::map<float, std::map<char32_t, jeecs::graphic::character>> m_character_set;
 };
 
-/* OPTIONAL */ je_font* je_font_load(
+/* OPTIONAL */ je_font_t* je_font_load(
     const char* font_path,
     size_t board_blank_size_x,
     size_t board_blank_size_y,
     /* OPTIONAL */ je_font_char_updater_t char_texture_updater)
 {
-    je_font* font = new je_font;
-    font->m_stb_font_data = new je_stb_font_data;
+    je_font_t* font = new je_font_t;
+    font->m_stb_font_data = new je_stb_font_data_t;
 
     font->m_path = strdup(font_path);
     font->m_font_file_buf = nullptr;
@@ -73,7 +73,7 @@ struct je_stb_font_data
     return font;
 }
 
-void je_font_free(je_font* font)
+void je_font_free(je_font_t* font)
 {
     assert(font != nullptr);
 
@@ -86,7 +86,7 @@ void je_font_free(je_font* font)
 }
 
 const jeecs::graphic::character* je_font_char_get(
-    je_font* font, float size, char32_t unicode32_char)
+    je_font_t* font, float size, char32_t unicode32_char)
 {
     assert(font != nullptr);
     assert(size > 0.f);
@@ -155,7 +155,7 @@ const jeecs::graphic::character* je_font_char_get(
                     jeecs::graphic::texture2d::create(
                         (size_t)texture_pixel_width,
                         (size_t)texture_pixel_height,
-                        jegl_texture_common::format::RGBA) }).first->second;
+                        JE_GL_TEXTURE_FORMAT_RGBA) }).first->second;
 
     ch.m_char = unicode32_char;
 

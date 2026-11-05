@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_state je_audio_source_play_state_get(jeal_source* source);
+JE_API je_audio_state_t je_audio_source_play_state_get(je_audio_source_t* source);
 ```
 
 ## 描述
@@ -14,15 +14,15 @@ JE_API jeal_state je_audio_source_play_state_get(jeal_source* source);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| source | jeal_source* | 音频源指针 |
+| source | je_audio_source_t* | 音频源指针 |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| jeal_state | 音频源的播放状态 |
+| je_audio_state_t | 音频源的播放状态 |
 
-### jeal_state 枚举值
+### je_audio_state_t 枚举值
 
 | 值 | 描述 |
 |----|------|
@@ -33,7 +33,7 @@ JE_API jeal_state je_audio_source_play_state_get(jeal_source* source);
 ## 用法示例
 
 ```cpp
-jeal_state state = je_audio_source_play_state_get(source);
+je_audio_state_t state = je_audio_source_play_state_get(source);
 
 switch (state) {
     case JE_AUDIO_STATE_STOPPED:

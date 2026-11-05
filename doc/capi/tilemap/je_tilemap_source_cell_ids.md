@@ -4,8 +4,8 @@
 
 ```c
 JE_API /* OPTIONAL: If source_idx is invalid */ const int32_t*
-    je_tilemap_source_cell_ids(je_TilesetDocument* tileset,
-        je_SourceId source_idx, /* OPTIONAL */ int32_t* out_count);
+    je_tilemap_source_cell_ids(je_tileset_document_t* tileset,
+        je_source_id_t source_idx, /* OPTIONAL */ int32_t* out_count);
 ```
 
 ## 描述
@@ -16,8 +16,8 @@ JE_API /* OPTIONAL: If source_idx is invalid */ const int32_t*
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
-| `source_idx` | `je_SourceId` | — |
+| `tileset` | `je_tileset_document_t*` | — |
+| `source_idx` | `je_source_id_t` | — |
 | `out_count` | `int32_t*` | 可选。 out_count 返回元素数量（可为 nullptr） |
 
 ## 返回值

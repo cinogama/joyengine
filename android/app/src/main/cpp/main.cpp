@@ -280,7 +280,7 @@ public:
     }
 
 public:
-    static jeecs_raw_file _je_android_file_open(const char* path, size_t* out_len)
+    static je_raw_file_t _je_android_file_open(const char* path, size_t* out_len)
     {
         if (_asset_manager != nullptr && path[0] == '#')
         {
@@ -310,7 +310,7 @@ public:
         }
         return nullptr;
     }
-    static size_t _je_android_file_read(void* buffer, size_t elemsz, size_t elemcount, jeecs_raw_file file)
+    static size_t _je_android_file_read(void* buffer, size_t elemsz, size_t elemcount, je_raw_file_t file)
     {
         auto* finstance = (_je_file_instance*)file;
         if (finstance->m_asset_file != nullptr)
@@ -324,7 +324,7 @@ public:
             return fread(buffer, elemsz, elemcount, finstance->m_raw_file);
         }
     }
-    static size_t _je_android_file_tell(jeecs_raw_file file)
+    static size_t _je_android_file_tell(je_raw_file_t file)
     {
         auto* finstance = (_je_file_instance*)file;
         if (finstance->m_asset_file != nullptr)
@@ -338,7 +338,7 @@ public:
             return ftell(finstance->m_raw_file);
         }
     }
-    static int _je_android_file_seek(jeecs_raw_file file, int64_t offset, je_read_file_seek_mode mode)
+    static int _je_android_file_seek(je_raw_file_t file, int64_t offset, je_file_seek_mode_t mode)
     {
         auto* finstance = (_je_file_instance*)file;
         if (finstance->m_asset_file != nullptr)
@@ -353,7 +353,7 @@ public:
             return fseek(finstance->m_raw_file, offset, mode);
         }
     }
-    static int _je_android_file_close(jeecs_raw_file file)
+    static int _je_android_file_close(je_raw_file_t file)
     {
         auto* finstance = (_je_file_instance*)file;
 

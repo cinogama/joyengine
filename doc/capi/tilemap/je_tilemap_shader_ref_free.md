@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_tilemap_shader_ref_free(/* OPTIONAL */ je_tilemap_shader_ref* shader);
+JE_API void je_tilemap_shader_ref_free(/* OPTIONAL */ je_tilemap_shader_ref_t* shader);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_tilemap_shader_ref_free(/* OPTIONAL */ je_tilemap_shader_ref* sha
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `shader` | `je_tilemap_shader_ref*` | 可选。 |
+| `shader` | `je_tilemap_shader_ref_t*` | 可选。 |
 
 ## 返回值
 

@@ -4,7 +4,7 @@
 
 ```c
 JE_API bool je_cache_binary_append_uint32(
-    je_writing_cache_file* file,
+    je_writing_cache_file_t* file,
     uint32_t val);
 ```
 
@@ -16,7 +16,7 @@ JE_API bool je_cache_binary_append_uint32(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `file` | `je_writing_cache_file*` | — |
+| `file` | `je_writing_cache_file_t*` | — |
 | `val` | `uint32_t` | — |
 
 ## 返回值

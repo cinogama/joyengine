@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API int32_t je_tilemap_source_count(je_TilesetDocument* tileset);
+JE_API int32_t je_tilemap_source_count(je_tileset_document_t* tileset);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API int32_t je_tilemap_source_count(je_TilesetDocument* tileset);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
+| `tileset` | `je_tileset_document_t*` | — |
 
 ## 返回值
 

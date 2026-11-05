@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API /* OPTIONAL: If index is out of range or the slot is empty */ je_TilemapDocument* je_tilemap_loaded_map(int32_t index);
+JE_API /* OPTIONAL: If index is out of range or the slot is empty */ je_tilemap_document_t* je_tilemap_loaded_map(int32_t index);
 ```
 
 ## 描述
@@ -20,7 +20,7 @@ JE_API /* OPTIONAL: If index is out of range or the slot is empty */ je_TilemapD
 
 | 类型 | 描述 |
 |------|------|
-| `je_TilemapDocument*` | 见描述。 |
+| `je_tilemap_document_t*` | 见描述。 |
 
 ## 注意事项
 

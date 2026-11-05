@@ -29,7 +29,7 @@ JE_API void je_ecs_world_prefab_create_with_components(
 
 ## 注意事项
 
-- 预制体是 `je_GameEntity` 中唯一可以跨帧持有的例外：普通实体只允许在一帧期间持有，一帧结束时引擎可能执行碎片回收（defragmentation）导致索引失效，而预制体不受此影响
+- 预制体是 `je_game_entity_t` 中唯一可以跨帧持有的例外：普通实体只允许在一帧期间持有，一帧结束时引擎可能执行碎片回收（defragmentation）导致索引失效，而预制体不受此影响
 
 ## 相关接口
 

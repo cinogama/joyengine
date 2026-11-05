@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_effect_distortion* je_audio_effect_distortion_create();
+JE_API je_audio_effect_distortion_t* je_audio_effect_distortion_create();
 ```
 
 ## 描述
@@ -18,12 +18,12 @@ JE_API jeal_effect_distortion* je_audio_effect_distortion_create();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_effect_distortion* | 失真效果实例指针 |
+| je_audio_effect_distortion_t* | 失真效果实例指针 |
 
-### jeal_effect_distortion 结构体
+### je_audio_effect_distortion_t 结构体
 
 ```cpp
-struct jeal_effect_distortion {
+struct je_audio_effect_distortion_t {
     float m_edge;                  // 边缘，默认 0.2，范围 [0.0, 1.0]
     float m_gain;                  // 增益，默认 0.05，范围 [0.01, 1.0]
     float m_lowpass_cutoff;        // 低通截止频率，默认 8000.0，范围 [80.0, 24000.0]
@@ -35,7 +35,7 @@ struct jeal_effect_distortion {
 ## 用法示例
 
 ```cpp
-jeal_effect_distortion* distortion = je_audio_effect_distortion_create();
+je_audio_effect_distortion_t* distortion = je_audio_effect_distortion_create();
 
 // 调整失真参数
 distortion->m_edge = 0.5f;

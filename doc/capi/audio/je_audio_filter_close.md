@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-void je_audio_filter_close(jeal_filter* filter);
+void je_audio_filter_close(je_audio_filter_t* filter);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ void je_audio_filter_close(jeal_filter* filter);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| filter | jeal_filter* | 要关闭的滤波器指针 |
+| filter | je_audio_filter_t* | 要关闭的滤波器指针 |
 
 ## 返回值
 
@@ -23,7 +23,7 @@ void je_audio_filter_close(jeal_filter* filter);
 ## 用法示例
 
 ```cpp
-jeal_filter* filter = je_audio_filter_create();
+je_audio_filter_t* filter = je_audio_filter_create();
 
 // 使用滤波器...
 

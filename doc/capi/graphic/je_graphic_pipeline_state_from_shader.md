@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API jegl_pipeline_state je_graphic_pipeline_state_from_shader(
-    jegl_shader* shader);
+JE_API je_gl_pipeline_state_t je_graphic_pipeline_state_from_shader(
+    je_gl_shader_t* shader);
 ```
 
 ## 描述
@@ -15,10 +15,10 @@ JE_API jegl_pipeline_state je_graphic_pipeline_state_from_shader(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `shader` | `jegl_shader*` | — |
+| `shader` | `je_gl_shader_t*` | — |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_pipeline_state` | 见描述。 |
+| `je_gl_pipeline_state_t` | 见描述。 |

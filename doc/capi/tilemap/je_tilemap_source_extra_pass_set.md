@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API bool je_tilemap_source_extra_pass_set(je_TilesetDocument* tileset,
-    je_SourceId source_idx, int32_t extra_idx, int32_t pass);
+JE_API bool je_tilemap_source_extra_pass_set(je_tileset_document_t* tileset,
+    je_source_id_t source_idx, int32_t extra_idx, int32_t pass);
 ```
 
 ## 描述
@@ -15,8 +15,8 @@ JE_API bool je_tilemap_source_extra_pass_set(je_TilesetDocument* tileset,
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `tileset` | `je_TilesetDocument*` | — |
-| `source_idx` | `je_SourceId` | — |
+| `tileset` | `je_tileset_document_t*` | — |
+| `source_idx` | `je_source_id_t` | — |
 | `extra_idx` | `int32_t` | — |
 | `pass` | `int32_t` | — |
 

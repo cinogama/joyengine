@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API void je_font_free(je_font* font);
+JE_API void je_font_free(je_font_t* font);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_font_free(je_font* font);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| font | je_font* | 要释放的字体对象 |
+| font | je_font_t* | 要释放的字体对象 |
 
 ## 返回值
 

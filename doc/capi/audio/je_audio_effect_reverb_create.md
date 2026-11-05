@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_effect_reverb* je_audio_effect_reverb_create();
+JE_API je_audio_effect_reverb_t* je_audio_effect_reverb_create();
 ```
 
 ## 描述
@@ -18,12 +18,12 @@ JE_API jeal_effect_reverb* je_audio_effect_reverb_create();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_effect_reverb* | 混响效果实例指针 |
+| je_audio_effect_reverb_t* | 混响效果实例指针 |
 
-### jeal_effect_reverb 结构体
+### je_audio_effect_reverb_t 结构体
 
 ```cpp
-struct jeal_effect_reverb {
+struct je_audio_effect_reverb_t {
     float m_density;                // 密度, 默认 1.0, 范围 [0.0, 1.0]
     float m_diffusion;              // 扩散度, 默认 1.0, 范围 [0.0, 1.0]
     float m_gain;                   // 增益, 默认 0.32, 范围 [0.0, 1.0]
@@ -43,7 +43,7 @@ struct jeal_effect_reverb {
 ## 用法示例
 
 ```cpp
-jeal_effect_reverb* reverb = je_audio_effect_reverb_create();
+je_audio_effect_reverb_t* reverb = je_audio_effect_reverb_create();
 
 // 调整混响参数（模拟大厅）
 reverb->m_decay_time = 3.0f;
@@ -53,7 +53,7 @@ reverb->m_diffusion = 0.8f;
 je_audio_effect_update(reverb);
 
 // 绑定到效果槽
-jeal_effect_slot* slot = je_audio_effect_slot_create();
+je_audio_effect_slot_t* slot = je_audio_effect_slot_create();
 je_audio_effect_slot_bind(slot, reverb);
 
 // 清理

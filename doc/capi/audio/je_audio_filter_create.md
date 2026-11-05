@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-jeal_filter* je_audio_filter_create();
+je_audio_filter_t* je_audio_filter_create();
 ```
 
 ## 描述
@@ -18,22 +18,22 @@ jeal_filter* je_audio_filter_create();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_filter* | 滤波器实例指针 |
+| je_audio_filter_t* | 滤波器实例指针 |
 
-### jeal_filter 结构体
+### je_audio_filter_t 结构体
 
 ```cpp
-struct jeal_filter {
-    jeal_native_filter_instance* m_filter_instance;
+struct je_audio_filter_t {
+    je_audio_native_filter_instance_t* m_filter_instance;
     size_t m_references;     // 引用计数
-    jeal_filter_type m_type; // 滤波器类型
+    je_audio_filter_type_t m_type; // 滤波器类型
     float m_gain;            // 增益，默认 1.0，范围 [0.0, 1.0]
     float m_gain_lf;         // 低频增益（对高通无效），默认 0.5
     float m_gain_hf;         // 高频增益（对低通无效），默认 0.5
 };
 ```
 
-### jeal_filter_type 枚举值
+### je_audio_filter_type_t 枚举值
 
 | 值 | 描述 |
 |----|------|
@@ -44,7 +44,7 @@ struct jeal_filter {
 ## 用法示例
 
 ```cpp
-jeal_filter* filter = je_audio_filter_create();
+je_audio_filter_t* filter = je_audio_filter_create();
 
 // 设置为低通滤波器
 filter->m_type = JE_AUDIO_FILTER_LOWPASS;

@@ -293,8 +293,8 @@ namespace jeecs
 
         struct group_filter_rule
         {
-            const je_TypeInfo* m_type;
-            je_ComponentRequirementKind     m_requirement;
+            const je_type_info_t* m_type;
+            je_component_requirement_kind_t     m_requirement;
         };
         struct group_definition
         {
@@ -365,7 +365,7 @@ namespace jeecs
         static std::optional<scene_physics_config> load_scene_physics_config_from_path(
             const std::string& path)
         {
-            jeecs_file* fp = je_file_open(path.c_str());
+            je_file_t* fp = je_file_open(path.c_str());
             if (fp == nullptr)
             {
                 jeecs::debug::logerr("Unable to open Physics2D scene config: '%s'.", path.c_str());
@@ -496,8 +496,8 @@ namespace jeecs
                     woort_struct_get(requirement_slot, filter_value, 1); // Requirement
 
                     group.m_filters.push_back(group_filter_rule{
-                        static_cast<const je_TypeInfo*>(woort_pointer(typeinfo_slot)),
-                        static_cast<je_ComponentRequirementKind>(woort_int(requirement_slot)),
+                        static_cast<const je_type_info_t*>(woort_pointer(typeinfo_slot)),
+                        static_cast<je_component_requirement_kind_t>(woort_int(requirement_slot)),
                         });
                 }
 

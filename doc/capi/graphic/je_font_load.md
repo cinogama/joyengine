@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API je_font* je_font_load(
+JE_API je_font_t* je_font_load(
     const char* font_path,
     size_t board_blank_size_x,
     size_t board_blank_size_y,
@@ -29,7 +29,7 @@ JE_API je_font* je_font_load(
 
 | 类型 | 描述 |
 |------|------|
-| je_font* | 字体对象指针，失败返回 nullptr |
+| je_font_t* | 字体对象指针，失败返回 nullptr |
 
 ## 相关接口
 

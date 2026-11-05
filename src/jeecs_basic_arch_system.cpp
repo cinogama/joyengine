@@ -22,19 +22,19 @@ namespace jeecs_impl
 {
     class arch_type;
 
-    // types_set 是排序去重的 std::vector<je_TypeId>，其不变式只能通过
+    // types_set 是排序去重的 std::vector<je_type_id_t>，其不变式只能通过
     // 以下三个辅助函数维护；archetype 的身份与 map 键序都依赖它是升序无重复的。
-    inline void types_set_insert(std::vector<je_TypeId>& _types, je_TypeId _tid) noexcept
+    inline void types_set_insert(std::vector<je_type_id_t>& _types, je_type_id_t _tid) noexcept
     {
         auto _at = std::lower_bound(_types.begin(), _types.end(), _tid);
         if (_at == _types.end() || *_at != _tid)
             _types.insert(_at, _tid);
     }
-    inline bool types_set_contains(const std::vector<je_TypeId>& _types, je_TypeId _tid) noexcept
+    inline bool types_set_contains(const std::vector<je_type_id_t>& _types, je_type_id_t _tid) noexcept
     {
         return std::binary_search(_types.begin(), _types.end(), _tid);
     }
-    inline bool types_set_erase(std::vector<je_TypeId>& _types, je_TypeId _tid) noexcept
+    inline bool types_set_erase(std::vector<je_type_id_t>& _types, je_type_id_t _tid) noexcept
     {
         auto _at = std::lower_bound(_types.begin(), _types.end(), _tid);
         if (_at == _types.end() || *_at != _tid)
@@ -44,25 +44,25 @@ namespace jeecs_impl
     }
     // 从未排序数组批量构建，一次分配 + 排序 + 去重；
     // 优于对逐元素调用 types_set_insert（每次插入都要搬移后半段）。
-    inline std::vector<je_TypeId> make_types_set(
-        const je_TypeId* _type_ids, size_t _count) noexcept
+    inline std::vector<je_type_id_t> make_types_set(
+        const je_type_id_t* _type_ids, size_t _count) noexcept
     {
-        std::vector<je_TypeId> _types(_type_ids, _type_ids + _count);
+        std::vector<je_type_id_t> _types(_type_ids, _type_ids + _count);
         std::sort(_types.begin(), _types.end());
         _types.erase(std::unique(_types.begin(), _types.end()), _types.end());
         return _types;
     }
 }
 
-// je_GameUniverse/je_GameWorld/je_Archtype/je_Chunk 在公开头文件中仅作不透明前向声明，
+// je_game_universe_t/je_game_world_t/je_archtype_t/je_chunk_t 在公开头文件中仅作不透明前向声明，
 // 此处给出空结构体定义，作为实际实现类的公开基类。引擎内部实现类
 // （jeecs_impl::ecs_universe 等）公开继承它们，使 C ABI 边界处可通过
 // derived↔base 的 static_cast 完成 je_Xxx* 与实现类指针之间的转换，
-// 无需 reinterpret_cast。空基类优化（EBO）保证 je_Chunk* 与 arch_chunk 对象地址一致。
-struct je_GameUniverse {};
-struct je_GameWorld {};
-struct je_Archtype {};
-struct je_Chunk {};
+// 无需 reinterpret_cast。空基类优化（EBO）保证 je_chunk_t* 与 arch_chunk 对象地址一致。
+struct je_game_universe_t {};
+struct je_game_world_t {};
+struct je_archtype_t {};
+struct je_chunk_t {};
 
 struct je_SelectedArchCache
 {
@@ -100,17 +100,17 @@ struct je_SelectedArchCache
     je_SelectedArchCache& operator = (const je_SelectedArchCache&) = delete;
 };
 
-struct je_CollectedRequirements
+struct je_collected_requirements_t
 {
     // 排序去重的紧凑类型集合：插入/删除/查找必须走 jeecs_impl::types_set_* 辅助函数
-    using types_set = std::vector<je_TypeId>;
+    using types_set = std::vector<je_type_id_t>;
 
     types_set m_contain_set;
     types_set m_except_set;
-    std::map<int /*je_ComponentRequirementKind*/, types_set> m_anyof_sets;
+    std::map<int /*je_component_requirement_kind_t*/, types_set> m_anyof_sets;
 
-    std::vector<je_ComponentRequirement> m_view_required;
-    std::vector<je_DependenceArchInfos> m_selected_archs;
+    std::vector<je_component_requirement_t> m_view_required;
+    std::vector<je_dependence_arch_infos_t> m_selected_archs;
 
     std::unordered_map<const jeecs_impl::arch_type*, je_SelectedArchCache>
         m_selected_arch_cache;
@@ -150,7 +150,7 @@ struct je_CollectedRequirements
 
 namespace jeecs_impl
 {
-    struct HoldedRequirementCollection : public je_RequirementCollection
+    struct HoldedRequirementCollection : public je_requirement_collection_t
     {
         HoldedRequirementCollection()
         {
@@ -168,7 +168,7 @@ namespace jeecs_impl
         HoldedRequirementCollection& operator = (HoldedRequirementCollection&&) = delete;
     };
 
-    using types_set = je_CollectedRequirements::types_set;
+    using types_set = je_collected_requirements_t::types_set;
 
     constexpr size_t CHUNK_SIZE = 16 * 1024; // 16K
 
@@ -176,7 +176,7 @@ namespace jeecs_impl
     class arch_manager;
     class ecs_world;
 
-    inline bool is_system_component_depends(je_TypeId id)
+    inline bool is_system_component_depends(je_type_id_t id)
     {
         if (jeecs::typing::of(id) == nullptr)
             return true;
@@ -255,20 +255,20 @@ namespace jeecs_impl
         }
     };
 
-    class arch_type : public je_Archtype
+    class arch_type : public je_archtype_t
     {
         JECS_DISABLE_MOVE_AND_COPY(arch_type);
         // ahahahah, arch_type is coming!
 
         struct arch_type_info
         {
-            const je_TypeInfo* m_typeinfo;
+            const je_type_info_t* m_typeinfo;
             size_t m_begin_offset_in_chunk;
         };
 
     public:
-        using types_list = std::vector<const je_TypeInfo*>;
-        using archtypes_map = std::unordered_map<je_TypeId, arch_type_info>;
+        using types_list = std::vector<const je_type_info_t*>;
+        using archtypes_map = std::unordered_map<je_type_id_t, arch_type_info>;
 
     private:
         /* Will be init in construction */
@@ -277,11 +277,11 @@ namespace jeecs_impl
 
         const types_set _m_types_set;
         const size_t _m_entity_size;
-        const je_EntityIdInChunk _m_entity_count_per_chunk;
+        const je_entity_id_in_chunk_t _m_entity_count_per_chunk;
         arch_manager* _m_arch_manager;
 
     public:
-        class arch_chunk : public je_Chunk
+        class arch_chunk : public je_chunk_t
         {
             JECS_DISABLE_MOVE_AND_COPY(arch_chunk);
 
@@ -291,18 +291,18 @@ namespace jeecs_impl
 
             byte_t _m_chunk_buffer[CHUNK_SIZE];
 
-            je_GameEntityMeta* _m_entities_meta;
+            je_game_entity_meta_t* _m_entities_meta;
 
             const types_set* _m_types;
             const archtypes_map* _m_arch_typeinfo_mapping;
-            const je_EntityIdInChunk _m_entity_count;
+            const je_entity_id_in_chunk_t _m_entity_count;
             const size_t _m_entity_size;
 
             arch_type* _m_arch_type;
-            mcmp_lockfree_fixed_id_stack<je_EntityIdInChunk>
+            mcmp_lockfree_fixed_id_stack<je_entity_id_in_chunk_t>
                 _m_free_slots;
 #ifndef NDEBUG
-            std::atomic<je_EntityIdInChunk> _m_debug_free_count;
+            std::atomic<je_entity_id_in_chunk_t> _m_debug_free_count;
 #endif
 
         public:
@@ -322,11 +322,11 @@ namespace jeecs_impl
             {
                 assert(jeoffsetof(jeecs_impl::arch_type::arch_chunk, _m_chunk_buffer) == 0);
 
-                _m_entities_meta = new je_GameEntityMeta[_m_entity_count]{};
+                _m_entities_meta = new je_game_entity_meta_t[_m_entity_count]{};
 
                 // 逆序压栈：栈是 LIFO，这样首次分配仍按 0,1,2... 顺序取出，
                 // 与原先用队列时的分配顺序保持一致。
-                for (je_EntityIdInChunk i = _m_entity_count; i-- > 0;)
+                for (je_entity_id_in_chunk_t i = _m_entity_count; i-- > 0;)
                     _m_free_slots.push(i);
             }
             ~arch_chunk()
@@ -343,7 +343,7 @@ namespace jeecs_impl
             //          `move_component_from` will move a specify component instance to current chunk.
             //         But component in current chunk has been destructed. So we didn't need to destruct
             //          it again.
-            inline void move_component_from(je_EntityIdInChunk eid, je_TypeId tid, void* from_component) const
+            inline void move_component_from(je_entity_id_in_chunk_t eid, je_type_id_t tid, void* from_component) const
             {
                 const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping->at(tid);
                 void* component_addr = get_component_addr(eid, arch_typeinfo.m_typeinfo->m_size, arch_typeinfo.m_begin_offset_in_chunk);
@@ -351,7 +351,7 @@ namespace jeecs_impl
                 jeecs::typing::destruct(arch_typeinfo.m_typeinfo, from_component);
             }
 
-            bool alloc_entity_id(je_EntityIdInChunk* out_id, je_Version* out_version)
+            bool alloc_entity_id(je_entity_id_in_chunk_t* out_id, je_version_t* out_version)
             {
                 if (_m_free_slots.pop(out_id))
                 {
@@ -367,17 +367,17 @@ namespace jeecs_impl
                 }
                 return false;
             }
-            inline void* get_component_addr(je_EntityIdInChunk _eid, size_t _chunksize, size_t _offset) const noexcept
+            inline void* get_component_addr(je_entity_id_in_chunk_t _eid, size_t _chunksize, size_t _offset) const noexcept
             {
                 return (void*)(_m_chunk_buffer + _offset + _eid * _chunksize);
             }
-            inline bool is_entity_valid(je_EntityIdInChunk eid, je_Version eversion) const noexcept
+            inline bool is_entity_valid(je_entity_id_in_chunk_t eid, je_version_t eversion) const noexcept
             {
                 if (_m_entities_meta[eid].m_version != eversion)
                     return false;
                 return true;
             }
-            inline void* get_component_addr_with_typeid(je_EntityIdInChunk eid, je_TypeId tid) const noexcept
+            inline void* get_component_addr_with_typeid(je_entity_id_in_chunk_t eid, je_type_id_t tid) const noexcept
             {
                 auto fnd = _m_arch_typeinfo_mapping->find(tid);
                 if (fnd == _m_arch_typeinfo_mapping->end())
@@ -386,7 +386,7 @@ namespace jeecs_impl
                 return get_component_addr(
                     eid, arch_typeinfo.m_typeinfo->m_size, arch_typeinfo.m_begin_offset_in_chunk);
             }
-            inline void destruct_component_addr_with_typeid(je_EntityIdInChunk eid, je_TypeId tid) const noexcept
+            inline void destruct_component_addr_with_typeid(je_entity_id_in_chunk_t eid, je_type_id_t tid) const noexcept
             {
                 const arch_type_info& arch_typeinfo = _m_arch_typeinfo_mapping->at(tid);
                 auto* component_addr = get_component_addr(
@@ -402,23 +402,23 @@ namespace jeecs_impl
             {
                 return _m_arch_type;
             }
-            inline const je_GameEntityMeta* get_entity_meta() const noexcept
+            inline const je_game_entity_meta_t* get_entity_meta() const noexcept
             {
                 return _m_entities_meta;
             }
-            inline void close_all_entity(je_GameWorld* by_world)
+            inline void close_all_entity(je_game_world_t* by_world)
             {
-                std::unordered_set<je_EntityIdInChunk> free_entity_ids;
+                std::unordered_set<je_entity_id_in_chunk_t> free_entity_ids;
                 for (;;)
                 {
-                    je_EntityIdInChunk freeid;
+                    je_entity_id_in_chunk_t freeid;
                     if (!_m_free_slots.pop(&freeid))
                         break;
 
                     free_entity_ids.emplace(freeid);
                 }
 
-                for (je_EntityIdInChunk eidx = 0; eidx < _m_entity_count; eidx++)
+                for (je_entity_id_in_chunk_t eidx = 0; eidx < _m_entity_count; eidx++)
                 {
                     if (free_entity_ids.find(eidx) == free_entity_ids.end())
                     {
@@ -440,14 +440,14 @@ namespace jeecs_impl
                 return _m_entity_size;
             }
 
-            inline std::unordered_set<je_EntityIdInChunk>
+            inline std::unordered_set<je_entity_id_in_chunk_t>
                 _take_all_empty_for_defragmentation() noexcept
             {
                 // 为了碎片整理，我们需要将所有的空位都取出来
-                std::unordered_set<je_EntityIdInChunk> empty_entity_ids;
+                std::unordered_set<je_entity_id_in_chunk_t> empty_entity_ids;
                 for (;;)
                 {
-                    je_EntityIdInChunk freeid;
+                    je_entity_id_in_chunk_t freeid;
                     if (!_m_free_slots.pop(&freeid))
                         break;
 
@@ -462,15 +462,15 @@ namespace jeecs_impl
             friend class command_buffer;
             friend class arch_type;
 
-            void command_active_entity(je_EntityIdInChunk eid, je_EntityStat stat) noexcept
+            void command_active_entity(je_entity_id_in_chunk_t eid, je_entity_stat_t stat) noexcept
             {
                 _m_entities_meta[eid].m_stat = stat;
             }
-            void command_add_free_slot(je_EntityIdInChunk eid) noexcept
+            void command_add_free_slot(je_entity_id_in_chunk_t eid) noexcept
             {
                 _m_free_slots.push(eid);
             }
-            void command_close_entity(je_EntityIdInChunk eid) noexcept
+            void command_close_entity(je_entity_id_in_chunk_t eid) noexcept
             {
                 auto* meta = &_m_entities_meta[eid];
 
@@ -487,8 +487,8 @@ namespace jeecs_impl
         };
 
     private:
-        std::atomic<je_EntityIdInChunk> _m_free_count;
-        std::atomic<je_EntityIdInChunk> _m_total_count;
+        std::atomic<je_entity_id_in_chunk_t> _m_free_count;
+        std::atomic<je_entity_id_in_chunk_t> _m_total_count;
 
         jeecs::basic::atomic_list<arch_chunk> _m_chunks;
 
@@ -499,12 +499,12 @@ namespace jeecs_impl
         struct entity
         {
             arch_chunk* _m_in_chunk;
-            je_EntityIdInChunk _m_id;
-            je_Version _m_version;
+            je_entity_id_in_chunk_t _m_id;
+            je_version_t _m_version;
 
             // Do not invoke this function if possiable, you should get component by arch_type & system.
             template <typename CT = void>
-            inline CT* get_component(je_TypeId tid) const
+            inline CT* get_component(je_type_id_t tid) const
             {
                 if (_m_in_chunk != nullptr && _m_in_chunk->is_entity_valid(_m_id, _m_version))
                     return static_cast<CT*>(_m_in_chunk->get_component_addr_with_typeid(_m_id, tid));
@@ -550,19 +550,19 @@ namespace jeecs_impl
             , _m_total_count(0)
         {
             static_assert(offsetof(jeecs::game_entity, _m_raw) == 0);
-            static_assert(offsetof(je_GameEntity, _m_in_chunk) == offsetof(entity, _m_in_chunk));
-            static_assert(offsetof(je_GameEntity, _m_id) == offsetof(entity, _m_id));
-            static_assert(offsetof(je_GameEntity, _m_version) == offsetof(entity, _m_version));
+            static_assert(offsetof(je_game_entity_t, _m_in_chunk) == offsetof(entity, _m_in_chunk));
+            static_assert(offsetof(je_game_entity_t, _m_id) == offsetof(entity, _m_id));
+            static_assert(offsetof(je_game_entity_t, _m_version) == offsetof(entity, _m_version));
 
             assert(!_types_set.empty());
 
-            for (je_TypeId tid : _types_set)
+            for (je_type_id_t tid : _types_set)
                 const_cast<types_list&>(_m_arch_typeinfo).push_back(jeecs::typing::of(tid));
 
             std::sort(
                 const_cast<types_list&>(_m_arch_typeinfo).begin(),
                 const_cast<types_list&>(_m_arch_typeinfo).end(),
-                [](const je_TypeInfo* a, const je_TypeInfo* b)
+                [](const je_type_info_t* a, const je_type_info_t* b)
                 {
                     return a->m_size < b->m_size;
                 });
@@ -585,8 +585,8 @@ namespace jeecs_impl
             const size_t chunk_size_without_gap = CHUNK_SIZE - component_reserved_gap;
             assert(_m_entity_size != 0 && _m_entity_size <= chunk_size_without_gap);
 
-            const_cast<je_EntityIdInChunk&>(_m_entity_count_per_chunk) =
-                static_cast<je_EntityIdInChunk>(chunk_size_without_gap / _m_entity_size);
+            const_cast<je_entity_id_in_chunk_t&>(_m_entity_count_per_chunk) =
+                static_cast<je_entity_id_in_chunk_t>(chunk_size_without_gap / _m_entity_size);
 
             size_t mem_offset = 0;
             for (auto* typeinfo : _m_arch_typeinfo)
@@ -654,7 +654,7 @@ namespace jeecs_impl
                     bool gap_filling_completed = false;
 
                     size_t stubborn_count = get_entity_count_per_chunk();
-                    for (je_EntityIdInChunk i = 0; i < get_entity_count_per_chunk(); ++i)
+                    for (je_entity_id_in_chunk_t i = 0; i < get_entity_count_per_chunk(); ++i)
                     {
                         auto* moving_entity_meta = &pick_chunk_metas[i];
 
@@ -664,8 +664,8 @@ namespace jeecs_impl
                             if (moving_entity_meta->m_stat == JE_ENTITY_STAT_READY)
                             {
                                 // OK, 继续搬运，这搬运组件多是一件美事啊
-                                je_EntityIdInChunk new_entity_id;
-                                je_Version new_entity_version;
+                                je_entity_id_in_chunk_t new_entity_id;
+                                je_version_t new_entity_version;
 
                                 // 从target_chunk中找到一个空闲位置，如果target_chunk满了，就移动到下一个target，直到
                                 // 完成分配，或者target_chunk == pick_chunk(自己搬到自己身上没有意义~)
@@ -788,13 +788,13 @@ namespace jeecs_impl
 
         void alloc_entity(
             arch_chunk** out_chunk,
-            je_EntityIdInChunk* out_eid,
-            je_Version* out_eversion) noexcept
+            je_entity_id_in_chunk_t* out_eid,
+            je_version_t* out_eversion) noexcept
         {
             std::shared_lock sg1(_m_chunk_list_defragmentation_mx);
             while (true)
             {
-                je_EntityIdInChunk free_entity_count = _m_free_count.load();
+                je_entity_id_in_chunk_t free_entity_count = _m_free_count.load();
                 while (0 != free_entity_count)
                 {
                     if (!_m_free_count.compare_exchange_weak(
@@ -831,8 +831,8 @@ namespace jeecs_impl
         entity instance_entity(/* OPTIONAL */ const entity* prefab) noexcept
         {
             arch_chunk* chunk;
-            je_EntityIdInChunk entity_id;
-            je_Version entity_version;
+            je_entity_id_in_chunk_t entity_id;
+            je_version_t entity_version;
 
             alloc_entity(&chunk, &entity_id, &entity_version);
             for (auto& arch_typeinfo : _m_arch_typeinfo_mapping)
@@ -872,14 +872,14 @@ namespace jeecs_impl
         {
             return _m_entity_count_per_chunk;
         }
-        inline const arch_type_info* get_arch_type_info_by_type_id(je_TypeId tid) const
+        inline const arch_type_info* get_arch_type_info_by_type_id(je_type_id_t tid) const
         {
             auto fnd = _m_arch_typeinfo_mapping.find(tid);
             if (fnd != _m_arch_typeinfo_mapping.end())
                 return &fnd->second;
             return nullptr;
         }
-        inline void close_all_entity(je_GameWorld* by_world)
+        inline void close_all_entity(je_game_world_t* by_world)
         {
             auto* chunk = get_head_chunk();
             while (chunk)
@@ -899,8 +899,8 @@ namespace jeecs_impl
         }
 
         inline void create_chunk_info(
-            je_CollectedRequirements* depend,
-            je_DependenceArchInfos* out_arch_info) const noexcept
+            je_collected_requirements_t* depend,
+            je_dependence_arch_infos_t* out_arch_info) const noexcept
         {
             out_arch_info->m_arch = const_cast<arch_type*>(this);
             out_arch_info->m_entity_count = get_entity_count_per_chunk();
@@ -987,7 +987,7 @@ namespace jeecs_impl
         {
             return !_m_arch_modified.test_and_set();
         }
-        inline void update_collection_archinfo(je_RequirementCollection* collection) const noexcept
+        inline void update_collection_archinfo(je_requirement_collection_t* collection) const noexcept
         {
             static auto contains = [](const types_set& a, const types_set& b)
                 {
@@ -1044,7 +1044,7 @@ namespace jeecs_impl
             collection->m_cached_arch_count =
                 collected_requirement->m_selected_archs.size();
         }
-        inline void close_all_entity(je_GameWorld* by_world)
+        inline void close_all_entity(je_game_world_t* by_world)
         {
             std::shared_lock sg1(_m_arch_types_mapping_mx);
             for (auto& [types, archtype] : _m_arch_types_mapping)
@@ -1138,12 +1138,12 @@ namespace jeecs_impl
 
             struct typed_component
             {
-                je_TypeId m_type_id;
+                je_type_id_t m_type_id;
                 void* m_component_addr; // if m_add_system_instance == nullptr, remove spcify comp
 
                 typed_component* last;
 
-                typed_component(je_TypeId tid, void* addr)
+                typed_component(je_type_id_t tid, void* addr)
                     : m_type_id(tid), m_component_addr(addr)
                 {
                     // Do nothing else
@@ -1151,7 +1151,7 @@ namespace jeecs_impl
             };
 
             bool m_entity_removed_flag;
-            je_EntityStat m_entity_active_stat;
+            je_entity_stat_t m_entity_active_stat;
             jeecs::basic::atomic_list<typed_component> m_adding_or_removing_components;
 
             _entity_command_buffer() = default;
@@ -1162,12 +1162,12 @@ namespace jeecs_impl
 
             struct typed_system
             {
-                const je_TypeInfo* m_typeinfo;
-                je_System m_add_system_instance; // if m_add_system_instance == nullptr, remove spcify sys
+                const je_type_info_t* m_typeinfo;
+                je_system_t m_add_system_instance; // if m_add_system_instance == nullptr, remove spcify sys
 
                 typed_system* last;
 
-                typed_system(const je_TypeInfo* tinfo, je_System addr)
+                typed_system(const je_type_info_t* tinfo, je_system_t addr)
                     : m_typeinfo(tinfo)
                     , m_add_system_instance(addr)
                 {
@@ -1179,7 +1179,7 @@ namespace jeecs_impl
                 // NOTE: 当尝试添加一个切片查询缓存时，系统可能已经被移除了；这种情况下就不添加了
                 jeecs::game_system* m_system_instance_may_not_exist;
 
-                je_TypeHash m_query_slice_typehash;
+                je_type_hash_t m_query_slice_typehash;
                 std::unique_ptr<HoldedRequirementCollection> m_created_collection;
 
                 append_slice_query_cache* last;
@@ -1264,7 +1264,7 @@ namespace jeecs_impl
             assert(_m_entity_command_buffers.empty() && _m_world_command_buffer == nullptr);
         }
 
-        void init_new_entity(const arch_type::entity& e, je_EntityStat stat)
+        void init_new_entity(const arch_type::entity& e, je_entity_stat_t stat)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
             assert(stat != JE_ENTITY_STAT_UNAVAILABLE);
@@ -1278,7 +1278,7 @@ namespace jeecs_impl
             _find_or_create_buffer_for_entity(e)->m_entity_removed_flag = true;
         }
 
-        void* append_component(const arch_type::entity& e, je_TypeId component_type)
+        void* append_component(const arch_type::entity& e, je_type_id_t component_type)
         {
             const auto* tinfo = jeecs::typing::of(component_type);
 
@@ -1293,7 +1293,7 @@ namespace jeecs_impl
 
             return created_component;
         }
-        void remove_component(const arch_type::entity& e, je_TypeId component_type)
+        void remove_component(const arch_type::entity& e, je_type_id_t component_type)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
@@ -1324,7 +1324,7 @@ namespace jeecs_impl
             _find_or_create_buffer_for_world()->m_update_enabled = std::optional(enable);
         }
 
-        void add_system_instance(const je_TypeInfo* type, je_System sys_instance)
+        void add_system_instance(const je_type_info_t* type, je_system_t sys_instance)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
@@ -1336,7 +1336,7 @@ namespace jeecs_impl
             _find_or_create_buffer_for_world()->m_adding_or_removing_systems.add_one(
                 new _world_command_buffer::typed_system(type, sys_instance));
         }
-        void remove_system_instance(const je_TypeInfo* type)
+        void remove_system_instance(const je_type_info_t* type)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
 
@@ -1348,7 +1348,7 @@ namespace jeecs_impl
         }
         void add_system_query_cache(
             jeecs::game_system* system_instance,
-            je_TypeHash hash,
+            je_type_hash_t hash,
             std::unique_ptr<HoldedRequirementCollection>&& collection)
         {
             std::shared_lock sl(_m_command_executer_guard_mx);
@@ -1364,21 +1364,21 @@ namespace jeecs_impl
     public:
         void update();
     };
-    class ecs_world : public je_GameWorld
+    class ecs_world : public je_game_world_t
     {
         JECS_DISABLE_MOVE_AND_COPY(ecs_world);
 
     public:
         using system_container_t =
-            std::unordered_map<const je_TypeInfo*, je_System>;
+            std::unordered_map<const je_type_info_t*, je_system_t>;
         using slice_cache_container_t =
-            std::unordered_map<je_TypeHash, std::unique_ptr<HoldedRequirementCollection>>;
+            std::unordered_map<je_type_hash_t, std::unique_ptr<HoldedRequirementCollection>>;
 
         // NOTE: 此处之所以要根据不同系统实例缓存不同的切片，是考虑到编译防火墙，不同编译器/库对
         //      相同/不同的切片类型哈希可能不同/相同；为了规避因此导致的哈希冲突或者重复，针对不同
         //      实例缓存，这样确保一个实例对应的始终是相同的模块（库），避免编译防火墙问题。
         using system_slice_cache_container_t =
-            std::unordered_map<je_System, slice_cache_container_t>;
+            std::unordered_map<je_system_t, slice_cache_container_t>;
     private:
         ecs_universe* _m_universe;
 
@@ -1425,7 +1425,7 @@ namespace jeecs_impl
             return m_systems;
         }
         void _destroy_system_instance(
-            const je_TypeInfo* type, je_System sys) noexcept
+            const je_type_info_t* type, je_system_t sys) noexcept
         {
             if (_m_world_enabled)
                 type->m_system_updaters->m_on_disable(sys);
@@ -1439,7 +1439,7 @@ namespace jeecs_impl
             if (_m_world_enabled)
                 job->m_for_worlds_job(this, job->m_custom_data);
         }
-        void append_system_instance(const je_TypeInfo* type, je_System sys) noexcept
+        void append_system_instance(const je_type_info_t* type, je_system_t sys) noexcept
         {
             auto fnd = m_systems.find(type);
             if (fnd == m_systems.end())
@@ -1470,7 +1470,7 @@ namespace jeecs_impl
                 append_system_instance(type, sys);
             }
         }
-        void remove_system_instance(const je_TypeInfo* type) noexcept
+        void remove_system_instance(const je_type_info_t* type) noexcept
         {
             auto fnd = m_systems.find(type);
             if (fnd != m_systems.end())
@@ -1492,7 +1492,7 @@ namespace jeecs_impl
         }
 
         static void _drop_collection_instance(
-            je_RequirementCollection* collection)
+            je_requirement_collection_t* collection)
         {
             delete collection->m_collected_requirement;
             delete collection;
@@ -1500,7 +1500,7 @@ namespace jeecs_impl
 
         void append_slice_cache_for_system_instance(
             jeecs::game_system* sys,
-            je_TypeHash hash,
+            je_type_hash_t hash,
             std::unique_ptr<HoldedRequirementCollection>&& collection)
         {
             auto fnd = m_system_slice_caches.find(sys);
@@ -1545,7 +1545,7 @@ namespace jeecs_impl
         }
 
     public:
-        void update_collection_archinfo(je_RequirementCollection* collection) const noexcept
+        void update_collection_archinfo(je_requirement_collection_t* collection) const noexcept
         {
             _get_arch_mgr().update_collection_archinfo(collection);
         }
@@ -1558,7 +1558,7 @@ namespace jeecs_impl
             if (_m_destroying_flag)
             {
                 // Remove all system from world.
-                std::vector<const je_TypeInfo*> _removing_sys_types;
+                std::vector<const je_type_info_t*> _removing_sys_types;
                 _removing_sys_types.reserve(m_systems.size());
 
                 for (auto& [sys_type, sys_instance] : m_systems)
@@ -1593,7 +1593,7 @@ namespace jeecs_impl
             return !_m_destroying_flag;
         }
 
-        inline arch_type::entity create_entity_with_component(const types_set& types, je_EntityStat stat)
+        inline arch_type::entity create_entity_with_component(const types_set& types, je_entity_stat_t stat)
         {
             auto entity = _m_arch_manager.create_an_entity_with_component(types);
             _m_command_buffer.init_new_entity(entity, stat);
@@ -1611,17 +1611,17 @@ namespace jeecs_impl
             _m_command_buffer.init_new_entity(entity, JE_ENTITY_STAT_READY);
             return entity;
         }
-        inline je_System request_to_append_system(const je_TypeInfo* type)
+        inline je_system_t request_to_append_system(const je_type_info_t* type)
         {
             if (type->m_type_class != JE_SYSTEM)
                 return nullptr;
 
-            je_System sys = static_cast<je_System>(malloc(type->m_size));
+            je_system_t sys = static_cast<je_system_t>(malloc(type->m_size));
             jeecs::typing::construct(type, sys, this);
             get_command_buffer().add_system_instance(type, sys);
             return sys;
         }
-        inline void request_to_remove_system(const je_TypeInfo* type)
+        inline void request_to_remove_system(const je_type_info_t* type)
         {
             get_command_buffer().remove_system_instance(type);
         }
@@ -1631,8 +1631,8 @@ namespace jeecs_impl
         }
         inline bool fetch_and_request_slice_cache_dependence(
             jeecs::game_system* system_instance,
-            je_TypeHash hash,
-            je_RequirementCollection** out_collection)
+            je_type_hash_t hash,
+            je_requirement_collection_t** out_collection)
         {
             // NOTE: `m_system_slice_caches` 只进行读操作，以确保安全。不允许在命令缓冲区处理期间
             //      执行 `fetch_and_request_slice_cache_dependence`
@@ -1719,7 +1719,7 @@ namespace jeecs_impl
                 arch_type::entity current_entity = _buf_in_entity.first;
 
                 auto* modify_typed_components = _buf_in_entity.second->m_adding_or_removing_components.pick_all();
-                std::unordered_map<je_TypeId, void*> modifying_component_type_and_instances;
+                std::unordered_map<je_type_id_t, void*> modifying_component_type_and_instances;
 
                 while (modify_typed_components != nullptr)
                 {
@@ -1760,7 +1760,7 @@ namespace jeecs_impl
                         }
 
                         // Remove all component
-                        for (je_TypeId type_id : *current_entity.chunk()->types())
+                        for (je_type_id_t type_id : *current_entity.chunk()->types())
                         {
                             current_entity.chunk()->destruct_component_addr_with_typeid(
                                 current_entity._m_id,
@@ -1809,7 +1809,7 @@ namespace jeecs_impl
                             types_set new_chunk_types = *current_entity.chunk()->types();
 
                             // 2. Apply modify!
-                            std::unordered_map<je_TypeId, void*> append_component_type_addr_map;
+                            std::unordered_map<je_type_id_t, void*> append_component_type_addr_map;
                             for (auto& [tid, instance] : modifying_component_type_and_instances)
                             {
                                 if (instance == nullptr)
@@ -1879,13 +1879,13 @@ namespace jeecs_impl
                                 if (new_arch_type_my_null != nullptr)
                                 {
                                     arch_type::arch_chunk* chunk;
-                                    je_EntityIdInChunk entity_id;
-                                    je_Version entity_version;
+                                    je_entity_id_in_chunk_t entity_id;
+                                    je_version_t entity_version;
 
                                     new_arch_type_my_null->alloc_entity(&chunk, &entity_id, &entity_version);
                                     // Entity alloced, move component to here..
 
-                                    for (je_TypeId type_id : new_chunk_types)
+                                    for (je_type_id_t type_id : new_chunk_types)
                                     {
                                         auto fnd = append_component_type_addr_map.find(type_id);
                                         if (fnd == append_component_type_addr_map.end())
@@ -1959,7 +1959,7 @@ namespace jeecs_impl
 
             if (_m_world->is_enabled() || _m_world->_is_destroying())
             {
-                std::unordered_map<const je_TypeInfo*, je_System> modifying_system_type_and_instances;
+                std::unordered_map<const je_type_info_t*, je_system_t> modifying_system_type_and_instances;
 
                 auto* append_or_remove_system = _m_world_command_buffer->m_adding_or_removing_systems.pick_all();
                 while (append_or_remove_system)
@@ -2011,7 +2011,7 @@ namespace jeecs_impl
     }
 
     // ecs_universe
-    class ecs_universe : public je_GameUniverse
+    class ecs_universe : public je_game_universe_t
     {
         inline static std::mutex _m_alive_universes_mx;
         inline static std::list<ecs_universe*> _m_alive_universes;
@@ -2088,7 +2088,7 @@ namespace jeecs_impl
         {
             _m_universe_actions.add_one(act);
         }
-        static void default_job_for_execute_sys_update_for_worlds_in_universe(je_GameWorld* _ecs_world, void* _)
+        static void default_job_for_execute_sys_update_for_worlds_in_universe(je_game_world_t* _ecs_world, void* _)
         {
             ecs_world* cur_world = static_cast<ecs_world*>(_ecs_world);
 
@@ -2742,12 +2742,12 @@ namespace jeecs_impl
     };
 }
 
-je_GameUniverse* je_ecs_universe_create()
+je_game_universe_t* je_ecs_universe_create()
 {
     return new jeecs_impl::ecs_universe();
 }
 
-void je_ecs_universe_exit_callback_register(je_GameUniverse* universe, void (*callback)(void*), /* OPTIONAL */ void* arg)
+void je_ecs_universe_exit_callback_register(je_game_universe_t* universe, void (*callback)(void*), /* OPTIONAL */ void* arg)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_exit_callback(
         [callback, arg]()
@@ -2756,7 +2756,7 @@ void je_ecs_universe_exit_callback_register(je_GameUniverse* universe, void (*ca
         });
 }
 
-void je_ecs_universe_loop(je_GameUniverse* ecs_universe)
+void je_ecs_universe_loop(je_game_universe_t* ecs_universe)
 {
     std::condition_variable exit_cv;
     std::mutex exit_mx;
@@ -2779,47 +2779,47 @@ void je_ecs_universe_loop(je_GameUniverse* ecs_universe)
     } while (0);
 }
 
-void je_ecs_universe_destroy(je_GameUniverse* ecs_universe)
+void je_ecs_universe_destroy(je_game_universe_t* ecs_universe)
 {
     delete static_cast<jeecs_impl::ecs_universe*>(ecs_universe);
 }
 
-void je_ecs_universe_lifetime_grow(je_GameUniverse* universe)
+void je_ecs_universe_lifetime_grow(je_game_universe_t* universe)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->grow_lifetime();
 }
 
-void je_ecs_universe_lifetime_trim(je_GameUniverse* universe)
+void je_ecs_universe_lifetime_trim(je_game_universe_t* universe)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->trim_lifetime();
 }
 
-je_Chunk* je_arch_chunk_get(je_Archtype* archtype)
+je_chunk_t* je_arch_chunk_get(je_archtype_t* archtype)
 {
     return static_cast<jeecs_impl::arch_type*>(archtype)->get_head_chunk();
 }
 
-/* OPTIONAL: If no successor chunk */ je_Chunk* je_arch_chunk_next(je_Chunk* chunk)
+/* OPTIONAL: If no successor chunk */ je_chunk_t* je_arch_chunk_next(je_chunk_t* chunk)
 {
     return static_cast<jeecs_impl::arch_type::arch_chunk*>(chunk)->last;
 }
 
-je_GameWorld* je_ecs_world_create(je_GameUniverse* in_universe)
+je_game_world_t* je_ecs_world_create(je_game_universe_t* in_universe)
 {
     return static_cast<jeecs_impl::ecs_universe*>(in_universe)->create_world();
 }
 
-void je_ecs_world_destroy(je_GameWorld* world)
+void je_ecs_world_destroy(je_game_world_t* world)
 {
     static_cast<jeecs_impl::ecs_world*>(world)->get_command_buffer().close_world();
 }
 
-/* OPTIONAL */ je_System je_ecs_world_system_instance_add(je_GameWorld* world, je_TypeId type)
+/* OPTIONAL */ je_system_t je_ecs_world_system_instance_add(je_game_world_t* world, je_type_id_t type)
 {
     return static_cast<jeecs_impl::ecs_world*>(world)->request_to_append_system(jeecs::typing::of(type));
 }
 
-/* OPTIONAL */ je_System je_ecs_world_system_instance_get(je_GameWorld* world, je_TypeId type)
+/* OPTIONAL */ je_system_t je_ecs_world_system_instance_get(je_game_world_t* world, je_type_id_t type)
 {
     auto& syss = static_cast<jeecs_impl::ecs_world*>(world)->get_system_instances();
     auto fnd = syss.find(jeecs::typing::of(type));
@@ -2828,20 +2828,20 @@ void je_ecs_world_destroy(je_GameWorld* world)
     return fnd->second;
 }
 
-void je_ecs_world_system_instance_remove(je_GameWorld* world, je_TypeId type)
+void je_ecs_world_system_instance_remove(je_game_world_t* world, je_type_id_t type)
 {
     static_cast<jeecs_impl::ecs_world*>(world)->request_to_remove_system(jeecs::typing::of(type));
 }
 
-void je_ecs_world_enable_set(je_GameWorld* world, bool enable)
+void je_ecs_world_enable_set(je_game_world_t* world, bool enable)
 {
     static_cast<jeecs_impl::ecs_world*>(world)->request_to_set_enable(enable);
 }
 
 void je_ecs_world_entity_create_with_components(
-    je_GameWorld* world,
-    je_GameEntity* out_entity,
-    const je_TypeId* component_ids,
+    je_game_world_t* world,
+    je_game_entity_t* out_entity,
+    const je_type_id_t* component_ids,
     size_t component_count)
 {
     assert(component_count != 0);
@@ -2857,9 +2857,9 @@ void je_ecs_world_entity_create_with_components(
     out_entity->_m_version = entity._m_version;
 }
 void je_ecs_world_prefab_create_with_components(
-    je_GameWorld* world,
-    je_GameEntity* out_entity,
-    const je_TypeId* component_ids,
+    je_game_world_t* world,
+    je_game_entity_t* out_entity,
+    const je_type_id_t* component_ids,
     size_t component_count)
 {
     assert(component_count != 0);
@@ -2875,9 +2875,9 @@ void je_ecs_world_prefab_create_with_components(
 }
 
 void je_ecs_world_entity_create_with_prefab(
-    je_GameWorld* world,
-    je_GameEntity* out_entity,
-    const je_GameEntity* prefab)
+    je_game_world_t* world,
+    je_game_entity_t* out_entity,
+    const je_game_entity_t* prefab)
 {
     auto entity = static_cast<jeecs_impl::ecs_world*>(world)
         ->create_entity_with_prefab(
@@ -2887,18 +2887,18 @@ void je_ecs_world_entity_create_with_prefab(
     out_entity->_m_version = entity._m_version;
 }
 
-je_CollectedRequirements* je_ecs_requirements_collect(
-    /* OPTIONAL: If total requirement count is 0 */ const je_ComponentRequirement* requirements,
+je_collected_requirements_t* je_ecs_requirements_collect(
+    /* OPTIONAL: If total requirement count is 0 */ const je_component_requirement_t* requirements,
     size_t view_requiremnt_count,
     size_t other_requiremnts_count)
 {
-    je_CollectedRequirements* const new_collected = new je_CollectedRequirements();
+    je_collected_requirements_t* const new_collected = new je_collected_requirements_t();
 
     new_collected->m_view_required.resize(view_requiremnt_count);
     memcpy(
         new_collected->m_view_required.data(),
         requirements,
-        view_requiremnt_count * sizeof(je_ComponentRequirement));
+        view_requiremnt_count * sizeof(je_component_requirement_t));
 
     const size_t total_requiremet_count =
         view_requiremnt_count + other_requiremnts_count;
@@ -2927,20 +2927,20 @@ je_CollectedRequirements* je_ecs_requirements_collect(
 }
 
 void je_ecs_world_collection_update(
-    je_GameWorld* world,
-    je_RequirementCollection* collection)
+    je_game_world_t* world,
+    je_requirement_collection_t* collection)
 {
     static_cast<jeecs_impl::ecs_world*>(world)->update_collection_archinfo(collection);
 }
 
-size_t je_ecs_world_arch_change_version_get(je_GameWorld* world)
+size_t je_ecs_world_arch_change_version_get(je_game_world_t* world)
 {
     return static_cast<jeecs_impl::ecs_world*>(world)->get_arch_change_version();
 }
 
 /* OPTIONAL: If entity is invalid */ void* je_ecs_world_entity_component_add(
-    const je_GameEntity* entity,
-    je_TypeId type)
+    const je_game_entity_t* entity,
+    je_type_id_t type)
 {
     auto* entity_located_world =
         static_cast<jeecs_impl::ecs_world*>(je_ecs_world_of_entity(entity));
@@ -2952,8 +2952,8 @@ size_t je_ecs_world_arch_change_version_get(je_GameWorld* world)
 }
 
 void je_ecs_world_entity_component_remove(
-    const je_GameEntity* entity,
-    je_TypeId type)
+    const je_game_entity_t* entity,
+    je_type_id_t type)
 {
     auto* entity_located_world =
         static_cast<jeecs_impl::ecs_world*>(je_ecs_world_of_entity(entity));
@@ -2963,14 +2963,14 @@ void je_ecs_world_entity_component_remove(
             type);
 }
 
-const je_GameEntityMeta* je_arch_entity_meta_addr_in_chunk(je_Chunk* chunk)
+const je_game_entity_meta_t* je_arch_entity_meta_addr_in_chunk(je_chunk_t* chunk)
 {
     return static_cast<jeecs_impl::arch_type::arch_chunk*>(chunk)->get_entity_meta();
 }
 
 /* OPTIONAL: If entity is invalid or no such component */ void* je_ecs_world_entity_component_get(
-    const je_GameEntity* entity,
-    je_TypeId type)
+    const je_game_entity_t* entity,
+    je_type_id_t type)
 {
     auto& ecs_entity = *reinterpret_cast<const jeecs_impl::arch_type::entity*>(entity);
     auto* component = ecs_entity.get_component(type);
@@ -2978,20 +2978,20 @@ const je_GameEntityMeta* je_arch_entity_meta_addr_in_chunk(je_Chunk* chunk)
 }
 
 void je_ecs_world_entity_destroy(
-    je_GameWorld* world,
-    const je_GameEntity* entity)
+    je_game_world_t* world,
+    const je_game_entity_t* entity)
 {
     static_cast<jeecs_impl::ecs_world*>(world)
         ->get_command_buffer().remove_entity(
             *reinterpret_cast<const jeecs_impl::arch_type::entity*>(entity));
 }
 
-je_GameUniverse* je_ecs_world_in_universe(je_GameWorld* world)
+je_game_universe_t* je_ecs_world_in_universe(je_game_world_t* world)
 {
     return static_cast<jeecs_impl::ecs_world*>(world)->get_universe();
 }
 
-/* OPTIONAL: If entity is invalid */ je_GameWorld* je_ecs_world_of_entity(const je_GameEntity* entity)
+/* OPTIONAL: If entity is invalid */ je_game_world_t* je_ecs_world_of_entity(const je_game_entity_t* entity)
 {
     auto* chunk = static_cast<jeecs_impl::arch_type::arch_chunk*>(entity->_m_in_chunk);
     if (chunk != nullptr)
@@ -3000,10 +3000,10 @@ je_GameUniverse* je_ecs_world_in_universe(je_GameWorld* world)
 }
 
 bool je_ecs_world_slice_dependence_query(
-    je_GameWorld* world,
+    je_game_world_t* world,
     jeecs::game_system* system_instance,
-    je_TypeHash slice_type_hash,
-    je_RequirementCollection** out_collection)
+    je_type_hash_t slice_type_hash,
+    je_requirement_collection_t** out_collection)
 {
     return static_cast<jeecs_impl::ecs_world*>(world)
         ->fetch_and_request_slice_cache_dependence(
@@ -3011,14 +3011,14 @@ bool je_ecs_world_slice_dependence_query(
 }
 
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
-je_GameWorld** je_debug_universe_worlds_get_all(je_GameUniverse* _universe)
+je_game_world_t** je_debug_universe_worlds_get_all(je_game_universe_t* _universe)
 {
     jeecs_impl::ecs_universe* universe = static_cast<jeecs_impl::ecs_universe*>(_universe);
     auto result = universe->_get_all_worlds();
 
-    je_GameWorld** out_result = (je_GameWorld**)je_mem_alloc(sizeof(je_GameWorld*) * (result.size() + 1));
+    je_game_world_t** out_result = (je_game_world_t**)je_mem_alloc(sizeof(je_game_world_t*) * (result.size() + 1));
 
-    je_GameWorld** write_place = out_result;
+    je_game_world_t** write_place = out_result;
     for (auto* worlds : result)
         *(write_place++) = worlds;
     *write_place = nullptr;
@@ -3026,16 +3026,16 @@ je_GameWorld** je_debug_universe_worlds_get_all(je_GameUniverse* _universe)
     return out_result;
 }
 
-void je_debug_entity_free(je_GameEntity* _entity_list)
+void je_debug_entity_free(je_game_entity_t* _entity_list)
 {
     delete _entity_list;
 }
 
-je_GameEntity** je_debug_world_entities_get_all(je_GameWorld* _world)
+je_game_entity_t** je_debug_world_entities_get_all(je_game_world_t* _world)
 {
     jeecs_impl::ecs_world* world = static_cast<jeecs_impl::ecs_world*>(_world);
 
-    std::vector<je_GameEntity*> out_entities;
+    std::vector<je_game_entity_t*> out_entities;
 
     auto&& archs = world->_get_arch_mgr()._get_all_arch_types();
     for (auto& arch : archs)
@@ -3049,9 +3049,9 @@ je_GameEntity** je_debug_world_entities_get_all(je_GameWorld* _world)
             {
                 if (entity_meta_arr[i].m_stat == JE_ENTITY_STAT_READY)
                 {
-                    je_GameEntity* entity = new je_GameEntity{};
+                    je_game_entity_t* entity = new je_game_entity_t{};
                     entity->_m_in_chunk = chunk;
-                    entity->_m_id = (je_EntityIdInChunk)i;
+                    entity->_m_id = (je_entity_id_in_chunk_t)i;
                     entity->_m_version = entity_meta_arr[i].m_version;
 
                     out_entities.push_back(entity);
@@ -3060,21 +3060,21 @@ je_GameEntity** je_debug_world_entities_get_all(je_GameWorld* _world)
             chunk = chunk->last;
         }
     }
-    je_GameEntity** out_result = (je_GameEntity**)je_mem_alloc(sizeof(je_GameEntity*) * (out_entities.size() + 1));
-    memcpy(out_result, out_entities.data(), out_entities.size() * sizeof(je_GameEntity*));
+    je_game_entity_t** out_result = (je_game_entity_t**)je_mem_alloc(sizeof(je_game_entity_t*) * (out_entities.size() + 1));
+    memcpy(out_result, out_entities.data(), out_entities.size() * sizeof(je_game_entity_t*));
     out_result[out_entities.size()] = nullptr;
 
     return out_result;
 }
 
-const je_TypeInfo** je_debug_entity_components_get_all(const je_GameEntity* _entity)
+const je_type_info_t** je_debug_entity_components_get_all(const je_game_entity_t* _entity)
 {
     const auto* cur_chunk = static_cast<jeecs_impl::arch_type::arch_chunk*>(_entity->_m_in_chunk);
     auto& cur_arch_type_infos = cur_chunk->get_arch_type()->get_type_infos();
 
-    const je_TypeInfo** outresult = (const je_TypeInfo**)
+    const je_type_info_t** outresult = (const je_type_info_t**)
         je_mem_alloc(
-            sizeof(const je_TypeInfo*) * (cur_arch_type_infos.size() + 1));
+            sizeof(const je_type_info_t*) * (cur_arch_type_infos.size() + 1));
 
     auto write_result = outresult;
     for (auto* typeinfo : cur_arch_type_infos)
@@ -3085,7 +3085,7 @@ const je_TypeInfo** je_debug_entity_components_get_all(const je_GameEntity* _ent
 
     // Sort by id.
     std::sort(outresult, write_result,
-        [](const je_TypeInfo* a, const je_TypeInfo* b)
+        [](const je_type_info_t* a, const je_type_info_t* b)
         {
             return a->m_id < b->m_id;
         });
@@ -3093,19 +3093,19 @@ const je_TypeInfo** je_debug_entity_components_get_all(const je_GameEntity* _ent
     return outresult;
 }
 
-const je_TypeInfo** je_debug_world_systems_attached_get_all(je_GameWorld* _world)
+const je_type_info_t** je_debug_world_systems_attached_get_all(je_game_world_t* _world)
 {
     jeecs_impl::ecs_world* world = static_cast<jeecs_impl::ecs_world*>(_world);
     auto& syss = world->get_system_instances();
 
-    std::vector<const je_TypeInfo*> attached_result;
+    std::vector<const je_type_info_t*> attached_result;
     attached_result.reserve(syss.size());
 
     for (auto& attached_sys : syss)
         attached_result.push_back(attached_sys.first);
 
-    size_t bufsz = attached_result.size() * sizeof(const je_TypeInfo*);
-    const je_TypeInfo** result = (const je_TypeInfo**)je_mem_alloc(bufsz + sizeof(const je_TypeInfo*));
+    size_t bufsz = attached_result.size() * sizeof(const je_type_info_t*);
+    const je_type_info_t** result = (const je_type_info_t**)je_mem_alloc(bufsz + sizeof(const je_type_info_t*));
 
     memcpy(result, attached_result.data(), bufsz);
     result[attached_result.size()] = nullptr;
@@ -3114,7 +3114,7 @@ const je_TypeInfo** je_debug_world_systems_attached_get_all(je_GameWorld* _world
 }
 
 void je_debug_entity_arch_information_get(
-    je_GameEntity* _entity,
+    je_game_entity_t* _entity,
     size_t* _out_chunk_size,
     size_t* _out_entity_size,
     size_t* _out_all_entity_count_in_chunk)
@@ -3126,87 +3126,87 @@ void je_debug_entity_arch_information_get(
     *_out_all_entity_count_in_chunk = chunkaddr->get_entity_count_in_chunk();
 }
 
-void je_ecs_universe_pre_for_worlds_job_register(je_GameUniverse* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
+void je_ecs_universe_pre_for_worlds_job_register(je_game_universe_t* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_pre_for_worlds_job(job, data, freefunc);
 }
-void je_ecs_universe_pre_call_once_job_register(je_GameUniverse* universe, je_job_call_once_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
+void je_ecs_universe_pre_call_once_job_register(je_game_universe_t* universe, je_job_call_once_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_pre_call_once_job(job, data, freefunc);
 }
-void je_ecs_universe_for_worlds_job_register(je_GameUniverse* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
+void je_ecs_universe_for_worlds_job_register(je_game_universe_t* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_for_worlds_job(job, data, freefunc);
 }
-void je_ecs_universe_call_once_job_register(je_GameUniverse* universe, je_job_call_once_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
+void je_ecs_universe_call_once_job_register(je_game_universe_t* universe, je_job_call_once_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_call_once_job(job, data, freefunc);
 }
-void je_ecs_universe_after_for_worlds_job_register(je_GameUniverse* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
+void je_ecs_universe_after_for_worlds_job_register(je_game_universe_t* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_after_for_worlds_job(job, data, freefunc);
 }
-void je_ecs_universe_after_call_once_job_register(je_GameUniverse* universe, je_job_call_once_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
+void je_ecs_universe_after_call_once_job_register(je_game_universe_t* universe, je_job_call_once_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->register_after_call_once_job(job, data, freefunc);
 }
 
-void je_ecs_universe_pre_for_worlds_job_unregister(je_GameUniverse* universe, je_job_for_worlds_t job)
+void je_ecs_universe_pre_for_worlds_job_unregister(je_game_universe_t* universe, je_job_for_worlds_t job)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->unregister_pre_for_worlds_job(job);
 }
-void je_ecs_universe_pre_call_once_job_unregister(je_GameUniverse* universe, je_job_call_once_t job)
+void je_ecs_universe_pre_call_once_job_unregister(je_game_universe_t* universe, je_job_call_once_t job)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->unregister_pre_call_once_job(job);
 }
-void je_ecs_universe_for_worlds_job_unregister(je_GameUniverse* universe, je_job_for_worlds_t job)
+void je_ecs_universe_for_worlds_job_unregister(je_game_universe_t* universe, je_job_for_worlds_t job)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->unregister_for_worlds_job(job);
 }
-void je_ecs_universe_call_once_job_unregister(je_GameUniverse* universe, je_job_call_once_t job)
+void je_ecs_universe_call_once_job_unregister(je_game_universe_t* universe, je_job_call_once_t job)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->unregister_call_once_job(job);
 }
-void je_ecs_universe_after_for_worlds_job_unregister(je_GameUniverse* universe, je_job_for_worlds_t job)
+void je_ecs_universe_after_for_worlds_job_unregister(je_game_universe_t* universe, je_job_for_worlds_t job)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->unregister_after_for_worlds_job(job);
 }
-void je_ecs_universe_after_call_once_job_unregister(je_GameUniverse* universe, je_job_call_once_t job)
+void je_ecs_universe_after_call_once_job_unregister(je_game_universe_t* universe, je_job_call_once_t job)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->unregister_after_call_once_job(job);
 }
 
-double je_ecs_universe_frame_deltatime_get(je_GameUniverse* universe)
+double je_ecs_universe_frame_deltatime_get(je_game_universe_t* universe)
 {
     return static_cast<jeecs_impl::ecs_universe*>(universe)->get_frame_deltatime();
 }
-void je_ecs_universe_frame_deltatime_set(je_GameUniverse* universe, double delta)
+void je_ecs_universe_frame_deltatime_set(je_game_universe_t* universe, double delta)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->set_frame_deltatime(delta);
 }
 
-double je_ecs_universe_real_deltatime_get(je_GameUniverse* universe)
+double je_ecs_universe_real_deltatime_get(je_game_universe_t* universe)
 {
     return static_cast<jeecs_impl::ecs_universe*>(universe)->get_real_deltatime();
 }
-double je_ecs_universe_smooth_deltatime_get(je_GameUniverse* universe)
+double je_ecs_universe_smooth_deltatime_get(je_game_universe_t* universe)
 {
     return static_cast<jeecs_impl::ecs_universe*>(universe)->get_smooth_deltatime();
 }
 
-double je_ecs_universe_max_deltatime_get(je_GameUniverse* universe)
+double je_ecs_universe_max_deltatime_get(je_game_universe_t* universe)
 {
     return static_cast<jeecs_impl::ecs_universe*>(universe)->get_max_deltatime();
 }
-void je_ecs_universe_max_deltatime_set(je_GameUniverse* universe, double val)
+void je_ecs_universe_max_deltatime_set(je_game_universe_t* universe, double val)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->set_max_deltatime(val);
 }
-void je_ecs_universe_time_scale_set(je_GameUniverse* universe, double scale)
+void je_ecs_universe_time_scale_set(je_game_universe_t* universe, double scale)
 {
     static_cast<jeecs_impl::ecs_universe*>(universe)->set_time_scale(scale);
 }
-double je_ecs_universe_time_scale_get(je_GameUniverse* universe)
+double je_ecs_universe_time_scale_get(je_game_universe_t* universe)
 {
     return static_cast<jeecs_impl::ecs_universe*>(universe)->get_time_scale();
 }

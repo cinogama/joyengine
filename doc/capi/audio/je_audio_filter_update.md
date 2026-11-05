@@ -3,18 +3,18 @@
 ## 函数签名
 
 ```cpp
-void je_audio_filter_update(jeal_filter* filter);
+void je_audio_filter_update(je_audio_filter_t* filter);
 ```
 
 ## 描述
 
-将对 `jeal_filter` 的参数修改应用到实际的滤波器上。
+将对 `je_audio_filter_t` 的参数修改应用到实际的滤波器上。
 
 ## 参数
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| filter | jeal_filter* | 滤波器指针 |
+| filter | je_audio_filter_t* | 滤波器指针 |
 
 ## 返回值
 
@@ -23,7 +23,7 @@ void je_audio_filter_update(jeal_filter* filter);
 ## 用法示例
 
 ```cpp
-jeal_filter* filter = je_audio_filter_create();
+je_audio_filter_t* filter = je_audio_filter_create();
 
 // 修改滤波器参数
 filter->m_type = JE_AUDIO_FILTER_LOWPASS;

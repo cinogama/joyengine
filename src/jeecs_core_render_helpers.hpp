@@ -21,14 +21,14 @@ namespace jeecs
     {
         JECS_DISABLE_MOVE_AND_COPY(render_draw_action);
 
-        jegl_command_buffer* m_command;
-        const jegl_builtin_uniform_slots* m_builtin_slots;
+        je_gl_command_buffer_t* m_command;
+        const je_gl_builtin_uniform_slots_t* m_builtin_slots;
         bool m_pending;
 
         render_draw_action(
-            jegl_command_buffer* command,
-            jegl_pipeline* pipeline,
-            jegl_vertex* vertex,
+            je_gl_command_buffer_t* command,
+            je_gl_pipeline_t* pipeline,
+            je_gl_vertex_t* vertex,
             uint32_t index_count,
             uint32_t instance_count)
             : m_command(command)
@@ -59,12 +59,12 @@ namespace jeecs
     };
 
     // Sets a builtin uniform on a draw action only when the shader actually
-    // exposes it (offset != JEGL_UNIFORM_SLOT_NONE).
+    // exposes it (offset != JE_GL_UNIFORM_SLOT_NONE).
 #define JE_CHECK_NEED_AND_SET_UNIFORM(ACTION, ITEM, TYPE, ...)                                  \
     do                                                                                          \
     {                                                                                           \
         const auto& _je_uniform_slot = (ACTION).m_builtin_slots->ITEM;                           \
-        if (_je_uniform_slot.m_offset != JEGL_UNIFORM_SLOT_NONE)                                 \
+        if (_je_uniform_slot.m_offset != JE_GL_UNIFORM_SLOT_NONE)                                 \
             je_graphic_cmd_set_uniform_##TYPE(                                                   \
                 (ACTION).m_command, _je_uniform_slot, __VA_ARGS__);                              \
     } while (0)

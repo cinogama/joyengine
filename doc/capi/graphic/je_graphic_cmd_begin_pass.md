@@ -4,9 +4,9 @@
 
 ```c
 JE_API void je_graphic_cmd_begin_pass(
-    jegl_command_buffer* cmd,
-    /* OPTIONAL: nullptr 表示屏幕后备缓冲区 */ jegl_frame_buffer* target,
-    const jegl_viewport* viewport);
+    je_gl_command_buffer_t* cmd,
+    /* OPTIONAL: nullptr 表示屏幕后备缓冲区 */ je_gl_frame_buffer_t* target,
+    const je_gl_viewport_t* viewport);
 ```
 
 ## 描述
@@ -17,9 +17,9 @@ JE_API void je_graphic_cmd_begin_pass(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `cmd` | `jegl_command_buffer*` | — |
-| `target` | `jegl_frame_buffer*` | 可选（nullptr 表示屏幕后备缓冲区） |
-| `viewport` | `const jegl_viewport*` | viewport 的 width/height 必须大于 0 |
+| `cmd` | `je_gl_command_buffer_t*` | — |
+| `target` | `je_gl_frame_buffer_t*` | 可选（nullptr 表示屏幕后备缓冲区） |
+| `viewport` | `const je_gl_viewport_t*` | viewport 的 width/height 必须大于 0 |
 
 ## 返回值
 

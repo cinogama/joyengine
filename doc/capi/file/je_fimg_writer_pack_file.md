@@ -4,7 +4,7 @@
 
 ```c
 JE_API bool je_fimg_writer_pack_file(
-    jeecs_fimg_writer* writer,
+    je_fimg_writer_t* writer,
     const char* filepath,
     const char* archive_path);
 ```
@@ -17,7 +17,7 @@ JE_API bool je_fimg_writer_pack_file(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `writer` | `jeecs_fimg_writer*` | writer 句柄 |
+| `writer` | `je_fimg_writer_t*` | writer 句柄 |
 | `filepath` | `const char*` | 源文件路径 |
 | `archive_path` | `const char*` | 镜像内的键，通常形如 `@/...` 或 `!/...` |
 

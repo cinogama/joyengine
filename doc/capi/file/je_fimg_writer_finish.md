@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API bool je_fimg_writer_finish(jeecs_fimg_writer* writer);
+JE_API bool je_fimg_writer_finish(je_fimg_writer_t* writer);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API bool je_fimg_writer_finish(jeecs_fimg_writer* writer);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `writer` | `jeecs_fimg_writer*` | writer 句柄 |
+| `writer` | `je_fimg_writer_t*` | writer 句柄 |
 
 ## 返回值
 

@@ -214,7 +214,7 @@ func int_rows_of(
     }
 }
 
-// 按值形态推断 je_PropertyType；无法识别返回 -1
+// 按值形态推断 je_property_type_t；无法识别返回 -1
 func infer_property_type(value: Toml)=> int
 {
     match (value->as_bool)

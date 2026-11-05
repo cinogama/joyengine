@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API je_TilesetDocument* je_tilemap_tileset_create(const char* name);
+JE_API je_tileset_document_t* je_tilemap_tileset_create(const char* name);
 ```
 
 ## 描述
@@ -20,7 +20,7 @@ JE_API je_TilesetDocument* je_tilemap_tileset_create(const char* name);
 
 | 类型 | 描述 |
 |------|------|
-| `je_TilesetDocument*` | 见描述。 |
+| `je_tileset_document_t*` | 见描述。 |
 
 ## 注意事项
 

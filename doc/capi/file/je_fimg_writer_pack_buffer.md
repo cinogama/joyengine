@@ -4,7 +4,7 @@
 
 ```c
 JE_API bool je_fimg_writer_pack_buffer(
-    jeecs_fimg_writer* writer,
+    je_fimg_writer_t* writer,
     const void* buffer,
     size_t len,
     const char* archive_path);
@@ -18,7 +18,7 @@ JE_API bool je_fimg_writer_pack_buffer(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `writer` | `jeecs_fimg_writer*` | writer 句柄 |
+| `writer` | `je_fimg_writer_t*` | writer 句柄 |
 | `buffer` | `const void*` | 数据指针；`len == 0` 时可为 `nullptr` |
 | `len` | `size_t` | 数据长度（字节） |
 | `archive_path` | `const char*` | 镜像内的键 |

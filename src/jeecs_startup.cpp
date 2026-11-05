@@ -31,7 +31,7 @@ struct _je_static_context_t
     woort_GCPin* _je_global_panic_hook_function;
     woort_PanicHandlerFunction _je_global_last_panic_handler;
 
-    jegl_graphic_api_entry _jegl_host_graphic_api = nullptr;
+    je_gl_graphic_api_entry_t _jegl_host_graphic_api = nullptr;
 
     jeecs::typing::type_unregister_guard* _je_unregister_guard = nullptr;
 };
@@ -52,12 +52,12 @@ static std::string _je_woort_exe_path()
     return path;
 }
 
-void je_graphic_host_api_set(/* OPTIONAL: nullptr to use platform default */ jegl_graphic_api_entry api)
+void je_graphic_host_api_set(/* OPTIONAL: nullptr to use platform default */ je_gl_graphic_api_entry_t api)
 {
     _je_global_context._jegl_host_graphic_api = api;
 }
 
-jegl_graphic_api_entry je_graphic_host_api_get(void)
+je_gl_graphic_api_entry_t je_graphic_host_api_get(void)
 {
     if (_je_global_context._jegl_host_graphic_api == nullptr)
     {
@@ -184,20 +184,20 @@ WOORT_API woort_api wojeapi_editor_register_panic_hook(void)
     return woort_ret_void();
 }
 
-static void je_default_graphic_interface_sync_func(jegl_context* gthread, void*)
+static void je_default_graphic_interface_sync_func(je_gl_context_t* gthread, void*)
 {
     std::thread([=]()
         {
-            jegl_sync_state state = jegl_sync_state::JEGL_SYNC_SHUTDOWN;
+            je_gl_sync_state_t state = je_gl_sync_state_t::JE_GL_SYNC_SHUTDOWN;
             for (;;)
             {
-                je_graphic_sync_init(gthread, state == jegl_sync_state::JEGL_SYNC_REBOOT);
+                je_graphic_sync_init(gthread, state == je_gl_sync_state_t::JE_GL_SYNC_REBOOT);
                 do
                 {
                     state = je_graphic_sync_update(gthread);
-                } while (state == jegl_sync_state::JEGL_SYNC_COMPLETE);
+                } while (state == je_gl_sync_state_t::JE_GL_SYNC_COMPLETE);
 
-                if (je_graphic_sync_shutdown(gthread, state == jegl_sync_state::JEGL_SYNC_REBOOT))
+                if (je_graphic_sync_shutdown(gthread, state == je_gl_sync_state_t::JE_GL_SYNC_REBOOT))
                     break;
             }
         })

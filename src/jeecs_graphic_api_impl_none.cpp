@@ -5,28 +5,28 @@
 
 namespace jeecs::graphic::api::none
 {
-    je_GraphicImplContext
-        startup(jegl_context* glthread, const jegl_interface_config*, bool reboot)
+    je_graphic_impl_context_t
+        startup(je_gl_context_t* glthread, const je_gl_interface_config_t*, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (None) start!");
 
         jegui_init_none(
             glthread,
-            [](jegl_context*, jegl_texture_2d *)
+            [](je_gl_context_t*, je_gl_texture_2d_t *)
             {
                 return (uint64_t)nullptr;
             },
-            [](jegl_context*, jegl_shader*)
+            [](je_gl_context_t*, je_gl_shader_t*)
             {
             });
 
         return nullptr;
     }
-    void pre_shutdown(jegl_context*, je_GraphicImplContext, bool)
+    void pre_shutdown(je_gl_context_t*, je_graphic_impl_context_t, bool)
     {
     }
-    void shutdown(jegl_context*, je_GraphicImplContext, bool reboot)
+    void shutdown(je_gl_context_t*, je_graphic_impl_context_t, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (None) shutdown!");
@@ -34,210 +34,210 @@ namespace jeecs::graphic::api::none
         jegui_shutdown_none(reboot);
     }
 
-    jegl_update_action pre_update(je_GraphicImplContext)
+    je_gl_update_action_t pre_update(je_graphic_impl_context_t)
     {
-        return jegl_update_action::JEGL_UPDATE_CONTINUE;
+        return je_gl_update_action_t::JE_GL_UPDATE_CONTINUE;
     }
-    jegl_update_action commit_update(
-        je_GraphicImplContext, jegl_update_action)
+    je_gl_update_action_t commit_update(
+        je_graphic_impl_context_t, je_gl_update_action_t)
     {
         jegui_update_none();
-        return jegl_update_action::JEGL_UPDATE_CONTINUE;
+        return je_gl_update_action_t::JE_GL_UPDATE_CONTINUE;
     }
 
-    jegl_resource_blob create_shader_blob(je_GraphicImplContext, jegl_shader*)
+    je_gl_resource_blob_t create_shader_blob(je_graphic_impl_context_t, je_gl_shader_t*)
     {
         return nullptr;
     }
-    void close_shader_blob(je_GraphicImplContext, jegl_resource_blob)
+    void close_shader_blob(je_graphic_impl_context_t, je_gl_resource_blob_t)
     {
     }
-    jegl_resource_blob create_texture_blob_2d(je_GraphicImplContext, jegl_texture_2d*)
-    {
-        return nullptr;
-    }
-    jegl_resource_blob create_texture_blob_3d(je_GraphicImplContext, jegl_texture_3d*)
+    je_gl_resource_blob_t create_texture_blob_2d(je_graphic_impl_context_t, je_gl_texture_2d_t*)
     {
         return nullptr;
     }
-    jegl_resource_blob create_texture_blob_array(je_GraphicImplContext, jegl_texture_array*)
+    je_gl_resource_blob_t create_texture_blob_3d(je_graphic_impl_context_t, je_gl_texture_3d_t*)
     {
         return nullptr;
     }
-    jegl_resource_blob create_texture_blob_cube(je_GraphicImplContext, jegl_texture_cube*)
+    je_gl_resource_blob_t create_texture_blob_array(je_graphic_impl_context_t, je_gl_texture_array_t*)
     {
         return nullptr;
     }
-    jegl_resource_blob create_texture_blob_msaa(je_GraphicImplContext, jegl_texture_msaa*)
+    je_gl_resource_blob_t create_texture_blob_cube(je_graphic_impl_context_t, je_gl_texture_cube_t*)
     {
         return nullptr;
     }
-    void close_texture_blob(je_GraphicImplContext, jegl_resource_blob)
-    {
-    }
-    jegl_resource_blob create_vertex_blob(je_GraphicImplContext, jegl_vertex*)
+    je_gl_resource_blob_t create_texture_blob_msaa(je_graphic_impl_context_t, je_gl_texture_msaa_t*)
     {
         return nullptr;
     }
-    void close_vertex_blob(je_GraphicImplContext, jegl_resource_blob)
+    void close_texture_blob(je_graphic_impl_context_t, je_gl_resource_blob_t)
     {
     }
-
-    void init_shader(je_GraphicImplContext, jegl_resource_blob, jegl_shader*)
+    je_gl_resource_blob_t create_vertex_blob(je_graphic_impl_context_t, je_gl_vertex_t*)
     {
+        return nullptr;
     }
-    void init_texture_2d(je_GraphicImplContext, jegl_resource_blob, jegl_texture_2d*)
-    {
-    }
-    void init_texture_3d(je_GraphicImplContext, jegl_resource_blob, jegl_texture_3d*)
-    {
-    }
-    void init_texture_array(je_GraphicImplContext, jegl_resource_blob, jegl_texture_array*)
-    {
-    }
-    void init_texture_cube(je_GraphicImplContext, jegl_resource_blob, jegl_texture_cube*)
-    {
-    }
-    void init_texture_msaa(je_GraphicImplContext, jegl_resource_blob, jegl_texture_msaa*)
-    {
-    }
-    void init_vertex(je_GraphicImplContext, jegl_resource_blob, jegl_vertex*)
-    {
-    }
-    void init_framebuffer(je_GraphicImplContext, jegl_frame_buffer*)
-    {
-    }
-    void init_ubuffer(je_GraphicImplContext, jegl_uniform_buffer*)
+    void close_vertex_blob(je_graphic_impl_context_t, je_gl_resource_blob_t)
     {
     }
 
-    void update_shader(je_GraphicImplContext, jegl_shader*)
+    void init_shader(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_shader_t*)
     {
     }
-    void update_texture_2d(je_GraphicImplContext, jegl_texture_2d*)
+    void init_texture_2d(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_2d_t*)
     {
     }
-    void update_texture_3d(je_GraphicImplContext, jegl_texture_3d*)
+    void init_texture_3d(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_3d_t*)
     {
     }
-    void update_texture_array(je_GraphicImplContext, jegl_texture_array*)
+    void init_texture_array(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_array_t*)
     {
     }
-    void update_texture_cube(je_GraphicImplContext, jegl_texture_cube*)
+    void init_texture_cube(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_cube_t*)
     {
     }
-    void update_texture_msaa(je_GraphicImplContext, jegl_texture_msaa*)
+    void init_texture_msaa(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_msaa_t*)
     {
     }
-    void update_vertex(je_GraphicImplContext, jegl_vertex*)
+    void init_vertex(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_vertex_t*)
     {
     }
-    void update_framebuffer(je_GraphicImplContext, jegl_frame_buffer*)
+    void init_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t*)
     {
     }
-    void update_ubuffer(je_GraphicImplContext, jegl_uniform_buffer*)
+    void init_ubuffer(je_graphic_impl_context_t, je_gl_uniform_buffer_t*)
     {
     }
 
-    void close_shader(je_GraphicImplContext, jegl_shader*)
+    void update_shader(je_graphic_impl_context_t, je_gl_shader_t*)
     {
     }
-    void close_texture_2d(je_GraphicImplContext, jegl_texture_2d*)
+    void update_texture_2d(je_graphic_impl_context_t, je_gl_texture_2d_t*)
     {
     }
-    void close_texture_3d(je_GraphicImplContext, jegl_texture_3d*)
+    void update_texture_3d(je_graphic_impl_context_t, je_gl_texture_3d_t*)
     {
     }
-    void close_texture_array(je_GraphicImplContext, jegl_texture_array*)
+    void update_texture_array(je_graphic_impl_context_t, je_gl_texture_array_t*)
     {
     }
-    void close_texture_cube(je_GraphicImplContext, jegl_texture_cube*)
+    void update_texture_cube(je_graphic_impl_context_t, je_gl_texture_cube_t*)
     {
     }
-    void close_texture_msaa(je_GraphicImplContext, jegl_texture_msaa*)
+    void update_texture_msaa(je_graphic_impl_context_t, je_gl_texture_msaa_t*)
     {
     }
-    void close_vertex(je_GraphicImplContext, jegl_vertex*)
+    void update_vertex(je_graphic_impl_context_t, je_gl_vertex_t*)
     {
     }
-    void close_framebuffer(je_GraphicImplContext, jegl_frame_buffer*)
+    void update_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t*)
     {
     }
-    void close_ubuffer(je_GraphicImplContext, jegl_uniform_buffer*)
+    void update_ubuffer(je_graphic_impl_context_t, je_gl_uniform_buffer_t*)
+    {
+    }
+
+    void close_shader(je_graphic_impl_context_t, je_gl_shader_t*)
+    {
+    }
+    void close_texture_2d(je_graphic_impl_context_t, je_gl_texture_2d_t*)
+    {
+    }
+    void close_texture_3d(je_graphic_impl_context_t, je_gl_texture_3d_t*)
+    {
+    }
+    void close_texture_array(je_graphic_impl_context_t, je_gl_texture_array_t*)
+    {
+    }
+    void close_texture_cube(je_graphic_impl_context_t, je_gl_texture_cube_t*)
+    {
+    }
+    void close_texture_msaa(je_graphic_impl_context_t, je_gl_texture_msaa_t*)
+    {
+    }
+    void close_vertex(je_graphic_impl_context_t, je_gl_vertex_t*)
+    {
+    }
+    void close_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t*)
+    {
+    }
+    void close_ubuffer(je_graphic_impl_context_t, je_gl_uniform_buffer_t*)
     {
     }
 
                                             // Render API (v2) no-ops.
-    void render_pipeline_init(je_GraphicImplContext, jegl_pipeline*)
+    void render_pipeline_init(je_graphic_impl_context_t, je_gl_pipeline_t*)
     {
     }
-    void render_pipeline_close(je_GraphicImplContext, jegl_pipeline*)
+    void render_pipeline_close(je_graphic_impl_context_t, je_gl_pipeline_t*)
     {
     }
-    void render_pipeline_bind(je_GraphicImplContext, jegl_pipeline*)
+    void render_pipeline_bind(je_graphic_impl_context_t, je_gl_pipeline_t*)
     {
     }
-    void render_sampler_init(je_GraphicImplContext, jegl_sampler*)
+    void render_sampler_init(je_graphic_impl_context_t, je_gl_sampler_t*)
     {
     }
-    void render_sampler_close(je_GraphicImplContext, jegl_sampler*)
+    void render_sampler_close(je_graphic_impl_context_t, je_gl_sampler_t*)
     {
     }
-    void render_sampler_bind(je_GraphicImplContext, uint32_t, jegl_sampler*)
+    void render_sampler_bind(je_graphic_impl_context_t, uint32_t, je_gl_sampler_t*)
     {
     }
     void render_begin_pass(
-        je_GraphicImplContext, jegl_frame_buffer*, const jegl_viewport*)
+        je_graphic_impl_context_t, je_gl_frame_buffer_t*, const je_gl_viewport_t*)
     {
     }
-    void render_clear_color(je_GraphicImplContext, uint32_t, const float[4])
+    void render_clear_color(je_graphic_impl_context_t, uint32_t, const float[4])
     {
     }
-    void render_clear_depth(je_GraphicImplContext, float)
+    void render_clear_depth(je_graphic_impl_context_t, float)
     {
     }
-    void render_end_pass(je_GraphicImplContext)
+    void render_end_pass(je_graphic_impl_context_t)
     {
     }
-    void render_bind_vertex(je_GraphicImplContext, jegl_vertex*)
+    void render_bind_vertex(je_graphic_impl_context_t, je_gl_vertex_t*)
     {
     }
-    void render_bind_uniform_buffer(je_GraphicImplContext, jegl_uniform_buffer*)
+    void render_bind_uniform_buffer(je_graphic_impl_context_t, je_gl_uniform_buffer_t*)
     {
     }
-    void render_bind_texture_2d(je_GraphicImplContext, uint32_t, jegl_texture_2d*)
+    void render_bind_texture_2d(je_graphic_impl_context_t, uint32_t, je_gl_texture_2d_t*)
     {
     }
-    void render_bind_texture_3d(je_GraphicImplContext, uint32_t, jegl_texture_3d*)
+    void render_bind_texture_3d(je_graphic_impl_context_t, uint32_t, je_gl_texture_3d_t*)
     {
     }
-    void render_bind_texture_array(je_GraphicImplContext, uint32_t, jegl_texture_array*)
+    void render_bind_texture_array(je_graphic_impl_context_t, uint32_t, je_gl_texture_array_t*)
     {
     }
-    void render_bind_texture_cube(je_GraphicImplContext, uint32_t, jegl_texture_cube*)
+    void render_bind_texture_cube(je_graphic_impl_context_t, uint32_t, je_gl_texture_cube_t*)
     {
     }
     void render_draw_indexed(
-        je_GraphicImplContext,
+        je_graphic_impl_context_t,
         uint32_t, uint32_t, uint32_t,
         const void*, uint32_t)
     {
     }
     void render_draw(
-        je_GraphicImplContext,
+        je_graphic_impl_context_t,
         uint32_t, uint32_t, uint32_t,
         const void*, uint32_t)
     {
     }
-    void render_commit_begin(je_GraphicImplContext)
+    void render_commit_begin(je_graphic_impl_context_t)
     {
     }
-    void render_commit_end(je_GraphicImplContext)
+    void render_commit_end(je_graphic_impl_context_t)
     {
     }
 }
 
-void je_graphic_using_none_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_none_apis(je_gl_graphic_api_t* write_to_apis)
 {
     using namespace jeecs::graphic::api::none;
 

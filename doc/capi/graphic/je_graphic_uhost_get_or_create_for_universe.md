@@ -5,7 +5,7 @@
 ```c
 JE_API jeecs::graphic_uhost* je_graphic_uhost_get_or_create_for_universe(
     void* universe,
-    const jegl_interface_config* config);
+    const je_gl_interface_config_t* config);
 ```
 
 ## 描述
@@ -17,7 +17,7 @@ JE_API jeecs::graphic_uhost* je_graphic_uhost_get_or_create_for_universe(
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
 | `universe` | `void*` | Universe 实例指针 |
-| `config` | `const jegl_interface_config*` | 图形配置（可为 `nullptr`） |
+| `config` | `const je_gl_interface_config_t*` | 图形配置（可为 `nullptr`） |
 
 ## 返回值
 
@@ -38,8 +38,8 @@ je_universe* universe = je_ecs_universe_create();
 jeecs::graphic_uhost* host = je_graphic_uhost_get_or_create_for_universe(universe, nullptr);
 
 // 或指定配置
-jegl_interface_config config = {};
-config.m_display_mode = jegl_interface_config::WINDOWED;
+je_gl_interface_config_t config = {};
+config.m_display_mode = JE_GL_DISPLAY_MODE_WINDOWED;
 config.m_width = 1920;
 config.m_height = 1080;
 

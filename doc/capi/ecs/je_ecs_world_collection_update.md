@@ -4,8 +4,8 @@
 
 ```c
 JE_API void je_ecs_world_collection_update(
-    je_GameWorld* world,
-    je_RequirementCollection* collection);
+    je_game_world_t* world,
+    je_requirement_collection_t* collection);
 ```
 
 ## 描述
@@ -16,8 +16,8 @@ JE_API void je_ecs_world_collection_update(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `world` | `je_GameWorld*` | — |
-| `collection` | `je_RequirementCollection*` | collection 中的 m_collected_requirement 应当已经由 je_ecs_requirements_collect 填充 |
+| `world` | `je_game_world_t*` | — |
+| `collection` | `je_requirement_collection_t*` | collection 中的 m_collected_requirement 应当已经由 je_ecs_requirements_collect 填充 |
 
 ## 返回值
 

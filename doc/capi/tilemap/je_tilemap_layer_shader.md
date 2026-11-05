@@ -3,8 +3,8 @@
 ## 函数签名
 
 ```c
-JE_API /* OPTIONAL: If layer has no shader style */ je_tilemap_shader_ref* je_tilemap_layer_shader(je_TilemapDocument* map,
-    je_LayerId layer);
+JE_API /* OPTIONAL: If layer has no shader style */ je_tilemap_shader_ref_t* je_tilemap_layer_shader(je_tilemap_document_t* map,
+    je_layer_id_t layer);
 ```
 
 ## 描述
@@ -15,14 +15,14 @@ JE_API /* OPTIONAL: If layer has no shader style */ je_tilemap_shader_ref* je_ti
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | — |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | — |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `je_tilemap_shader_ref*` | 见描述。 |
+| `je_tilemap_shader_ref_t*` | 见描述。 |
 
 ## 注意事项
 

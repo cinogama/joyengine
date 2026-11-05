@@ -3,9 +3,9 @@
 ## 函数签名
 
 ```c
-JE_API je_System je_ecs_world_system_instance_add(
-    je_GameWorld* world,
-    je_TypeId type);
+JE_API je_system_t je_ecs_world_system_instance_add(
+    je_game_world_t* world,
+    je_type_id_t type);
 ```
 
 ## 描述
@@ -16,14 +16,14 @@ JE_API je_System je_ecs_world_system_instance_add(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `world` | `je_GameWorld*` | 指向世界的指针 |
-| `type` | `je_TypeId` | 系统类型的 ID |
+| `world` | `je_game_world_t*` | 指向世界的指针 |
+| `type` | `je_type_id_t` | 系统类型的 ID |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `je_System` | 指向系统实例的指针；若给定的类型不是一个系统类型，返回 `nullptr` |
+| `je_system_t` | 指向系统实例的指针；若给定的类型不是一个系统类型，返回 `nullptr` |
 
 ## 用法
 
@@ -32,15 +32,15 @@ JE_API je_System je_ecs_world_system_instance_add(
 ### 示例
 
 ```cpp
-je_GameUniverse* universe = je_ecs_universe_create();
-je_GameWorld* world = je_ecs_world_create(universe);
+je_game_universe_t* universe = je_ecs_universe_create();
+je_game_world_t* world = je_ecs_world_create(universe);
 
 // 获取系统类型信息
-const je_TypeInfo* physics_system = 
+const je_type_info_t* physics_system = 
     je_typing_info_get_by_name("Physics2D::World");
 
 // 添加系统实例
-je_System system_instance = 
+je_system_t system_instance = 
     je_ecs_world_system_instance_add(world, physics_system->m_id);
 
 if (system_instance != nullptr) {

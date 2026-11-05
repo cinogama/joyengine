@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API bool je_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mode mode);
+JE_API bool je_file_seek(je_file_t* file, int64_t offset, je_file_seek_mode_t mode);
 ```
 
 ## 描述
@@ -14,9 +14,9 @@ JE_API bool je_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mod
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `file` | `jeecs_file*` | 指向文件句柄的指针 |
+| `file` | `je_file_t*` | 指向文件句柄的指针 |
 | `offset` | `int64_t` | 偏移量（可为负数） |
-| `mode` | `je_read_file_seek_mode` | 偏移模式 |
+| `mode` | `je_file_seek_mode_t` | 偏移模式 |
 
 ### 偏移模式
 
@@ -41,7 +41,7 @@ JE_API bool je_file_seek(jeecs_file* file, int64_t offset, je_read_file_seek_mod
 ### 示例
 
 ```cpp
-jeecs_file* file = je_file_open("@/data/test.bin");
+je_file_t* file = je_file_open("@/data/test.bin");
 if (file != nullptr) {
     // 跳转到文件开头后 100 字节处
     je_file_seek(file, 100, JE_READ_FILE_SEEK_SET);

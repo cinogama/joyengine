@@ -4,7 +4,7 @@
 
 ```c
 JE_API bool je_cache_binary_list_iterator_advance(
-    jeecs_cache_binary_list_iterator* inout_iterator);
+    je_cache_binary_list_iterator_t* inout_iterator);
 ```
 
 ## 描述
@@ -15,7 +15,7 @@ JE_API bool je_cache_binary_list_iterator_advance(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `inout_iterator` | `jeecs_cache_binary_list_iterator*` | — |
+| `inout_iterator` | `je_cache_binary_list_iterator_t*` | — |
 
 ## 返回值
 

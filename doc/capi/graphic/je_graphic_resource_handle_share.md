@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_graphic_resource_handle_share(jegl_resource_handle* resource_handle);
+JE_API void je_graphic_resource_handle_share(je_gl_resource_handle_t* resource_handle);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_graphic_resource_handle_share(jegl_resource_handle* resource_hand
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `resource_handle` | `jegl_resource_handle*` | 资源句柄指针 |
+| `resource_handle` | `je_gl_resource_handle_t*` | 资源句柄指针 |
 
 ## 返回值
 
@@ -33,12 +33,12 @@ JE_API void je_graphic_resource_handle_share(jegl_resource_handle* resource_hand
 ### 示例
 
 ```cpp
-jegl_texture_2d* texture = je_graphic_texture_2d_load(ctx, "@/textures/brick.png");
+je_gl_texture_2d_t* texture = je_graphic_texture_2d_load(ctx, "@/textures/brick.png");
 
 // 共享纹理给另一个对象
 jegl_share_resource(texture);  // 引用计数 +1
 
-// 现在需要调用两次 jegl_close_texture 才能真正释放资源
+// 现在需要调用两次 je_graphic_texture_2d_close 才能真正释放资源
 je_graphic_texture_2d_close(texture);  // 引用计数 -1
 je_graphic_texture_2d_close(texture);  // 引用计数 -1，资源被释放
 ```
@@ -51,5 +51,5 @@ je_graphic_texture_2d_close(texture);  // 引用计数 -1，资源被释放
 ## 相关接口
 
 - [je_graphic_shader_close](je_graphic_shader_close.md) - 关闭着色器
-- [jegl_close_texture](je_graphic_texture_2d_close.md) - 关闭纹理
+- [je_graphic_texture_2d_close](je_graphic_texture_2d_close.md) - 关闭纹理
 - [je_graphic_vertex_close](je_graphic_vertex_close.md) - 关闭顶点

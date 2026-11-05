@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_cmd_clear_color(
-    jegl_command_buffer* cmd, uint32_t attachment, const float rgba[4]);
+    je_gl_command_buffer_t* cmd, uint32_t attachment, const float rgba[4]);
 ```
 
 ## 描述
@@ -15,7 +15,7 @@ JE_API void je_graphic_cmd_clear_color(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `cmd` | `jegl_command_buffer*` | — |
+| `cmd` | `je_gl_command_buffer_t*` | — |
 | `attachment` | `uint32_t` | — |
 | `rgba` | `const float` | — |
 

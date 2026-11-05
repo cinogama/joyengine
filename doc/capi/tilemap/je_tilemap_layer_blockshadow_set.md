@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_tilemap_layer_blockshadow_set(je_TilemapDocument* map, je_LayerId layer, je_LayerBlockShadow blockshadow);
+JE_API void je_tilemap_layer_blockshadow_set(je_tilemap_document_t* map, je_layer_id_t layer, je_layer_block_shadow_t blockshadow);
 ```
 
 ## 描述
@@ -14,9 +14,9 @@ JE_API void je_tilemap_layer_blockshadow_set(je_TilemapDocument* map, je_LayerId
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `map` | `je_TilemapDocument*` | — |
-| `layer` | `je_LayerId` | — |
-| `blockshadow` | `je_LayerBlockShadow` | — |
+| `map` | `je_tilemap_document_t*` | — |
+| `layer` | `je_layer_id_t` | — |
+| `blockshadow` | `je_layer_block_shadow_t` | — |
 
 ## 返回值
 
@@ -28,5 +28,5 @@ JE_API void je_tilemap_layer_blockshadow_set(je_TilemapDocument* map, je_LayerId
 
 ## 相关接口
 
-- [je_tilemap_layer_blockshadow](je_tilemap_layer_blockshadow.md) - 取图层的 2D 光照遮挡阴影行为（je_LayerBlockShadow），…
+- [je_tilemap_layer_blockshadow](je_tilemap_layer_blockshadow.md) - 取图层的 2D 光照遮挡阴影行为（je_layer_block_shadow_t），…
 - [je_tilemap_layer_blockshadow_factor_set](je_tilemap_layer_blockshadow_factor_set.md) - 设置图层的遮挡阴影浓度：不做范围钳制（与 Light2D::BlockSha…

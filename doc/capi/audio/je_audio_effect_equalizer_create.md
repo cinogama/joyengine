@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API jeal_effect_equalizer* je_audio_effect_equalizer_create();
+JE_API je_audio_effect_equalizer_t* je_audio_effect_equalizer_create();
 ```
 
 ## 描述
@@ -18,7 +18,7 @@ JE_API jeal_effect_equalizer* je_audio_effect_equalizer_create();
 
 | 类型 | 描述 |
 |------|------|
-| jeal_effect_equalizer* | 均衡器效果实例指针 |
+| je_audio_effect_equalizer_t* | 均衡器效果实例指针 |
 
 ## 注意事项
 

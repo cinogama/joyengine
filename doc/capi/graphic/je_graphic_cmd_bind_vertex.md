@@ -4,7 +4,7 @@
 
 ```c
 JE_API void je_graphic_cmd_bind_vertex(
-    jegl_command_buffer* cmd, jegl_vertex* vertex);
+    je_gl_command_buffer_t* cmd, je_gl_vertex_t* vertex);
 ```
 
 ## 描述
@@ -15,8 +15,8 @@ JE_API void je_graphic_cmd_bind_vertex(
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `cmd` | `jegl_command_buffer*` | — |
-| `vertex` | `jegl_vertex*` | — |
+| `cmd` | `je_gl_command_buffer_t*` | — |
+| `vertex` | `je_gl_vertex_t*` | — |
 
 ## 返回值
 

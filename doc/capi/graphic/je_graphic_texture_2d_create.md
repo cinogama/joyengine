@@ -3,10 +3,10 @@
 ## 函数签名
 
 ```c
-JE_API jegl_texture_2d* je_graphic_texture_2d_create(
+JE_API je_gl_texture_2d_t* je_graphic_texture_2d_create(
     size_t width,
     size_t height,
-    jegl_texture_common::format format);
+    je_gl_texture_format_t format);
 ```
 
 ## 描述
@@ -19,13 +19,13 @@ JE_API jegl_texture_2d* je_graphic_texture_2d_create(
 |--------|------|------|
 | `width` | `size_t` | 纹理宽度 |
 | `height` | `size_t` | 纹理高度 |
-| `format` | `jegl_texture_common::format` | 纹理格式 |
+| `format` | `je_gl_texture_format_t` | 纹理格式 |
 
 ## 返回值
 
 | 类型 | 描述 |
 |------|------|
-| `jegl_texture_2d*` | 纹理资源指针（不会返回 `nullptr`） |
+| `je_gl_texture_2d_t*` | 纹理资源指针（不会返回 `nullptr`） |
 
 ## 用法
 
@@ -45,7 +45,7 @@ JE_API jegl_texture_2d* je_graphic_texture_2d_create(
 
 ```cpp
 // 创建 1024x1024 的 RGBA 纹理
-jegl_texture_2d* texture = je_graphic_texture_2d_create(1024, 1024, jegl_texture::RGBA);
+je_gl_texture_2d_t* texture = je_graphic_texture_2d_create(1024, 1024, JE_GL_TEXTURE_FORMAT_RGBA);
 
 // 使用纹理...
 
@@ -54,12 +54,12 @@ je_graphic_texture_2d_close(texture);
 
 ## 注意事项
 
-- 若格式包含 `COLOR16`、`DEPTH`、`FRAMEBUF`、`CUBE` 或有 MSAA 支持，则不创建像素缓冲，像素数据为 `nullptr`
+- 若格式包含 `FLOAT16`、`DEPTH`、`FRAMEBUF` 或有 MSAA 支持，则不创建像素缓冲，像素数据为 `nullptr`
 - 若创建像素缓冲，像素缓存按字节置为 0 填充初始化
 - 如果宽度或高度为 0，将被视为 1
 - 使用此接口创建的纹理，其资源路径为 `nullptr`
 
 ## 相关接口
 
-- [jegl_load_texture](je_graphic_texture_2d_load.md) - 从文件加载纹理
-- [jegl_close_texture](je_graphic_texture_2d_close.md) - 关闭纹理
+- [je_graphic_texture_2d_load](je_graphic_texture_2d_load.md) - 从文件加载纹理
+- [je_graphic_texture_2d_close](je_graphic_texture_2d_close.md) - 关闭纹理

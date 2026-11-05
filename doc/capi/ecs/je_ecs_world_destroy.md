@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```c
-JE_API void je_ecs_world_destroy(je_GameWorld* world);
+JE_API void je_ecs_world_destroy(je_game_world_t* world);
 ```
 
 ## 描述
@@ -14,7 +14,7 @@ JE_API void je_ecs_world_destroy(je_GameWorld* world);
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `world` | `je_GameWorld*` | 指向需要销毁的世界的指针 |
+| `world` | `je_game_world_t*` | 指向需要销毁的世界的指针 |
 
 ## 返回值
 
@@ -35,8 +35,8 @@ JE_API void je_ecs_world_destroy(je_GameWorld* world);
 ### 示例
 
 ```cpp
-je_GameUniverse* universe = je_ecs_universe_create();
-je_GameWorld* world = je_ecs_world_create(universe);
+je_game_universe_t* universe = je_ecs_universe_create();
+je_game_world_t* world = je_ecs_world_create(universe);
 
 // 使用世界...
 

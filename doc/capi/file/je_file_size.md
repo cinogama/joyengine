@@ -3,18 +3,18 @@
 ## 函数签名
 
 ```c
-JE_API size_t je_file_size(jeecs_file* file);
+JE_API size_t je_file_size(je_file_t* file);
 ```
 
 ## 描述
 
-获取文件总大小（解压后的逻辑大小）。`jeecs_file` 的布局由引擎内部维护，应通过此接口读取大小。
+获取文件总大小（解压后的逻辑大小）。`je_file_t` 的布局由引擎内部维护，应通过此接口读取大小。
 
 ## 参数
 
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
-| `file` | `jeecs_file*` | 指向文件句柄的指针 |
+| `file` | `je_file_t*` | 指向文件句柄的指针 |
 
 ## 返回值
 
@@ -25,7 +25,7 @@ JE_API size_t je_file_size(jeecs_file* file);
 ## 示例
 
 ```cpp
-jeecs_file* file = je_file_open("@/data/config.bin");
+je_file_t* file = je_file_open("@/data/config.bin");
 if (file != nullptr) {
     size_t size = je_file_size(file);
     std::vector<char> buffer(size);

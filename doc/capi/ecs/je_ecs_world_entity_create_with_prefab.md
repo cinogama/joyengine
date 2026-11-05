@@ -27,7 +27,7 @@ JE_API void je_ecs_world_entity_create_with_prefab(
 
 ## 注意事项
 
-- 通过 `out_entity` 接收的是普通实体（非预制体），只允许在一帧期间持有：一帧结束时，引擎可能执行碎片回收（defragmentation），导致 `je_GameEntity` 索引失效
+- 通过 `out_entity` 接收的是普通实体（非预制体），只允许在一帧期间持有：一帧结束时，引擎可能执行碎片回收（defragmentation），导致 `je_game_entity_t` 索引失效
 - `prefab` 指向的预制体实体不受碎片回收影响，可以跨帧持有
 
 ## 相关接口
