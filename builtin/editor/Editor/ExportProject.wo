@@ -1137,9 +1137,9 @@ namespace JEEditor::Editor
         }
 
         // 预生成项目内全部 TOML 源资源的二进制缓存（.je4animation /
-        // .je4tileset / .je4tilemap）。导出的运行时没有 je/pkg 脚本源码，
-        // 无法在游戏内加载 cache_generator，因此在编辑器进程里先生成；
-        // 随后的 packProjectFiles 会按通用 .je4cache 规则把
+        // .je4tileset / .je4tilemap / .je4texture）。导出的运行时没有
+        // je/pkg 脚本源码，无法在游戏内加载 cache_generator，因此在编辑器
+        // 进程里先生成；随后的 packProjectFiles 会按通用 .je4cache 规则把
         // <源>.je4cache 一并打进镜像。
         func packScriptCaches(prepare: ModulePrepare, working_path: path_t)
         {
@@ -1165,6 +1165,9 @@ namespace JEEditor::Editor
                         else if (ext == ".je4tilemap")
                             generated =
                                 je::cache::generate_map_cache(p->to_string());
+                        else if (ext == ".je4texture")
+                            generated =
+                                je::cache::generate_texture_cache(p->to_string());
                         else
                             continue;
 

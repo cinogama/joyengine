@@ -1,7 +1,8 @@
 #define JE_IMPL
 #include "jeecs.hpp"
-#include "jeecs_cache_version.hpp"
 #include "jeecs_fimg_archive.hpp"
+
+#include "wo.h"
 
 #include <cstdio>
 #include <sys/stat.h>
@@ -491,35 +492,58 @@ je_image_texture_color_space_t je_image_texture_color_space_get(const char* path
 {
     assert(path != nullptr);
 
-    // Missing/stale caches intentionally fall back to sRGB, matching the
-    // historical behavior of image textures before this property existed.
-    if (auto* cache = je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, 0))
-    {
-        uint32_t color_space = (uint32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
-        const size_t read = je_file_read(&color_space, sizeof(color_space), 1, cache);
-        je_file_close(cache);
+    const std::string settings_path = std::string(path) + ".je4texture";
 
-        if (read == 1 && color_space == (uint32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR)
-            return JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR;
+    // 属性是可选资源：源文件不存在时直接按默认值处理，不调用生成器
+    //（否则每张没有属性的纹理都会在加载时打印生成失败日志）。
+    je_file_t* const source = je_file_open(settings_path.c_str());
+    if (source == nullptr)
+        return JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
+    je_file_close(source);
+
+    je_file_t* const cache =
+        je_image_texture_cache_open_or_create(settings_path.c_str());
+
+    // 生成器不可用或生成失败时同样回退到 sRGB。
+    if (cache == nullptr)
+        return JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
+
+    je_cache_binary_document_t root;
+    int32_t color_space = (int32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
+
+    const bool valid = je_cache_binary_document_open(cache, &root)
+        && je_cache_binary_document_index(
+            &root,
+            "color_space",
+            JE_CACHE_BINARY_VALUE_INT32,
+            &color_space);
+    je_file_close(cache);
+
+    if (!valid)
+    {
+        // A cache file that exists but cannot be parsed is corruption, not a
+        // miss; report it instead of silently treating it as the default.
+        jeecs::debug::logerr(
+            "Invalid image texture property cache for '%s'.",
+            settings_path.c_str());
+        return JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
     }
-    return JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
+
+    return color_space == (int32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR
+        ? JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR
+        : JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
 }
 
-bool je_image_texture_color_space_set(
-    const char* path, je_image_texture_color_space_t color_space)
+WOORT_API woort_api wojeapi_image_texture_cache_ensure(void)
 {
-    assert(path != nullptr);
+    const std::string path = woort_string(0);
 
-    // je_cache_file_create also embeds the image CRC64, so changing the
-    // image later invalidates this property cache automatically.
-    je_writing_cache_file_t* const cache = je_cache_file_create(path, IMAGE_TEXTURE_CACHE_VERSION, 0);
-    if (cache == nullptr)
-        return false;
+    je_file_t* cache = je_image_texture_cache_open_or_create(path.c_str());
+    if (cache != nullptr)
+    {
+        je_file_close(cache);
+        return woort_ret_bool(true);
+    }
 
-    const uint32_t value =
-        color_space == JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR ? 1u : 0u;
-    const size_t written =
-        je_cache_file_write(&value, sizeof(value), 1, cache);
-    je_cache_file_close(cache);
-    return written == 1;
+    return woort_ret_bool(false);
 }

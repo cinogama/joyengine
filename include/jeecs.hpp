@@ -2713,7 +2713,7 @@ JE_API /* OPTIONAL */ je_file_t* je_animation_cache_open_or_create(const char* p
 je_image_texture_color_space_t [类型]
 图片纹理的颜色空间。图片加载时按此决定 GPU 纹理格式：
     * SRGB   —— 8 位 RGB 数据按 sRGB 编码存储，采样时由硬件转换为线性；
-                这是未提供属性缓存时的默认值
+                这是未提供属性源文件时的默认值
     * LINEAR —— 8 位 RGB 数据按线性数值直接采样（法线图、遮罩等非颜色数据）
 */
 enum je_image_texture_color_space_t
@@ -2724,22 +2724,26 @@ enum je_image_texture_color_space_t
 
 /*
 je_image_texture_color_space_get [基本接口]
-读取图片纹理属性缓存（<path>.je4cache）中记录的颜色空间
-    * 缓存不存在、校验失败（图片已改动）或内容非法时返回 SRGB
+读取图片纹理的颜色空间（来自属性源文件 <path>.je4texture）
+    * 属性源文件是 TOML，例如 color_space = "linear"；值缺失或非法时为 SRGB
+    * 引擎按源文件 CRC64 生成/复用 <path>.je4texture.je4cache，缓存可随时删除重建
+    * 属性源文件不存在、缓存无法生成或内容非法时返回 SRGB
     * 不检查 path 指向的文件是否为图片
 */
 JE_API je_image_texture_color_space_t je_image_texture_color_space_get(
     const char* path);
 
 /*
-je_image_texture_color_space_set [基本接口]
-将图片纹理颜色空间写入 <path>.je4cache
-    * 缓存带有图片内容的 CRC64；图片之后被修改时，旧缓存会自动失效
-    * 返回 false 表示缓存写入失败（路径不可写、源文件不可读等）
+je_image_texture_cache_open_or_create [基本接口]
+打开指定的图片纹理属性缓存；缓存缺失或失效时调用内置缓存生成器重建
+    * path 为属性源文件路径（<图片路径>.je4texture），不是图片路径
+    * 返回的句柄由调用方负责关闭（见 je_file_close）；无法生成时返回 nullptr
+请参见：
+    je_cache_file_load
+    je_file_close
 */
-JE_API bool je_image_texture_color_space_set(
-    const char* path,
-    je_image_texture_color_space_t color_space);
+JE_API /* OPTIONAL */ je_file_t* je_image_texture_cache_open_or_create(
+    const char* path);
 
 /////////////////////////// GRAPHIC //////////////////////////////
 // Here to store low-level-graphic-api.

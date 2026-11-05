@@ -2429,8 +2429,9 @@ void je_graphic_resource_handle_share(je_gl_resource_handle_t* resource_handle)
         texture_instance->m_height = (size_t)h;
         texture_instance->m_format = JE_GL_TEXTURE_FORMAT_RGBA;
 
-        // Image textures default to sRGB; a texture property cache written by
-        // the editor can mark non-color data (normal maps, masks, ...) linear.
+        // Image textures default to sRGB; the <path>.je4texture property
+        // source (edited from the texture properties window) can mark
+        // non-color data (normal maps, masks, ...) linear.
         if (je_image_texture_color_space_get(path)
             == JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB)
         {

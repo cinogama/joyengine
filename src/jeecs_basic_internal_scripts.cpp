@@ -181,6 +181,7 @@ namespace jeecs
     static std::optional<woort_CodeEnv*> cache_builder_of_animation = nullopt;
     static std::optional<woort_CodeEnv*> cache_builder_of_tilemap = nullopt;
     static std::optional<woort_CodeEnv*> cache_builder_of_tileset = nullopt;
+    static std::optional<woort_CodeEnv*> cache_builder_of_image_texture = nullopt;
 }
 
 using namespace jeecs;
@@ -196,6 +197,9 @@ void je_internal_script_init()
     cache_builder_of_tileset =
         _je_try_load_internal_script_with_cache_and_bootup(
             "!/builtin/script/internal/cache/tileset.wo");
+    cache_builder_of_image_texture =
+        _je_try_load_internal_script_with_cache_and_bootup(
+            "!/builtin/script/internal/cache/texture.wo");
 }
 
 void je_internal_script_finish()
@@ -214,6 +218,11 @@ void je_internal_script_finish()
     {
         woort_codeenv_drop(cache_builder_of_tileset.value());
         cache_builder_of_tileset.reset();
+    }
+    if (cache_builder_of_image_texture.has_value())
+    {
+        woort_codeenv_drop(cache_builder_of_image_texture.value());
+        cache_builder_of_image_texture.reset();
     }
 }
 
@@ -333,5 +342,18 @@ static je_file_t* _jeecs_generate_cache(
             path,
             TILESET_CACHE_VERSION,
             cache_builder_of_tileset.value());
+    return nullptr;
+}
+
+/* OPTIONAL */ je_file_t* je_image_texture_cache_open_or_create(const char* path)
+{
+    if (je_file_t* file = je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, 0))
+        return file;
+
+    if (cache_builder_of_image_texture.has_value())
+        return _jeecs_generate_cache(
+            path,
+            IMAGE_TEXTURE_CACHE_VERSION,
+            cache_builder_of_image_texture.value());
     return nullptr;
 }

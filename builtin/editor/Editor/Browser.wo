@@ -291,12 +291,13 @@ namespace JEEditor::Editor
                 ;
         }
         
-        // 默认隐藏的名称：以 '.' 开头的文件/目录，以及引擎生成的 *.je4cache
-        // 缓存文件与 *.je4project 工程文件。
+        // 默认隐藏的名称：以 '.' 开头的文件/目录，以及引擎生成/从属的
+        // *.je4cache 缓存文件、*.je4texture 纹理属性文件与 *.je4project 工程文件。
         func isHiddenName(name: string)=> bool
         {
             return name->begin_with(".")
                 || name->end_with(".je4cache")
+                || name->end_with(".je4texture")
                 || name->end_with(".je4project");
         }
         

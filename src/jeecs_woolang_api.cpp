@@ -1671,14 +1671,6 @@ WOORT_API woort_api wojeapi_image_texture_get_color_space(void)
         (woort_Int)je_image_texture_color_space_get(woort_string(0)));
 }
 
-WOORT_API woort_api wojeapi_image_texture_set_color_space(void)
-{
-    return woort_ret_bool(
-        je_image_texture_color_space_set(
-            woort_string(0),
-            (je_image_texture_color_space_t)woort_int(1)));
-}
-
 WOORT_API woort_api wojeapi_texture2d_open(void)
 {
     const woort_value universe_ptr = WOORT_RETURN_SLOT;
