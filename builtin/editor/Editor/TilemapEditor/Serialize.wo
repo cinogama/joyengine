@@ -1,7 +1,8 @@
 // 瓦片地图编辑器 —— TOML 序列化。
 // .je4tilemap/.je4tileset 是 TOML 文本源：本模块从引擎文档读取当前
-// 状态，构造 toml::Toml 树；保存时交给引擎写盘并重建 .je4cache。
-// 引擎侧不生成 TOML，只写这里传过去的文本。
+// 状态，构造 toml::Toml 树，并由编辑器自己写盘；写完后经 bind_path
+// 通知引擎登记路径。引擎不写盘、不重建缓存，<path>.je4cache 在下次
+// 加载时按源文件 CRC 自动重建。
 //
 // 格式（详见 src/jeecs_core_tilemap_model.hpp）：
 //   tileset: name / next_tile_id / [[sources]] / [[properties]] / [[tiles]]
@@ -18,11 +19,14 @@ import je;
 import je::graphic;
 import je::tilemap;
 
+import builtin::editor::Editor::ResourcePath;
+
 using std;
 using je;
 using je::graphic;
 using je::tilemap;
 using toml;
+using JEEditor::Editor::ResourcePath;
 
 namespace JEEditor::Editor::TilemapEditor
 {
@@ -582,7 +586,9 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // ==================== 保存入口 ====================
-    // 序列化为 TOML 文本后交给引擎：写盘 + 重建 .je4cache + 登记路径。
+    // 编辑器负责写盘：序列化为 TOML 后写入实际路径，再经 bind_path 把
+    // 文档登记到引擎路径。缓存不在这里重建，下次加载时按源文件 CRC
+    // 自然失效并重建。
     public func save_map_document(map: Tilemap, path: string)=> bool
     {
         let mut root_opt = option::none: option<Toml>;
@@ -595,7 +601,22 @@ namespace JEEditor::Editor::TilemapEditor
                 return false;
             }
         }
-        return map->save_toml(path, root_opt->unwrap->to_toml());
+        match (toml::save(root_opt->unwrap,
+            ResourcePath::toLocalResourcePath(path)))
+        {
+            ok(_)?;
+            err(message)?
+            {
+                je::logerr(F"写入瓦片地图 '{path}' 失败：{message}");
+                return false;
+            }
+        }
+        if (!map->bind_path(path))
+        {
+            je::logerr(F"登记瓦片地图路径 '{path}' 失败");
+            return false;
+        }
+        return true;
     }
 
     public func save_tileset_document(ts: Tileset, path: string)=> bool
@@ -610,6 +631,21 @@ namespace JEEditor::Editor::TilemapEditor
                 return false;
             }
         }
-        return ts->save_toml(path, root_opt->unwrap->to_toml());
+        match (toml::save(root_opt->unwrap,
+            ResourcePath::toLocalResourcePath(path)))
+        {
+            ok(_)?;
+            err(message)?
+            {
+                je::logerr(F"写入瓦片图集 '{path}' 失败：{message}");
+                return false;
+            }
+        }
+        if (!ts->bind_path(path))
+        {
+            je::logerr(F"登记瓦片图集路径 '{path}' 失败");
+            return false;
+        }
+        return true;
     }
 }

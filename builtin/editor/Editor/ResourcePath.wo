@@ -25,12 +25,14 @@ namespace JEEditor::Editor::ResourcePath
         }
     }
 
-    // 正向：@/ 相对形式 -> 真实路径。非 @/ 前缀（绝对路径等）原样
-    // 返回（仅做 normalize 转成 path_t）。
+    // 正向：引擎路径（@/ 相对运行时目录、!/ 相对可执行文件目录）-> 真实
+    // 路径。其他形态（绝对路径等）原样返回（仅做 normalize 转成 path_t）。
     public func toLocalResourcePath(path: string)=> fsys::path_t
     {
         if (path->begin_with("@/"))
             return fsys::workpath() / path->sub(2);
+        if (path->begin_with("!/"))
+            return fsys::normalize(std::host_path()) / path->sub(2);
         return fsys::normalize(path);
     }
 }

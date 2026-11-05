@@ -38,10 +38,6 @@
 
 namespace
 {
-    constexpr const char* ANIMATION_CACHE_GENERATOR_PATH =
-        "!/builtin/script/cache_generator/animation.wo";
-    constexpr const char* ANIMATION_CACHE_GENERATOR_ENTRY = "generate";
-
     bool _read_cache_string(
         const jeecs_cache_binary_document* document,
         const char* key,
@@ -289,6 +285,7 @@ namespace
         {
             jeecs::debug::logerr(
                 "Failed to load animation '%s'.", path);
+            return false;
         }
 
         jeecs_cache_binary_document root;

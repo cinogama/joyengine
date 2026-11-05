@@ -6228,17 +6228,19 @@ je_tilemap_create_map [基本接口]
 JE_API /* OPTIONAL: If size is invalid */ je_TilemapDocument* je_tilemap_create_map(int32_t w, int32_t h, int32_t tile_px);
 
 /*
-je_tilemap_save_map [基本接口]
-把编辑器序列化好的 TOML 文本写入 path（.je4tilemap），重建
-<path>.je4cache，并把该路径登记为文档路径
-    * 引擎不生成 TOML：文本由 Woolang 编辑器脚本序列化后传入
-    * 写盘或缓存生成失败返回 false（TOML 可能已部分写入，重试即可）
+je_tilemap_bind_map_path [基本接口]
+编辑器已把地图的 TOML 源写入 path（.je4tilemap）后，把该路径登记为
+文档路径
+    * 引擎不写盘、不生成/重建缓存：<path>.je4cache 在下次加载时按
+      源文件 CRC64 自动失效并重建
+    * 解除本文档的旧路径绑定并顶替 path 上的既有绑定
+    * 文档须由调用方持有外部引用，否则返回 false
     * path 支持 @/ 与 !/ 前缀（与 je_tilemap_open_map 一致）
 请参见：
     je_tilemap_open_map
 */
-JE_API bool je_tilemap_save_map(
-    je_TilemapDocument* map, const char* path, const char* toml_text);
+JE_API bool je_tilemap_bind_map_path(
+    je_TilemapDocument* map, const char* path);
 
 /*
 je_tilemap_reload_map [基本接口]
@@ -6768,17 +6770,19 @@ je_tilemap_create_tileset [基本接口]
 JE_API je_TilesetDocument* je_tilemap_create_tileset(const char* name);
 
 /*
-je_tilemap_save_tileset [基本接口]
-把编辑器序列化好的 TOML 文本写入 path（.je4tileset），重建
-<path>.je4cache，并把该路径登记为文档路径
-    * 引擎不生成 TOML：文本由 Woolang 编辑器脚本序列化后传入
-    * 写盘或缓存生成失败返回 false（TOML 可能已部分写入，重试即可）
+je_tilemap_bind_tileset_path [基本接口]
+编辑器已把图集的 TOML 源写入 path（.je4tileset）后，把该路径登记为
+文档路径
+    * 引擎不写盘、不生成/重建缓存：<path>.je4cache 在下次加载时按
+      源文件 CRC64 自动失效并重建
+    * 解除本文档的旧路径绑定并顶替 path 上的既有绑定
+    * 文档须由调用方持有外部引用，否则返回 false
     * path 支持 @/ 与 !/ 前缀（与 je_tilemap_open_tileset 一致）
 请参见：
     je_tilemap_open_tileset
 */
-JE_API bool je_tilemap_save_tileset(
-    je_TilesetDocument* tileset, const char* path, const char* toml_text);
+JE_API bool je_tilemap_bind_tileset_path(
+    je_TilesetDocument* tileset, const char* path);
 
 /*
 je_tilemap_reload_tileset [基本接口]

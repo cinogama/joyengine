@@ -3,9 +3,9 @@
 //
 // .je4tileset/.je4tilemap 是 TOML 文本源，运行期读取由引擎生成的
 // <源路径>.je4cache（缓存缺失/失效时引擎调用
-// builtin/script/cache_generator/{tileset,tilemap}.wo 重建）。
-// TOML 的生成不在引擎侧：编辑器用本组读取接口序列化后，经 save_toml
-// 交给引擎写盘、重建缓存并登记路径。
+// builtin/script/internal/cache/{tileset,tilemap}.wo 重建）。
+// TOML 的写盘由编辑器脚本负责；写完后经 bind_path 通知引擎把文档
+// 登记到该路径（引擎不写盘、不重建缓存，缓存下次加载时自然重建）。
 //
 // 文档指针类型为 Tilemap / Tileset（基于 gchandle 声明，载荷为引擎侧
 // 不透明文档实例指针）：值本身持有文档 1 个引用，被 GC 回收（或
@@ -17,7 +17,7 @@
 // 延长到指针值之外，如跨场景常驻）；unload -1，归零且已保存时文档被
 // 逐出缓存（实例销毁、指针失效），未保存的文档保留驻留。使用地图的
 // 世界与地图引用的图集亦各占 1 个引用，不受脚本侧影响。相关方法声明
-// 在对应类型的命名空间中，可用接收者形式调用：map->save_toml(path, text)、
+// 在对应类型的命名空间中，可用接收者形式调用：map->bind_path(path)、
 // tileset->add_source(...) 等。
 //
 // 瓦片值编码（网格与笔刷统一）：
@@ -84,11 +84,12 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_reload_map")
                 public func reload(path: string)=> void;
 
-            // 保存：toml_text 由编辑器脚本序列化；引擎负责写入 path、
-            // 重建 <path>.je4cache 并更新文档登记（保存后各世界按新路径
-            // 共享）。写盘或缓存生成失败返回 false。
-            extern("libjoyecs", "wojeapi_tilemap_save_map")
-                public func save_toml(self: Tilemap, path: string, toml_text: string)=> bool;
+            // 编辑器已把 TOML 源写入 path 后，把该路径登记为文档路径
+            //（解除旧路径绑定、顶替既有绑定，保存后各世界按新路径共享）。
+            // 引擎不写盘、不重建缓存：<path>.je4cache 在下次加载时按源
+            // 文件 CRC 自动失效并重建。文档无外部引用时返回 false。
+            extern("libjoyecs", "wojeapi_tilemap_bind_map_path")
+                public func bind_path(self: Tilemap, path: string)=> bool;
 
             // 返回 (宽, 高, 瓦片像素, 图层数)
             extern("libjoyecs", "wojeapi_tilemap_map_size")
@@ -505,11 +506,11 @@ namespace je
             extern("libjoyecs", "wojeapi_tilemap_reload_tileset")
                 public func reload(path: string)=> void;
 
-            // 保存：toml_text 由编辑器脚本序列化；引擎负责写入 path、
-            // 重建 <path>.je4cache 并更新文档登记。写盘或缓存生成失败
-            // 返回 false。
-            extern("libjoyecs", "wojeapi_tilemap_save_tileset")
-                public func save_toml(self: Tileset, path: string, toml_text: string)=> bool;
+            // 编辑器已把 TOML 源写入 path 后，把该路径登记为文档路径。
+            // 引擎不写盘、不重建缓存：<path>.je4cache 在下次加载时按源
+            // 文件 CRC 自动失效并重建。文档无外部引用时返回 false。
+            extern("libjoyecs", "wojeapi_tilemap_bind_tileset_path")
+                public func bind_path(self: Tileset, path: string)=> bool;
 
             extern("libjoyecs", "wojeapi_tilemap_tileset_version")
                 public func version(self: Tileset)=> int;

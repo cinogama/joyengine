@@ -38,12 +38,12 @@ namespace je::cache
     }
 
     // 确保 path 指向的 .je4animation TOML 已有可用的 .je4cache；缺失或
-    // 失效时调用 builtin/script/cache_generator/animation.wo 生成。
+    // 失效时调用 builtin/script/internal/cache/animation.wo 生成。
     // 引擎加载动画时会自动走同一流程，这里提供给导出流程预生成缓存。
     extern("libjoyecs", "wojeapi_animation_cache_ensure")
         public func generate_animation_cache(path: string)=> bool;
 
-    // 同上，对应 .je4tileset / .je4tilemap 与 cache_generator 下的生成器。
+    // 同上，对应 .je4tileset / .je4tilemap 与 internal/cache 下的生成器。
     extern("libjoyecs", "wojeapi_tileset_cache_ensure")
         public func generate_tileset_cache(path: string)=> bool;
 

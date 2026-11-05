@@ -16,7 +16,6 @@
 #   error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
 #endif
 #include "jeecs.hpp"
-#include "jeecs_cache_version.hpp"
 
 #include <vector>
 #include <map>
@@ -25,7 +24,6 @@
 #include <tuple>
 #include <string>
 #include <memory>
-#include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <cctype>
@@ -644,7 +642,8 @@ namespace jeecs
             return true;
         }
 
-        // @/!/ 前缀 -> 本地文件系统路径（保存用；读取走 jeecs_file_open 支持 fimg 包）
+        // @/!/ 前缀 -> 本地文件系统路径（注册表路径键规范化用；读取走
+        // jeecs_file_open 支持 fimg 包）
         inline std::string resolve_runtime_prefix(const std::string& path)
         {
             if (!path.empty() && path[0] == '@')
@@ -652,17 +651,6 @@ namespace jeecs
             if (!path.empty() && path[0] == '!')
                 return std::string(::jeecs_file_get_host_path()) + path.substr(1);
             return path;
-        }
-
-        // 写文本文件（TOML 源由编辑器脚本生成，这里只负责落盘）
-        inline bool write_text_to_file(const std::string& text, const std::string& path)
-        {
-            FILE* f = fopen(resolve_runtime_prefix(path).c_str(), "wb");
-            if (f == nullptr)
-                return false;
-            bool written = fwrite(text.data(), 1, text.size(), f) == text.size();
-            fclose(f);
-            return written;
         }
 
         // ==================== 源网格跟随纹理尺寸 ====================
@@ -1406,9 +1394,9 @@ namespace jeecs
         // 缓存目的保活任何文档。外部引用归零且无引用方时实例销毁
         //（含未保存文档——unload 即丢弃），下次按路径 open 从磁盘重
         // 读；地图销毁会级联释放其图集持有（RAII，无手工逐出）。
-        // 路径 -> 实例是派生索引：保存/重载经 save_*/reload_* 集中
+        // 路径 -> 实例是派生索引：绑定/重载经 bind_*/reload_* 集中
         // 维护，实例销毁后 weak 引用自然过期，解析时按需清除。失败
-        // 路径只尝试一次，避免逐帧重试造成日志刷屏；保存/重载会清除
+        // 路径只尝试一次，避免逐帧重试造成日志刷屏；绑定/重载会清除
         // 失败记录。
         //
         // ---- 线程安全 ----
@@ -1527,23 +1515,16 @@ namespace jeecs
                 return raw;
             }
 
-            // 保存并登记路径：TOML 文本由编辑器（Woolang）序列化，引擎只
-            // 负责写盘、重建 .je4cache、重绑路径索引（另一文档对同路径的
-            // 既有绑定被顶替 —— "最后一次保存者获胜"，与编辑器另存语义
-            // 一致）。写盘与缓存生成在锁外（内容属共享可变数据），路径
-            // 索引重绑在锁内。调用方须持有外部引用（无账目即契约外使用，
-            // 按失败返回）。
-            bool save_map(MapDocument* doc, const std::string& path,
-                const std::string& toml)
+            // 编辑器已把 TOML 源写入 path：把文档的路径登记迁移到 path。
+            // 不写盘、不生成缓存——<path>.je4cache 由下次加载经
+            // jeecs_tilemap_open_or_create_cache 按源 CRC 自然重建。
+            // 重绑路径索引（另一文档对同路径的既有绑定被顶替 ——
+            // "最后一次保存者获胜"，与编辑器另存语义一致）。调用方须
+            // 持有外部引用（无账目即契约外使用，按失败返回）。
+            bool bind_map_path(MapDocument* doc, const std::string& path)
             {
                 assert(doc != nullptr);
                 if (path.empty())
-                    return false;
-                if (!write_text_to_file(toml, path))
-                    return false;
-                if (!jeecs::cache::generate_from_script(path.c_str(),
-                    TILEMAP_CACHE_VERSION, TILEMAP_CACHE_GENERATOR_PATH,
-                    CACHE_GENERATOR_ENTRY))
                     return false;
                 std::lock_guard lock(m_mutex);
                 auto fnd = m_maps.held.find(doc);
@@ -1553,17 +1534,10 @@ namespace jeecs
                 doc->path = path;
                 return true;
             }
-            bool save_tileset(TilesetDocument* doc, const std::string& path,
-                const std::string& toml)
+            bool bind_tileset_path(TilesetDocument* doc, const std::string& path)
             {
                 assert(doc != nullptr);
                 if (path.empty())
-                    return false;
-                if (!write_text_to_file(toml, path))
-                    return false;
-                if (!jeecs::cache::generate_from_script(path.c_str(),
-                    TILESET_CACHE_VERSION, TILESET_CACHE_GENERATOR_PATH,
-                    CACHE_GENERATOR_ENTRY))
                     return false;
                 std::lock_guard lock(m_mutex);
                 auto fnd = m_tilesets.held.find(doc);

@@ -1422,11 +1422,10 @@ int32_t je_tilemap_unload_map(je_TilemapDocument* map)
 {
     return jeecs::Tilemap::documents::inst().unload_map(map);
 }
-bool je_tilemap_save_map(je_TilemapDocument* map, const char* path, const char* toml_text)
+bool je_tilemap_bind_map_path(je_TilemapDocument* map, const char* path)
 {
     assert(path != nullptr);
-    assert(toml_text != nullptr);
-    return jeecs::Tilemap::documents::inst().save_map(map, path, toml_text);
+    return jeecs::Tilemap::documents::inst().bind_map_path(map, path);
 }
 void je_tilemap_reload_map(const char* path)
 {
@@ -2188,11 +2187,10 @@ int32_t je_tilemap_unload_tileset(je_TilesetDocument* tileset)
 {
     return jeecs::Tilemap::documents::inst().unload_tileset(tileset);
 }
-bool je_tilemap_save_tileset(je_TilesetDocument* tileset, const char* path, const char* toml_text)
+bool je_tilemap_bind_tileset_path(je_TilesetDocument* tileset, const char* path)
 {
     assert(path != nullptr);
-    assert(toml_text != nullptr);
-    return jeecs::Tilemap::documents::inst().save_tileset(tileset, path, toml_text);
+    return jeecs::Tilemap::documents::inst().bind_tileset_path(tileset, path);
 }
 void je_tilemap_reload_tileset(const char* path)
 {
@@ -2899,10 +2897,10 @@ WOORT_API woort_api wojeapi_tilemap_create_map(void)
     return woort_ret_option_gchandle(
         doc, WOORT_IGNORE, woje_tilemap_release_map, nullptr);
 }
-WOORT_API woort_api wojeapi_tilemap_save_map(void)
+WOORT_API woort_api wojeapi_tilemap_bind_map_path(void)
 {
-    return woort_ret_bool(je_tilemap_save_map(
-        woje_map_doc(0), woort_string(1), woort_string(2)) ? true : false);
+    return woort_ret_bool(je_tilemap_bind_map_path(
+        woje_map_doc(0), woort_string(1)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_reload_map(void)
 {
@@ -3584,10 +3582,10 @@ WOORT_API woort_api wojeapi_tilemap_create_tileset(void)
     return woort_ret_option_gchandle(
         doc, WOORT_IGNORE, woje_tilemap_release_tileset, nullptr);
 }
-WOORT_API woort_api wojeapi_tilemap_save_tileset(void)
+WOORT_API woort_api wojeapi_tilemap_bind_tileset_path(void)
 {
-    return woort_ret_bool(je_tilemap_save_tileset(
-        woje_ts_doc(0), woort_string(1), woort_string(2)) ? true : false);
+    return woort_ret_bool(je_tilemap_bind_tileset_path(
+        woje_ts_doc(0), woort_string(1)) ? true : false);
 }
 WOORT_API woort_api wojeapi_tilemap_reload_tileset(void)
 {
@@ -4067,15 +4065,25 @@ WOORT_API woort_api wojeapi_tilemap_cell_quad(void)
 
 // ======================================================================
 // 缓存预生成（导出流程用）：校验 <path>.je4cache，缺失/失效时调用
-// builtin/script/cache_generator/{tileset,tilemap}.wo 重建。
+// builtin/script/internal/cache/{tileset,tilemap}.wo 重建。
 // 导出的运行时没有 je/pkg 脚本源码，无法在游戏内加载生成器，因此由
 // 编辑器进程提前生成；随后的打包流程会按通用 .je4cache 规则一并打包。
 // ======================================================================
 WOORT_API woort_api wojeapi_tileset_cache_ensure(void)
 {
-    return woort_ret_bool(jeecs::Tilemap::ensure_tileset_cache(woort_string(0)));
+    jeecs_file* cache = jeecs_tileset_open_or_create_cache(woort_string(0));
+    if (cache == nullptr)
+        return woort_ret_bool(false);
+
+    jeecs_file_close(cache);
+    return woort_ret_bool(true);
 }
 WOORT_API woort_api wojeapi_tilemap_cache_ensure(void)
 {
-    return woort_ret_bool(jeecs::Tilemap::ensure_map_cache(woort_string(0)));
+    jeecs_file* cache = jeecs_tilemap_open_or_create_cache(woort_string(0));
+    if (cache == nullptr)
+        return woort_ret_bool(false);
+
+    jeecs_file_close(cache);
+    return woort_ret_bool(true);
 }
