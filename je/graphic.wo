@@ -11,15 +11,12 @@ namespace je
     {
         // 图片纹理颜色空间：sRGB（默认，颜色贴图）或 Linear（法线/遮罩等
         // 非颜色数据）。属性保存在 <图片路径>.je4texture（TOML）中，引擎
-        // 按该源文件生成并复用二进制属性缓存。
+        // 把它与解码后的像素一同写入图片纹理缓存 <图片路径>.je4cache。
         public enum texture_color_space
         {
             SRGB = 0,
             LINEAR = 1,
         }
-
-        extern("libjoyecs", "wojeapi_image_texture_get_color_space")
-            public func image_texture_get_color_space(path: string)=> texture_color_space;
 
         public using vertex = gchandle
         {

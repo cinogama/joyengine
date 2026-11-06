@@ -31,7 +31,8 @@ using JEEditor::Editor::ResourcePath;
 namespace JEEditor::Editor
 {
     // 图片纹理属性窗口：编辑图片的颜色空间，写入 <图片路径>.je4texture（TOML）。
-    // 引擎加载图片时按该源文件生成/复用二进制属性缓存，决定 GPU 纹理格式：
+    // 引擎加载图片时按图片与该源文件生成/复用纹理缓存 <图片路径>.je4cache
+    //（颜色空间 + 解码后的像素），颜色空间决定 GPU 纹理格式：
     //   SRGB   —— 颜色贴图（默认），采样时硬件把 sRGB 转为线性；
     //   LINEAR —— 法线/遮罩等非颜色数据，按线性数值直接采样。
     using TextureProperties = struct{
@@ -49,11 +50,37 @@ namespace JEEditor::Editor
             return TextureProperties{
                 m_path = path,
                 m_runtime_path = runtime_path,
-                m_color_space = mut image_texture_get_color_space(runtime_path),
+                m_color_space = mut loadColorSpace(path),
                 m_preview = mut texture2d::load(
                     option::value(Singleton::Universe::getUniverse()), runtime_path),
                 m_status = mut "",
             };
+        }
+        // 读取 <图片路径>.je4texture 中保存的颜色空间：属性源文件不存在、
+        // 无法解析、键缺失或取值未知时按默认的 sRGB 处理（与引擎一致）。
+        func loadColorSpace(path: path_t)=> texture_color_space
+        {
+            let settings_path = normalize(path->to_string + ".je4texture");
+            if (exist(settings_path))
+            {
+                match (toml::load(settings_path))
+                {
+                    ok(root)?
+                    {
+                        match (root["color_space"]->as_string)
+                        {
+                            value(name)?
+                            {
+                                if (name->lower == "linear")
+                                    return texture_color_space::LINEAR;
+                            }
+                            none?;
+                        }
+                    }
+                    err(_)?;
+                }
+            }
+            return texture_color_space::SRGB;
         }
         public func showTextureProperties(path: path_t)
         {
@@ -85,7 +112,7 @@ namespace JEEditor::Editor
                 option::value(univ), self.m_runtime_path);
         }
         // 把当前颜色空间写入 <图片路径>.je4texture；属性源文件是唯一真相，
-        // 引擎会在下次加载时按新内容重建二进制缓存。失败时弹窗并返回 false。
+        // 校验码随之改变，引擎会在下次加载时重建纹理缓存。失败时弹窗并返回 false。
         func saveSettings(self: TextureProperties)=> bool
         {
             let settings_path = normalize(self.m_path->to_string + ".je4texture");

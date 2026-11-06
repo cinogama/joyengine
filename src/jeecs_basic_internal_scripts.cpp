@@ -4,6 +4,7 @@
 #include "wo.h"
 #include "jeecs_cache_version.hpp"
 
+#include <string>
 #include <vector>
 
 using namespace std;
@@ -226,8 +227,10 @@ void je_internal_script_finish()
     }
 }
 
+// usecrc64 follows je_cache_file_create: 0 derives the key from path's bytes,
+// any other value is the key itself (used both to create and to reload).
 static je_file_t* _jeecs_generate_cache(
-    const char* path, uint32_t format_version, woort_CodeEnv* cenv)
+    const char* path, uint32_t format_version, woort_CodeEnv* cenv, uint64_t usecrc64)
 {
     static constexpr const char* SCRIPT_ENTRY = "generate";
 
@@ -235,16 +238,17 @@ static je_file_t* _jeecs_generate_cache(
 
     if (vmm == nullptr)
     {
-        debug::logerr("Failed to create new script vm for generating `%s`.");
+        debug::logerr("Failed to create new script vm for generating `%s`.", path);
         return nullptr;
     }
 
     je_writing_cache_file_t* const cache_file = je_cache_file_create(
-        path, format_version, 0);
+        path, format_version, usecrc64);
 
     if (cache_file == nullptr)
     {
-        debug::logerr("Failed to create cache file for generating `%s`.");
+        debug::logerr("Failed to create cache file for generating `%s`.", path);
+        woort_vm_close(vmm);
         return nullptr;
     }
 
@@ -301,7 +305,7 @@ static je_file_t* _jeecs_generate_cache(
     je_cache_file_close(cache_file, succ);
 
     if (succ)
-        return je_cache_file_load(path, format_version, 0);
+        return je_cache_file_load(path, format_version, usecrc64);
 
     return nullptr;
 }
@@ -315,7 +319,8 @@ static je_file_t* _jeecs_generate_cache(
         return _jeecs_generate_cache(
             path,
             ANIMATION_CACHE_VERSION,
-            cache_builder_of_animation.value());
+            cache_builder_of_animation.value(),
+            0);
     return nullptr;
 }
 
@@ -328,7 +333,8 @@ static je_file_t* _jeecs_generate_cache(
         return _jeecs_generate_cache(
             path,
             TILEMAP_CACHE_VERSION,
-            cache_builder_of_tilemap.value());
+            cache_builder_of_tilemap.value(),
+            0);
     return nullptr;
 }
 
@@ -341,19 +347,29 @@ static je_file_t* _jeecs_generate_cache(
         return _jeecs_generate_cache(
             path,
             TILESET_CACHE_VERSION,
-            cache_builder_of_tileset.value());
+            cache_builder_of_tileset.value(),
+            0);
     return nullptr;
 }
 
 /* OPTIONAL */ je_file_t* je_image_texture_cache_open_or_create(const char* path)
 {
-    if (je_file_t* file = je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, 0))
+    // The cache carries both the image pixels and the color space from the
+    // optional <path>.je4texture source, so the key chains both files: a
+    // change to either invalidates it. With neither file present (exported
+    // runtimes ship only the cache) the key is 0 and validation is skipped.
+    const uint64_t crc64_key = jeecs_crc64_of_file(
+        (std::string(path) + ".je4texture").c_str(),
+        jeecs_crc64_of_file(path, 0));
+
+    if (je_file_t* file = je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, crc64_key))
         return file;
 
     if (cache_builder_of_image_texture.has_value())
         return _jeecs_generate_cache(
             path,
             IMAGE_TEXTURE_CACHE_VERSION,
-            cache_builder_of_image_texture.value());
+            cache_builder_of_image_texture.value(),
+            crc64_key);
     return nullptr;
 }

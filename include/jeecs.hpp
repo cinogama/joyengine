@@ -2724,6 +2724,10 @@ je_image_texture_color_space_t [类型]
     * SRGB   —— 8 位 RGB 数据按 sRGB 编码存储，采样时由硬件转换为线性；
                 这是未提供属性源文件时的默认值
     * LINEAR —— 8 位 RGB 数据按线性数值直接采样（法线图、遮罩等非颜色数据）
+取值来自属性源文件 <图片路径>.je4texture（TOML，例如 color_space = "linear"），
+随像素一同写入图片纹理缓存
+请参见：
+    je_image_texture_cache_open_or_create
 */
 enum je_image_texture_color_space_t
 {
@@ -2732,25 +2736,18 @@ enum je_image_texture_color_space_t
 };
 
 /*
-je_image_texture_color_space_get [基本接口]
-读取图片纹理的颜色空间（来自属性源文件 <path>.je4texture）
-    * 属性源文件是 TOML，例如 color_space = "linear"；值缺失或非法时为 SRGB
-    * 引擎按源文件 CRC64 生成/复用 <path>.je4texture.je4cache，缓存可随时删除重建
-    * 已有缓存时直接读取；源文件缺失（如导出的运行时只携带缓存）时跳过 CRC 校验
-    * 属性源文件与缓存都不存在、缓存无法生成或内容非法时返回 SRGB
-    * 不检查 path 指向的文件是否为图片
-*/
-JE_API je_image_texture_color_space_t je_image_texture_color_space_get(
-    const char* path);
-
-/*
 je_image_texture_cache_open_or_create [基本接口]
-打开指定的图片纹理属性缓存；缓存缺失或失效时调用内置缓存生成器重建
-    * path 为属性源文件路径（<图片路径>.je4texture），不是图片路径
+打开指定图片的纹理缓存 <path>.je4cache；缓存缺失或失效时调用内置缓存生成器重建
+    * path 为图片路径；缓存包含纹理的颜色空间和解码后的 RGBA8 像素数据，
+      加载纹理时可直接使用而无需再解码图片
+    * 校验码为图片文件与属性源文件 <path>.je4texture 内容连续计算的 CRC64，
+      两者任一改变都会使缓存失效；属性源文件是可选的
+    * 图片与属性源文件都不存在（如导出的运行时只携带缓存）时跳过校验
     * 返回的句柄由调用方负责关闭（见 je_file_close）；无法生成时返回 nullptr
 请参见：
     je_cache_file_load
     je_file_close
+    je_graphic_texture_2d_load
 */
 JE_API /* OPTIONAL */ je_file_t* je_image_texture_cache_open_or_create(
     const char* path);
@@ -4235,12 +4232,16 @@ JE_API void je_graphic_shader_close(je_gl_shader_t* shader);
 /*
 je_graphic_texture_2d_load [基本接口]
 从指定路径加载一个二维纹理资源，加载的路径规则与 je_file_open 相同
-    * 若指定的文件不存在或不是一个合法的纹理，则返回nullptr
+    * 从图片纹理缓存 <path>.je4cache 读取颜色空间与像素数据；缓存缺失或
+        失效时先按图片与属性源文件 <path>.je4texture 重建缓存（导出的
+        运行时只携带缓存、没有生成器，缓存不可用时返回 nullptr）
+    * 若无法取得可用的缓存，则返回nullptr
     * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
         用计数，使用 je_graphic_texture_2d_close 可减少引用计数；当资源的引用计数变为 0 时，
         资源将被释放
 请参见：
     je_file_open
+    je_image_texture_cache_open_or_create
     jegl_share_resource
     je_graphic_texture_2d_close
 */

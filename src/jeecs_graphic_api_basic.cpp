@@ -175,11 +175,6 @@ namespace Assimp
     };
 }
 
-#if !JE4_STB_IMAGE_STATIC_IMPLED
-#define STB_IMAGE_IMPLEMENTATION
-#endif
-#include <stb_image.h>
-
 #include <condition_variable>
 #include <list>
 #include <future>
@@ -1855,11 +1850,11 @@ static void _jegl_close_texture_instance(TexT* texture)
     if (_jegl_close_resource_handle(&texture->m_handle))
     {
         // close resource's raw data, then send this resource to closing-queue
-        if (texture->m_pixels)
+        if (texture->m_pixels != nullptr)
         {
             assert(0 == (texture->m_format
                 & JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK));
-            stbi_image_free(texture->m_pixels);
+            free(texture->m_pixels);
         }
         else
             assert(0 != (texture->m_format
@@ -2386,6 +2381,72 @@ void je_graphic_resource_handle_share(je_gl_resource_handle_t* resource_handle)
     ++resource_handle->m_raw_ref_count->m_binding_count;
 }
 
+// Opens the texture cache <path>.je4cache of an image. The cache is
+// (re)generated only when the image itself exists; without it an existing
+// cache is read as is: exported runtimes carry only the cache, and probing an
+// optional image (e.g. @/icon.png) must not trigger generator failure logs.
+static /* OPTIONAL */ je_file_t* _jegl_open_image_texture_cache(const char* path)
+{
+    if (je_file_t* image = je_file_open(path))
+    {
+        je_file_close(image);
+        return je_image_texture_cache_open_or_create(path);
+    }
+    return je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, 0);
+}
+
+// Reads the document written by builtin/script/internal/cache/texture.wo.
+// Outputs are written only on success; *out_pixels is malloc'ed like every
+// texture pixel buffer.
+static bool _jegl_read_image_texture_cache(
+    je_file_t* cache,
+    size_t* out_width,
+    size_t* out_height,
+    je_image_texture_color_space_t* out_color_space,
+    je_gl_texture_pixel_data_t** out_pixels)
+{
+    je_cache_binary_document_t root;
+    int32_t width, height, color_space;
+    je_cache_binary_buffer_t pixels;
+
+    if (!je_cache_binary_document_open(cache, &root)
+        || !je_cache_binary_document_index(
+            &root, "width", JE_CACHE_BINARY_VALUE_INT32, &width)
+        || !je_cache_binary_document_index(
+            &root, "height", JE_CACHE_BINARY_VALUE_INT32, &height)
+        || !je_cache_binary_document_index(
+            &root, "color_space", JE_CACHE_BINARY_VALUE_INT32, &color_space)
+        || !je_cache_binary_document_index(
+            &root, "pixels", JE_CACHE_BINARY_VALUE_BUFFER, &pixels))
+        return false;
+
+    if (width <= 0 || height <= 0)
+        return false;
+
+    const size_t pixels_size = (size_t)width * (size_t)height * 4;
+
+    size_t buffer_size = 0;
+    if (!je_cache_binary_buffer_read(nullptr, &buffer_size, &pixels)
+        || buffer_size != pixels_size)
+        return false;
+
+    auto* const pixel_data =
+        static_cast<je_gl_texture_pixel_data_t*>(malloc(pixels_size));
+    if (!je_cache_binary_buffer_read(pixel_data, &buffer_size, &pixels))
+    {
+        free(pixel_data);
+        return false;
+    }
+
+    *out_width = (size_t)width;
+    *out_height = (size_t)height;
+    *out_color_space = color_space == (int32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR
+        ? JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR
+        : JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
+    *out_pixels = pixel_data;
+    return true;
+}
+
 /* OPTIONAL */ je_gl_texture_2d_t* je_graphic_texture_2d_load(/* OPTIONAL */ je_gl_context_t* context, const char* path)
 {
     auto* shared_texture =
@@ -2395,58 +2456,55 @@ void je_graphic_resource_handle_share(je_gl_resource_handle_t* resource_handle)
     if (shared_texture != nullptr)
         return shared_texture;
 
-    if (je_file_t* texfile = je_file_open(path))
+    size_t width = 0;
+    size_t height = 0;
+    je_image_texture_color_space_t color_space = JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
+    je_gl_texture_pixel_data_t* pixels = nullptr;
+
+    if (je_file_t* cache = _jegl_open_image_texture_cache(path))
     {
-        je_gl_texture_2d_t* texture_instance =
-            static_cast<je_gl_texture_2d_t*>(malloc(sizeof(je_gl_texture_2d_t)));
-
-        int w, h, cdepth;
-
-        stbi_set_flip_vertically_on_load(true);
-
-        stbi_io_callbacks res_reader;
-        res_reader.read = [](void* f, char* data, int size)
-            { return (int)je_file_read(data, 1, (size_t)size, (je_file_t*)f); };
-        res_reader.eof = [](void* f)
-            { return je_file_tell((je_file_t*)f) >= je_file_size((je_file_t*)f) ? 1 : 0; };
-        res_reader.skip = [](void* f, int n)
-            { je_file_seek((je_file_t*)f, (size_t)n, je_file_seek_mode_t::JE_READ_FILE_SEEK_CURRENT); };
-
-        texture_instance->m_pixels = stbi_load_from_callbacks(
-            &res_reader, texfile, &w, &h, &cdepth, STBI_rgb_alpha);
-
-        je_file_close(texfile);
-
-        if (texture_instance->m_pixels == nullptr)
+        if (!_jegl_read_image_texture_cache(
+            cache, &width, &height, &color_space, &pixels))
         {
-            jeecs::debug::logerr("Cannot load texture: Invalid image format of file: '%s'", path);
-            free(texture_instance);
-            return nullptr;
+            // A cache that exists but cannot be parsed is corruption, not a
+            // miss; report it instead of silently treating it as loadable.
+            jeecs::debug::logerr("Invalid image texture cache for '%s'.", path);
         }
-
-        texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_2D;
-        texture_instance->m_width = (size_t)w;
-        texture_instance->m_height = (size_t)h;
-        texture_instance->m_format = JE_GL_TEXTURE_FORMAT_RGBA;
-
-        // Image textures default to sRGB; the <path>.je4texture property
-        // source (edited from the texture properties window) can mark
-        // non-color data (normal maps, masks, ...) linear.
-        if (je_image_texture_color_space_get(path)
-            == JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB)
-        {
-            texture_instance->m_format = (je_gl_texture_format_t)(
-                texture_instance->m_format | JE_GL_TEXTURE_FORMAT_SRGB);
-        }
-
-        _jegl_init_resource_handle(&texture_instance->m_handle, path);
-
-        return _jegl_try_update_shared_resource(
-            context, texture_instance);
+        je_file_close(cache);
     }
 
-    jeecs::debug::loginfo("Cannot load texture: Failed to open file: '%s'", path);
-    return nullptr;
+    if (pixels == nullptr)
+    {
+        // No cache and no generator (exported runtimes ship only caches and
+        // no generator scripts): there is nothing left to load from. Stay
+        // quiet about plain misses: optional probes like @/icon.png end up
+        // here on every start.
+        jeecs::debug::loginfo("Cannot load texture: no usable cache for '%s'.", path);
+        return nullptr;
+    }
+
+    je_gl_texture_2d_t* texture_instance =
+        static_cast<je_gl_texture_2d_t*>(malloc(sizeof(je_gl_texture_2d_t)));
+
+    texture_instance->m_pixels = pixels;
+    texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_2D;
+    texture_instance->m_width = width;
+    texture_instance->m_height = height;
+    texture_instance->m_format = JE_GL_TEXTURE_FORMAT_RGBA;
+
+    // Image textures default to sRGB; the <path>.je4texture property
+    // source (edited from the texture properties window) can mark
+    // non-color data (normal maps, masks, ...) linear.
+    if (color_space == JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB)
+    {
+        texture_instance->m_format = (je_gl_texture_format_t)(
+            texture_instance->m_format | JE_GL_TEXTURE_FORMAT_SRGB);
+    }
+
+    _jegl_init_resource_handle(&texture_instance->m_handle, path);
+
+    return _jegl_try_update_shared_resource(
+        context, texture_instance);
 }
 
 je_gl_vertex_t* _jegl_create_vertex_impl(

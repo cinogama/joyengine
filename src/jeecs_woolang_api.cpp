@@ -184,6 +184,16 @@ WOORT_API woort_api wojeapi_cache_binary_append_int32_buffer(void)
         count > 0 ? (const void*)buffer.data() : (const void*)&empty_buffer,
         count * sizeof(int32_t)));
 }
+// 任意字节缓冲按 BUFFER 写入（图片像素等大批量数据）。
+WOORT_API woort_api wojeapi_cache_binary_append_buffer(void)
+{
+    auto* file = static_cast<je_writing_cache_file_t*>(woort_pointer(0));
+
+    size_t buflen = 0;
+    const void* buf = woort_buffer(1, &buflen);
+
+    return woort_ret_bool(je_cache_binary_append_buffer(file, buf, buflen));
+}
 
 WOORT_API woort_api wojeapi_mark_shared_glresource_outdated(void)
 {
@@ -1662,12 +1672,6 @@ WOORT_API woort_api wojeapi_type_basic_type(void)
 }
 
 ///////////////////////////////////////////////////////////////////////
-
-WOORT_API woort_api wojeapi_image_texture_get_color_space(void)
-{
-    return woort_ret_int(
-        (woort_Int)je_image_texture_color_space_get(woort_string(0)));
-}
 
 WOORT_API woort_api wojeapi_texture2d_open(void)
 {

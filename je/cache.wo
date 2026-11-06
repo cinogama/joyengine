@@ -1,5 +1,6 @@
 // Joyengine 4.x
 import pkg::std;
+import pkg::buffer;
 
 namespace je::cache
 {
@@ -35,6 +36,12 @@ namespace je::cache
 
         extern("libjoyecs", "wojeapi_cache_binary_append_float32")
             public func append_float32(self: binary_writer, value: real)=> bool;
+
+        // 任意字节缓冲按 BUFFER 写入（图片像素等大批量数据）。读取侧用
+        // je_cache_binary_buffer_read 一次性取出，避免逐元素 LIST 读取的
+        // 重复扫描。
+        extern("libjoyecs", "wojeapi_cache_binary_append_buffer")
+            public func append_buffer(self: binary_writer, buf: buffer)=> bool;
     }
 
     // 确保 path 指向的 .je4animation TOML 已有可用的 .je4cache；缺失或
@@ -50,8 +57,10 @@ namespace je::cache
     extern("libjoyecs", "wojeapi_tilemap_cache_ensure")
         public func generate_map_cache(path: string)=> bool;
 
-    // 确保 path 指向的 .je4texture TOML 已有可用的 .je4cache；path 为
-    // 属性源文件路径（<图片路径>.je4texture），引擎加载纹理时走同一流程。
+    // 确保 path 指向的图片已有可用的纹理缓存 <path>.je4cache（颜色空间 +
+    // 解码后的像素）；缓存按图片与可选的 <path>.je4texture 属性源文件
+    // 校验，缺失或失效时调用 builtin/script/internal/cache/texture.wo 生成。
+    // 引擎加载纹理时走同一流程，这里提供给导出流程预生成缓存。
     extern("libjoyecs", "wojeapi_image_texture_cache_ensure")
         public func generate_texture_cache(path: string)=> bool;
 }

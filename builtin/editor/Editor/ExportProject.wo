@@ -14,9 +14,9 @@
 // 镜像中的键约定与引擎的资源路径一致：项目文件使用 @/<相对路径>，
 // 引擎内部着色器使用 !/builtin/shader/internal/<文件名>。
 //
-// 需要预处理的资源（.shader、.je4animation、.je4tileset、.je4tilemap、
-// .je4texture）只打入生成的 <源>.je4cache，源文件不随包；运行时按源路径
-// 查找缓存，源文件缺失时跳过 CRC 校验。
+// 需要预处理的资源（.shader、.je4animation、.je4tileset、.je4tilemap，以及
+// 图片连同其 .je4texture 属性）只打入生成的 <源>.je4cache，源文件不随包；
+// 运行时按源路径查找缓存，源文件缺失时跳过 CRC 校验。
 
 import pkg::std;
 import pkg::fsys;
@@ -1133,10 +1133,30 @@ namespace JEEditor::Editor
             return_ok!;
         }
 
-        // 预生成项目内全部 TOML 源资源的二进制缓存（.je4animation /
-        // .je4tileset / .je4tilemap / .je4texture）。导出的运行时没有
-        // je/pkg 脚本源码，无法在游戏内加载 cache_generator，因此在编辑器
-        // 进程里先生成；导出只携带这些 .je4cache，源文件不随包。
+        // 作为纹理加载、导出时只携带纹理缓存 <图片>.je4cache 的图片扩展名。
+        // 覆盖 stb_image 支持的全部格式：运行时不再回退直接解码图片，
+        // 任何可加载的图片都必须在导出时打成缓存。
+        func isImageExtension(ext: string)=> bool
+        {
+            return ext == ".png"
+                || ext == ".jpg"
+                || ext == ".jpeg"
+                || ext == ".bmp"
+                || ext == ".tga"
+                || ext == ".gif"
+                || ext == ".psd"
+                || ext == ".hdr"
+                || ext == ".pic"
+                || ext == ".pnm"
+                || ext == ".ppm"
+                || ext == ".pgm";
+        }
+
+        // 预生成项目内全部缓存化资源的二进制缓存：TOML 源资源（.je4animation /
+        // .je4tileset / .je4tilemap）以及图片的纹理缓存（<图片>.je4cache，包含
+        // .je4texture 中的颜色空间与解码后的像素）。导出的运行时没有 je/pkg
+        // 脚本源码，无法在游戏内加载缓存生成器，因此在编辑器进程里先生成；
+        // 导出只携带这些 .je4cache，源文件不随包。
         func packScriptCaches(prepare: ModulePrepare, working_path: path_t)
         {
             prepare->postMessage("正在生成脚本资源缓存……");
@@ -1152,7 +1172,7 @@ namespace JEEditor::Editor
 
                         let ext = extension(p)->lower;
                         if (ext != ".je4animation" && ext != ".je4tileset"
-                            && ext != ".je4tilemap" && ext != ".je4texture")
+                            && ext != ".je4tilemap" && !isImageExtension(ext))
                             continue;
 
                         // 隐藏目录中的资源不随包导出，无需为它们生成缓存。
@@ -1176,7 +1196,7 @@ namespace JEEditor::Editor
                         else if (ext == ".je4tilemap")
                             generated =
                                 je::cache::generate_map_cache(p->to_string());
-                        else if (ext == ".je4texture")
+                        else if (isImageExtension(ext))
                             generated =
                                 je::cache::generate_texture_cache(p->to_string());
 
@@ -1237,14 +1257,16 @@ namespace JEEditor::Editor
                 || ext == ".dmp";
         }
         
-        // 这些 TOML 源资源由引擎转换为 <源>.je4cache 供运行时读取；
-        // 导出只携带缓存，源文件由 packScriptCaches 预处理后跳过。
+        // 这些源资源由引擎转换为 <源>.je4cache 供运行时读取；导出只携带
+        // 缓存，源文件由 packScriptCaches 预处理后跳过。.je4texture 属性已
+        // 写入对应图片的纹理缓存，同样不随包。
         func isCacheBackedSourceExtension(ext: string)=> bool
         {
             return ext == ".je4animation"
                 || ext == ".je4tileset"
                 || ext == ".je4tilemap"
-                || ext == ".je4texture";
+                || ext == ".je4texture"
+                || isImageExtension(ext);
         }
         
         // 把 path 复制到 dst（保持目录结构），失败时抛出描述。
@@ -1266,8 +1288,8 @@ namespace JEEditor::Editor
         // 按项目文件规则整理项目目录：脚本预编译为 WORT 二进制，动态库原样
         // 复制，其余文件打进资源镜像。需要预处理的资源只打包缓存：
         //   * .shader 源码与缓存由 packShaders 编译并打包缓存；
-        //   * .je4animation/.je4tileset/.je4tilemap/.je4texture 的缓存由
-        //     packScriptCaches 生成，此处跳过源文件、按原路径打包缓存。
+        //   * .je4animation/.je4tileset/.je4tilemap 与图片（连同 .je4texture）
+        //     的缓存由 packScriptCaches 生成，此处跳过源文件、按原路径打包缓存。
         // 运行时按源路径查找 <源>.je4cache，源文件缺失时跳过 CRC 校验。
         func packProjectFiles(prepare: ModulePrepare,
             packer: je::internal::fimg_writer,
@@ -1295,9 +1317,15 @@ namespace JEEditor::Editor
                 let ext = extension(p)->lower;
                 
                 // 着色器缓存由 packShaders 打包；其余 .je4cache（动画/图集/
-                // 地图/图片属性）按原路径打进资源镜像，供运行时读取。
+                // 地图/图片纹理）按原路径打进资源镜像，供运行时读取。
                 if (ext == ".je4cache"
                     && purename(p)->lower->end_with(".shader"))
+                    continue;
+
+                // 旧版纹理属性缓存（<图片>.je4texture.je4cache）已被图片纹理
+                // 缓存取代，运行时不再读取，不随包。
+                if (ext == ".je4cache"
+                    && purename(p)->lower->end_with(".je4texture"))
                     continue;
 
                 if (isSkippedExtension(ext))

@@ -7,9 +7,11 @@ constexpr uint32_t CACHE_MANAGER_MAIN_VERSION = 0x00000003;
 
 // Sub cache versions
 constexpr uint32_t SHADER_CACHE_VERSION = 0x00000290;
-// Image texture property cache generated from the .je4texture TOML source;
-// the payload is a binary cache document (color_space -> INT32).
-constexpr uint32_t IMAGE_TEXTURE_CACHE_VERSION = 0x00000002;
+// Image texture cache generated from the image file and its optional
+// .je4texture TOML source; the payload is a binary cache document
+// (width/height/color_space -> INT32, pixels -> RGBA8 BUFFER), keyed by
+// crc64(image file bytes chained with .je4texture bytes).
+constexpr uint32_t IMAGE_TEXTURE_CACHE_VERSION = 0x00000003;
 // Frame animation cache generated from the .je4animation TOML source; the
 // payload is a binary cache document (see jeecs_cache_binary_* in jeecs.hpp).
 constexpr uint32_t ANIMATION_CACHE_VERSION = 0x00000001;
@@ -19,3 +21,8 @@ constexpr uint32_t TILESET_CACHE_VERSION = 0x00000001;
 constexpr uint32_t TILEMAP_CACHE_VERSION = 0x00000001;
 
 constexpr uint32_t INTERNAL_SCRIPT_CACHE_VERSION = 0x00000001;
+
+// Continue the crc64 of filepath's bytes onto crc64_continue (seed in,
+// updated value out). A missing or empty file returns crc64_continue
+// unchanged, so chaining an absent optional source keeps the previous state.
+uint64_t jeecs_crc64_of_file(const char* filepath, uint64_t crc64_continue);
