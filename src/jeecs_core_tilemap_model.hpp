@@ -400,8 +400,9 @@ namespace jeecs
 
         // ==================== 缓存文档读写 ====================
         // .je4tileset/.je4tilemap 是 TOML 文本源，运行期读取由 Woolang
-        // 生成器写出的 <源路径>.je4cache。缓存文件头（管理器版本/格式版本/
-        // 源 CRC64）由 je_cache_file_create 写入，其后是一个
+        // 生成器写出的 <源路径>.je4cache。缓存文件头（格式版本/源 CRC64）
+        // 由 je_cache_file_create 写入，管理器版本留空占位，由
+        // je_cache_file_close(..., true) 回写后缓存才生效，其后是一个
         // jeecs_cache_binary_* 文档：
         //   图集 DOCUMENT
         //     "name" -> STRING

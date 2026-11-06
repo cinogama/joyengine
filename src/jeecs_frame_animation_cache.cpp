@@ -13,8 +13,9 @@
 // 帧动画不再直接读取 .je4animation 源文件，而是读取由
 // builtin/script/cache_generator/animation.wo 生成的二进制缓存：
 //   <动画源路径>.je4cache
-// 缓存文件头由 je_cache_file_create 写入（管理器版本 + 格式版本 +
-// 源文件 CRC64），其后是一个 jeecs_cache_binary_* 文档。文档结构：
+// 缓存文件头由 je_cache_file_create 写入（格式版本 + 源文件 CRC64；
+// 管理器版本留空占位，由 je_cache_file_close(..., true) 回写后缓存才
+// 生效），其后是一个 jeecs_cache_binary_* 文档。文档结构：
 //   DOCUMENT
 //     "animations" -> LIST of DOCUMENT(action)
 //         "name" -> STRING

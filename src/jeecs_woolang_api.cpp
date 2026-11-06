@@ -94,10 +94,8 @@ WOORT_API woort_api wojeapi_file_cache_write_all(void)
     {
         auto written_len = je_cache_file_write(buf, sizeof(char), buflen, cache);
 
-        je_cache_file_close(cache);
-
-        if (buflen == written_len)
-            ok = true;
+        ok = buflen == written_len;
+        je_cache_file_close(cache, ok);
     }
     (void)woort_vm_swap(last);
 

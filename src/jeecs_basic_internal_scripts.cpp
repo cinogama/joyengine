@@ -133,7 +133,7 @@ namespace jeecs
         woort_free(binary_buffer);
 
         if (writting_cache != nullptr)
-            je_cache_file_close(writting_cache);
+            je_cache_file_close(writting_cache, cache_create_succ);
 
         return cenv;
     }
@@ -298,7 +298,7 @@ static je_file_t* _jeecs_generate_cache(
     (void)woort_vm_swap(last_vm);
     woort_vm_close(vmm);
 
-    je_cache_file_close(cache_file);
+    je_cache_file_close(cache_file, succ);
 
     if (succ)
         return je_cache_file_load(path, format_version, 0);

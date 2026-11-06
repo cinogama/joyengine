@@ -129,7 +129,11 @@ uint64_t _crc64_of_file(const char* filepath)
         return nullptr;
     }
 
-    fwrite(&CACHE_MANAGER_MAIN_VERSION, sizeof(uint32_t), 1, f);
+    // The main version is left as an invalid placeholder; the cache file can
+    // never pass je_cache_file_load's validation until je_cache_file_close
+    // writes it back with finished == true.
+    constexpr uint32_t UNFINISHED_MAIN_VERSION_PLACEHOLDER = 0;
+    fwrite(&UNFINISHED_MAIN_VERSION_PLACEHOLDER, sizeof(uint32_t), 1, f);
     fwrite(&format_version, sizeof(uint32_t), 1, f);
     fwrite(&crc64_result, sizeof(uint64_t), 1, f);
 
@@ -145,7 +149,16 @@ size_t je_cache_file_write(
     return fwrite(write_buffer, elem_size, count, reinterpret_cast<FILE*>(file));
 }
 
-void je_cache_file_close(je_writing_cache_file_t* file)
+void je_cache_file_close(je_writing_cache_file_t* file, bool finished)
 {
-    fclose(reinterpret_cast<FILE*>(file));
+    FILE* const f = reinterpret_cast<FILE*>(file);
+
+    if (finished)
+    {
+        // Write back the main version to make this cache file take effect.
+        fseek(f, 0, SEEK_SET);
+        fwrite(&CACHE_MANAGER_MAIN_VERSION, sizeof(uint32_t), 1, f);
+    }
+
+    fclose(f);
 }

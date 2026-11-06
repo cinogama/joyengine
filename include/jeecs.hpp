@@ -2134,6 +2134,9 @@ je_cache_file_create [基本接口]
 若创建文件失败，则返回nullptr
     * 若 usecrc64 被指定为 0，则自动计算 filepath 指定文件的校验值
     * 否则直接使用 usecrc64 作为校验值
+    * 创建时缓存主版本号留空占位，此时的缓存文件始终无效，
+      直到 je_cache_file_close 以 finished == true 关闭回写主版本号后
+      缓存才生效
     * 打开后的缓存文件需要使用 je_cache_file_close 关闭
     * 使用 je_cache_file_write 写入数据
 请参见：
@@ -2158,8 +2161,14 @@ JE_API size_t je_cache_file_write(
 /*
 je_cache_file_close [基本接口]
 关闭创建出的缓存文件
+    * finished 为 true 时表示缓存内容已完整写入，关闭前会回写缓存主版本号
+      使缓存生效（je_cache_file_create 创建时主版本号留空占位）
+    * finished 为 false 时表示缓存写入失败，直接关闭且不回写主版本号，
+      这样关闭的缓存文件无法通过 je_cache_file_load 的校验，始终无效
+请参见：
+    je_cache_file_create
 */
-JE_API void je_cache_file_close(je_writing_cache_file_t* file);
+JE_API void je_cache_file_close(je_writing_cache_file_t* file, bool finished);
 
 /////////////////////////// CACHE BINARY DOCUMENT /////////////////////////////////
 

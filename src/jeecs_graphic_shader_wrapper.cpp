@@ -308,7 +308,7 @@ void _jegl_create_shader_cache(je_gl_shader_t* shader_resource, uint64_t virtual
             je_cache_file_write(&texture.m_kind, sizeof(je_gl_texture_kind_t), 1, cachefile);
         }
 
-        je_cache_file_close(cachefile);
+        je_cache_file_close(cachefile, true);
     }
 }
 

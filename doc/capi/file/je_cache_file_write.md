@@ -43,17 +43,15 @@ if (cache != nullptr) {
     uint8_t bytecode[] = { /* ... */ };
     size_t written = je_cache_file_write(bytecode, 1, sizeof(bytecode), cache);
     
-    if (written == sizeof(bytecode)) {
-        printf("Cache file written successfully\n");
-    }
-    
-    je_cache_file_close(cache);
+    // 写入完整传 true 使缓存生效，失败传 false 保持缓存无效
+    je_cache_file_close(cache, written == sizeof(bytecode));
 }
 ```
 
 ## 注意事项
 
 - 返回值小于 `count` 可能表示写入失败或磁盘空间不足
+- 写入失败时应以 `finished == false` 调用 `je_cache_file_close`，使缓存文件保持无效
 
 ## 相关接口
 

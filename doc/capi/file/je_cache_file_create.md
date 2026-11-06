@@ -49,15 +49,16 @@ if (cache != nullptr) {
     const char* compiled_data = /* ... */;
     size_t data_size = /* ... */;
     
-    je_cache_file_write(compiled_data, 1, data_size, cache);
+    const size_t written = je_cache_file_write(compiled_data, 1, data_size, cache);
     
-    // 关闭缓存文件
-    je_cache_file_close(cache);
+    // 写入完整传 true 使缓存生效，失败传 false 保持缓存无效
+    je_cache_file_close(cache, written == data_size);
 }
 ```
 
 ## 注意事项
 
+- 创建时缓存主版本号留空占位，此时缓存文件始终无效，直到 `je_cache_file_close` 以 `finished == true` 关闭回写主版本号后缓存才生效
 - 创建后的缓存文件需要使用 `je_cache_file_close` 关闭
 - 使用 `je_cache_file_write` 写入数据
 - 会覆盖已存在的同名缓存文件
