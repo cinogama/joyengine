@@ -6,7 +6,7 @@
 JE_API je_writing_cache_file_t* je_cache_file_create(
     const char* filepath,
     uint32_t format_version,
-    uint64_t usecrc64);
+    wo_integer_t usecrc64);
 ```
 
 ## 描述
@@ -19,14 +19,14 @@ JE_API je_writing_cache_file_t* je_cache_file_create(
 |--------|------|------|
 | `filepath` | `const char*` | 原始文件路径 |
 | `format_version` | `uint32_t` | 缓存文件格式版本 |
-| `usecrc64` | `uint64_t` | 校验值设置 |
+| `usecrc64` | `wo_integer_t` | 校验值设置 |
 
 ### usecrc64 参数说明
 
 | 值 | 描述 |
 |----|------|
-| `0` | 自动计算 `filepath` 指定文件的校验值；原始文件缺失或为空时创建失败 |
-| 其他 | 直接使用指定值作为校验值（例如由 `je_cache_file_crc64` 拼接多个源文件得到） |
+| `0` | 自动计算 `filepath` 指定文件的校验值 |
+| 其他 | 直接使用指定值作为校验值 |
 
 ## 返回值
 
@@ -67,4 +67,3 @@ if (cache != nullptr) {
 - [je_cache_file_write](je_cache_file_write.md) - 写入缓存文件
 - [je_cache_file_close](je_cache_file_close.md) - 关闭缓存文件
 - [je_cache_file_load](je_cache_file_load.md) - 加载缓存文件
-- [je_cache_file_crc64](je_cache_file_crc64.md) - 计算文件内容的 crc64 校验值

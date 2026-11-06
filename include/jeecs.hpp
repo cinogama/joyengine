@@ -2104,19 +2104,6 @@ je_fimg_writer_abort [基本接口]
 */
 JE_API void je_fimg_writer_abort(je_fimg_writer_t* writer);
 
-/*
-je_cache_file_crc64 [基本接口]
-以 crc64_seed 为初值，按字节继续累加计算 filepath 指定文件内容的 crc64 校验值
-    * crc64_seed 为 0 时，结果即为该文件内容本身的校验值
-    * 以前一个文件的结果作为初值，可得到多个文件内容依次拼接后的校验值，
-      用于由多个源文件共同决定的缓存
-    * 文件不存在或为空时，原样返回 crc64_seed
-请参见：
-    je_cache_file_load
-    je_cache_file_create
-*/
-JE_API uint64_t je_cache_file_crc64(const char* filepath, uint64_t crc64_seed);
-
 // If ignore_crc64 == true, cache will always work even if origin file changed.
 
 /*
@@ -2124,8 +2111,7 @@ je_cache_file_load [基本接口]
 尝试读取 filepath 对应的缓存文件，将校验缓存文件的格式版本和校验码
 缓存文件存在且校验通过则成功读取，否则返回nullptr
     * 若 virtual_crc64 被指定为 -1，则忽略检验原始文件一致性
-    * 若 virtual_crc64 被指定为 0，则使用 filepath 指定文件的内容计算校验值；
-      原始文件缺失或为空（计算结果为 0）时跳过一致性检验
+    * 若 virtual_crc64 被指定为 0，则使用 filepath 指定文件的内容计算校验值
     * 其他情况，使用 virtual_crc64 直接指定校验值
     * 打开后的缓存文件需要使用 je_file_close 关闭
     * 使用 je_file_read 读取数据
@@ -2738,27 +2724,22 @@ enum je_image_texture_color_space_t
 
 /*
 je_image_texture_color_space_get [基本接口]
-读取图片纹理的颜色空间（来自图片纹理缓存 <path>.je4cache）
-    * 颜色空间的源头是属性源文件 <path>.je4texture（TOML，例如
-      color_space = "linear"）；值缺失或非法时为 SRGB
-    * 图片存在时按需生成或复用纹理缓存（见 je_image_texture_cache_open_or_create）；
-      图片缺失（如导出的运行时只携带缓存）时直接读取缓存并跳过 CRC 校验
-    * 图片与缓存都不存在、缓存无法生成或内容非法时返回 SRGB
-    * 缓存缺失时会完整解码图片以生成缓存
+读取图片纹理的颜色空间（来自属性源文件 <path>.je4texture）
+    * 属性源文件是 TOML，例如 color_space = "linear"；值缺失或非法时为 SRGB
+    * 引擎按源文件 CRC64 生成/复用 <path>.je4texture.je4cache，缓存可随时删除重建
+    * 已有缓存时直接读取；源文件缺失（如导出的运行时只携带缓存）时跳过 CRC 校验
+    * 属性源文件与缓存都不存在、缓存无法生成或内容非法时返回 SRGB
+    * 不检查 path 指向的文件是否为图片
 */
 JE_API je_image_texture_color_space_t je_image_texture_color_space_get(
     const char* path);
 
 /*
 je_image_texture_cache_open_or_create [基本接口]
-打开图片 path 的纹理缓存 <path>.je4cache；缓存缺失或失效时调用内置缓存生成器重建
-    * 缓存由图片与可选的属性源文件 <path>.je4texture 共同生成，包含颜色空间、
-      尺寸与 RGBA8 像素数据（行序自下而上）
-    * 校验码为图片与属性源文件内容依次拼接后的 crc64（见 je_cache_file_crc64）；
-      图片不可读时跳过 CRC 校验
+打开指定的图片纹理属性缓存；缓存缺失或失效时调用内置缓存生成器重建
+    * path 为属性源文件路径（<图片路径>.je4texture），不是图片路径
     * 返回的句柄由调用方负责关闭（见 je_file_close）；无法生成时返回 nullptr
 请参见：
-    je_cache_file_crc64
     je_cache_file_load
     je_file_close
 */
@@ -4245,18 +4226,12 @@ JE_API void je_graphic_shader_close(je_gl_shader_t* shader);
 /*
 je_graphic_texture_2d_load [基本接口]
 从指定路径加载一个二维纹理资源，加载的路径规则与 je_file_open 相同
-    * 优先读取图片纹理缓存 <path>.je4cache（颜色空间与像素数据），无需解码图片；
-      缓存缺失或失效时按图片与属性源文件 <path>.je4texture 生成缓存，
-      见 je_image_texture_cache_open_or_create
-    * 图片缺失时直接使用缓存（导出的运行时只携带缓存）
-    * 缓存不可用（无法生成或内容非法）时直接解码图片，并按 sRGB 处理
-    * 若图片与缓存都不可用，或图片不是一个合法的纹理，则返回nullptr
+    * 若指定的文件不存在或不是一个合法的纹理，则返回nullptr
     * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
         用计数，使用 je_graphic_texture_2d_close 可减少引用计数；当资源的引用计数变为 0 时，
         资源将被释放
 请参见：
     je_file_open
-    je_image_texture_cache_open_or_create
     jegl_share_resource
     je_graphic_texture_2d_close
 */

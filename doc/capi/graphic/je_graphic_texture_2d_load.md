@@ -44,10 +44,7 @@ if (texture != nullptr) {
 
 ## 注意事项
 
-- 优先读取图片纹理缓存 `<path>.je4cache`（颜色空间与像素数据），无需解码图片；缓存缺失或失效时按图片与属性源文件 `<path>.je4texture` 生成缓存，见 `je_image_texture_cache_open_or_create`
-- 图片缺失时直接使用缓存（导出的运行时只携带缓存）
-- 缓存不可用（无法生成或内容非法）时直接解码图片，并按 sRGB 处理
-- 若图片与缓存都不可用，或图片不是一个合法的纹理，则返回 `nullptr`
+- 若指定的文件不存在或不是一个合法的纹理，则返回 `nullptr`
 - 图形资源创建时自动获取一个引用计数
 - 使用 `jegl_share_resource` 可增加引用计数
 - 使用 `je_graphic_texture_2d_close` 可减少引用计数
@@ -56,5 +53,4 @@ if (texture != nullptr) {
 
 - [je_graphic_texture_2d_create](je_graphic_texture_2d_create.md) - 创建纹理
 - [je_graphic_texture_2d_close](je_graphic_texture_2d_close.md) - 关闭纹理
-- [je_image_texture_cache_open_or_create](je_image_texture_cache_open_or_create.md) - 打开或生成图片纹理缓存
 - [je_file_open](../file/je_file_open.md) - 打开文件

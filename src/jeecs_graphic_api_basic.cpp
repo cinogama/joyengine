@@ -2386,87 +2386,6 @@ void je_graphic_resource_handle_share(je_gl_resource_handle_t* resource_handle)
     ++resource_handle->m_raw_ref_count->m_binding_count;
 }
 
-// 按引擎统一的约定解码图片：强制 RGBA8，行序自下而上（与纹理坐标一致）。
-// 返回的像素由 stbi_image_free 释放；格式无法识别时返回 nullptr。
-static /* OPTIONAL */ stbi_uc* _jegl_decode_image_rgba8(
-    je_file_t* file, int* out_width, int* out_height)
-{
-    stbi_set_flip_vertically_on_load(true);
-
-    stbi_io_callbacks res_reader;
-    res_reader.read = [](void* f, char* data, int size)
-        { return (int)je_file_read(data, 1, (size_t)size, (je_file_t*)f); };
-    res_reader.eof = [](void* f)
-        { return je_file_tell((je_file_t*)f) >= je_file_size((je_file_t*)f) ? 1 : 0; };
-    res_reader.skip = [](void* f, int n)
-        { je_file_seek((je_file_t*)f, (size_t)n, je_file_seek_mode_t::JE_READ_FILE_SEEK_CURRENT); };
-
-    int cdepth;
-    return stbi_load_from_callbacks(
-        &res_reader, file, out_width, out_height, &cdepth, STBI_rgb_alpha);
-}
-
-// 打开图片 path 的纹理缓存（<path>.je4cache）。缓存可以脱离图片单独存在
-//（导出包只携带缓存），因此图片缺失时直接读取缓存，je_cache_file_load
-// 随之跳过一致性检验；只有图片存在时才允许生成，避免探测可选的图片
-//（如 @/icon.png）时打印生成失败日志。
-static /* OPTIONAL */ je_file_t* _jegl_open_image_texture_cache(const char* path)
-{
-    if (je_file_t* image = je_file_open(path))
-    {
-        je_file_close(image);
-        return je_image_texture_cache_open_or_create(path);
-    }
-    return je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, 0);
-}
-
-// 读取纹理缓存文档，由 builtin/script/internal/cache/texture.wo 生成：
-//   DOCUMENT
-//     "color_space" -> INT32（0 = sRGB，1 = Linear）
-//     "width"       -> INT32
-//     "height"      -> INT32
-//     "pixels"      -> BUFFER（width * height * 4 字节 RGBA8，行序自下而上）
-// 像素放在最后，按键查找时不会跳过（解压）大块像素数据。返回的像素由
-// malloc 分配，与 stbi_image_free 兼容；文档不完整时返回 nullptr。
-static /* OPTIONAL */ je_gl_texture_pixel_data_t* _jegl_read_image_texture_cache(
-    je_file_t* cache, size_t* out_width, size_t* out_height, bool* out_srgb)
-{
-    je_cache_binary_document_t root;
-    int32_t color_space, width, height;
-    je_cache_binary_buffer_t pixels_buffer;
-
-    if (!je_cache_binary_document_open(cache, &root)
-        || !je_cache_binary_document_index(
-            &root, "color_space", JE_CACHE_BINARY_VALUE_INT32, &color_space)
-        || !je_cache_binary_document_index(
-            &root, "width", JE_CACHE_BINARY_VALUE_INT32, &width)
-        || !je_cache_binary_document_index(
-            &root, "height", JE_CACHE_BINARY_VALUE_INT32, &height)
-        || !je_cache_binary_document_index(
-            &root, "pixels", JE_CACHE_BINARY_VALUE_BUFFER, &pixels_buffer)
-        || width <= 0
-        || height <= 0)
-        return nullptr;
-
-    const size_t pixels_length = (size_t)width * (size_t)height * 4;
-    auto* const pixels =
-        static_cast<je_gl_texture_pixel_data_t*>(malloc(pixels_length));
-    assert(pixels != nullptr);
-
-    size_t read_length = pixels_length;
-    if (!je_cache_binary_buffer_read(pixels, &read_length, &pixels_buffer)
-        || read_length != pixels_length)
-    {
-        free(pixels);
-        return nullptr;
-    }
-
-    *out_width = (size_t)width;
-    *out_height = (size_t)height;
-    *out_srgb = color_space != (int32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR;
-    return pixels;
-}
-
 /* OPTIONAL */ je_gl_texture_2d_t* je_graphic_texture_2d_load(/* OPTIONAL */ je_gl_context_t* context, const char* path)
 {
     auto* shared_texture =
@@ -2476,145 +2395,58 @@ static /* OPTIONAL */ je_gl_texture_pixel_data_t* _jegl_read_image_texture_cache
     if (shared_texture != nullptr)
         return shared_texture;
 
-    je_gl_texture_pixel_data_t* pixels = nullptr;
-    size_t width = 0, height = 0;
-
-    // Image textures default to sRGB; the <path>.je4texture property source
-    // (edited from the texture properties window) can mark non-color data
-    // (normal maps, masks, ...) linear. The texture cache carries it.
-    bool srgb = true;
-
-    // 优先使用纹理缓存：颜色空间与像素都从缓存读取，无需解码图片。
-    if (je_file_t* cache = _jegl_open_image_texture_cache(path))
+    if (je_file_t* texfile = je_file_open(path))
     {
-        pixels = _jegl_read_image_texture_cache(cache, &width, &height, &srgb);
-        je_file_close(cache);
+        je_gl_texture_2d_t* texture_instance =
+            static_cast<je_gl_texture_2d_t*>(malloc(sizeof(je_gl_texture_2d_t)));
 
-        // 缓存存在但无法解析属于损坏而非缺失，报告后回退为直接解码。
-        if (pixels == nullptr)
-            jeecs::debug::logerr("Invalid image texture cache for '%s'.", path);
-    }
+        int w, h, cdepth;
 
-    // 缓存不可用（生成器不可用、无法写入缓存或缓存损坏）时直接解码图片，
-    // 此时读不到属性，按默认的 sRGB 处理。
-    if (pixels == nullptr)
-    {
-        je_file_t* const texfile = je_file_open(path);
-        if (texfile == nullptr)
-        {
-            jeecs::debug::loginfo("Cannot load texture: Failed to open file: '%s'", path);
-            return nullptr;
-        }
+        stbi_set_flip_vertically_on_load(true);
 
-        int w, h;
-        pixels = _jegl_decode_image_rgba8(texfile, &w, &h);
+        stbi_io_callbacks res_reader;
+        res_reader.read = [](void* f, char* data, int size)
+            { return (int)je_file_read(data, 1, (size_t)size, (je_file_t*)f); };
+        res_reader.eof = [](void* f)
+            { return je_file_tell((je_file_t*)f) >= je_file_size((je_file_t*)f) ? 1 : 0; };
+        res_reader.skip = [](void* f, int n)
+            { je_file_seek((je_file_t*)f, (size_t)n, je_file_seek_mode_t::JE_READ_FILE_SEEK_CURRENT); };
+
+        texture_instance->m_pixels = stbi_load_from_callbacks(
+            &res_reader, texfile, &w, &h, &cdepth, STBI_rgb_alpha);
+
         je_file_close(texfile);
 
-        if (pixels == nullptr)
+        if (texture_instance->m_pixels == nullptr)
         {
             jeecs::debug::logerr("Cannot load texture: Invalid image format of file: '%s'", path);
+            free(texture_instance);
             return nullptr;
         }
 
-        width = (size_t)w;
-        height = (size_t)h;
-        srgb = true;
-    }
+        texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_2D;
+        texture_instance->m_width = (size_t)w;
+        texture_instance->m_height = (size_t)h;
+        texture_instance->m_format = JE_GL_TEXTURE_FORMAT_RGBA;
 
-    je_gl_texture_2d_t* texture_instance =
-        static_cast<je_gl_texture_2d_t*>(malloc(sizeof(je_gl_texture_2d_t)));
-    assert(texture_instance != nullptr);
-
-    texture_instance->m_pixels = pixels;
-    texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_2D;
-    texture_instance->m_width = width;
-    texture_instance->m_height = height;
-    texture_instance->m_format = srgb
-        ? (je_gl_texture_format_t)(JE_GL_TEXTURE_FORMAT_RGBA | JE_GL_TEXTURE_FORMAT_SRGB)
-        : JE_GL_TEXTURE_FORMAT_RGBA;
-
-    _jegl_init_resource_handle(&texture_instance->m_handle, path);
-
-    return _jegl_try_update_shared_resource(
-        context, texture_instance);
-}
-
-je_image_texture_color_space_t je_image_texture_color_space_get(const char* path)
-{
-    assert(path != nullptr);
-
-    je_file_t* const cache = _jegl_open_image_texture_cache(path);
-
-    // 图片与缓存都不可用（或生成失败）时按默认的 sRGB 处理。
-    if (cache == nullptr)
-        return JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
-
-    je_cache_binary_document_t root;
-    int32_t color_space = (int32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
-
-    const bool valid = je_cache_binary_document_open(cache, &root)
-        && je_cache_binary_document_index(
-            &root,
-            "color_space",
-            JE_CACHE_BINARY_VALUE_INT32,
-            &color_space);
-    je_file_close(cache);
-
-    if (!valid)
-    {
-        // A cache file that exists but cannot be parsed is corruption, not a
-        // miss; report it instead of silently treating it as the default.
-        jeecs::debug::logerr("Invalid image texture cache for '%s'.", path);
-        return JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
-    }
-
-    return color_space == (int32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR
-        ? JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR
-        : JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
-}
-
-// 纹理缓存生成器（builtin/script/internal/cache/texture.wo）的像素部分：
-// 解码 path 指向的图片，向当前文档追加 "width" INT32、"height" INT32 与
-// "pixels" BUFFER，像素与 je_graphic_texture_2d_load 直接解码的结果一致。
-// 图片无法打开或解码时返回 false。
-WOORT_API woort_api wojeapi_cache_binary_append_image_texture_pixels(void)
-{
-    auto* file = static_cast<je_writing_cache_file_t*>(woort_pointer(0));
-    const woort_U8CString path = woort_string(1);
-
-    bool succ = false;
-
-    woort_vm* const last = woort_vm_swap(nullptr);
-    {
-        if (je_file_t* image = je_file_open(path))
+        // Image textures default to sRGB; the <path>.je4texture property
+        // source (edited from the texture properties window) can mark
+        // non-color data (normal maps, masks, ...) linear.
+        if (je_image_texture_color_space_get(path)
+            == JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB)
         {
-            int w, h;
-            stbi_uc* const pixels = _jegl_decode_image_rgba8(image, &w, &h);
-            je_file_close(image);
-
-            if (pixels != nullptr)
-            {
-                succ = je_cache_binary_append_string(file, "width")
-                    && je_cache_binary_append_int32(file, (int32_t)w)
-                    && je_cache_binary_append_string(file, "height")
-                    && je_cache_binary_append_int32(file, (int32_t)h)
-                    && je_cache_binary_append_string(file, "pixels")
-                    && je_cache_binary_append_buffer(
-                        file, pixels, (size_t)w * (size_t)h * 4);
-
-                stbi_image_free(pixels);
-            }
-            else
-                jeecs::debug::logerr(
-                    "Cannot generate texture cache: Invalid image format of file: '%s'", path);
+            texture_instance->m_format = (je_gl_texture_format_t)(
+                texture_instance->m_format | JE_GL_TEXTURE_FORMAT_SRGB);
         }
-        else
-            jeecs::debug::logerr(
-                "Cannot generate texture cache: Failed to open file: '%s'", path);
-    }
-    (void)woort_vm_swap(last);
 
-    return woort_ret_bool(succ);
+        _jegl_init_resource_handle(&texture_instance->m_handle, path);
+
+        return _jegl_try_update_shared_resource(
+            context, texture_instance);
+    }
+
+    jeecs::debug::loginfo("Cannot load texture: Failed to open file: '%s'", path);
+    return nullptr;
 }
 
 je_gl_vertex_t* _jegl_create_vertex_impl(

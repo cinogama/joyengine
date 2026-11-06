@@ -10,26 +10,9 @@
 // WARNING!!!!
 // DO NOT USE SIZE_T!!!!
 
-// Host file-system path of filepath's cache (<filepath>.je4cache); engine
-// path prefixes (@/ runtime, !/ host) are resolved for direct fopen/remove.
-static std::string _cache_file_native_path(const char* filepath)
+uint64_t _crc64_of_file(const char* filepath)
 {
-    using namespace std;
-
-    string file_cache_path = filepath + ".je4cache"s;
-    if (file_cache_path[0] == '@')
-        file_cache_path = je_file_runtime_path_get() + file_cache_path.substr(1);
-    if (file_cache_path[0] == '!')
-        file_cache_path = je_file_host_path_get() + file_cache_path.substr(1);
-
-    return file_cache_path;
-}
-
-uint64_t je_cache_file_crc64(const char* filepath, uint64_t crc64_seed)
-{
-    assert(filepath != nullptr);
-
-    uint64_t crc64_result = crc64_seed;
+    uint64_t crc64_result = 0;
     if (auto* origin_file = je_file_open(filepath))
     {
         constexpr size_t READ_COUNT_PER_GROUP = 256;
@@ -95,7 +78,7 @@ uint64_t je_cache_file_crc64(const char* filepath, uint64_t crc64_seed)
         else
         {
             uint64_t crc64_result =
-                virtual_crc64 ? virtual_crc64 : je_cache_file_crc64(filepath, 0);
+                virtual_crc64 ? virtual_crc64 : _crc64_of_file(filepath);
 
             uint64_t cache_crc64 = 0;
             je_file_read(&cache_crc64, sizeof(uint64_t), 1, cache_file);
@@ -122,7 +105,7 @@ uint64_t je_cache_file_crc64(const char* filepath, uint64_t crc64_seed)
 {
     using namespace std;
 
-    uint64_t crc64_result = usecrc64 == 0 ? je_cache_file_crc64(filepath, 0) : usecrc64;
+    uint64_t crc64_result = usecrc64 == 0 ? _crc64_of_file(filepath) : usecrc64;
     if (crc64_result == 0)
     {
         jeecs::debug::logwarn(
@@ -132,7 +115,11 @@ uint64_t je_cache_file_crc64(const char* filepath, uint64_t crc64_seed)
         return nullptr;
     }
 
-    const string file_cache_path = _cache_file_native_path(filepath);
+    string file_cache_path = filepath + ".je4cache"s;
+    if (file_cache_path[0] == '@')
+        file_cache_path = je_file_runtime_path_get() + file_cache_path.substr(1);
+    if (file_cache_path[0] == '!')
+        file_cache_path = je_file_host_path_get() + file_cache_path.substr(1);
 
     FILE* f = fopen(file_cache_path.c_str(), "wb");
 
@@ -161,12 +148,4 @@ size_t je_cache_file_write(
 void je_cache_file_close(je_writing_cache_file_t* file)
 {
     fclose(reinterpret_cast<FILE*>(file));
-}
-
-// Engine-internal (not part of the C-API): removes the cache file of
-// filepath, e.g. a half-written cache left by a failed generator whose
-// header (with a matching crc64) would otherwise keep being accepted.
-void _jeecs_cache_file_discard(const char* filepath)
-{
-    (void)std::remove(_cache_file_native_path(filepath).c_str());
 }

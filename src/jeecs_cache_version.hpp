@@ -7,10 +7,9 @@ constexpr uint32_t CACHE_MANAGER_MAIN_VERSION = 0x00000003;
 
 // Sub cache versions
 constexpr uint32_t SHADER_CACHE_VERSION = 0x00000290;
-// Image texture cache generated from the image file and its optional
-// .je4texture TOML property source; the payload is a binary cache document
-// (color_space -> INT32, width -> INT32, height -> INT32, pixels -> BUFFER).
-constexpr uint32_t IMAGE_TEXTURE_CACHE_VERSION = 0x00000003;
+// Image texture property cache generated from the .je4texture TOML source;
+// the payload is a binary cache document (color_space -> INT32).
+constexpr uint32_t IMAGE_TEXTURE_CACHE_VERSION = 0x00000002;
 // Frame animation cache generated from the .je4animation TOML source; the
 // payload is a binary cache document (see jeecs_cache_binary_* in jeecs.hpp).
 constexpr uint32_t ANIMATION_CACHE_VERSION = 0x00000001;

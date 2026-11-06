@@ -1,19 +1,13 @@
-// 纹理缓存生成器：根据图片与可选的 <图片路径>.je4texture 属性 TOML，生成
-// 引擎可读的二进制缓存文档（je_cache_binary_* 格式）。
+// 纹理属性缓存生成器：把 <图片路径>.je4texture TOML 转换为引擎可读的
+// 二进制缓存文档（je_cache_binary_* 格式）。
 //
-// 由引擎在 <图片路径>.je4cache 缺失或失效时加载，调用 generate：
-//   cache  —— C 侧创建好的缓存写入器（文件头已写入，校验码是图片与属性
-//             源内容依次拼接后的 crc64）
-//   source —— 图片的引擎路径（@/ 或 !/）
+// 由引擎在 .je4cache 缺失或失效时加载，调用 generate：
+//   cache  —— C 侧创建好的缓存写入器（文件头已写入）
+//   source —— 属性 TOML 的引擎路径（@/ 或 !/），经 je::file::readall 读取
 //
-// 文档结构与 src/jeecs_graphic_api_basic.cpp 的读取逻辑一一对应：
+// 文档结构与 src/jeecs_basic_file_image.cpp 的读取逻辑一一对应：
 //   DOCUMENT
-//     "color_space" -> INT32（0 = sRGB，1 = Linear），来自属性 TOML
-//     "width"       -> INT32
-//     "height"      -> INT32
-//     "pixels"      -> BUFFER（width * height * 4 字节 RGBA8，行序自下而上）
-// 宽高与像素由引擎解码图片后直接写入（append_image_texture_pixels），像素
-// 数据不经过脚本。
+//     "color_space" -> INT32（0 = sRGB，1 = Linear）
 
 import pkg::std;
 import pkg::toml;
@@ -24,48 +18,49 @@ import je::cache;
 using std;
 using toml;
 
-// 读取属性 TOML 中的颜色空间。属性源是可选的：缺失或取值未知时按默认的
-// sRGB 处理；无法解析时报告错误后同样按 sRGB 处理，修正后校验码随之改变，
-// 缓存会被重建。
-func load_color_space(settings_path: string)=> int
-{
-    match (je::file::readall(settings_path))
-    {
-        value(text)?
-        {
-            match (toml::parse(text))
-            {
-                ok(root)?
-                {
-                    match (root["color_space"]->as_string)
-                    {
-                        value(name)?
-                        {
-                            if (name->lower == "linear")
-                                return 1;
-                        }
-                        none?;
-                    }
-                }
-                err(msg)?
-                    je::logerr(F"无法解析纹理属性 TOML 文件 {settings_path}：{msg}");
-            }
-        }
-        none?;
-    }
-    return 0;
-}
-
 extern func generate(
     cache: je::cache::binary_writer, source: string)=> bool
 {
+    let mut source_text = option::none: option<string>;
+    match (je::file::readall(source))
+    {
+        value(text)? source_text = option::value(text);
+        none?
+        {
+            je::logerr(F"无法读取纹理属性 TOML 文件 {source}");
+            return false;
+        }
+    }
+
+    let mut loaded = option::none: option<Toml>;
+    match (toml::parse(source_text->unwrap))
+    {
+        ok(root)? loaded = option::value(root);
+        err(msg)?
+        {
+            je::logerr(F"无法解析纹理属性 TOML 文件 {source}：{msg}");
+            return false;
+        }
+    }
+    let root = loaded->unwrap;
+
+    // 缺失或未知取值一律按默认的 sRGB 处理。
+    let mut color_space = 0;
+    match (root["color_space"]->as_string)
+    {
+        value(name)?
+        {
+            if (name->lower == "linear")
+                color_space = 1;
+        }
+        none?;
+    }
+
     if (!cache->append_document())
         return false;
     if (!cache->append_string("color_space"))
         return false;
-    if (!cache->append_int32(load_color_space(source + ".je4texture")))
-        return false;
-    if (!cache->append_image_texture_pixels(source))
+    if (!cache->append_int32(color_space))
         return false;
     return cache->append_end();
 }
