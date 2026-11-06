@@ -4,7 +4,11 @@
 #include "wo.h"
 #include "jeecs_cache_version.hpp"
 
+#include <string>
 #include <vector>
+
+// jeecs_cache_mgr.cpp
+void _jeecs_cache_file_discard(const char* filepath);
 
 using namespace std;
 
@@ -227,24 +231,27 @@ void je_internal_script_finish()
 }
 
 static je_file_t* _jeecs_generate_cache(
-    const char* path, uint32_t format_version, woort_CodeEnv* cenv)
+    const char* path, uint32_t format_version, woort_CodeEnv* cenv, uint64_t usecrc64)
 {
     static constexpr const char* SCRIPT_ENTRY = "generate";
+
+    je_writing_cache_file_t* const cache_file = je_cache_file_create(
+        path, format_version, usecrc64);
+
+    if (cache_file == nullptr)
+    {
+        debug::logerr("Failed to create cache file for generating `%s`.", path);
+        return nullptr;
+    }
 
     woort_vm* const vmm = woort_vm_create();
 
     if (vmm == nullptr)
     {
-        debug::logerr("Failed to create new script vm for generating `%s`.");
-        return nullptr;
-    }
+        debug::logerr("Failed to create new script vm for generating `%s`.", path);
 
-    je_writing_cache_file_t* const cache_file = je_cache_file_create(
-        path, format_version, 0);
-
-    if (cache_file == nullptr)
-    {
-        debug::logerr("Failed to create cache file for generating `%s`.");
+        je_cache_file_close(cache_file);
+        _jeecs_cache_file_discard(path);
         return nullptr;
     }
 
@@ -301,8 +308,11 @@ static je_file_t* _jeecs_generate_cache(
     je_cache_file_close(cache_file);
 
     if (succ)
-        return je_cache_file_load(path, format_version, 0);
+        return je_cache_file_load(path, format_version, usecrc64);
 
+    // 文件头（含与源一致的校验码）在调用生成器之前就已写出，半成品缓存
+    // 不删除的话会一直被当作有效缓存，直到源文件改变。
+    _jeecs_cache_file_discard(path);
     return nullptr;
 }
 
@@ -315,7 +325,8 @@ static je_file_t* _jeecs_generate_cache(
         return _jeecs_generate_cache(
             path,
             ANIMATION_CACHE_VERSION,
-            cache_builder_of_animation.value());
+            cache_builder_of_animation.value(),
+            0);
     return nullptr;
 }
 
@@ -328,7 +339,8 @@ static je_file_t* _jeecs_generate_cache(
         return _jeecs_generate_cache(
             path,
             TILEMAP_CACHE_VERSION,
-            cache_builder_of_tilemap.value());
+            cache_builder_of_tilemap.value(),
+            0);
     return nullptr;
 }
 
@@ -341,19 +353,30 @@ static je_file_t* _jeecs_generate_cache(
         return _jeecs_generate_cache(
             path,
             TILESET_CACHE_VERSION,
-            cache_builder_of_tileset.value());
+            cache_builder_of_tileset.value(),
+            0);
     return nullptr;
 }
 
 /* OPTIONAL */ je_file_t* je_image_texture_cache_open_or_create(const char* path)
 {
-    if (je_file_t* file = je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, 0))
+    // 图片缓存由图片与可选的 <图片路径>.je4texture 属性源共同生成，校验码
+    // 是二者内容依次拼接后的 crc64；图片不可读时为 0，je_cache_file_load
+    // 随之跳过一致性检验（导出包只携带缓存）。
+    const std::string settings_path = std::string(path) + ".je4texture";
+
+    uint64_t crc64 = je_cache_file_crc64(path, 0);
+    if (crc64 != 0)
+        crc64 = je_cache_file_crc64(settings_path.c_str(), crc64);
+
+    if (je_file_t* file = je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, crc64))
         return file;
 
     if (cache_builder_of_image_texture.has_value())
         return _jeecs_generate_cache(
             path,
             IMAGE_TEXTURE_CACHE_VERSION,
-            cache_builder_of_image_texture.value());
+            cache_builder_of_image_texture.value(),
+            crc64);
     return nullptr;
 }

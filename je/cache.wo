@@ -35,6 +35,13 @@ namespace je::cache
 
         extern("libjoyecs", "wojeapi_cache_binary_append_float32")
             public func append_float32(self: binary_writer, value: real)=> bool;
+
+        // 纹理缓存生成器专用：由引擎解码 path 指向的图片，向当前文档追加
+        // "width" INT32、"height" INT32 与 "pixels" BUFFER（RGBA8，行序自下
+        // 而上）。像素数据不经过脚本；图片无法打开或解码时返回 false。
+        extern("libjoyecs", "wojeapi_cache_binary_append_image_texture_pixels")
+            public func append_image_texture_pixels(self: binary_writer,
+                path: string)=> bool;
     }
 
     // 确保 path 指向的 .je4animation TOML 已有可用的 .je4cache；缺失或
@@ -50,8 +57,9 @@ namespace je::cache
     extern("libjoyecs", "wojeapi_tilemap_cache_ensure")
         public func generate_map_cache(path: string)=> bool;
 
-    // 确保 path 指向的 .je4texture TOML 已有可用的 .je4cache；path 为
-    // 属性源文件路径（<图片路径>.je4texture），引擎加载纹理时走同一流程。
+    // 确保图片 path 已有可用的纹理缓存（<图片路径>.je4cache，包含颜色空间
+    // 与像素数据，由图片与可选的 <图片路径>.je4texture 属性源共同生成）；
+    // 引擎加载纹理时走同一流程，这里提供给导出流程预生成缓存。
     extern("libjoyecs", "wojeapi_image_texture_cache_ensure")
         public func generate_texture_cache(path: string)=> bool;
 }

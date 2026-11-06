@@ -6,7 +6,7 @@
 JE_API je_file_t* je_cache_file_load(
     const char* filepath,
     uint32_t format_version,
-    wo_integer_t virtual_crc64);
+    uint64_t virtual_crc64);
 ```
 
 ## 描述
@@ -19,15 +19,15 @@ JE_API je_file_t* je_cache_file_load(
 |--------|------|------|
 | `filepath` | `const char*` | 缓存文件路径 |
 | `format_version` | `uint32_t` | 缓存文件格式版本 |
-| `virtual_crc64` | `wo_integer_t` | 校验值设置 |
+| `virtual_crc64` | `uint64_t` | 校验值设置 |
 
 ### virtual_crc64 参数说明
 
 | 值 | 描述 |
 |----|------|
 | `-1` | 忽略原始文件一致性校验 |
-| `0` | 使用 `filepath` 指定文件的内容计算校验值 |
-| 其他 | 直接使用指定值作为校验值 |
+| `0` | 使用 `filepath` 指定文件的内容计算校验值；原始文件缺失或为空（计算结果为 0）时跳过一致性校验 |
+| 其他 | 直接使用指定值作为校验值（例如由 `je_cache_file_crc64` 拼接多个源文件得到） |
 
 ## 返回值
 
@@ -66,5 +66,6 @@ je_file_t* cache2 = je_cache_file_load("@/shader/basic.shader", 1, -1);
 ## 相关接口
 
 - [je_cache_file_create](je_cache_file_create.md) - 创建缓存文件
+- [je_cache_file_crc64](je_cache_file_crc64.md) - 计算文件内容的 crc64 校验值
 - [je_file_read](je_file_read.md) - 读取文件内容
 - [je_file_close](je_file_close.md) - 关闭文件

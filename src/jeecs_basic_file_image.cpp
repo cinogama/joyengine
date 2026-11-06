@@ -1,6 +1,5 @@
 #define JE_IMPL
 #include "jeecs.hpp"
-#include "jeecs_cache_version.hpp"
 #include "jeecs_fimg_archive.hpp"
 
 #include "wo.h"
@@ -489,60 +488,8 @@ void je_fimg_writer_abort(je_fimg_writer_t* writer)
     delete writer;
 }
 
-je_image_texture_color_space_t je_image_texture_color_space_get(const char* path)
-{
-    assert(path != nullptr);
-
-    const std::string settings_path = std::string(path) + ".je4texture";
-
-    // 导出的运行时只携带 .je4cache（.je4texture 源文件不随包），因此先按
-    // 源路径读取已有缓存；源文件缺失时 je_cache_file_load 跳过 CRC 校验。
-    je_file_t* cache = je_cache_file_load(
-        settings_path.c_str(), IMAGE_TEXTURE_CACHE_VERSION, 0);
-
-    if (cache == nullptr)
-    {
-        // 属性是可选资源：源文件也不存在时直接按默认值处理，不调用生成器
-        //（否则每张没有属性的纹理都会在加载时打印生成失败日志）。
-        je_file_t* const source = je_file_open(settings_path.c_str());
-        if (source == nullptr)
-            return JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
-        je_file_close(source);
-
-        // 缓存缺失或失效且源文件存在：调用生成器重建。
-        cache = je_image_texture_cache_open_or_create(settings_path.c_str());
-
-        // 生成器不可用或生成失败时同样回退到 sRGB。
-        if (cache == nullptr)
-            return JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
-    }
-
-    je_cache_binary_document_t root;
-    int32_t color_space = (int32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
-
-    const bool valid = je_cache_binary_document_open(cache, &root)
-        && je_cache_binary_document_index(
-            &root,
-            "color_space",
-            JE_CACHE_BINARY_VALUE_INT32,
-            &color_space);
-    je_file_close(cache);
-
-    if (!valid)
-    {
-        // A cache file that exists but cannot be parsed is corruption, not a
-        // miss; report it instead of silently treating it as the default.
-        jeecs::debug::logerr(
-            "Invalid image texture property cache for '%s'.",
-            settings_path.c_str());
-        return JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
-    }
-
-    return color_space == (int32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR
-        ? JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR
-        : JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
-}
-
+// 确保图片 path（不是 .je4texture 属性源）已有可用的纹理缓存；供导出流程
+// 预生成，引擎加载纹理时走同一个 je_image_texture_cache_open_or_create。
 WOORT_API woort_api wojeapi_image_texture_cache_ensure(void)
 {
     const std::string path = woort_string(0);
