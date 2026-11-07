@@ -13,17 +13,18 @@
 
 #define JE_AL_DEVICE(p) reinterpret_cast<ALCdevice *>(p)
 #define AL_JE_DEVICE(p) reinterpret_cast<je_audio_native_play_device_instance_t *>(p)
-#define JE_EFFECT_HEAD(v) (AudioEffectHead *)(reinterpret_cast<intptr_t>(v) - sizeof(AudioEffectHead))
-#define JE_EFFECT_DATA(t, v) (t *)(reinterpret_cast<intptr_t>(v) + sizeof(AudioEffectHead))
+#define JE_EFFECT_HEAD(v) (EffectHead *)(reinterpret_cast<intptr_t>(v) - sizeof(EffectHead))
+#define JE_EFFECT_DATA(t, v) (t *)(reinterpret_cast<intptr_t>(v) + sizeof(EffectHead))
 
 using namespace std;
 using namespace jeecs;
+using namespace jeecs::audio;
 
-namespace jeecs
+namespace jeecs::audio
 {
     namespace
     {
-        struct AudioNativeEffectInstance
+        struct NativeEffectInstance
         {
             ALuint m_effect_id;
 
@@ -33,52 +34,52 @@ namespace jeecs
             };
             optional<dump_data_t> m_dump;
         };
-        struct alignas(8) AudioEffectHead
+        struct alignas(8) EffectHead
         {
-            AudioNativeEffectInstance* m_effect_instance;
+            NativeEffectInstance* m_effect_instance;
             ALenum m_effect_kind;
 
             size_t m_references;
         };
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_reverb_t) == 0);
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_chorus_t) == 0);
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_distortion_t) == 0);
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_echo_t) == 0);
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_flanger_t) == 0);
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_frequency_shifter_t) == 0);
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_vocal_morpher_t) == 0);
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_pitch_shifter_t) == 0);
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_ring_modulator_t) == 0);
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_autowah_t) == 0);
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_compressor_t) == 0);
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_equalizer_t) == 0);
-        static_assert(sizeof(AudioEffectHead) % alignof(je_audio_effect_eax_reverb_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_reverb_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_chorus_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_distortion_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_echo_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_flanger_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_frequency_shifter_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_vocal_morpher_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_pitch_shifter_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_ring_modulator_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_autowah_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_compressor_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_equalizer_t) == 0);
+        static_assert(sizeof(EffectHead) % alignof(je_audio_effect_eax_reverb_t) == 0);
 
-        class AudioContextHelper
+        class ContextHelper
         {
         public:
             static void increase_ref(const je_audio_buffer_t* buffer);
             static void decrease_ref(const je_audio_buffer_t* buffer);
-            static void increase_ref(AudioEffectHead* effect);
-            static void decrease_ref(AudioEffectHead* effect);
+            static void increase_ref(EffectHead* effect);
+            static void decrease_ref(EffectHead* effect);
             static void increase_ref(je_audio_effect_slot_t* effect_slot);
             static void decrease_ref(je_audio_effect_slot_t* effect_slot);
             static void increase_ref(je_audio_filter_t* filter);
             static void decrease_ref(je_audio_filter_t* filter);
 
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_reverb_t* reverb);
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_chorus_t* chorus);
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_distortion_t* distortion);
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_echo_t* echo);
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_flanger_t* flanger);
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_frequency_shifter_t* shifter);
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_vocal_morpher_t* morpher);
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_pitch_shifter_t* shifter);
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_ring_modulator_t* modulator);
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_autowah_t* wah);
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_compressor_t* compressor);
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_equalizer_t* equalizer);
-            static void effect_init_default(AudioEffectHead* head, je_audio_effect_eax_reverb_t* eaxreverb);
+            static void effect_init_default(EffectHead* head, je_audio_effect_reverb_t* reverb);
+            static void effect_init_default(EffectHead* head, je_audio_effect_chorus_t* chorus);
+            static void effect_init_default(EffectHead* head, je_audio_effect_distortion_t* distortion);
+            static void effect_init_default(EffectHead* head, je_audio_effect_echo_t* echo);
+            static void effect_init_default(EffectHead* head, je_audio_effect_flanger_t* flanger);
+            static void effect_init_default(EffectHead* head, je_audio_effect_frequency_shifter_t* shifter);
+            static void effect_init_default(EffectHead* head, je_audio_effect_vocal_morpher_t* morpher);
+            static void effect_init_default(EffectHead* head, je_audio_effect_pitch_shifter_t* shifter);
+            static void effect_init_default(EffectHead* head, je_audio_effect_ring_modulator_t* modulator);
+            static void effect_init_default(EffectHead* head, je_audio_effect_autowah_t* wah);
+            static void effect_init_default(EffectHead* head, je_audio_effect_compressor_t* compressor);
+            static void effect_init_default(EffectHead* head, je_audio_effect_equalizer_t* equalizer);
+            static void effect_init_default(EffectHead* head, je_audio_effect_eax_reverb_t* eaxreverb);
 
             template <typename T>
             class Holder
@@ -145,13 +146,13 @@ struct je_audio_native_buffer_instance_t
 struct je_audio_native_source_instance_t
 {
     ALuint m_source_id;
-    AudioContextHelper::Holder<const je_audio_buffer_t> m_playing_buffer;
-    AudioContextHelper::Holder<je_audio_filter_t> m_playing_filter;
+    ContextHelper::Holder<const je_audio_buffer_t> m_playing_buffer;
+    ContextHelper::Holder<je_audio_filter_t> m_playing_filter;
 
     struct playing_effect_slot_and_filter
     {
-        AudioContextHelper::Holder<je_audio_effect_slot_t>    m_slot;
-        AudioContextHelper::Holder<je_audio_filter_t>         m_filter;
+        ContextHelper::Holder<je_audio_effect_slot_t>    m_slot;
+        ContextHelper::Holder<je_audio_filter_t>         m_filter;
     };
     playing_effect_slot_and_filter m_playing_effect_slot_and_filters[audio::MAX_AUXILIARY_SENDS];
 
@@ -166,7 +167,7 @@ struct je_audio_native_source_instance_t
 struct je_audio_native_effect_slot_instance_t
 {
     ALuint m_effect_slot_id;
-    AudioContextHelper::Holder<AudioEffectHead> m_binding_effect;
+    ContextHelper::Holder<EffectHead> m_binding_effect;
 
     struct dump_data_t
     {
@@ -184,15 +185,15 @@ struct je_audio_native_filter_instance_t
     optional<dump_data_t> m_dump;
 };
 
-namespace jeecs
+namespace jeecs::audio
 {
     namespace
     {
-        class AudioContext
+        class Context
         {
-            JECS_DISABLE_MOVE_AND_COPY(AudioContext);
+            JECS_DISABLE_MOVE_AND_COPY(Context);
 
-            friend class AudioContextHelper;
+            friend class ContextHelper;
 
             const bool m_openal_ALC_ENUMERATE_ALL_EXT_enabled;
 
@@ -251,7 +252,7 @@ namespace jeecs
             mutex m_buffers_mx; // g2
             unordered_set<je_audio_buffer_t*> m_buffers;
             mutex m_effects_mx; // g3
-            unordered_set<AudioEffectHead*> m_effects;
+            unordered_set<EffectHead*> m_effects;
             mutex m_effect_slots_mx; // g4
             unordered_set<je_audio_effect_slot_t*> m_effect_slots;
             mutex m_filters_mx; // g5
@@ -313,7 +314,7 @@ namespace jeecs
                     m_buffers_dump;
                 unordered_map<je_audio_source_t*, je_audio_native_source_instance_t*>
                     m_sources_dump;
-                unordered_map<AudioEffectHead*, AudioNativeEffectInstance*>
+                unordered_map<EffectHead*, NativeEffectInstance*>
                     m_effects_dump;
                 unordered_map<je_audio_effect_slot_t*, je_audio_native_effect_slot_instance_t*>
                     m_effect_slots_dump;
@@ -1125,7 +1126,7 @@ namespace jeecs
                 shutdown_buffer(rw_buffer);
             }
 
-            void update_effect_lockfree(AudioEffectHead* effect)
+            void update_effect_lockfree(EffectHead* effect)
             {
                 if (!m_current_play_device.has_value())
                 {
@@ -1138,7 +1139,7 @@ namespace jeecs
 
                 if (effect->m_effect_instance == nullptr)
                 {
-                    effect->m_effect_instance = new AudioNativeEffectInstance;
+                    effect->m_effect_instance = new NativeEffectInstance;
                     if (efx != nullptr)
                         efx->alGenEffects(1, &effect->m_effect_instance->m_effect_id);
                 }
@@ -1354,7 +1355,7 @@ namespace jeecs
                     effect->m_effect_instance->m_dump.reset();
                 }
             }
-            AudioNativeEffectInstance* shutdown_effect_native_instance(AudioEffectHead* effect)
+            NativeEffectInstance* shutdown_effect_native_instance(EffectHead* effect)
             {
                 if (effect->m_effect_instance != nullptr)
                 {
@@ -1368,7 +1369,7 @@ namespace jeecs
                 }
                 return nullptr;
             }
-            void shutdown_effect(AudioEffectHead* effect)
+            void shutdown_effect(EffectHead* effect)
             {
                 assert(effect != nullptr);
 
@@ -1392,7 +1393,7 @@ namespace jeecs
 
                 free(effect);
             }
-            void close_effect_lockfree(AudioEffectHead* effect)
+            void close_effect_lockfree(EffectHead* effect)
             {
                 m_effects.erase(effect);
                 shutdown_effect(effect);
@@ -1421,7 +1422,7 @@ namespace jeecs
 
                     if (slot->m_effect_slot_instance->m_binding_effect.has_value())
                     {
-                        AudioEffectHead* effect = slot->m_effect_slot_instance->m_binding_effect.value();
+                        EffectHead* effect = slot->m_effect_slot_instance->m_binding_effect.value();
                         efx->alAuxiliaryEffectSloti(
                             slot_id, AL_EFFECTSLOT_EFFECT, effect->m_effect_instance->m_effect_id);
                     }
@@ -1611,7 +1612,7 @@ namespace jeecs
                 lock_guard g5(m_filters_mx);       // g5
                 shared_lock g0(m_context_mx);      // g0
 
-                AudioContextHelper::decrease_ref(filter);
+                ContextHelper::decrease_ref(filter);
             }
 
             je_audio_effect_slot_t* create_effect_slot()
@@ -1642,9 +1643,9 @@ namespace jeecs
                 lock_guard g4(m_effect_slots_mx); // g4
                 shared_lock g0(m_context_mx);     // g0
 
-                AudioContextHelper::decrease_ref(slot);
+                ContextHelper::decrease_ref(slot);
             }
-            void set_slot_effect(je_audio_effect_slot_t* slot, AudioEffectHead* effect_may_null)
+            void set_slot_effect(je_audio_effect_slot_t* slot, EffectHead* effect_may_null)
             {
                 lock_guard g4(m_effect_slots_mx); // g4
                 lock_guard g3(m_effects_mx);      // g3
@@ -1693,15 +1694,15 @@ namespace jeecs
             template <typename T>
             T* create_effect()
             {
-                void* buf = malloc(sizeof(AudioEffectHead) + sizeof(T));
+                void* buf = malloc(sizeof(EffectHead) + sizeof(T));
 
-                AudioEffectHead* head = static_cast<AudioEffectHead*>(buf);
+                EffectHead* head = static_cast<EffectHead*>(buf);
                 T* effect = JE_EFFECT_DATA(T, buf);
 
                 head->m_effect_instance = nullptr;
                 head->m_references = 1;
 
-                AudioContextHelper::effect_init_default(head, effect);
+                ContextHelper::effect_init_default(head, effect);
 
                 lock_guard g3(m_effects_mx);  // g3
                 shared_lock g0(m_context_mx); // g0
@@ -1724,7 +1725,7 @@ namespace jeecs
                 lock_guard g3(m_effects_mx);  // g3
                 shared_lock g0(m_context_mx); // g0
 
-                AudioContextHelper::decrease_ref(JE_EFFECT_HEAD(effect_data));
+                ContextHelper::decrease_ref(JE_EFFECT_HEAD(effect_data));
             }
 
             const je_audio_buffer_t* create_buffer(
@@ -1937,7 +1938,7 @@ namespace jeecs
                 lock_guard g2(m_buffers_mx);  // g2
                 shared_lock g0(m_context_mx); // g0
 
-                AudioContextHelper::decrease_ref(buffer);
+                ContextHelper::decrease_ref(buffer);
             }
 
             je_audio_source_t* create_source()
@@ -2550,7 +2551,7 @@ namespace jeecs
                 }
             }
 
-            AudioContext()
+            Context()
                 : m_openal_ALC_ENUMERATE_ALL_EXT_enabled(
                     alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT"))
                 , m_context_updating_thread_quit(false)
@@ -2576,9 +2577,9 @@ namespace jeecs
                 update_listener();
 
                 m_context_updating_thread =
-                    thread(&AudioContext::audio_device_update_thread_job, this);
+                    thread(&Context::audio_device_update_thread_job, this);
             }
-            ~AudioContext()
+            ~Context()
             {
                 do
                 {
@@ -2605,13 +2606,13 @@ namespace jeecs
             }
         };
 
-        static AudioContext* g_engine_audio_context = nullptr;
+        static Context* g_engine_audio_context = nullptr;
 
-        void AudioContextHelper::increase_ref(const je_audio_buffer_t* buffer)
+        void ContextHelper::increase_ref(const je_audio_buffer_t* buffer)
         {
             ++buffer->m_references;
         }
-        void AudioContextHelper::decrease_ref(const je_audio_buffer_t* buffer)
+        void ContextHelper::decrease_ref(const je_audio_buffer_t* buffer)
         {
             if (0 == --buffer->m_references)
             {
@@ -2620,11 +2621,11 @@ namespace jeecs
             }
         }
 
-        void AudioContextHelper::increase_ref(AudioEffectHead* effect)
+        void ContextHelper::increase_ref(EffectHead* effect)
         {
             ++effect->m_references;
         }
-        void AudioContextHelper::decrease_ref(AudioEffectHead* effect)
+        void ContextHelper::decrease_ref(EffectHead* effect)
         {
             if (0 == --effect->m_references)
             {
@@ -2633,11 +2634,11 @@ namespace jeecs
             }
         }
 
-        void AudioContextHelper::increase_ref(je_audio_effect_slot_t* slot)
+        void ContextHelper::increase_ref(je_audio_effect_slot_t* slot)
         {
             ++slot->m_references;
         }
-        void AudioContextHelper::decrease_ref(je_audio_effect_slot_t* slot)
+        void ContextHelper::decrease_ref(je_audio_effect_slot_t* slot)
         {
             if (0 == --slot->m_references)
             {
@@ -2646,11 +2647,11 @@ namespace jeecs
             }
         }
 
-        void AudioContextHelper::increase_ref(je_audio_filter_t* filter)
+        void ContextHelper::increase_ref(je_audio_filter_t* filter)
         {
             ++filter->m_references;
         }
-        void AudioContextHelper::decrease_ref(je_audio_filter_t* filter)
+        void ContextHelper::decrease_ref(je_audio_filter_t* filter)
         {
             if (0 == --filter->m_references)
             {
@@ -2659,7 +2660,7 @@ namespace jeecs
             }
         }
 
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_reverb_t* reverb)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_reverb_t* reverb)
         {
             head->m_effect_kind = AL_EFFECT_REVERB;
 
@@ -2677,7 +2678,7 @@ namespace jeecs
             reverb->m_room_rolloff_factor = AL_REVERB_DEFAULT_ROOM_ROLLOFF_FACTOR;
             reverb->m_decay_hf_limit = AL_REVERB_DEFAULT_DECAY_HFLIMIT != AL_FALSE;
         }
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_chorus_t* chorus)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_chorus_t* chorus)
         {
             head->m_effect_kind = AL_EFFECT_CHORUS;
 
@@ -2688,7 +2689,7 @@ namespace jeecs
             chorus->m_feedback = AL_CHORUS_DEFAULT_FEEDBACK;
             chorus->m_delay = AL_CHORUS_DEFAULT_DELAY;
         }
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_distortion_t* distortion)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_distortion_t* distortion)
         {
             head->m_effect_kind = AL_EFFECT_DISTORTION;
 
@@ -2698,7 +2699,7 @@ namespace jeecs
             distortion->m_equalizer_center_freq = AL_DISTORTION_DEFAULT_EQCENTER;
             distortion->m_equalizer_bandwidth = AL_DISTORTION_DEFAULT_EQBANDWIDTH;
         }
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_echo_t* echo)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_echo_t* echo)
         {
             head->m_effect_kind = AL_EFFECT_ECHO;
 
@@ -2708,7 +2709,7 @@ namespace jeecs
             echo->m_feedback = AL_ECHO_DEFAULT_FEEDBACK;
             echo->m_spread = AL_ECHO_DEFAULT_SPREAD;
         }
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_flanger_t* flanger)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_flanger_t* flanger)
         {
             head->m_effect_kind = AL_EFFECT_FLANGER;
 
@@ -2719,7 +2720,7 @@ namespace jeecs
             flanger->m_feedback = AL_FLANGER_DEFAULT_FEEDBACK;
             flanger->m_delay = AL_FLANGER_DEFAULT_DELAY;
         }
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_frequency_shifter_t* shifter)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_frequency_shifter_t* shifter)
         {
             head->m_effect_kind = AL_EFFECT_FREQUENCY_SHIFTER;
 
@@ -2729,7 +2730,7 @@ namespace jeecs
             shifter->m_right_direction =
                 (je_audio_effect_frequency_shifter_direction_t)AL_FREQUENCY_SHIFTER_DEFAULT_RIGHT_DIRECTION;
         }
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_vocal_morpher_t* morpher)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_vocal_morpher_t* morpher)
         {
             head->m_effect_kind = AL_EFFECT_VOCAL_MORPHER;
 
@@ -2740,14 +2741,14 @@ namespace jeecs
             morpher->m_waveform = (je_audio_effect_vocal_morpher_waveform_t)AL_VOCAL_MORPHER_DEFAULT_WAVEFORM;
             morpher->m_rate = AL_VOCAL_MORPHER_DEFAULT_RATE;
         }
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_pitch_shifter_t* shifter)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_pitch_shifter_t* shifter)
         {
             head->m_effect_kind = AL_EFFECT_PITCH_SHIFTER;
 
             shifter->m_coarse_tune = AL_PITCH_SHIFTER_DEFAULT_COARSE_TUNE;
             shifter->m_fine_tune = AL_PITCH_SHIFTER_DEFAULT_FINE_TUNE;
         }
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_ring_modulator_t* modulator)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_ring_modulator_t* modulator)
         {
             head->m_effect_kind = AL_EFFECT_RING_MODULATOR;
 
@@ -2755,7 +2756,7 @@ namespace jeecs
             modulator->m_highpass_cutoff = AL_RING_MODULATOR_DEFAULT_HIGHPASS_CUTOFF;
             modulator->m_waveform = (je_audio_effect_ring_modulator_waveform_t)AL_RING_MODULATOR_DEFAULT_WAVEFORM;
         }
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_autowah_t* wah)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_autowah_t* wah)
         {
             head->m_effect_kind = AL_EFFECT_AUTOWAH;
 
@@ -2764,13 +2765,13 @@ namespace jeecs
             wah->m_resonance = AL_AUTOWAH_DEFAULT_RESONANCE;
             wah->m_peak_gain = AL_AUTOWAH_DEFAULT_PEAK_GAIN;
         }
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_compressor_t* compressor)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_compressor_t* compressor)
         {
             head->m_effect_kind = AL_EFFECT_COMPRESSOR;
 
             compressor->m_enabled = AL_COMPRESSOR_DEFAULT_ONOFF != AL_FALSE;
         }
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_equalizer_t* equalizer)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_equalizer_t* equalizer)
         {
             head->m_effect_kind = AL_EFFECT_EQUALIZER;
 
@@ -2785,7 +2786,7 @@ namespace jeecs
             equalizer->m_high_gain = AL_EQUALIZER_DEFAULT_HIGH_GAIN;
             equalizer->m_high_cutoff = AL_EQUALIZER_DEFAULT_HIGH_CUTOFF;
         }
-        void AudioContextHelper::effect_init_default(AudioEffectHead* head, je_audio_effect_eax_reverb_t* eaxreverb)
+        void ContextHelper::effect_init_default(EffectHead* head, je_audio_effect_eax_reverb_t* eaxreverb)
         {
             head->m_effect_kind = AL_EFFECT_EAXREVERB;
 
@@ -2823,7 +2824,7 @@ namespace jeecs
 void jeal_init()
 {
     assert(g_engine_audio_context == nullptr);
-    g_engine_audio_context = new AudioContext;
+    g_engine_audio_context = new Context;
 }
 void jeal_finish()
 {
