@@ -2005,6 +2005,18 @@ je_file_size [基本接口]
 JE_API size_t je_file_size(je_file_t* file);
 
 /*
+je_file_crc64 [基本接口]
+计算 filepath 指定文件内容的 crc64 校验值，路径按 je_file_open 的规则解析
+    * crc64_continue 作为种子传入，返回在其基础上链式计算后的结果，
+      传 0 即从头计算
+    * 文件不存在或为空时原样返回 crc64_continue，因此链式计算时拼接
+      缺失的可选文件不会影响之前的状态
+请参见：
+    je_file_open
+*/
+JE_API uint64_t je_file_crc64(const char* filepath, uint64_t crc64_continue);
+
+/*
 je_fimg_archive_open [基本接口]
 从指定目录打开一个 fimg 镜像（fimg.je4index + fimg.<N>.je4image）
 目录下不存在清单或清单损坏时返回 nullptr

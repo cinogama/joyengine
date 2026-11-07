@@ -21,8 +21,3 @@ constexpr uint32_t TILESET_CACHE_VERSION = 0x00000001;
 constexpr uint32_t TILEMAP_CACHE_VERSION = 0x00000001;
 
 constexpr uint32_t INTERNAL_SCRIPT_CACHE_VERSION = 0x00000001;
-
-// Continue the crc64 of filepath's bytes onto crc64_continue (seed in,
-// updated value out). A missing or empty file returns crc64_continue
-// unchanged, so chaining an absent optional source keeps the previous state.
-uint64_t jeecs_crc64_of_file(const char* filepath, uint64_t crc64_continue);

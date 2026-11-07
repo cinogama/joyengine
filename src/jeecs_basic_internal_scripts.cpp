@@ -363,9 +363,9 @@ namespace jeecs::internal_script
     // optional <path>.je4texture source, so the key chains both files: a
     // change to either invalidates it. With neither file present (exported
     // runtimes ship only the cache) the key is 0 and validation is skipped.
-    const uint64_t crc64_key = jeecs_crc64_of_file(
+    const uint64_t crc64_key = je_file_crc64(
         (string(path) + ".je4texture").c_str(),
-        jeecs_crc64_of_file(path, 0));
+        je_file_crc64(path, 0));
 
     if (je_file_t* file = je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, crc64_key))
         return file;

@@ -10,7 +10,7 @@
 // WARNING!!!!
 // DO NOT USE SIZE_T!!!!
 
-uint64_t jeecs_crc64_of_file(const char* filepath, uint64_t crc64_continue)
+uint64_t je_file_crc64(const char* filepath, uint64_t crc64_continue)
 {
     uint64_t crc64_result = crc64_continue;
     if (auto* origin_file = je_file_open(filepath))
@@ -78,7 +78,7 @@ uint64_t jeecs_crc64_of_file(const char* filepath, uint64_t crc64_continue)
         else
         {
             uint64_t crc64_result =
-                virtual_crc64 ? virtual_crc64 : jeecs_crc64_of_file(filepath, 0);
+                virtual_crc64 ? virtual_crc64 : je_file_crc64(filepath, 0);
 
             uint64_t cache_crc64 = 0;
             je_file_read(&cache_crc64, sizeof(uint64_t), 1, cache_file);
@@ -105,7 +105,7 @@ uint64_t jeecs_crc64_of_file(const char* filepath, uint64_t crc64_continue)
 {
     using namespace std;
 
-    uint64_t crc64_result = usecrc64 == 0 ? jeecs_crc64_of_file(filepath, 0) : usecrc64;
+    uint64_t crc64_result = usecrc64 == 0 ? je_file_crc64(filepath, 0) : usecrc64;
     if (crc64_result == 0)
     {
         jeecs::debug::logwarn(
