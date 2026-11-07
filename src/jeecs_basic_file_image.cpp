@@ -1,8 +1,7 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 #include "jeecs_fimg_archive.hpp"
-
-#include "wo.h"
+#include "jeecs_basic_file.hpp"
 
 #include <cstdio>
 #include <sys/stat.h>
@@ -12,186 +11,65 @@
 #include <shared_mutex>
 #include <string>
 
-namespace
+namespace jeecs::file {}
+
+using namespace std;
+using namespace jeecs;
+using namespace jeecs::file;
+
+namespace jeecs::file
 {
-    je_read_file_open_func_t _m_read_file_open_impl = nullptr;
-    je_read_file_func_t _m_read_file_impl = nullptr;
-    je_read_file_tell_func_t _m_read_file_tell_impl = nullptr;
-    je_read_file_seek_func_t _m_read_file_seek_impl = nullptr;
-    je_read_file_close_func_t _m_read_file_close_impl = nullptr;
-
-    je_raw_file_t _je_file_open(const char* path, size_t* out_len)
+    namespace
     {
-        if (_m_read_file_open_impl != nullptr)
-            return _m_read_file_open_impl(path, out_len);
+        std::mutex _g_path_mutex;
+        std::string _g_host_path;
+        std::string _g_runtime_path;
 
-        FILE* fhandle = fopen(path, "rb");
-        if (fhandle)
+        std::shared_mutex _g_default_archive_mutex;
+        std::shared_ptr<const jeecs::fimg::archive> _g_default_archive;
+
+        std::string _get_host_path_copy()
         {
-#if defined(_WIN32)
-            struct _stat64 cfstat;
-            const int stat_result = _stat64(path, &cfstat);
-#else
-            struct stat cfstat;
-            const int stat_result = stat(path, &cfstat);
-#endif
-            if (stat_result != 0)
-            {
-                fclose(fhandle);
-                return nullptr;
-            }
-            *out_len = static_cast<size_t>(cfstat.st_size);
+            std::lock_guard<std::mutex> lock(_g_path_mutex);
+            return _g_host_path;
         }
-        return fhandle;
-    }
-
-    size_t _je_file_read(void* buffer, size_t elemsz, size_t elemcount, je_raw_file_t file)
-    {
-        if (_m_read_file_impl != nullptr)
-            return _m_read_file_impl(buffer, elemsz, elemcount, file);
-
-        return fread(buffer, elemsz, elemcount, static_cast<FILE*>(file));
-    }
-
-    size_t _je_file_tell(je_raw_file_t file)
-    {
-        if (_m_read_file_tell_impl != nullptr)
-            return _m_read_file_tell_impl(file);
-
-#if defined(_WIN32)
-        return static_cast<size_t>(_ftelli64(static_cast<FILE*>(file)));
-#else
-        return static_cast<size_t>(ftello(static_cast<FILE*>(file)));
-#endif
-    }
-
-    int _je_file_seek(je_raw_file_t file, int64_t offset, je_file_seek_mode_t mode)
-    {
-        if (_m_read_file_seek_impl != nullptr)
-            return _m_read_file_seek_impl(file, offset, mode);
-
-#if defined(_WIN32)
-        return _fseeki64(static_cast<FILE*>(file), offset, static_cast<int>(mode));
-#else
-        return fseeko(static_cast<FILE*>(file), static_cast<off_t>(offset), static_cast<int>(mode));
-#endif
-    }
-
-    int _je_file_close(je_raw_file_t file)
-    {
-        if (_m_read_file_close_impl != nullptr)
-            return _m_read_file_close_impl(file);
-
-        return fclose(static_cast<FILE*>(file));
-    }
-
-    std::mutex _g_path_mutex;
-    std::string _g_host_path;
-    std::string _g_runtime_path;
-
-    std::shared_mutex _g_default_archive_mutex;
-    std::shared_ptr<const jeecs::fimg::archive> _g_default_archive;
-
-    std::string _get_host_path_copy()
-    {
-        std::lock_guard<std::mutex> lock(_g_path_mutex);
-        return _g_host_path;
-    }
-
-    std::string _get_runtime_path_copy()
-    {
-        std::lock_guard<std::mutex> lock(_g_path_mutex);
-        return _g_runtime_path;
-    }
-
-    std::string _join_root_and_rest(const std::string& root, const std::string& rest)
-    {
-        if (root.empty())
-            return rest;
-        if (rest.empty())
-            return root;
-
-        const bool root_has_separator = root.back() == '/' || root.back() == '\\';
-        const bool rest_has_separator = rest.front() == '/' || rest.front() == '\\';
-
-        if (root_has_separator && rest_has_separator)
-            return root + rest.substr(1);
-        if (!root_has_separator && !rest_has_separator)
-            return root + "/" + rest;
-        return root + rest;
-    }
-
-    std::string _resolve_path(const char* path)
-    {
-        if (path[0] == '@')
+        std::string _get_runtime_path_copy()
         {
-            std::string root = _get_runtime_path_copy();
+            std::lock_guard<std::mutex> lock(_g_path_mutex);
+            return _g_runtime_path;
+        }
+        std::string _join_root_and_rest(const std::string& root, const std::string& rest)
+        {
             if (root.empty())
-                root = _get_host_path_copy();
+                return rest;
+            if (rest.empty())
+                return root;
 
-            return _join_root_and_rest(root, path + 1);
+            const bool root_has_separator = root.back() == '/' || root.back() == '\\';
+            const bool rest_has_separator = rest.front() == '/' || rest.front() == '\\';
+
+            if (root_has_separator && rest_has_separator)
+                return root + rest.substr(1);
+            if (!root_has_separator && !rest_has_separator)
+                return root + "/" + rest;
+            return root + rest;
         }
-
-        if (path[0] == '!')
-            return _join_root_and_rest(_get_host_path_copy(), path + 1);
-
-        return path;
-    }
-}
-
-namespace jeecs::fimg::io
-{
-    raw_file open(const char* path, size_t* out_size)
-    {
-        assert(path != nullptr && out_size != nullptr);
-        return _je_file_open(path, out_size);
-    }
-
-    size_t read(void* buffer, size_t elem_size, size_t count, raw_file file)
-    {
-        assert(file != nullptr);
-        assert(buffer != nullptr || elem_size == 0 || count == 0);
-        return _je_file_read(buffer, elem_size, count, file);
-    }
-
-    size_t tell(raw_file file)
-    {
-        assert(file != nullptr);
-        return _je_file_tell(file);
-    }
-
-    int seek(raw_file file, int64_t offset, origin origin)
-    {
-        assert(file != nullptr);
-        switch (origin)
+        std::string _resolve_path(const char* path)
         {
-        case origin::begin:
-            return _je_file_seek(file, offset, JE_READ_FILE_SEEK_SET);
-        case origin::current:
-            return _je_file_seek(file, offset, JE_READ_FILE_SEEK_CURRENT);
-        case origin::end:
-            return _je_file_seek(file, offset, JE_READ_FILE_SEEK_END);
+            if (path[0] == '@')
+            {
+                std::string root = _get_runtime_path_copy();
+                if (root.empty())
+                    root = _get_host_path_copy();
+
+                return _join_root_and_rest(root, path + 1);
+            }
+
+            if (path[0] == '!')
+                return _join_root_and_rest(_get_host_path_copy(), path + 1);
+
+            return path;
         }
-        return -1;
-    }
-
-    int close(raw_file file)
-    {
-        assert(file != nullptr);
-        return _je_file_close(file);
-    }
-}
-
-namespace jeecs::fimg
-{
-    void report_error(const std::string& message)
-    {
-        jeecs::debug::logerr("%s", message.c_str());
-    }
-
-    void report_warning(const std::string& message)
-    {
-        jeecs::debug::logwarn("%s", message.c_str());
     }
 }
 
@@ -212,21 +90,6 @@ struct je_fimg_writer_t
     std::unique_ptr<jeecs::fimg::writer> impl;
 };
 
-void je_file_native_operator_register(
-    je_read_file_open_func_t opener,
-    je_read_file_func_t reader,
-    je_read_file_tell_func_t teller,
-    je_read_file_seek_func_t seeker,
-    je_read_file_close_func_t closer)
-{
-    assert(
-        opener != nullptr && reader != nullptr && teller != nullptr && seeker != nullptr && closer != nullptr);
-    _m_read_file_open_impl = opener;
-    _m_read_file_impl = reader;
-    _m_read_file_tell_impl = teller;
-    _m_read_file_seek_impl = seeker;
-    _m_read_file_close_impl = closer;
-}
 
 void je_file_host_path_set(const char* path)
 {
@@ -263,7 +126,9 @@ const char* je_file_runtime_path_get()
     const std::string resolved_path = _resolve_path(path);
 
     size_t file_length = 0;
-    je_raw_file_t native_handle = _je_file_open(resolved_path.c_str(), &file_length);
+    const je_raw_file_t native_handle =
+        native::open(resolved_path.c_str(), &file_length);
+
     if (native_handle != nullptr)
     {
         auto* file = new je_file_t;
@@ -301,7 +166,7 @@ void je_file_close(je_file_t* file)
 
     if (file->m_native_file_handle != nullptr)
     {
-        auto close_state = _je_file_close(file->m_native_file_handle);
+        auto close_state = native::close(file->m_native_file_handle);
         if (close_state != 0)
             jeecs::debug::logerr("Fail to close file(%d:%d).", (int)close_state, (int)errno);
     }
@@ -320,7 +185,7 @@ size_t je_file_read(
     assert(out_buffer != nullptr || elem_size == 0 || count == 0);
 
     if (file->m_native_file_handle != nullptr)
-        return _je_file_read(out_buffer, elem_size, count, file->m_native_file_handle);
+        return native::read(out_buffer, elem_size, count, file->m_native_file_handle);
 
     return file->m_image_file_handle->read(out_buffer, elem_size, count);
 }
@@ -330,7 +195,7 @@ size_t je_file_tell(je_file_t* file)
     assert(file != nullptr);
 
     if (file->m_native_file_handle != nullptr)
-        return _je_file_tell(file->m_native_file_handle);
+        return native::tell(file->m_native_file_handle);
 
     return static_cast<size_t>(file->m_image_file_handle->tell());
 }
@@ -340,7 +205,7 @@ bool je_file_seek(je_file_t* file, int64_t offset, je_file_seek_mode_t mode)
     assert(file != nullptr);
 
     if (file->m_native_file_handle != nullptr)
-        return _je_file_seek(file->m_native_file_handle, offset, mode) == 0;
+        return native::seek(file->m_native_file_handle, offset, mode) == 0;
 
     switch (mode)
     {

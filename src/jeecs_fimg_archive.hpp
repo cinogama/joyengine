@@ -1,5 +1,10 @@
 #pragma once
 
+#ifndef JE_IMPL
+#   define JE_IMPL
+#endif
+#include "jeecs.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -38,27 +43,6 @@ namespace jeecs::fimg
     inline constexpr size_t MAX_MANIFEST_SIZE = 64 * 1024 * 1024;
     inline constexpr uint64_t MAX_FILE_COUNT = 1 * 1024 * 1024;
     inline constexpr size_t COMPRESSION_BUFFER_SIZE = 64 * 1024;
-
-    namespace io
-    {
-        using raw_file = void*;
-
-        enum class origin
-        {
-            begin,
-            current,
-            end,
-        };
-
-        raw_file open(const char* path, size_t* out_size);
-        size_t read(void* buffer, size_t elem_size, size_t count, raw_file file);
-        size_t tell(raw_file file);
-        int seek(raw_file file, int64_t offset, origin origin);
-        int close(raw_file file);
-    }
-
-    void report_error(const std::string& message);
-    void report_warning(const std::string& message);
 
     // Comma/semicolon separated default list of already-compressed extensions.
     const char* default_skip_extensions();
@@ -129,7 +113,7 @@ namespace jeecs::fimg
         }
 
         // The resulting position is clamped to [0, size].
-        bool seek(int64_t offset, io::origin origin);
+        bool seek(int64_t offset, je_file_seek_mode_t origin);
 
         // Returns the number of complete elements read.
         size_t read(void* buffer, size_t elem_size, size_t count);
@@ -155,7 +139,7 @@ namespace jeecs::fimg
 
         uint64_t m_open_shard = 0;
         uint64_t m_open_shard_pos = 0;
-        io::raw_file m_handle = nullptr;
+        je_raw_file_t m_handle = nullptr;
         bool m_failed = false;
 
         uint64_t m_stored_cursor = 0;

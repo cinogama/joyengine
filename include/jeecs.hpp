@@ -1886,7 +1886,7 @@ enum je_file_seek_mode_t
     JE_READ_FILE_SEEK_END = SEEK_END,
 };
 
-typedef void* je_raw_file_t;
+typedef struct _je_raw_file_s_t* je_raw_file_t;
 
 typedef je_raw_file_t(*je_read_file_open_func_t)(const char*, size_t*);
 typedef size_t(*je_read_file_func_t)(void*, size_t, size_t, je_raw_file_t);

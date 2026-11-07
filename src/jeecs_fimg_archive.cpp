@@ -1,15 +1,22 @@
+#define JE_IMPL
+#include "jeecs.hpp"
 #include "jeecs_fimg_archive.hpp"
+#include "jeecs_basic_file.hpp"
+
+#include "wo.h"
 
 #define MINIZ_NO_ZLIB_COMPATIBLE_NAMES
 #include "miniz.h"
-
-#include "wo.h"
 
 #include <algorithm>
 #include <cassert>
 #include <cctype>
 #include <cstring>
 #include <limits>
+
+using namespace std;
+using namespace jeecs;
+using namespace jeecs::file;
 
 namespace
 {
@@ -161,7 +168,7 @@ namespace jeecs::fimg
         const std::string manifest_path = join_path(root, MANIFEST_FILE_NAME);
 
         size_t manifest_size = 0;
-        io::raw_file handle = io::open(manifest_path.c_str(), &manifest_size);
+        je_raw_file_t handle = native::open(manifest_path.c_str(), &manifest_size);
         if (handle == nullptr)
         {
             // A missing manifest is a normal development setup: resources are
@@ -171,14 +178,14 @@ namespace jeecs::fimg
 
         if (manifest_size < HEADER_SIZE)
         {
-            io::close(handle);
-            report_error("fimg manifest '" + manifest_path + "' is truncated.");
+            native::close(handle);
+            debug::logerr("FImage manifest '%s' is truncated.", manifest_path.c_str());
             return nullptr;
         }
         if (manifest_size > MAX_MANIFEST_SIZE)
         {
-            io::close(handle);
-            report_error("fimg manifest '" + manifest_path + "' is too large.");
+            native::close(handle);
+            debug::logerr("FImage manifest '%s' is too large.", manifest_path.c_str());
             return nullptr;
         }
 
@@ -186,7 +193,7 @@ namespace jeecs::fimg
         size_t read_size = 0;
         while (read_size < manifest_size)
         {
-            const size_t this_time = io::read(
+            const size_t this_time = native::read(
                 data.data() + read_size, 1, manifest_size - read_size, handle);
 
             if (this_time == 0)
