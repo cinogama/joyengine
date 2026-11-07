@@ -1066,14 +1066,14 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
 
             const auto prepare =
                 _jegl_prepare_shader_resource(pipeline->m_shader);
-            assert(prepare != jegl_resource_prepare_result::INVALID);
+            assert(prepare != ResourcePrepareResult::INVALID);
 
             const auto pipeline_prepare =
                 _jegl_prepare_pipeline_resource(pipeline);
-            assert(pipeline_prepare != jegl_resource_prepare_result::INVALID);
+            assert(pipeline_prepare != ResourcePrepareResult::INVALID);
 
-            if (prepare != jegl_resource_prepare_result::READY
-                || pipeline_prepare != jegl_resource_prepare_result::READY)
+            if (prepare != ResourcePrepareResult::READY
+                || pipeline_prepare != ResourcePrepareResult::READY)
             {
                 render->pipeline_init(impl_context, pipeline);
                 pipeline->m_backend_initialized = true;
@@ -1197,9 +1197,9 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
 
             const auto sampler_prepare =
                 _jegl_prepare_sampler_resource(sampler);
-            assert(sampler_prepare != jegl_resource_prepare_result::INVALID);
+            assert(sampler_prepare != ResourcePrepareResult::INVALID);
 
-            if (sampler_prepare != jegl_resource_prepare_result::READY)
+            if (sampler_prepare != ResourcePrepareResult::READY)
             {
                 render->sampler_init(impl_context, sampler);
                 sampler->m_backend_initialized = true;

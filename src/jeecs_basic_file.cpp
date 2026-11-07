@@ -5,6 +5,7 @@
 #include "jeecs_basic_bootup.hpp"
 
 #include <cstdio>
+#include <string>
 
 namespace jeecs::file {}
 
@@ -113,6 +114,18 @@ namespace jeecs::file
         tell_impl = &default_functions::tell;
         seek_impl = &default_functions::seek;
         close_impl = &default_functions::close;
+
+        string exe_path = {};
+        const size_t need = woort_exe_path(nullptr, 0);
+        if (need != 0)
+        {
+            exe_path.resize(need);
+            (void)woort_exe_path(exe_path.data(), need);
+        }
+
+        je_file_host_path_set(exe_path.c_str());
+        je_file_runtime_path_set(exe_path.c_str());
+        je_fimg_default_archive_set(exe_path.c_str());
     }
     void shutdown()
     {

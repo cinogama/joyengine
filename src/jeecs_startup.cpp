@@ -23,21 +23,6 @@ struct _je_static_context_t
 };
 static _je_static_context_t _je_global_context;
 
-// woort_exe_path() now follows snprintf semantics (fills @p buf, returns the
-// path length excluding the NUL terminator, 0 on failure). Wrap it so callers
-// can keep using a plain string. The result is cached by the runtime, so this
-// is cheap to call repeatedly.
-static std::string _je_woort_exe_path()
-{
-    size_t need = woort_exe_path(nullptr, 0);
-    if (need == 0)
-        return {};
-
-    std::string path(need, '\0');
-    (void)woort_exe_path(path.data(), need + 1);
-    return path;
-}
-
 void je_graphic_host_api_set(/* OPTIONAL: nullptr to use platform default */ je_gl_graphic_api_entry_t api)
 {
     _je_global_context._jegl_host_graphic_api = api;
@@ -234,11 +219,6 @@ void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
         }
     }
 
-    const auto exe_path = _je_woort_exe_path();
-    je_file_host_path_set(exe_path.c_str());
-    je_file_runtime_path_set(exe_path.c_str());
-    je_fimg_default_archive_set(exe_path.c_str());
-
     assert(_je_global_context._je_unregister_guard == nullptr);
     _je_global_context._je_unregister_guard = new jeecs::typing::type_unregister_guard();
     jeecs::entry::module_entry(_je_global_context._je_unregister_guard);
@@ -272,7 +252,7 @@ static woort_CodeEnv* _je_open_file_to_compile_vm(const char* vpath)
 
 static woort_CodeEnv* _je_try_open_cached_binary()
 {
-    return _je_open_file_to_compile_vm("@/builtin/editor.woo.je4cache");
+    return _je_open_file_to_compile_vm("!/builtin/editor.woo.je4cache");
 }
 
 bool je_core_main_script_entry()
@@ -288,23 +268,35 @@ bool je_core_main_script_entry()
     {
         // Cache loaded, skip,
     }
-    else if ((cenv = _je_open_file_to_compile_vm(
-        (std::string(je_file_host_path_get()) + "/builtin/editor/main.wo").c_str())) != nullptr)
+    else if ((cenv = _je_open_file_to_compile_vm("!/builtin/editor/main.wo")) != nullptr)
     {
         size_t binary_length;
         void* buffer;
 
         if (woort_CodeEnv_save_binary(cenv, &buffer, &binary_length))
         {
-            FILE* objdump = fopen((_je_woort_exe_path() + "/builtin/editor.woo.je4cache").c_str(), "wb");
-            if (objdump != nullptr)
+            auto* const cache = je_cache_file_create("!/builtin/editor/main.wo", 1, 0);
+            bool succ = false;
+            if (cache != nullptr) do
             {
-                size_t writelen = fwrite(buffer, 1, binary_length, objdump);
-                assert(writelen == binary_length);
-                (void)writelen;
+                if (!je_cache_binary_append_document(cache))
+                    break;
+                if (!je_cache_binary_append_string(cache, "content"))
+                    break;
+                if (!je_cache_binary_append_buffer(cache, buffer, binary_length))
+                    break;
+                if (!je_cache_binary_append_end(cache))
+                    break;
 
-                fclose(objdump);
-            }
+                succ = true;
+            } while (0);
+
+            if (!succ)
+                jeecs::debug::logwarn("Failed to create editor script binary cache.");
+
+            if (cache != nullptr)
+                je_cache_file_close(cache, succ);
+
             woort_free(buffer);
         }
     }

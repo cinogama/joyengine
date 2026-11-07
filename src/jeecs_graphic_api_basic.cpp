@@ -101,7 +101,8 @@ namespace Assimp
     public:
         je_file_io_system()
             : m_current_dir(je_file_runtime_path_get())
-        {}
+        {
+        }
 
         bool Exists(const char* pFile) const override
         {
@@ -193,7 +194,8 @@ struct je_gl_resource_bind_counter_t
     std::atomic_int32_t m_binding_count;
     je_gl_resource_bind_counter_t(int32_t init)
         : m_binding_count(init)
-    {}
+    {
+    }
 };
 
 namespace jeecs::graphic
@@ -570,7 +572,8 @@ struct je_gl_context_notifier_t
         cached_resource_statement(T* res)
             : m_resource(res)
             , m_keeped_count(0)
-        {}
+        {
+        }
 
         cached_resource_statement(const cached_resource_statement&) = default;
         cached_resource_statement(cached_resource_statement&&) = default;
@@ -1141,6 +1144,81 @@ namespace jeecs::graphic
                 _jegl_free_resource_instance(new jeecs::graphic::resource_to_destroy(texture));
             }
         }
+
+        je_gl_shader_t* _jegl_load_shader_source_impl(
+            const char* path, const char* src, bool is_virtual_file)
+        {
+            if (is_virtual_file)
+            {
+                if (je_file_t* shader_cache = je_cache_file_load(path, SHADER_CACHE_VERSION, wo_crc64_str(src)))
+                    return shader_wrapper::_jegl_load_shader_cache(shader_cache, path);
+            }
+
+#if JE4_ENABLE_SHADER_WRAP_GENERATOR
+            je_gl_shader_t* instance = nullptr;
+
+            wo_CompileErrors* cerror;
+            woort_CodeEnv* const cenv = wo_load_source(path, src, &cerror);
+            if (cenv == nullptr)
+            {
+                // Compile error
+                jeecs::debug::logerr("Fail to load shader: %s.\n%s", path, wo_get_compile_error(cerror, WO_PLAIM));
+                wo_compile_errors_free(cerror);
+            }
+            else
+            {
+                woort_vm* const vmm = woort_vm_create();
+                if (vmm == nullptr)
+                    jeecs::debug::logerr("Fail to load shader: %s.\nFailed to create vm.");
+                else
+                {
+                    woort_vm* const last = woort_vm_swap(vmm);
+
+                    woort_value result;
+                    if (!woort_push_reserve(1, &result))
+                    {
+                        jeecs::debug::logerr("Fail to load shader: %s.\nStack overflow.");
+                    }
+                    else if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup(result, cenv, false))
+                    {
+                        jeecs::debug::logerr("Fail to load shader: %s.\n%s.",
+                            woort_vm_get_runtime_error(vmm));
+                    }
+                    else if (!woort_load_extern_const(result, cenv, "je::shader::generate_shader"))
+                    {
+                        jeecs::debug::logerr("Fail to load shader: %s. need to import je::shader.",
+                            path);
+                    }
+                    else if (WOORT_VM_CALL_STATUS_NORMAL != woort_invoke(result, result))
+                    {
+                        jeecs::debug::logerr("Fail to load shader: %s: %s.", path,
+                            woort_vm_get_runtime_error(vmm));
+                    }
+                    else
+                    {
+                        shader_wrapper::ShaderWrapper* const shader_graph =
+                            static_cast<shader_wrapper::ShaderWrapper*>(woort_gcpointer(result));
+
+                        instance = shader_wrapper::_jegl_create_shader_instance_and_init();
+
+                        shader_wrapper::jegl_shader_generate_shader_source(shader_graph, instance);
+
+                        _jegl_init_resource_handle(&instance->m_handle, path);
+                        shader_wrapper::_jegl_create_shader_cache(instance, is_virtual_file ? wo_crc64_str(src) : 0);
+                    }
+
+                    (void)woort_vm_swap(last);
+                    woort_vm_close(vmm);
+                }
+                woort_codeenv_drop(cenv);
+            }
+
+            return instance;
+#else
+            jeecs::debug::logerr("Shader generator has been disabled.");
+            return nullptr;
+#endif
+        }
     }
 
     /////////////////////////////////////////////////////////////////////////////
@@ -1149,22 +1227,21 @@ namespace jeecs::graphic
    // draw. They intentionally mirror the legacy immediate-API code paths so
    // both paths share the same resource state machine.
    /////////////////////////////////////////////////////////////////////////////
-
-    jegl_resource_prepare_result _jegl_prepare_shader_resource(je_gl_shader_t* shader)
+    ResourcePrepareResult _jegl_prepare_shader_resource(je_gl_shader_t* shader)
     {
         assert(shader != nullptr);
 
         auto* thread_handle = jeecs::graphic::_current_graphic_thread;
         if (thread_handle == nullptr)
-            return jegl_resource_prepare_result::INVALID;
+            return ResourcePrepareResult::INVALID;
 
         const auto* gapi = thread_handle->m_apis;
         switch (_jegl_check_resource_state(shader))
         {
         case jeecs::graphic::jegl_resouce_state::READY:
-            return jegl_resource_prepare_result::READY;
+            return ResourcePrepareResult::READY;
         case jeecs::graphic::jegl_resouce_state::NEED_UPDATE:
-            return jegl_resource_prepare_result::UPDATED;
+            return ResourcePrepareResult::UPDATED;
         case jeecs::graphic::jegl_resouce_state::NEED_INIT:
         {
             je_gl_resource_blob_t shader_blob;
@@ -1199,49 +1276,49 @@ namespace jeecs::graphic
                         shader_blob);
                 }
             }
-            return jegl_resource_prepare_result::INITIALIZED;
+            return ResourcePrepareResult::INITIALIZED;
         }
         case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
         default:
-            return jegl_resource_prepare_result::INVALID;
+            return ResourcePrepareResult::INVALID;
         }
     }
-    jegl_resource_prepare_result _jegl_prepare_pipeline_resource(je_gl_pipeline_t* pipeline)
+    ResourcePrepareResult _jegl_prepare_pipeline_resource(je_gl_pipeline_t* pipeline)
     {
         assert(pipeline != nullptr);
         if (jeecs::graphic::_current_graphic_thread == nullptr)
-            return jegl_resource_prepare_result::INVALID;
+            return ResourcePrepareResult::INVALID;
 
         switch (_jegl_check_resource_state(pipeline))
         {
         case jeecs::graphic::jegl_resouce_state::READY:
-            return jegl_resource_prepare_result::READY;
+            return ResourcePrepareResult::READY;
         case jeecs::graphic::jegl_resouce_state::NEED_UPDATE:
-            return jegl_resource_prepare_result::UPDATED;
+            return ResourcePrepareResult::UPDATED;
         case jeecs::graphic::jegl_resouce_state::NEED_INIT:
-            return jegl_resource_prepare_result::INITIALIZED;
+            return ResourcePrepareResult::INITIALIZED;
         case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
         default:
-            return jegl_resource_prepare_result::INVALID;
+            return ResourcePrepareResult::INVALID;
         }
     }
-    jegl_resource_prepare_result _jegl_prepare_sampler_resource(je_gl_sampler_t* sampler)
+    ResourcePrepareResult _jegl_prepare_sampler_resource(je_gl_sampler_t* sampler)
     {
         assert(sampler != nullptr);
         if (jeecs::graphic::_current_graphic_thread == nullptr)
-            return jegl_resource_prepare_result::INVALID;
+            return ResourcePrepareResult::INVALID;
 
         switch (_jegl_check_resource_state(sampler))
         {
         case jeecs::graphic::jegl_resouce_state::READY:
-            return jegl_resource_prepare_result::READY;
+            return ResourcePrepareResult::READY;
         case jeecs::graphic::jegl_resouce_state::NEED_UPDATE:
-            return jegl_resource_prepare_result::UPDATED;
+            return ResourcePrepareResult::UPDATED;
         case jeecs::graphic::jegl_resouce_state::NEED_INIT:
-            return jegl_resource_prepare_result::INITIALIZED;
+            return ResourcePrepareResult::INITIALIZED;
         case jeecs::graphic::jegl_resouce_state::INVALID_CONTEXT:
         default:
-            return jegl_resource_prepare_result::INVALID;
+            return ResourcePrepareResult::INVALID;
         }
     }
 
@@ -2231,81 +2308,6 @@ je_gl_texture_msaa_t* je_graphic_texture_msaa_create(
 
     _jegl_init_resource_handle(&texture_instance->m_handle, nullptr);
     return texture_instance;
-}
-
-je_gl_shader_t* _jegl_load_shader_source_impl(
-    const char* path, const char* src, bool is_virtual_file)
-{
-    if (is_virtual_file)
-    {
-        if (je_file_t* shader_cache = je_cache_file_load(path, SHADER_CACHE_VERSION, wo_crc64_str(src)))
-            return shader_wrapper::_jegl_load_shader_cache(shader_cache, path);
-    }
-
-#if JE4_ENABLE_SHADER_WRAP_GENERATOR
-    je_gl_shader_t* instance = nullptr;
-
-    wo_CompileErrors* cerror;
-    woort_CodeEnv* const cenv = wo_load_source(path, src, &cerror);
-    if (cenv == nullptr)
-    {
-        // Compile error
-        jeecs::debug::logerr("Fail to load shader: %s.\n%s", path, wo_get_compile_error(cerror, WO_PLAIM));
-        wo_compile_errors_free(cerror);
-    }
-    else
-    {
-        woort_vm* const vmm = woort_vm_create();
-        if (vmm == nullptr)
-            jeecs::debug::logerr("Fail to load shader: %s.\nFailed to create vm.");
-        else
-        {
-            woort_vm* const last = woort_vm_swap(vmm);
-
-            woort_value result;
-            if (!woort_push_reserve(1, &result))
-            {
-                jeecs::debug::logerr("Fail to load shader: %s.\nStack overflow.");
-            }
-            else if (WOORT_VM_CALL_STATUS_NORMAL != woort_bootup(result, cenv, false))
-            {
-                jeecs::debug::logerr("Fail to load shader: %s.\n%s.",
-                    woort_vm_get_runtime_error(vmm));
-            }
-            else if (!woort_load_extern_const(result, cenv, "je::shader::generate_shader"))
-            {
-                jeecs::debug::logerr("Fail to load shader: %s. need to import je::shader.",
-                    path);
-            }
-            else if (WOORT_VM_CALL_STATUS_NORMAL != woort_invoke(result, result))
-            {
-                jeecs::debug::logerr("Fail to load shader: %s: %s.", path,
-                    woort_vm_get_runtime_error(vmm));
-            }
-            else
-            {
-                shader_wrapper::ShaderWrapper* const shader_graph =
-                    static_cast<shader_wrapper::ShaderWrapper*>(woort_gcpointer(result));
-
-                instance = shader_wrapper::_jegl_create_shader_instance_and_init();
-
-                shader_wrapper::jegl_shader_generate_shader_source(shader_graph, instance);
-
-                _jegl_init_resource_handle(&instance->m_handle, path);
-                shader_wrapper::_jegl_create_shader_cache(instance, is_virtual_file ? wo_crc64_str(src) : 0);
-            }
-
-            (void)woort_vm_swap(last);
-            woort_vm_close(vmm);
-        }
-        woort_codeenv_drop(cenv);
-    }
-
-    return instance;
-#else
-    jeecs::debug::logerr("Shader generator has been disabled.");
-    return nullptr;
-#endif
 }
 
 /* OPTIONAL */ je_gl_shader_t* je_graphic_shader_source_load(

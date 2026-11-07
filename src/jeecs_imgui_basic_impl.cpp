@@ -3001,7 +3001,7 @@ void jegui_commit_srgb_encode_pass(je_gl_texture_2d_t* source_texture)
     {
         if (_jegl_prepare_shader_resource(
                 _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource())
-            == jegl_resource_prepare_result::INVALID)
+            == ResourcePrepareResult::INVALID)
         {
             jeecs::debug::logfatal(
                 "Failed to prepare the sRGB encode shader.");
@@ -3139,7 +3139,7 @@ void je_gui_backend_update(
     je_gl_shader_t* imgui_shader =
         _je_gui_tls_ctx._jegl_rend_texture_shader.value()->resource();
     const auto prepare_result = _jegl_prepare_shader_resource(imgui_shader);
-    assert(prepare_result != jegl_resource_prepare_result::INVALID);
+    assert(prepare_result != ResourcePrepareResult::INVALID);
     (void)prepare_result;
 
     ImGui::NewFrame();

@@ -1,11 +1,11 @@
 #pragma once
 
 #define MODULE_LIST                             \
+    JE_MODULE_MACRO(woolang_runtime)            \
     JE_MODULE_MACRO(time)                       \
     JE_MODULE_MACRO(file)                       \
     JE_MODULE_MACRO(log)                        \
     JE_MODULE_MACRO(audio)                      \
-    JE_MODULE_MACRO(woolang_runtime)            \
     JE_MODULE_MACRO(engine_woolang_api)         \
     JE_MODULE_MACRO(external_woolang_packages)  \
     JE_MODULE_MACRO(external_modules)           \

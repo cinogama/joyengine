@@ -11,32 +11,33 @@
 
 #include "jeecs.hpp"
 
-// Result of preparing a resource on the graphic thread.
-// READY      : already initialized and not modified
-// UPDATED    : backend *_update hook was called
-// INITIALIZED: backend *_init hook was called
-// INVALID    : wrong graphic thread / invalid resource
-enum class jegl_resource_prepare_result : uint8_t
-{
-    INVALID,
-    READY,
-    UPDATED,
-    INITIALIZED,
-};
-
 namespace jeecs::graphic
 {
     // Defined in jeecs_graphic_api_basic.cpp. The command-buffer commit path
     // asserts that it runs on the context's graphic thread.
     extern thread_local je_gl_context_t* _current_graphic_thread;
 
+    // Result of preparing a resource on the graphic thread.
+    // READY      : already initialized and not modified
+    // UPDATED    : backend *_update hook was called
+    // INITIALIZED: backend *_init hook was called
+    // INVALID    : wrong graphic thread / invalid resource
+    enum class ResourcePrepareResult : uint8_t
+    {
+        INVALID,
+        READY,
+        UPDATED,
+        INITIALIZED,
+    };
+
+
     // Resource preparation helpers implemented in jeecs_graphic_api_basic.cpp.
     // They perform lazy init / update on the graphic thread and do not bind or
     // draw anything. The render-API commit loop calls them before issuing the
     // corresponding backend call.
-    jegl_resource_prepare_result _jegl_prepare_shader_resource(je_gl_shader_t* shader);
-    jegl_resource_prepare_result _jegl_prepare_pipeline_resource(je_gl_pipeline_t* pipeline);
-    jegl_resource_prepare_result _jegl_prepare_sampler_resource(je_gl_sampler_t* sampler);
+    ResourcePrepareResult _jegl_prepare_shader_resource(je_gl_shader_t* shader);
+    ResourcePrepareResult _jegl_prepare_pipeline_resource(je_gl_pipeline_t* pipeline);
+    ResourcePrepareResult _jegl_prepare_sampler_resource(je_gl_sampler_t* sampler);
     bool _jegl_prepare_vertex_resource(je_gl_vertex_t* vertex);
     bool _jegl_prepare_uniform_buffer_resource(je_gl_uniform_buffer_t* buffer);
     bool _jegl_prepare_framebuffer_resource(je_gl_frame_buffer_t* framebuffer);
