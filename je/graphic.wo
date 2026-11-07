@@ -280,50 +280,55 @@ namespace je
             extern("libjoyecs", "wojeapi_command_buffer_bind_texture")
                 public func bind_texture(self: command_buffer, binding_pass: int, tex: texture2d)=> void;
             
-            extern("libjoyecs", "wojeapi_command_buffer_draw")
-                public func draw(self: command_buffer, shad: shader, vert: vertex)=> draw_action;
-            
+            extern("libjoyecs", "wojeapi_command_buffer_bind_shader")
+                public func bind_shader(self: command_buffer, shad: shader, vert: vertex)=> bound_shader;
+
             extern("libjoyecs", "wojeapi_command_buffer_commit")
                 public func commit(self: command_buffer)=> void;
         }
-        
-        public using draw_action = handle;
-        namespace draw_action
+
+        // bind_shader 绑定 shader+vertex 并返回句柄；先在句柄上设置
+        // 本次绘制的 uniform，最后显式调用 draw 录制绘制命令。
+        public using bound_shader = handle;
+        namespace bound_shader
         {
-            extern("libjoyecs", "wojeapi_draw_action_set_uniform_int")
-                func _set_uniform_int(act: draw_action, shad: shader, name: string, val: int)=> void;
-            extern("libjoyecs", "wojeapi_draw_action_set_uniform_int2")
-                func _set_uniform_int2(act: draw_action, shad: shader, name: string, x: int, y: int)=> void;
-            extern("libjoyecs", "wojeapi_draw_action_set_uniform_int3")
-                func _set_uniform_int3(act: draw_action, shad: shader, name: string, x: int, y: int, z: int)=> void;
-            extern("libjoyecs", "wojeapi_draw_action_set_uniform_int4")
-                func _set_uniform_int4(act: draw_action, shad: shader, name: string, x: int, y: int, z: int, w: int)=> void;
-            
-            extern("libjoyecs", "wojeapi_draw_action_set_uniform_float")
-                func _set_uniform_float(act: draw_action, shad: shader, name: string, val: real)=> void;
-            extern("libjoyecs", "wojeapi_draw_action_set_uniform_float2")
-                func _set_uniform_float2(act: draw_action, shad: shader, name: string, x: real, y: real)=> void;
-            extern("libjoyecs", "wojeapi_draw_action_set_uniform_float3")
-                func _set_uniform_float3(act: draw_action, shad: shader, name: string, x: real, y: real, z: real)=> void;
-            extern("libjoyecs", "wojeapi_draw_action_set_uniform_float4")
-                func _set_uniform_float4(act: draw_action, shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
-            extern("libjoyecs", "wojeapi_draw_action_set_uniform_color")
-                func _set_uniform_color(act: draw_action, shad: shader, name: string, x: real, y: real, z: real, w: real)=> void;
-            
-            extern("libjoyecs", "wojeapi_draw_action_set_uniform_float2x2")
-                func _set_uniform_float2x2(act: draw_action, shad: shader, name: string,
+            extern("libjoyecs", "wojeapi_bound_shader_draw")
+                public func draw(self: bound_shader)=> void;
+
+            extern("libjoyecs", "wojeapi_bound_shader_set_uniform_int")
+                func _set_uniform_int(bound: bound_shader, name: string, val: int)=> void;
+            extern("libjoyecs", "wojeapi_bound_shader_set_uniform_int2")
+                func _set_uniform_int2(bound: bound_shader, name: string, x: int, y: int)=> void;
+            extern("libjoyecs", "wojeapi_bound_shader_set_uniform_int3")
+                func _set_uniform_int3(bound: bound_shader, name: string, x: int, y: int, z: int)=> void;
+            extern("libjoyecs", "wojeapi_bound_shader_set_uniform_int4")
+                func _set_uniform_int4(bound: bound_shader, name: string, x: int, y: int, z: int, w: int)=> void;
+
+            extern("libjoyecs", "wojeapi_bound_shader_set_uniform_float")
+                func _set_uniform_float(bound: bound_shader, name: string, val: real)=> void;
+            extern("libjoyecs", "wojeapi_bound_shader_set_uniform_float2")
+                func _set_uniform_float2(bound: bound_shader, name: string, x: real, y: real)=> void;
+            extern("libjoyecs", "wojeapi_bound_shader_set_uniform_float3")
+                func _set_uniform_float3(bound: bound_shader, name: string, x: real, y: real, z: real)=> void;
+            extern("libjoyecs", "wojeapi_bound_shader_set_uniform_float4")
+                func _set_uniform_float4(bound: bound_shader, name: string, x: real, y: real, z: real, w: real)=> void;
+            extern("libjoyecs", "wojeapi_bound_shader_set_uniform_color")
+                func _set_uniform_color(bound: bound_shader, name: string, x: real, y: real, z: real, w: real)=> void;
+
+            extern("libjoyecs", "wojeapi_bound_shader_set_uniform_float2x2")
+                func _set_uniform_float2x2(bound: bound_shader, name: string,
                     m0: real, m1: real, m2: real, m3: real)=> void;
-            extern("libjoyecs", "wojeapi_draw_action_set_uniform_float3x3")
-                func _set_uniform_float3x3(act: draw_action, shad: shader, name: string,
+            extern("libjoyecs", "wojeapi_bound_shader_set_uniform_float3x3")
+                func _set_uniform_float3x3(bound: bound_shader, name: string,
                     m0: real, m1: real, m2: real, m3: real, m4: real, m5: real, m6: real, m7: real, m8: real)=> void;
-            extern("libjoyecs", "wojeapi_draw_action_set_uniform_float4x4")
-                func _set_uniform_float4x4(act: draw_action, shad: shader, name: string,
-                    m0: real, m1: real, m2: real, m3: real, 
-                    m4: real, m5: real, m6: real, m7: real, 
-                    m8: real, m9: real, m10: real, m11: real, 
+            extern("libjoyecs", "wojeapi_bound_shader_set_uniform_float4x4")
+                func _set_uniform_float4x4(bound: bound_shader, name: string,
+                    m0: real, m1: real, m2: real, m3: real,
+                    m4: real, m5: real, m6: real, m7: real,
+                    m8: real, m9: real, m10: real, m11: real,
                     m12: real, m13: real, m14: real, m15: real)=> void;
-            
-            public func set_uniform<T>(self: draw_action, shad: shader, name: string, val: T)
+
+            public func set_uniform<T>(self: bound_shader, name: string, val: T)
                 where val is int
                 || val is (int, int)
                 || val is (int, int, int)
@@ -334,57 +339,54 @@ namespace je
                 || val is (real, real, real, real);
             {
                 if (val is int)
-                    _set_uniform_int(self, shad, name, val);
+                    _set_uniform_int(self, name, val);
                 else if (val is (int, int))
-                    _set_uniform_int2(self, shad, name, val...);
+                    _set_uniform_int2(self, name, val...);
                 else if (val is (int, int, int))
-                    _set_uniform_int3(self, shad, name, val...);
+                    _set_uniform_int3(self, name, val...);
                 else if (val is (int, int, int, int))
-                    _set_uniform_int4(self, shad, name, val...);
+                    _set_uniform_int4(self, name, val...);
                 else if (val is real)
-                    _set_uniform_float(self, shad, name, val);
+                    _set_uniform_float(self, name, val);
                 else if (val is (real, real))
-                    _set_uniform_float2(self, shad, name, val...);
+                    _set_uniform_float2(self, name, val...);
                 else if (val is (real, real, real))
-                    _set_uniform_float3(self, shad, name, val...);
+                    _set_uniform_float3(self, name, val...);
                 else if (val is (real, real, real, real))
-                    _set_uniform_float4(self, shad, name, val...);
+                    _set_uniform_float4(self, name, val...);
                 else
                     std::panic("Here should not been exec.");
             }
 
             public func set_uniform_color(
-                self: draw_action, shad: shader, name: string,
+                self: bound_shader, name: string,
                 val: (real, real, real, real))=> void
             {
-                _set_uniform_color(self, shad, name, val...);
+                _set_uniform_color(self, name, val...);
             }
 
             public func set_uniform_mat4x4(
-                self: draw_action,
-                shad: shader, 
-                name: string, 
+                self: bound_shader,
+                name: string,
                 val: (real, real, real, real, real, real, real, real, real, real, real, real, real, real, real, real))
             {
-                _set_uniform_float4x4(self, shad, name, val...);
+                _set_uniform_float4x4(self, name, val...);
             }
-            
+
             public func set_uniform_mat3x3(
-                self: draw_action,
-                shad: shader, 
-                name: string, 
+                self: bound_shader,
+                name: string,
                 val: (real, real, real, real, real, real, real, real, real))
             {
-                _set_uniform_float3x3(self, shad, name, val...);
+                _set_uniform_float3x3(self, name, val...);
             }
-            
+
             public func set_uniform_mat2x2(
-                self: draw_action,
-                shad: shader, 
-                name: string, 
+                self: bound_shader,
+                name: string,
                 val: (real, real, real, real))
             {
-                _set_uniform_float2x2(self, shad, name, val...);
+                _set_uniform_float2x2(self, name, val...);
             }
         }
         

@@ -489,35 +489,34 @@ namespace jeecs
 
                 auto* pipeline = pipeline_for(
                     (*using_shader).get(), vertex_resource);
-
-                render_draw_action draw_action(
-                    cmd,
-                    pipeline,
-                    vertex_resource,
-                    (uint32_t)vertex_resource->m_index_count,
-                    1);
+                je_graphic_cmd_bind_pipeline(cmd, pipeline);
+                je_graphic_cmd_bind_vertex(cmd, vertex_resource);
+                render_builtin_uniforms uniforms(cmd, pipeline);
 
                 if (u.m != nullptr)
-                    JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model, float4x4, u.m);
+                    JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_model, float4x4, u.m);
                 if (u.mv != nullptr)
-                    JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view, float4x4, u.mv);
+                    JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_model_view, float4x4, u.mv);
                 if (u.mvp != nullptr)
-                    JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, u.mvp);
+                    JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_model_view_projection, float4x4, u.mvp);
 
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_local_scale, float3,
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_local_scale, float3,
                     u.local_scale.x, u.local_scale.y, u.local_scale.z);
 
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_tiling, float2, u.tiling.x, u.tiling.y);
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_offset, float2, u.offset.x, u.offset.y);
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_uv_tiling, float2, u.tiling.x, u.tiling.y);
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_uv_offset, float2, u.offset.x, u.offset.y);
 
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_color, float4,
                     u.color.x, u.color.y, u.color.z, u.color.w);
 
                 if (u.light2d_resolution != nullptr)
-                    JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_light2d_resolution, float2,
+                    JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_light2d_resolution, float2,
                         u.light2d_resolution->x, u.light2d_resolution->y);
                 if (u.light2d_decay != nullptr)
-                    JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_light2d_decay, float, *u.light2d_decay);
+                    JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_light2d_decay, float, *u.light2d_decay);
+
+                je_graphic_cmd_draw_indexed(
+                    cmd, (uint32_t)vertex_resource->m_index_count, 0, 1);
             }
         }
 
@@ -1137,12 +1136,9 @@ namespace jeecs
 
             auto* pipeline = pipeline_for(
                 m_text_batch_shader, vb->resource());
-            render_draw_action draw_action(
-                chain,
-                pipeline,
-                vb->resource(),
-                (uint32_t)(m_text_batch_quads * 6),
-                1);
+            je_graphic_cmd_bind_pipeline(chain, pipeline);
+            je_graphic_cmd_bind_vertex(chain, vb->resource());
+            render_builtin_uniforms uniforms(chain, pipeline);
 
             static const float MAT4_IDENTITY[4][4] = {
                 {1.f, 0.f, 0.f, 0.f},
@@ -1151,14 +1147,17 @@ namespace jeecs
                 {0.f, 0.f, 0.f, 1.f},
             };
 
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model, float4x4, MAT4_IDENTITY);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view, float4x4, view);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, view);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_model, float4x4, MAT4_IDENTITY);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_model_view, float4x4, view);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_model_view_projection, float4x4, view);
 
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_local_scale, float3, 1.f, 1.f, 1.f);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_tiling, float2, 1.f, 1.f);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_offset, float2, 0.f, 0.f);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4, 1.f, 1.f, 1.f, 1.f);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_local_scale, float3, 1.f, 1.f, 1.f);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_uv_tiling, float2, 1.f, 1.f);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_uv_offset, float2, 0.f, 0.f);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_color, float4, 1.f, 1.f, 1.f, 1.f);
+
+            je_graphic_cmd_draw_indexed(
+                chain, (uint32_t)(m_text_batch_quads * 6), 0, 1);
 
             m_text_batch_quads = 0;
         }
@@ -2205,33 +2204,29 @@ namespace jeecs
             auto* vertex_resource = shape_vertex->resource();
             auto* pipeline = pipeline_for(
                 shadow_shader.get(), vertex_resource);
-
-            render_draw_action draw_action(
-                shadow_chain,
-                pipeline,
-                vertex_resource,
-                (uint32_t)vertex_resource->m_index_count,
-                1);
+            je_graphic_cmd_bind_pipeline(shadow_chain, pipeline);
+            je_graphic_cmd_bind_vertex(shadow_chain, vertex_resource);
+            render_builtin_uniforms uniforms(shadow_chain, pipeline);
 
             const float(&MAT4_MODEL)[4][4] = occluder_translation->object2world;
             float MAT4_MVP[4][4], MAT4_MV[4][4];
             math::mat4xmat4(MAT4_MVP, vp, MAT4_MODEL);
             math::mat4xmat4(MAT4_MV, view, MAT4_MODEL);
 
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model, float4x4, MAT4_MODEL);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view, float4x4, MAT4_MV);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, MAT4_MVP);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_local_scale, float3,
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_model, float4x4, MAT4_MODEL);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_model_view, float4x4, MAT4_MV);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_model_view_projection, float4x4, MAT4_MVP);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_local_scale, float3,
                 local_scale.x, local_scale.y, local_scale.z);
             // 阴影逐像素排序键：x=实体/顶点 key，y/z=深度映射，w=模式位
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_shadow_key, float4,
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_shadow_key, float4,
                 shadow_key.x, shadow_key.y, shadow_key.z, shadow_key.w);
 
             if (textures != nullptr)
             {
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_tiling, float2,
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_uv_tiling, float2,
                     textures->tiling.x, textures->tiling.y);
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_offset, float2,
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_uv_offset, float2,
                     textures->offset.x, textures->offset.y);
             }
 
@@ -2240,7 +2235,7 @@ namespace jeecs
             // 椭圆中心（世界空间 XY + 中心世界 Z 在 .w）
             if (color_override != nullptr)
             {
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_color, float4,
                     color_override->x,
                     color_override->y,
                     color_override->z,
@@ -2249,12 +2244,12 @@ namespace jeecs
             else if (light.parallel != nullptr)
             {
                 math::vec3 rotated_light_dir = light.translation->world_rotation * parallel_dir_ref;
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_color, float4,
                     rotated_light_dir.x, rotated_light_dir.y, rotated_light_dir.z, color_w);
             }
             else
             {
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_color, float4,
                     shadow_cast_pos.x,
                     shadow_cast_pos.y,
                     shadow_cast_pos.z,
@@ -2264,12 +2259,15 @@ namespace jeecs
             // SpriteShadow 接触椭圆参数（其余遮挡物不使用）
             if (ellipse_params != nullptr)
             {
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_shadow_ellipse, float4,
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_shadow_ellipse, float4,
                     ellipse_params->x,
                     ellipse_params->y,
                     ellipse_params->z,
                     ellipse_params->w);
             }
+
+            je_graphic_cmd_draw_indexed(
+                shadow_chain, (uint32_t)vertex_resource->m_index_count, 0, 1);
         }
 
         // 自阴影的 painter key 前移量（世界单位）：同一图层的 BlockShadow
@@ -2328,21 +2326,18 @@ namespace jeecs
             auto* pipeline = pipeline_for(
                 sub_pass_shader.get(), vertex_resource);
 
-            render_draw_action draw_action(
-                shadow_chain,
-                pipeline,
-                vertex_resource,
-                (uint32_t)vertex_resource->m_index_count,
-                1);
+            je_graphic_cmd_bind_pipeline(shadow_chain, pipeline);
+            je_graphic_cmd_bind_vertex(shadow_chain, vertex_resource);
+            render_builtin_uniforms uniforms(shadow_chain, pipeline);
 
             const float(&MAT4_MODEL)[4][4] = block.translation->object2world;
             float MAT4_MVP[4][4], MAT4_MV[4][4];
             math::mat4xmat4(MAT4_MVP, vp, MAT4_MODEL);
             math::mat4xmat4(MAT4_MV, view, MAT4_MODEL);
 
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model, float4x4, MAT4_MODEL);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view, float4x4, MAT4_MV);
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_model_view_projection, float4x4, MAT4_MVP);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_model, float4x4, MAT4_MODEL);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_model_view, float4x4, MAT4_MV);
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_model_view_projection, float4x4, MAT4_MVP);
 
             // painter key：TopDown 用实体底边世界 Y，普通 2D 用实体世界 Z；
             // 接收面再前移半层，使同层 BlockShadow（key 稍后）被清除。
@@ -2356,7 +2351,7 @@ namespace jeecs
             else
                 surface_key -= SELF_SHADOW_SURFACE_BIAS;
 
-            JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_shadow_key, float4,
+            JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_shadow_key, float4,
                 surface_key,
                 depth_mapping.scale,
                 depth_mapping.bias,
@@ -2370,7 +2365,7 @@ namespace jeecs
                 const float height_line = block.selfshadow->auto_disable
                     ? shadow_cast_pos.y
                     : 1e30f;
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_color, float4,
                     block.selfshadow->factor,
                     height_line,
                     0.f,
@@ -2383,9 +2378,9 @@ namespace jeecs
                 && (topdown_light
                     ? block.bottom_world_center.y >= shadow_cast_pos.y
                     : block.translation->world_position.z >= shadow_cast_pos.z))
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4, 0.f, 0.f, 0.f, 0.f);
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_color, float4, 0.f, 0.f, 0.f, 0.f);
             else
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_color, float4,
                     block.selfshadow->factor,
                     block.selfshadow->factor,
                     block.selfshadow->factor,
@@ -2393,11 +2388,14 @@ namespace jeecs
 
             if (block.textures != nullptr)
             {
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_tiling, float2,
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_uv_tiling, float2,
                     block.textures->tiling.x, block.textures->tiling.y);
-                JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_offset, float2,
+                JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_uv_offset, float2,
                     block.textures->offset.x, block.textures->offset.y);
             }
+
+            je_graphic_cmd_draw_indexed(
+                shadow_chain, (uint32_t)vertex_resource->m_index_count, 0, 1);
         }
 
         // SpriteShadow（角色接触阴影）绘制：在实体世界包围盒底边中点
@@ -2986,20 +2984,20 @@ namespace jeecs
                             m_defer_light2d_host._screen_vertex->resource();
                         auto* pipeline = pipeline_for(
                             (*using_shader).get(), vertex_resource);
+                        je_graphic_cmd_bind_pipeline(final_target_rend_chain, pipeline);
+                        je_graphic_cmd_bind_vertex(final_target_rend_chain, vertex_resource);
+                        render_builtin_uniforms uniforms(final_target_rend_chain, pipeline);
 
-                        render_draw_action draw_action(
-                            final_target_rend_chain,
-                            pipeline,
-                            vertex_resource,
-                            (uint32_t)vertex_resource->m_index_count,
-                            1);
-
-                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_light2d_resolution, float2,
+                        JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_light2d_resolution, float2,
                             post_light_resolution.x, post_light_resolution.y);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_tiling, float2, final_tiling.x, final_tiling.y);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_uv_offset, float2, final_offset.x, final_offset.y);
-                        JE_CHECK_NEED_AND_SET_UNIFORM(draw_action, m_color, float4,
+                        JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_uv_tiling, float2, final_tiling.x, final_tiling.y);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_uv_offset, float2, final_offset.x, final_offset.y);
+                        JE_CHECK_NEED_AND_SET_UNIFORM(uniforms, m_color, float4,
                             final_color.x, final_color.y, final_color.z, final_color.w);
+
+                        je_graphic_cmd_draw_indexed(
+                            final_target_rend_chain,
+                            (uint32_t)vertex_resource->m_index_count, 0, 1);
                     }
                 } // Finish for Light2d effect.
             }

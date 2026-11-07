@@ -20,6 +20,7 @@ namespace jeecs
         thread_local mt19937 mt = mt19937(random_device()());
     }
 }
+
 void je_uid_generate(je_uuid_t *uid)
 {
     uniform_int_distribution<uint16_t> dist_ushort(0, UINT16_MAX);

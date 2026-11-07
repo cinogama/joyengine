@@ -196,10 +196,6 @@ struct je_gl_command_buffer_t
     bool m_in_pass;
     bool m_pass_has_draw;
 
-    bool m_pending_draw;
-    jegl_cmd_op m_pending_draw_op;
-    uint32_t m_pending_a, m_pending_b, m_pending_c;
-
     bool m_has_pipeline;
     bool m_has_vertex;
     je_gl_pipeline_t* m_pipeline;
@@ -223,11 +219,6 @@ struct je_gl_command_buffer_t
         , m_resource_count(0)
         , m_in_pass(false)
         , m_pass_has_draw(false)
-        , m_pending_draw(false)
-        , m_pending_draw_op(jegl_cmd_op::DRAW_INDEXED)
-        , m_pending_a(0)
-        , m_pending_b(0)
-        , m_pending_c(0)
         , m_has_pipeline(false)
         , m_has_vertex(false)
         , m_pipeline(nullptr)
@@ -346,8 +337,8 @@ struct je_gl_command_buffer_t
     void reset()
     {
         // 帧可能因图形实现请求 SKIP/STOP（窗口最小化/关闭）而从未提交，
-        // 此时缓冲区仍停留在 pass 内、可能还有挂起的 draw。录制只发生在本侧
-        // CPU 内存，尚未提交到后端，直接丢弃即可，复用前不应因此报错。
+        // 此时缓冲区仍停留在 pass 内。录制只发生在本侧 CPU 内存，尚未提交
+        // 到后端，直接丢弃即可，复用前不应因此报错。
         m_in_pass = false;
 
         release_all_resources();
@@ -355,9 +346,6 @@ struct je_gl_command_buffer_t
         m_uniform_arena.clear();
 
         m_pass_has_draw = false;
-        m_pending_draw = false;
-        m_pending_draw_op = jegl_cmd_op::DRAW_INDEXED;
-        m_pending_a = m_pending_b = m_pending_c = 0;
         m_has_pipeline = false;
         m_has_vertex = false;
         m_pipeline = nullptr;
@@ -493,20 +481,6 @@ struct je_gl_command_buffer_t
 
         m_pass_has_draw = true;
     }
-
-    void flush_pending_draw()
-    {
-        if (!m_pending_draw)
-            return;
-
-        assert(m_in_pass);
-        m_pending_draw = false;
-        emit_draw(
-            m_pending_draw_op,
-            m_pending_a,
-            m_pending_b,
-            m_pending_c);
-    }
 };
 
 /////////////////////////////////////////////////////////////////////////////
@@ -623,7 +597,6 @@ void je_graphic_cmd_begin_pass(
     assert(viewport->width > 0);
     assert(viewport->height > 0);
     assert(!cmd->m_in_pass);
-    assert(!cmd->m_pending_draw);
 
     cmd->retain(target);
 
@@ -658,7 +631,6 @@ void je_graphic_cmd_clear_color(
     assert(cmd != nullptr);
     assert(rgba != nullptr);
     assert(cmd->m_in_pass);
-    cmd->flush_pending_draw();
     assert(!cmd->m_pass_has_draw);
     assert(attachment < cmd->m_target_attachment_count);
 
@@ -676,7 +648,6 @@ void je_graphic_cmd_clear_depth(je_gl_command_buffer_t* cmd, float depth)
 {
     assert(cmd != nullptr);
     assert(cmd->m_in_pass);
-    cmd->flush_pending_draw();
     assert(!cmd->m_pass_has_draw);
 
     jegl_cmd command{};
@@ -689,7 +660,6 @@ void je_graphic_cmd_end_pass(je_gl_command_buffer_t* cmd)
 {
     assert(cmd != nullptr);
     assert(cmd->m_in_pass);
-    cmd->flush_pending_draw();
 
     jegl_cmd command{};
     command.m_op = jegl_cmd_op::END_PASS;
@@ -706,7 +676,6 @@ void je_graphic_cmd_bind_pipeline(
     assert(pipeline != nullptr);
     assert(cmd->m_in_pass);
     assert(pipeline->m_context == cmd->m_context);
-    cmd->flush_pending_draw();
 
     cmd->retain(pipeline);
 
@@ -726,7 +695,6 @@ void je_graphic_cmd_bind_vertex(
     assert(cmd != nullptr);
     assert(vertex != nullptr);
     assert(cmd->m_in_pass);
-    cmd->flush_pending_draw();
 
     cmd->retain(vertex);
 
@@ -745,7 +713,6 @@ void je_graphic_cmd_bind_uniform_buffer(
     assert(cmd != nullptr);
     assert(buffer != nullptr);
     assert(cmd->m_in_pass);
-    cmd->flush_pending_draw();
 
     cmd->retain(buffer);
 
@@ -767,7 +734,6 @@ static void _jegl_cmd_bind_texture_impl(
     assert(texture != nullptr);
     assert(cmd->m_in_pass);
     assert(pass < 32);
-    cmd->flush_pending_draw();
 
     cmd->retain(texture);
 
@@ -833,7 +799,6 @@ void je_graphic_cmd_bind_sampler(
     assert(cmd->m_in_pass);
     assert(cmd->m_has_pipeline);
     assert(sampler_id < 16);
-    cmd->flush_pending_draw();
 
     cmd->retain(sampler);
 
@@ -997,7 +962,6 @@ void je_graphic_cmd_draw_indexed(
     assert(index_count > 0);
     assert(instance_count > 0);
 
-    cmd->flush_pending_draw();
     cmd->emit_draw(
         jegl_cmd_op::DRAW_INDEXED,
         index_count,
@@ -1014,7 +978,6 @@ void je_graphic_cmd_draw(
     assert(vertex_count > 0);
     assert(instance_count > 0);
 
-    cmd->flush_pending_draw();
     cmd->emit_draw(
         jegl_cmd_op::DRAW,
         vertex_count,
@@ -1027,9 +990,6 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
     assert(cmd != nullptr);
     assert(cmd->m_context != nullptr);
     assert(jeecs::graphic::_current_graphic_thread == cmd->m_context);
-
-    if (cmd->m_pending_draw)
-        cmd->flush_pending_draw();
 
     // A pass begun by je_graphic_branch_new_command_buffer may still be open; close
     // it here so callers can follow the "record, commit" flow.
@@ -1290,38 +1250,4 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
     }
 
     render->commit_end(impl_context);
-}
-
-void _jegl_cmd_begin_deferred_draw(
-    je_gl_command_buffer_t* cmd,
-    je_gl_pipeline_t* pipeline,
-    je_gl_vertex_t* vertex,
-    uint32_t index_count,
-    uint32_t instance_count)
-{
-    assert(cmd != nullptr);
-    assert(pipeline != nullptr);
-    assert(vertex != nullptr);
-    assert(cmd->m_in_pass);
-    // Flush the previous deferred draw before starting a new one. Callers
-    // such as the Woolang bindings may rely on "draw, set uniforms, draw"
-    // without explicitly ending the previous action.
-    cmd->flush_pending_draw();
-    assert(index_count > 0);
-    assert(instance_count > 0);
-
-    je_graphic_cmd_bind_pipeline(cmd, pipeline);
-    je_graphic_cmd_bind_vertex(cmd, vertex);
-
-    cmd->m_pending_draw = true;
-    cmd->m_pending_draw_op = jegl_cmd_op::DRAW_INDEXED;
-    cmd->m_pending_a = index_count;
-    cmd->m_pending_b = 0;
-    cmd->m_pending_c = instance_count;
-}
-
-void _jegl_cmd_end_deferred_draw(je_gl_command_buffer_t* cmd)
-{
-    assert(cmd != nullptr);
-    cmd->flush_pending_draw();
 }

@@ -9,13 +9,6 @@
 #include <unordered_map>
 #include <vector>
 
-void _jegl_cmd_begin_deferred_draw(
-    je_gl_command_buffer_t* cmd,
-    je_gl_pipeline_t* pipeline,
-    je_gl_vertex_t* vertex,
-    uint32_t index_count,
-    uint32_t instance_count);
-
 struct _jewo_log_channel
 {
     std::atomic_flag                                            m_mx;
@@ -4379,10 +4372,14 @@ WOORT_API woort_api wojeapi_branch_new_frame(void)
 
 namespace
 {
-    struct woje_draw_action
+    // A shader+vertex pair bound to a command buffer by
+    // wojeapi_command_buffer_bind_shader. Scripts set per-draw uniforms on it
+    // by name and finish with the explicit wojeapi_bound_shader_draw.
+    struct woje_bound_shader
     {
         je_gl_command_buffer_t* m_command;
         je_gl_pipeline_t* m_pipeline;
+        uint32_t m_index_count;
     };
 
     std::unordered_map<uint64_t, je_gl_pipeline_t*> _woje_pipeline_cache;
@@ -4426,16 +4423,16 @@ namespace
         return pipeline;
     }
 
-    thread_local woje_draw_action _woje_draw_actions[64];
-    thread_local size_t _woje_draw_action_index = 0;
+    thread_local woje_bound_shader _woje_bound_shaders[64];
+    thread_local size_t _woje_bound_shader_index = 0;
 
-    je_gl_uniform_slot_t _woje_action_uniform_slot(
-        woje_draw_action* action, const char* name)
+    je_gl_uniform_slot_t _woje_bound_shader_uniform_slot(
+        woje_bound_shader* bound, const char* name)
     {
         // Editor shaders do not necessarily consume every builtin uniform
         // (e.g. a gizmo shader may use only JE_MVP). Absent uniforms are a
         // normal optional case here; the typed setters below skip them.
-        return je_graphic_pipeline_uniform_slot(action->m_pipeline, name);
+        return je_graphic_pipeline_uniform_slot(bound->m_pipeline, name);
     }
 }
 
@@ -4551,7 +4548,7 @@ WOORT_API woort_api wojeapi_command_buffer_bind_texture(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_command_buffer_draw(void)
+WOORT_API woort_api wojeapi_command_buffer_bind_shader(void)
 {
     auto* cmd = (je_gl_command_buffer_t*)woort_pointer(0);
     auto* shad =
@@ -4565,19 +4562,24 @@ WOORT_API woort_api wojeapi_command_buffer_draw(void)
     auto* pipeline = _woje_get_pipeline(
         je_graphic_cmd_get_context(cmd), shader_resource, vertex_resource);
 
-    _jegl_cmd_begin_deferred_draw(
-        cmd,
-        pipeline,
-        vertex_resource,
-        (uint32_t)vertex_resource->m_index_count,
-        1);
+    je_graphic_cmd_bind_pipeline(cmd, pipeline);
+    je_graphic_cmd_bind_vertex(cmd, vertex_resource);
 
-    auto& action =
-        _woje_draw_actions[_woje_draw_action_index++ % 64];
-    action.m_command = cmd;
-    action.m_pipeline = pipeline;
+    auto& bound =
+        _woje_bound_shaders[_woje_bound_shader_index++ % 64];
+    bound.m_command = cmd;
+    bound.m_pipeline = pipeline;
+    bound.m_index_count = (uint32_t)vertex_resource->m_index_count;
 
-    return woort_ret_pointer(&action);
+    return woort_ret_pointer(&bound);
+}
+
+WOORT_API woort_api wojeapi_bound_shader_draw(void)
+{
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    je_graphic_cmd_draw_indexed(
+        bound->m_command, bound->m_index_count, 0, 1);
+    return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_command_buffer_commit(void)
@@ -4587,113 +4589,113 @@ WOORT_API woort_api wojeapi_command_buffer_commit(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_draw_action_set_uniform_int(void)
+WOORT_API woort_api wojeapi_bound_shader_set_uniform_int(void)
 {
-    auto* act = (woje_draw_action*)woort_pointer(0);
-    const char* name = woort_string(2);
-    auto slot = _woje_action_uniform_slot(act, name);
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    const char* name = woort_string(1);
+    auto slot = _woje_bound_shader_uniform_slot(bound, name);
     if (slot.m_offset == JE_GL_UNIFORM_SLOT_NONE)
         return woort_ret_void();
 
-    je_graphic_cmd_set_uniform_int(act->m_command, slot, (int)woort_int(3));
+    je_graphic_cmd_set_uniform_int(bound->m_command, slot, (int)woort_int(2));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_draw_action_set_uniform_int2(void)
+WOORT_API woort_api wojeapi_bound_shader_set_uniform_int2(void)
 {
-    auto* act = (woje_draw_action*)woort_pointer(0);
-    const char* name = woort_string(2);
-    auto slot = _woje_action_uniform_slot(act, name);
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    const char* name = woort_string(1);
+    auto slot = _woje_bound_shader_uniform_slot(bound, name);
     if (slot.m_offset == JE_GL_UNIFORM_SLOT_NONE)
         return woort_ret_void();
 
     je_graphic_cmd_set_uniform_int2(
-        act->m_command, slot, (int)woort_int(3), (int)woort_int(4));
+        bound->m_command, slot, (int)woort_int(2), (int)woort_int(3));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_draw_action_set_uniform_int3(void)
+WOORT_API woort_api wojeapi_bound_shader_set_uniform_int3(void)
 {
-    auto* act = (woje_draw_action*)woort_pointer(0);
-    const char* name = woort_string(2);
-    auto slot = _woje_action_uniform_slot(act, name);
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    const char* name = woort_string(1);
+    auto slot = _woje_bound_shader_uniform_slot(bound, name);
     if (slot.m_offset == JE_GL_UNIFORM_SLOT_NONE)
         return woort_ret_void();
 
-    je_graphic_cmd_set_uniform_int3(act->m_command, slot,
-        (int)woort_int(3), (int)woort_int(4), (int)woort_int(5));
+    je_graphic_cmd_set_uniform_int3(bound->m_command, slot,
+        (int)woort_int(2), (int)woort_int(3), (int)woort_int(4));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_draw_action_set_uniform_int4(void)
+WOORT_API woort_api wojeapi_bound_shader_set_uniform_int4(void)
 {
-    auto* act = (woje_draw_action*)woort_pointer(0);
-    const char* name = woort_string(2);
-    auto slot = _woje_action_uniform_slot(act, name);
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    const char* name = woort_string(1);
+    auto slot = _woje_bound_shader_uniform_slot(bound, name);
     if (slot.m_offset == JE_GL_UNIFORM_SLOT_NONE)
         return woort_ret_void();
 
-    je_graphic_cmd_set_uniform_int4(act->m_command, slot,
-        (int)woort_int(3), (int)woort_int(4), (int)woort_int(5), (int)woort_int(6));
+    je_graphic_cmd_set_uniform_int4(bound->m_command, slot,
+        (int)woort_int(2), (int)woort_int(3), (int)woort_int(4), (int)woort_int(5));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_draw_action_set_uniform_float(void)
+WOORT_API woort_api wojeapi_bound_shader_set_uniform_float(void)
 {
-    auto* act = (woje_draw_action*)woort_pointer(0);
-    const char* name = woort_string(2);
-    auto slot = _woje_action_uniform_slot(act, name);
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    const char* name = woort_string(1);
+    auto slot = _woje_bound_shader_uniform_slot(bound, name);
     if (slot.m_offset == JE_GL_UNIFORM_SLOT_NONE)
         return woort_ret_void();
 
-    je_graphic_cmd_set_uniform_float(act->m_command, slot, woort_float(3));
+    je_graphic_cmd_set_uniform_float(bound->m_command, slot, woort_float(2));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_draw_action_set_uniform_float2(void)
+WOORT_API woort_api wojeapi_bound_shader_set_uniform_float2(void)
 {
-    auto* act = (woje_draw_action*)woort_pointer(0);
-    const char* name = woort_string(2);
-    auto slot = _woje_action_uniform_slot(act, name);
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    const char* name = woort_string(1);
+    auto slot = _woje_bound_shader_uniform_slot(bound, name);
     if (slot.m_offset == JE_GL_UNIFORM_SLOT_NONE)
         return woort_ret_void();
 
     je_graphic_cmd_set_uniform_float2(
-        act->m_command, slot, woort_float(3), woort_float(4));
+        bound->m_command, slot, woort_float(2), woort_float(3));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_draw_action_set_uniform_float3(void)
+WOORT_API woort_api wojeapi_bound_shader_set_uniform_float3(void)
 {
-    auto* act = (woje_draw_action*)woort_pointer(0);
-    const char* name = woort_string(2);
-    auto slot = _woje_action_uniform_slot(act, name);
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    const char* name = woort_string(1);
+    auto slot = _woje_bound_shader_uniform_slot(bound, name);
     if (slot.m_offset == JE_GL_UNIFORM_SLOT_NONE)
         return woort_ret_void();
 
-    je_graphic_cmd_set_uniform_float3(act->m_command, slot,
-        woort_float(3), woort_float(4), woort_float(5));
+    je_graphic_cmd_set_uniform_float3(bound->m_command, slot,
+        woort_float(2), woort_float(3), woort_float(4));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_draw_action_set_uniform_float4(void)
+WOORT_API woort_api wojeapi_bound_shader_set_uniform_float4(void)
 {
-    auto* act = (woje_draw_action*)woort_pointer(0);
-    const char* name = woort_string(2);
-    auto slot = _woje_action_uniform_slot(act, name);
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    const char* name = woort_string(1);
+    auto slot = _woje_bound_shader_uniform_slot(bound, name);
     if (slot.m_offset == JE_GL_UNIFORM_SLOT_NONE)
         return woort_ret_void();
 
-    je_graphic_cmd_set_uniform_float4(act->m_command, slot,
-        woort_float(3), woort_float(4), woort_float(5), woort_float(6));
+    je_graphic_cmd_set_uniform_float4(bound->m_command, slot,
+        woort_float(2), woort_float(3), woort_float(4), woort_float(5));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_draw_action_set_uniform_color(void)
+WOORT_API woort_api wojeapi_bound_shader_set_uniform_color(void)
 {
-    auto* act = (woje_draw_action*)woort_pointer(0);
-    const char* name = woort_string(2);
-    auto slot = _woje_action_uniform_slot(act, name);
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    const char* name = woort_string(1);
+    auto slot = _woje_bound_shader_uniform_slot(bound, name);
     if (slot.m_offset == JE_GL_UNIFORM_SLOT_NONE)
         return woort_ret_void();
 
@@ -4701,58 +4703,58 @@ WOORT_API woort_api wojeapi_draw_action_set_uniform_color(void)
     // them through math::color so its storage-to-linear conversion stays the
     // only place that knows how a color is represented.
     const jeecs::math::vec4 linear = jeecs::math::color(
-        woort_float(3), woort_float(4), woort_float(5), woort_float(6))
+        woort_float(2), woort_float(3), woort_float(4), woort_float(5))
         .to_linear();
-    je_graphic_cmd_set_uniform_float4(act->m_command, slot,
+    je_graphic_cmd_set_uniform_float4(bound->m_command, slot,
         linear.x, linear.y, linear.z, linear.w);
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_draw_action_set_uniform_float2x2(void)
+WOORT_API woort_api wojeapi_bound_shader_set_uniform_float2x2(void)
 {
-    auto* act = (woje_draw_action*)woort_pointer(0);
-    const char* name = woort_string(2);
-    auto slot = _woje_action_uniform_slot(act, name);
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    const char* name = woort_string(1);
+    auto slot = _woje_bound_shader_uniform_slot(bound, name);
     if (slot.m_offset == JE_GL_UNIFORM_SLOT_NONE)
         return woort_ret_void();
 
     float mat[2][2];
     for (int i = 0; i < 4; ++i)
-        (&mat[0][0])[i] = woort_float((woort_value)(3 + i));
+        (&mat[0][0])[i] = woort_float((woort_value)(2 + i));
 
-    je_graphic_cmd_set_uniform_float2x2(act->m_command, slot, mat);
+    je_graphic_cmd_set_uniform_float2x2(bound->m_command, slot, mat);
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_draw_action_set_uniform_float3x3(void)
+WOORT_API woort_api wojeapi_bound_shader_set_uniform_float3x3(void)
 {
-    auto* act = (woje_draw_action*)woort_pointer(0);
-    const char* name = woort_string(2);
-    auto slot = _woje_action_uniform_slot(act, name);
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    const char* name = woort_string(1);
+    auto slot = _woje_bound_shader_uniform_slot(bound, name);
     if (slot.m_offset == JE_GL_UNIFORM_SLOT_NONE)
         return woort_ret_void();
 
     float mat[3][3];
     for (int i = 0; i < 9; ++i)
-        (&mat[0][0])[i] = woort_float((woort_value)(3 + i));
+        (&mat[0][0])[i] = woort_float((woort_value)(2 + i));
 
-    je_graphic_cmd_set_uniform_float3x3(act->m_command, slot, mat);
+    je_graphic_cmd_set_uniform_float3x3(bound->m_command, slot, mat);
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_draw_action_set_uniform_float4x4(void)
+WOORT_API woort_api wojeapi_bound_shader_set_uniform_float4x4(void)
 {
-    auto* act = (woje_draw_action*)woort_pointer(0);
-    const char* name = woort_string(2);
-    auto slot = _woje_action_uniform_slot(act, name);
+    auto* bound = (woje_bound_shader*)woort_pointer(0);
+    const char* name = woort_string(1);
+    auto slot = _woje_bound_shader_uniform_slot(bound, name);
     if (slot.m_offset == JE_GL_UNIFORM_SLOT_NONE)
         return woort_ret_void();
 
     float mat[4][4];
     for (int i = 0; i < 16; ++i)
-        (&mat[0][0])[i] = woort_float((woort_value)(3 + i));
+        (&mat[0][0])[i] = woort_float((woort_value)(2 + i));
 
-    je_graphic_cmd_set_uniform_float4x4(act->m_command, slot, mat);
+    je_graphic_cmd_set_uniform_float4x4(bound->m_command, slot, mat);
     return woort_ret_void();
 }
 

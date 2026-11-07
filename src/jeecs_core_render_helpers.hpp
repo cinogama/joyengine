@@ -13,48 +13,21 @@
 
 namespace jeecs
 {
-    // RAII wrapper around the engine's old "draw returns an action" pattern:
-    // binds the pipeline/vertex, collects per-draw uniforms, and records the
-    // indexed draw when the action goes out of scope. The draw is flushed
-    // before the next state change, so record order is preserved.
-    struct render_draw_action
+    // Pairs a command buffer with the builtin uniform slots of the pipeline
+    // bound to it, so JE_CHECK_NEED_AND_SET_UNIFORM can set builtin uniforms
+    // between je_graphic_cmd_bind_pipeline/bind_vertex and the explicit
+    // je_graphic_cmd_draw_indexed call.
+    struct render_builtin_uniforms
     {
-        JECS_DISABLE_MOVE_AND_COPY(render_draw_action);
-
         je_gl_command_buffer_t* m_command;
         const je_gl_builtin_uniform_slots_t* m_builtin_slots;
-        bool m_pending;
 
-        render_draw_action(
+        render_builtin_uniforms(
             je_gl_command_buffer_t* command,
-            je_gl_pipeline_t* pipeline,
-            je_gl_vertex_t* vertex,
-            uint32_t index_count,
-            uint32_t instance_count)
+            je_gl_pipeline_t* pipeline)
             : m_command(command)
             , m_builtin_slots(je_graphic_pipeline_builtin_uniform_slots(pipeline))
-            , m_pending(true)
         {
-            _jegl_cmd_begin_deferred_draw(
-                command,
-                pipeline,
-                vertex,
-                index_count,
-                instance_count);
-        }
-
-        ~render_draw_action()
-        {
-            flush();
-        }
-
-        void flush()
-        {
-            if (m_pending)
-            {
-                _jegl_cmd_end_deferred_draw(m_command);
-                m_pending = false;
-            }
         }
     };
 

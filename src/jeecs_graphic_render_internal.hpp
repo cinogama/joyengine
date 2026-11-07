@@ -94,15 +94,3 @@ inline void _jegl_patch_ndc_scale(
         static_cast<uint8_t*>(uniform_data) + ndc_offset,
         ndc_scale, sizeof(ndc_scale));
 }
-
-// Deferred draw used by the engine's render systems and the Woolang bindings.
-// Mirrors the old "draw returns an action, uniforms are set on it, the next
-// operation flushes it" pattern. Public users should prefer the explicit
-// jegl_cmd_set_uniform_* + je_graphic_cmd_draw_indexed ordering.
-void _jegl_cmd_begin_deferred_draw(
-    je_gl_command_buffer_t* cmd,
-    je_gl_pipeline_t* pipeline,
-    je_gl_vertex_t* vertex,
-    uint32_t index_count,
-    uint32_t instance_count);
-void _jegl_cmd_end_deferred_draw(je_gl_command_buffer_t* cmd);
