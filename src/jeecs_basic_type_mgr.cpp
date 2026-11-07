@@ -14,7 +14,7 @@
 #include <string>
 #include <optional>
 
-namespace jeecs_impl
+namespace jeecs
 {
     class global_factory_holder
     {
@@ -426,7 +426,7 @@ const je_type_info_t* je_typing_register(
     je_copy_construct_func_t _copy_constructor,
     je_move_construct_func_t _move_constructor)
 {
-    return jeecs_impl::global_factory_holder::holder()->declear_type(
+    return jeecs::global_factory_holder::holder()->declear_type(
         _name,
         _hash,
         _size,
@@ -447,7 +447,7 @@ void je_typing_reset(
     je_copy_construct_func_t _copy_constructor,
     je_move_construct_func_t _move_constructor)
 {
-    return jeecs_impl::global_factory_holder::holder()->reset_type(
+    return jeecs::global_factory_holder::holder()->reset_type(
         _tinfo,
         _size,
         _align,
@@ -460,26 +460,26 @@ void je_typing_reset(
 /* OPTIONAL: If _id is invalid or unregistered */ const je_type_info_t* je_typing_info_get_by_id(
     je_type_id_t _id)
 {
-    return jeecs_impl::global_factory_holder::holder()
+    return jeecs::global_factory_holder::holder()
         ->get_info_by_id(_id);
 }
 
 /* OPTIONAL: If _hash is not registered */ const je_type_info_t* je_typing_info_get_by_hash(
     je_type_hash_t _hash)
 {
-    return jeecs_impl::global_factory_holder::holder()
+    return jeecs::global_factory_holder::holder()
         ->get_info_by_hash(_hash);
 }
 
 /* OPTIONAL: If type_name is not found */ const je_type_info_t* je_typing_info_get_by_name(
     const char* type_name)
 {
-    return jeecs_impl::global_factory_holder::holder()->get_info_by_name(type_name);
+    return jeecs::global_factory_holder::holder()->get_info_by_name(type_name);
 }
 
 void je_typing_unregister(const je_type_info_t* tinfo)
 {
-    jeecs_impl::global_factory_holder::holder()->undeclear_type(
+    jeecs::global_factory_holder::holder()->undeclear_type(
         const_cast<je_type_info_t*>(tinfo));
 }
 
@@ -491,7 +491,7 @@ void je_typing_member_register(
     woort_value _boxed_woovalue_init_may_ignored,
     ptrdiff_t _member_offset)
 {
-    jeecs_impl::global_factory_holder::holder()
+    jeecs::global_factory_holder::holder()
         ->declear_member(
             const_cast<je_type_info_t*>(_classtype),
             _membertype,
@@ -508,7 +508,7 @@ void je_typing_script_parser_register(
     const char* woolang_typename,
     const char* woolang_typedecl)
 {
-    jeecs_impl::global_factory_holder::holder()
+    jeecs::global_factory_holder::holder()
         ->declear_script_parser(
             const_cast<je_type_info_t*>(_type),
             c2w,
@@ -530,7 +530,7 @@ void je_typing_system_updater_register(
     je_update_func_t _commit_update,
     je_update_func_t _graphic_update)
 {
-    jeecs_impl::global_factory_holder::holder()
+    jeecs::global_factory_holder::holder()
         ->declear_system_updater(
             const_cast<je_type_info_t*>(_type),
             _on_enable,
@@ -550,7 +550,7 @@ void je_typing_system_updater_register(
 // NOTE: need free the return result by 'je_mem_free'
 const je_type_info_t** je_debug_types_registered_get_all(void)
 {
-    auto&& types = jeecs_impl::global_factory_holder::holder()->get_all_registed_types();
+    auto&& types = jeecs::global_factory_holder::holder()->get_all_registed_types();
     auto result = (const je_type_info_t**)je_mem_alloc(sizeof(const je_type_info_t*) * (types.size() + 1));
     result[types.size()] = nullptr;
 

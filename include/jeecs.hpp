@@ -199,7 +199,7 @@ typedef struct je_uuid_t {
 
 // ---- C ABI ECS 不透明句柄（opaque handle）前向声明 ----
 // 这些类型对外仅暴露指针；完整定义在引擎内部（src/）。C/C++ 通用，二进制兼容。
-// 在引擎内部以空结构体作为公开基类，实际实现类（jeecs_impl::ecs_universe 等）继承它们，
+// 在引擎内部以空结构体作为公开基类，实际实现类（jeecs::ecs_universe 等）继承它们，
 // 因此 C ABI 边界处可使用干净的 derived↔base static_cast，无需 reinterpret_cast。
 // 此处提前声明是因为 je_game_entity_t（见下方）需要引用 je_chunk_t。
 typedef struct je_game_universe_t je_game_universe_t;   // ECS 宇宙（全局上下文）

@@ -16,6 +16,8 @@
 #define JE_EFFECT_HEAD(v) (EffectHead *)(reinterpret_cast<intptr_t>(v) - sizeof(EffectHead))
 #define JE_EFFECT_DATA(t, v) (t *)(reinterpret_cast<intptr_t>(v) + sizeof(EffectHead))
 
+namespace jeecs::audio {}
+
 using namespace std;
 using namespace jeecs;
 using namespace jeecs::audio;
