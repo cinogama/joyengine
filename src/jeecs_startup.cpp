@@ -7,11 +7,9 @@
 
 #include <list>
 
-void jeal_init();
 void jegl_shader_generator_init();
 
 void je_ecs_finish();
-void jeal_finish();
 void jegl_finish();
 void jetowoo_finish();
 void jegl_shader_generator_shutdown();
@@ -200,7 +198,7 @@ void _jeecs_entry_register_core_systems(
 
 void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
 {
-    jeecs::bootup();
+    jeecs::bootup(argc, argv);
 
     // Update default graphic sync funciton
     je_graphic_sync_thread_callback_register(
@@ -209,15 +207,6 @@ void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
     _je_global_context._jegl_host_graphic_api = nullptr;
 
     jegl_shader_generator_init();
-
-    const wo_WooDyn_Functions funcs = {
-        &woort_init,
-        &woort_shutdown,
-        &woort_dylib_load,
-        &woort_dylib_load_func,
-        &woort_dylib_unload,
-    };
-    wo_init(argc, argv, &funcs);
 
     for (int i = 1; i < argc - 1; ++i)
     {
@@ -383,14 +372,8 @@ void je_core_finish()
 
     (void)woort_set_panic_callback(NULL);
 
-    // Free registered external libraries.
-    je_extern_lib_module_finish();
-    je_extern_lib_3rd_pkgs_finish();
-    je_extern_lib_woo_api_finish();
 
     jeecs::shutdown();
-
-    wo_finish(nullptr, nullptr);
 
     delete _je_global_context._je_unregister_guard;
     _je_global_context._je_unregister_guard = nullptr;

@@ -275,7 +275,7 @@ namespace jeecs::internal_script
         }
     }
 
-    void bootup()
+    void bootup(int, char**)
     {
         cache_builder_of_animation =
             try_load_internal_script_with_cache_and_bootup(

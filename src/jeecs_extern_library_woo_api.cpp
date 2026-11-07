@@ -27,7 +27,7 @@ namespace jeecs::engine_woolang_api
         woort_Dylib* engine_api_lib_handle = nullptr;
     }
 
-    void bootup()
+    void bootup(int, char**)
     {
         assert(engine_api_lib_handle == nullptr);
 #ifdef JE_HAVE_EXTERN_LIB_WOO_API
@@ -40,7 +40,7 @@ namespace jeecs::engine_woolang_api
 #ifdef JE_HAVE_EXTERN_LIB_WOO_API
         je_extern_lib_woo_api_finish_impl(engine_api_lib_handle);
 #endif
-        assert(_je_api_lib_handle != nullptr);
+        assert(engine_api_lib_handle != nullptr);
     }
 
 }

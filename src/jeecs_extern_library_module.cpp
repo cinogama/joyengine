@@ -27,7 +27,7 @@ namespace jeecs::external_modules
         vector<woort_Dylib*> static_module_lib_handles;
     }
 
-    void bootup()
+    void bootup(int, char**)
     {
         assert(static_module_lib_handles.empty());
 #ifdef JE_HAVE_EXTERN_LIB_MODULE

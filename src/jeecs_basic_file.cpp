@@ -103,7 +103,7 @@ namespace jeecs::file
         }
     }
 
-    void bootup()
+    void bootup(int, char**)
     {
         using namespace jeecs::file::native;
         using namespace jeecs::file::native;

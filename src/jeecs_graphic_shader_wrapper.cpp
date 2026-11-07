@@ -1,5 +1,7 @@
 #define JE_IMPL
 #include "jeecs.hpp"
+#include "jeecs_basic_bootup.hpp"
+
 #include <algorithm>
 #include <cstring>
 #include <functional>
@@ -16,119 +18,128 @@ void _jegl_init_resource_handle(
     je_gl_resource_handle_t* resource_handle,
     const char* path_may_null_if_builtin);
 
-namespace
+namespace jeecs::graphic::shader_wrapper {}
+
+using namespace std;
+using namespace jeecs;
+using namespace jeecs::graphic::shader_wrapper;
+
+namespace jeecs::graphic::shader_wrapper 
 {
-    void _jegl_get_uniform_layout(
-        je_gl_shader_uniform_type_t type, uint32_t* out_size, uint32_t* out_align)
+    namespace
     {
-        switch (type)
+        void _jegl_get_uniform_layout(
+            je_gl_shader_uniform_type_t type, uint32_t* out_size, uint32_t* out_align)
         {
-        case JE_GL_SHADER_UNIFORM_TYPE_INT:
-        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT:
-            *out_size = 4;
-            *out_align = 4;
-            break;
-        case JE_GL_SHADER_UNIFORM_TYPE_INT2:
-        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2:
-            *out_size = 8;
-            *out_align = 8;
-            break;
-        case JE_GL_SHADER_UNIFORM_TYPE_INT3:
-        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3:
-            *out_size = 12;
-            *out_align = 16;
-            break;
-        case JE_GL_SHADER_UNIFORM_TYPE_INT4:
-        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4:
-            *out_size = 16;
-            *out_align = 16;
-            break;
-        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2X2:
-            *out_size = 16;
-            *out_align = 8;
-            break;
-        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3X3:
-            *out_size = 48;
-            *out_align = 16;
-            break;
-        case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4X4:
-            *out_size = 64;
-            *out_align = 16;
-            break;
-        case JE_GL_SHADER_UNIFORM_TYPE_TEXTURE:
-            *out_size = 0;
-            *out_align = 1;
-            break;
-        default:
-            assert(false);
-            *out_size = 0;
-            *out_align = 1;
-            break;
-        }
-    }
-
-    uint32_t _jegl_align_up(uint32_t value, uint32_t alignment)
-    {
-        return (value + alignment - 1) / alignment * alignment;
-    }
-
-    // Computes the canonical std140 layout of the shader's per-draw uniform
-    // block. Every backend and the command-buffer recorder use these offsets,
-    // so the layout must stay stable across backends; the shader generator
-    // sorts uniforms by packing rank to keep HLSL cbuffer packing identical to
-    // std140 (see je/shader/shader.wo).
-    void _jegl_resolve_canonical_uniform_layout(je_gl_shader_t* shader)
-    {
-        uint32_t offset = 0;
-        uint32_t max_align = 4;
-
-        for (auto* uniform = shader->m_custom_uniforms;
-            uniform != nullptr;
-            uniform = uniform->m_next)
-        {
-            uint32_t size, align;
-            _jegl_get_uniform_layout(uniform->m_uniform_type, &size, &align);
-
-            if (size == 0)
+            switch (type)
             {
-                uniform->m_offset = jeecs::graphic::INVALID_UNIFORM_LOCATION;
-                uniform->m_size = 0;
-                continue;
+            case JE_GL_SHADER_UNIFORM_TYPE_INT:
+            case JE_GL_SHADER_UNIFORM_TYPE_FLOAT:
+                *out_size = 4;
+                *out_align = 4;
+                break;
+            case JE_GL_SHADER_UNIFORM_TYPE_INT2:
+            case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2:
+                *out_size = 8;
+                *out_align = 8;
+                break;
+            case JE_GL_SHADER_UNIFORM_TYPE_INT3:
+            case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3:
+                *out_size = 12;
+                *out_align = 16;
+                break;
+            case JE_GL_SHADER_UNIFORM_TYPE_INT4:
+            case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4:
+                *out_size = 16;
+                *out_align = 16;
+                break;
+            case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2X2:
+                *out_size = 16;
+                *out_align = 8;
+                break;
+            case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3X3:
+                *out_size = 48;
+                *out_align = 16;
+                break;
+            case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4X4:
+                *out_size = 64;
+                *out_align = 16;
+                break;
+            case JE_GL_SHADER_UNIFORM_TYPE_TEXTURE:
+                *out_size = 0;
+                *out_align = 1;
+                break;
+            default:
+                assert(false);
+                *out_size = 0;
+                *out_align = 1;
+                break;
             }
-
-            offset = _jegl_align_up(offset, align);
-            uniform->m_offset = offset;
-            uniform->m_size = size;
-            offset += size;
-            max_align = std::max(max_align, align);
         }
 
-        shader->m_uniform_block_size = _jegl_align_up(offset, max_align);
-
-        auto resolve = [shader](const char* name) -> uint32_t
+        uint32_t _jegl_align_up(uint32_t value, uint32_t alignment)
         {
+            return (value + alignment - 1) / alignment * alignment;
+        }
+
+        // Computes the canonical std140 layout of the shader's per-draw uniform
+        // block. Every backend and the command-buffer recorder use these offsets,
+        // so the layout must stay stable across backends; the shader generator
+        // sorts uniforms by packing rank to keep HLSL cbuffer packing identical to
+        // std140 (see je/shader/shader.wo).
+        void _jegl_resolve_canonical_uniform_layout(je_gl_shader_t* shader)
+        {
+            uint32_t offset = 0;
+            uint32_t max_align = 4;
+
             for (auto* uniform = shader->m_custom_uniforms;
                 uniform != nullptr;
                 uniform = uniform->m_next)
             {
-                if (uniform->m_uniform_type != JE_GL_SHADER_UNIFORM_TYPE_TEXTURE
-                    && std::strcmp(uniform->m_name, name) == 0)
-                    return uniform->m_offset;
-            }
-            return jeecs::graphic::INVALID_UNIFORM_LOCATION;
-        };
+                uint32_t size, align;
+                _jegl_get_uniform_layout(uniform->m_uniform_type, &size, &align);
 
-        shader->m_builtin_uniforms.m_builtin_uniform_ndc_scale = resolve("JE_NDC_SCALE");
-        shader->m_builtin_uniforms.m_builtin_uniform_m = resolve("JE_M");
-        shader->m_builtin_uniforms.m_builtin_uniform_mv = resolve("JE_MV");
-        shader->m_builtin_uniforms.m_builtin_uniform_mvp = resolve("JE_MVP");
-        shader->m_builtin_uniforms.m_builtin_uniform_local_scale = resolve("JE_LOCAL_SCALE");
-        shader->m_builtin_uniforms.m_builtin_uniform_tiling = resolve("JE_UV_TILING");
-        shader->m_builtin_uniforms.m_builtin_uniform_offset = resolve("JE_UV_OFFSET");
-        shader->m_builtin_uniforms.m_builtin_uniform_color = resolve("JE_COLOR");
-        shader->m_builtin_uniforms.m_builtin_uniform_light2d_resolution = resolve("JE_LIGHT2D_RESOLUTION");
-        shader->m_builtin_uniforms.m_builtin_uniform_light2d_decay = resolve("JE_LIGHT2D_DECAY");
-        shader->m_builtin_uniforms.m_builtin_uniform_shadow_ellipse = resolve("JE_SHADOW_ELLIPSE");
+                if (size == 0)
+                {
+                    uniform->m_offset = jeecs::graphic::INVALID_UNIFORM_LOCATION;
+                    uniform->m_size = 0;
+                    continue;
+                }
+
+                offset = _jegl_align_up(offset, align);
+                uniform->m_offset = offset;
+                uniform->m_size = size;
+                offset += size;
+                max_align = std::max(max_align, align);
+            }
+
+            shader->m_uniform_block_size = _jegl_align_up(offset, max_align);
+
+            auto resolve = [shader](const char* name) -> uint32_t
+                {
+                    for (auto* uniform = shader->m_custom_uniforms;
+                        uniform != nullptr;
+                        uniform = uniform->m_next)
+                    {
+                        if (uniform->m_uniform_type != JE_GL_SHADER_UNIFORM_TYPE_TEXTURE
+                            && std::strcmp(uniform->m_name, name) == 0)
+                            return uniform->m_offset;
+                    }
+                    return jeecs::graphic::INVALID_UNIFORM_LOCATION;
+                };
+
+            shader->m_builtin_uniforms.m_builtin_uniform_ndc_scale = resolve("JE_NDC_SCALE");
+            shader->m_builtin_uniforms.m_builtin_uniform_m = resolve("JE_M");
+            shader->m_builtin_uniforms.m_builtin_uniform_mv = resolve("JE_MV");
+            shader->m_builtin_uniforms.m_builtin_uniform_mvp = resolve("JE_MVP");
+            shader->m_builtin_uniforms.m_builtin_uniform_local_scale = resolve("JE_LOCAL_SCALE");
+            shader->m_builtin_uniforms.m_builtin_uniform_tiling = resolve("JE_UV_TILING");
+            shader->m_builtin_uniforms.m_builtin_uniform_offset = resolve("JE_UV_OFFSET");
+            shader->m_builtin_uniforms.m_builtin_uniform_color = resolve("JE_COLOR");
+            shader->m_builtin_uniforms.m_builtin_uniform_light2d_resolution = resolve("JE_LIGHT2D_RESOLUTION");
+            shader->m_builtin_uniforms.m_builtin_uniform_light2d_decay = resolve("JE_LIGHT2D_DECAY");
+            shader->m_builtin_uniforms.m_builtin_uniform_shadow_ellipse = resolve("JE_SHADOW_ELLIPSE");
+        }
     }
 }
 
@@ -754,7 +765,7 @@ void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, je_gl_
     for (size_t i = 0; i < write_to_shader->m_fragment_out_count; ++i)
         write_to_shader->m_fragment_out[i] = shader_wrapper_ptr->m_fout_layout.at(i);
 
-    std::unordered_map<std::string, const shader_uniform_block_info*> _uniform_blocks;
+    std::unordered_map<std::string, const ShaderUniformBlockInfo*> _uniform_blocks;
     for (auto& uniform_block : shader_wrapper_ptr->m_uniform_blocks)
     {
         auto result = _uniform_blocks.emplace(

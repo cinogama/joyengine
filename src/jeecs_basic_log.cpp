@@ -159,7 +159,7 @@ namespace jeecs::log
         }
     }
 
-    void bootup()
+    void bootup(int, char**)
     {
         g_worker_shutdown.store(false);
         g_worker_running.store(true);

@@ -1,5 +1,6 @@
 #define JE_IMPL
 #include "jeecs.hpp"
+#include "jeecs_basic_bootup.hpp
 
 #include <AL/al.h>
 #include <AL/alc.h>
@@ -2821,19 +2822,20 @@ namespace jeecs::audio
             eaxreverb->m_decay_hf_limit = AL_EAXREVERB_DEFAULT_DECAY_HFLIMIT != AL_FALSE;
         }
     }
+
+    void bootup()
+    {
+        assert(g_engine_audio_context == nullptr);
+        g_engine_audio_context = new Context;
+    }
+    void shutdown()
+    {
+        assert(g_engine_audio_context != nullptr);
+        delete g_engine_audio_context;
+        g_engine_audio_context = nullptr;
+    }
 }
 
-void jeal_init()
-{
-    assert(g_engine_audio_context == nullptr);
-    g_engine_audio_context = new Context;
-}
-void jeal_finish()
-{
-    assert(g_engine_audio_context != nullptr);
-    delete g_engine_audio_context;
-    g_engine_audio_context = nullptr;
-}
 /* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sample size */ const je_audio_buffer_t* je_audio_buffer_create(
     const void* data,
     size_t buffer_data_len,

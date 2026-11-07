@@ -24,7 +24,7 @@ namespace jeecs::time
         double sleep_suppression;
     }
 
-    void bootup()
+    void bootup(int, char**)
     {
         epoch_point = steady_clock::now();
         sleep_suppression = 0.0005;

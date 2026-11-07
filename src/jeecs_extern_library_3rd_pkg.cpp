@@ -29,7 +29,7 @@ namespace jeecs::external_woolang_packages
         vector<woort_Dylib*> static_woolang_packages_libraries_handles;
     }
 
-    void bootup()
+    void bootup(int, char**)
     {
         assert(static_woolang_packages_libraries_handles.empty());
 #ifdef JE_HAVE_EXTERN_LIB_3RD_PKG

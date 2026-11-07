@@ -4,6 +4,7 @@
     JE_MODULE_MACRO(time)                       \
     JE_MODULE_MACRO(file)                       \
     JE_MODULE_MACRO(log)                        \
+    JE_MODULE_MACRO(audio)                      \
     JE_MODULE_MACRO(woolang_runtime)            \
     JE_MODULE_MACRO(engine_woolang_api)         \
     JE_MODULE_MACRO(external_woolang_packages)  \
@@ -12,7 +13,7 @@
 
 namespace jeecs
 {
-#define JE_MODULE_MACRO(m) namespace m{void bootup();}
+#define JE_MODULE_MACRO(m) namespace m{void bootup(int, char**);}
     MODULE_LIST
 #undef JE_MODULE_MACRO
 
@@ -22,32 +23,24 @@ namespace jeecs
 
         ;;
 
-    static void bootup()
+    static void bootup(int argc, char** argv)
     {
-#define JE_MODULE_MACRO(m) m::bootup();
+#define JE_MODULE_MACRO(m) m::bootup(argc, argv);
         MODULE_LIST
 #undef JE_MODULE_MACRO
     }
 
     static void shutdown()
     {
-        struct shutdown_guard {
-            using callback_t = void(*)(void);
-            callback_t m_callback;
-
-            shutdown_guard(callback_t c)
-                : m_callback(c)
-            {
-            }
-            ~shutdown_guard()
-            {
-                m_callback();
-            }
+        using callback_t = void(*)(void);
+        const callback_t callbacks[] = {
+#define JE_MODULE_MACRO(m) &m::shutdown,
+            MODULE_LIST
+#undef JE_MODULE_MACRO
         };
 
-#define JE_MODULE_MACRO(m) shutdown_guard m(&m::shutdown);
-        MODULE_LIST
-#undef JE_MODULE_MACRO
+        for (size_t i = sizeof(callbacks) / sizeof(callback_t); i > 0; --i)
+            callbacks[i - 1]();
     }
 }
 
