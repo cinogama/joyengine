@@ -1,6 +1,7 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
+#include "jeecs_basic_bootup.hpp"
 
 #include "wo.h"
 
@@ -209,6 +210,8 @@ void _jeecs_entry_register_core_systems(
 
 void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
 {
+    jeecs::bootup();
+
     // Update default graphic sync funciton
     je_graphic_sync_thread_callback_register(
         je_default_graphic_interface_sync_func, nullptr);
@@ -415,6 +418,8 @@ void je_core_finish()
     je_fimg_default_archive_set(nullptr);
     jegl_shader_generator_shutdown();
     je_log_finish();
+
+    jeecs::shutdown();
 }
 
 const char* je_build_version()

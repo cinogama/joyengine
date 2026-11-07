@@ -207,17 +207,7 @@ bool je_file_seek(je_file_t* file, int64_t offset, je_file_seek_mode_t mode)
     if (file->m_native_file_handle != nullptr)
         return native::seek(file->m_native_file_handle, offset, mode) == 0;
 
-    switch (mode)
-    {
-    case JE_READ_FILE_SEEK_SET:
-        return file->m_image_file_handle->seek(offset, jeecs::fimg::io::origin::begin);
-    case JE_READ_FILE_SEEK_CURRENT:
-        return file->m_image_file_handle->seek(offset, jeecs::fimg::io::origin::current);
-    case JE_READ_FILE_SEEK_END:
-        return file->m_image_file_handle->seek(offset, jeecs::fimg::io::origin::end);
-    }
-
-    return false;
+    return file->m_image_file_handle->seek(offset, mode);
 }
 
 size_t je_file_size(je_file_t* file)

@@ -201,11 +201,11 @@ namespace jeecs::fimg
 
             read_size += this_time;
         }
-        io::close(handle);
+        native::close(handle);
 
         if (read_size != manifest_size)
         {
-            report_error("failed to read fimg manifest '" + manifest_path + "'.");
+            debug::logerr("failed to read fimg manifest '%s'.", manifest_path.c_str());
             return nullptr;
         }
 
@@ -214,7 +214,7 @@ namespace jeecs::fimg
 
         if (std::memcmp(cursor, MANIFEST_MAGIC, sizeof(MANIFEST_MAGIC)) != 0)
         {
-            report_error("fimg manifest '" + manifest_path + "' has an invalid magic.");
+            debug::logerr("fimg manifest '%s' has an invalid magic.", manifest_path.c_str());
             return nullptr;
         }
         cursor += sizeof(MANIFEST_MAGIC);
@@ -235,42 +235,41 @@ namespace jeecs::fimg
             || !read_u64(cursor, end, total_stored_size)
             || !read_u64(cursor, end, index_crc64))
         {
-            report_error("fimg manifest '" + manifest_path + "' has a truncated header.");
+            debug::logerr("fimg manifest '%s' has a truncated header.", manifest_path.c_str());
             return nullptr;
         }
 
         if (version != FORMAT_VERSION)
         {
-            report_error("fimg manifest '" + manifest_path
-                + "' uses an unsupported format version ("
-                + std::to_string(version) + ").");
+            debug::logerr("fimg manifest '%s' uses an unsupported format version (%u).",
+                manifest_path.c_str(), version);
             return nullptr;
         }
         if (flags != 0)
         {
-            report_error("fimg manifest '" + manifest_path + "' uses unknown flags.");
+            debug::logerr("fimg manifest '%s' uses unknown flags.", manifest_path.c_str());
             return nullptr;
         }
         if (shard_size == 0 || shard_size > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
         {
-            report_error("fimg manifest '" + manifest_path + "' has an invalid shard size.");
+            debug::logerr("fimg manifest '%s' has an invalid shard size.", manifest_path.c_str());
             return nullptr;
         }
         if (file_count > MAX_FILE_COUNT)
         {
-            report_error("fimg manifest '" + manifest_path + "' declares too many files.");
+            debug::logerr("fimg manifest '%s' declares too many files.", manifest_path.c_str());
             return nullptr;
         }
 
         const uint8_t* const entries_begin = cursor;
         if (file_count > static_cast<uint64_t>(end - entries_begin) / ENTRY_MIN_SIZE)
         {
-            report_error("fimg manifest '" + manifest_path + "' has an invalid file count.");
+            debug::logerr("fimg manifest '%s' has an invalid file count.", manifest_path.c_str());
             return nullptr;
         }
         if (crc64(entries_begin, static_cast<size_t>(end - entries_begin)) != index_crc64)
         {
-            report_error("fimg manifest '" + manifest_path + "' has a broken index (crc mismatch).");
+            debug::logerr("fimg manifest '%s' has a broken index (crc mismatch).", manifest_path.c_str());
             return nullptr;
         }
 
@@ -283,19 +282,19 @@ namespace jeecs::fimg
             uint32_t path_length = 0;
             if (!read_u32(cursor, end, path_length))
             {
-                report_error("fimg manifest '" + manifest_path + "' has a truncated entry.");
+                debug::logerr("fimg manifest '%s' has a truncated entry.", manifest_path.c_str());
                 return nullptr;
             }
 
             if (path_length == 0
                 || static_cast<uint64_t>(end - cursor) < static_cast<uint64_t>(path_length) + 36)
             {
-                report_error("fimg manifest '" + manifest_path + "' has an invalid entry path.");
+                debug::logerr("fimg manifest '%s' has an invalid entry path.", manifest_path.c_str());
                 return nullptr;
             }
             if (std::memchr(cursor, 0, path_length) != nullptr)
             {
-                report_error("fimg manifest '" + manifest_path + "' contains a NUL in a path.");
+                debug::logerr("fimg manifest '%s' contains a NUL in a path.", manifest_path.c_str());
                 return nullptr;
             }
 
@@ -308,15 +307,15 @@ namespace jeecs::fimg
                 || !read_u64(cursor, end, ent.stored_size)
                 || !read_u64(cursor, end, ent.size))
             {
-                report_error("fimg manifest '" + manifest_path + "' has a truncated entry.");
+                debug::logerr("fimg manifest '%s' has a truncated entry.", manifest_path.c_str());
                 return nullptr;
             }
 
             uint32_t codec = 0;
             if (!read_u32(cursor, end, codec) || codec > CODEC_DEFLATE)
             {
-                report_error("fimg manifest '" + manifest_path
-                    + "' uses an unknown codec for '" + entry_path + "'.");
+                debug::logerr("fimg manifest '%s' uses an unknown codec for '%s'.",
+                    manifest_path.c_str(), entry_path.c_str());
                 return nullptr;
             }
             ent.codec = codec;
@@ -325,15 +324,15 @@ namespace jeecs::fimg
             {
                 if (ent.stored_size != ent.size)
                 {
-                    report_error("fimg manifest '" + manifest_path
-                        + "' has an inconsistent stored size for '" + entry_path + "'.");
+                    debug::logerr("fimg manifest '%s' has an inconsistent stored size for '%s'.",
+                        manifest_path.c_str(), entry_path.c_str());
                     return nullptr;
                 }
             }
             else if (ent.size == 0 || ent.stored_size == 0)
             {
-                report_error("fimg manifest '" + manifest_path
-                    + "' has an invalid compressed entry '" + entry_path + "'.");
+                debug::logerr("fimg manifest '%s' has an invalid compressed entry '%s'.",
+                    manifest_path.c_str(), entry_path.c_str());
                 return nullptr;
             }
 
@@ -341,16 +340,16 @@ namespace jeecs::fimg
             {
                 if (ent.offset >= shard_size)
                 {
-                    report_error("fimg manifest '" + manifest_path
-                        + "' has an out-of-range offset for '" + entry_path + "'.");
+                    debug::logerr("fimg manifest '%s' has an out-of-range offset for '%s'.",
+                        manifest_path.c_str(), entry_path.c_str());
                     return nullptr;
                 }
 
                 const uint64_t last_byte_in_shard = ent.stored_size - 1;
                 if (ent.offset > std::numeric_limits<uint64_t>::max() - last_byte_in_shard)
                 {
-                    report_error("fimg manifest '" + manifest_path
-                        + "' has an overflowing stored size for '" + entry_path + "'.");
+                    debug::logerr("fimg manifest '%s' has an overflowing stored size for '%s'.",
+                        manifest_path.c_str(), entry_path.c_str());
                     return nullptr;
                 }
 
@@ -358,15 +357,15 @@ namespace jeecs::fimg
                 if (ent.shard > std::numeric_limits<uint64_t>::max() - shard_delta
                     || ent.shard + shard_delta >= shard_count)
                 {
-                    report_error("fimg manifest '" + manifest_path
-                        + "' references a missing shard for '" + entry_path + "'.");
+                    debug::logerr("fimg manifest '%s' references a missing shard for '%s'.",
+                        manifest_path.c_str(), entry_path.c_str());
                     return nullptr;
                 }
             }
             else if (ent.shard > shard_count)
             {
-                report_error("fimg manifest '" + manifest_path
-                    + "' has an invalid empty-file entry '" + entry_path + "'.");
+                debug::logerr("fimg manifest '%s' has an invalid empty-file entry '%s'.",
+                    manifest_path.c_str(), entry_path.c_str());
                 return nullptr;
             }
 
@@ -375,34 +374,35 @@ namespace jeecs::fimg
                 if (ent.size > static_cast<uint64_t>(std::numeric_limits<size_t>::max())
                     || ent.stored_size > static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
                 {
-                    report_error("fimg manifest '" + manifest_path
-                        + "' contains a file too large for this platform: '" + entry_path + "'.");
+                    debug::logerr(
+                        "fimg manifest '%s' contains a file too large for this platform: '%s'.",
+                        manifest_path.c_str(), entry_path.c_str());
                     return nullptr;
                 }
             }
 
             if (sum_stored_size > std::numeric_limits<uint64_t>::max() - ent.stored_size)
             {
-                report_error("fimg manifest '" + manifest_path + "' has an overflowing total size.");
+                debug::logerr("fimg manifest '%s' has an overflowing total size.", manifest_path.c_str());
                 return nullptr;
             }
             sum_stored_size += ent.stored_size;
 
             auto insert_result = result->m_entries.emplace(std::move(entry_path), ent);
             if (!insert_result.second)
-                report_warning("fimg manifest '" + manifest_path
-                    + "' contains a duplicate path, keeping the first entry: '"
-                    + insert_result.first->first + "'.");
+                debug::logwarn(
+                    "fimg manifest '%s' contains a duplicate path, keeping the first entry: '%s'.",
+                    manifest_path.c_str(), insert_result.first->first.c_str());
         }
 
         if (cursor != end)
         {
-            report_error("fimg manifest '" + manifest_path + "' has trailing garbage.");
+            debug::logerr("fimg manifest '%s' has trailing garbage.", manifest_path.c_str());
             return nullptr;
         }
         if (sum_stored_size != total_stored_size)
         {
-            report_error("fimg manifest '" + manifest_path + "' has an inconsistent total size.");
+            debug::logerr("fimg manifest '%s' has an inconsistent total size.", manifest_path.c_str());
             return nullptr;
         }
 
@@ -437,7 +437,7 @@ namespace jeecs::fimg
     {
         if (m_handle != nullptr)
         {
-            io::close(m_handle);
+            native::close(m_handle);
             m_handle = nullptr;
         }
         m_open_shard_pos = 0;
@@ -453,9 +453,13 @@ namespace jeecs::fimg
         {
             if (m_open_shard_pos != offset_in_shard)
             {
-                if (io::seek(m_handle, static_cast<int64_t>(offset_in_shard), io::origin::begin) != 0)
+                if (native::seek(
+                    m_handle, 
+                    static_cast<int64_t>(offset_in_shard),
+                    je_file_seek_mode_t::JE_READ_FILE_SEEK_SET) != 0)
                 {
-                    report_error("failed to seek inside fimg shard '" + m_owner->shard_path(shard) + "'.");
+                    debug::logerr("failed to seek inside fimg shard '%s'.",
+                        m_owner->shard_path(shard).c_str());
                     m_failed = true;
                     return false;
                 }
@@ -468,10 +472,10 @@ namespace jeecs::fimg
 
         const std::string path = m_owner->shard_path(shard);
         size_t shard_size = 0;
-        m_handle = io::open(path.c_str(), &shard_size);
+        m_handle = native::open(path.c_str(), &shard_size);
         if (m_handle == nullptr)
         {
-            report_error("failed to open fimg shard '" + path + "'.");
+            debug::logerr("failed to open fimg shard '%s'.", path.c_str());
             m_failed = true;
             return false;
         }
@@ -481,9 +485,12 @@ namespace jeecs::fimg
 
         if (offset_in_shard != 0)
         {
-            if (io::seek(m_handle, static_cast<int64_t>(offset_in_shard), io::origin::begin) != 0)
+            if (native::seek(
+                m_handle,
+                static_cast<int64_t>(offset_in_shard), 
+                je_file_seek_mode_t::JE_READ_FILE_SEEK_SET) != 0)
             {
-                report_error("failed to seek inside fimg shard '" + path + "'.");
+                debug::logerr("failed to seek inside fimg shard '%s'.", path.c_str());
                 m_failed = true;
                 return false;
             }
@@ -510,11 +517,11 @@ namespace jeecs::fimg
             if (!ensure_shard(shard, offset_in_shard))
                 return false;
 
-            const size_t this_time = io::read(out + done, 1, static_cast<size_t>(chunk), m_handle);
+            const size_t this_time = native::read(out + done, 1, static_cast<size_t>(chunk), m_handle);
             if (this_time != chunk)
             {
-                report_error("truncated fimg shard '" + m_owner->shard_path(shard)
-                    + "' while reading the archive.");
+                debug::logerr("truncated fimg shard '%s' while reading the archive.",
+                    m_owner->shard_path(shard).c_str());
                 m_failed = true;
                 return false;
             }
@@ -557,7 +564,7 @@ namespace jeecs::fimg
 
         if (mz_inflateInit2(m_inflate_stream.get(), -MZ_DEFAULT_WINDOW_BITS) != MZ_OK)
         {
-            report_error("failed to initialize the fimg decompressor.");
+            debug::logerr("failed to initialize the fimg decompressor.");
             m_inflate_stream.reset();
             m_failed = true;
             return false;
@@ -633,7 +640,7 @@ namespace jeecs::fimg
             }
             if (result != MZ_OK && result != MZ_BUF_ERROR)
             {
-                report_error("failed to decompress a fimg archive entry.");
+                debug::logerr("failed to decompress a fimg archive entry.");
                 m_failed = true;
                 return false;
             }
@@ -641,13 +648,13 @@ namespace jeecs::fimg
             {
                 if (stream->avail_in == 0 && input_exhausted)
                 {
-                    report_error("truncated deflate stream in fimg archive.");
+                    debug::logerr("truncated deflate stream in fimg archive.");
                     m_failed = true;
                     return false;
                 }
                 if (stream->avail_in != 0)
                 {
-                    report_error("the fimg decompressor made no progress.");
+                    debug::logerr("the fimg decompressor made no progress.");
                     m_failed = true;
                     return false;
                 }
@@ -676,7 +683,7 @@ namespace jeecs::fimg
 
             if (produced == 0)
             {
-                report_error("deflate stream ended before the requested fimg position.");
+                debug::logerr("deflate stream ended before the requested fimg position.");
                 m_failed = true;
                 return false;
             }
@@ -712,11 +719,11 @@ namespace jeecs::fimg
             if (!ensure_shard(shard, offset_in_shard))
                 break;
 
-            const size_t this_time = io::read(out + done, 1, static_cast<size_t>(chunk), m_handle);
+            const size_t this_time = native::read(out + done, 1, static_cast<size_t>(chunk), m_handle);
             if (this_time < chunk)
             {
-                report_error("truncated fimg shard '" + m_owner->shard_path(shard)
-                    + "' while reading the archive.");
+                debug::logerr("truncated fimg shard '%s' while reading the archive.",
+                    m_owner->shard_path(shard).c_str());
                 m_failed = true;
                 done += this_time;
                 m_position += this_time;
@@ -767,25 +774,25 @@ namespace jeecs::fimg
 
         if (m_stream_ended && m_stream_position < m_entry.size)
         {
-            report_error("truncated deflate stream in fimg archive.");
+            debug::logerr("truncated deflate stream in fimg archive.");
             m_failed = true;
         }
 
         return produced / elem_size;
     }
 
-    bool file::seek(int64_t offset, io::origin origin)
+    bool file::seek(int64_t offset, je_file_seek_mode_t origin)
     {
         uint64_t base = 0;
         switch (origin)
         {
-        case io::origin::begin:
+        case je_file_seek_mode_t::JE_READ_FILE_SEEK_SET:
             base = 0;
             break;
-        case io::origin::current:
+        case je_file_seek_mode_t::JE_READ_FILE_SEEK_CURRENT:
             base = m_position;
             break;
-        case io::origin::end:
+        case je_file_seek_mode_t::JE_READ_FILE_SEEK_END:
             base = m_entry.size;
             break;
         }
@@ -864,7 +871,7 @@ namespace jeecs::fimg
         FILE* const file = std::fopen(path.c_str(), "wb");
         if (file == nullptr)
         {
-            report_error("failed to create fimg shard '" + path + "'.");
+            debug::logerr("failed to create fimg shard '%s'.", path.c_str());
             m_failed = true;
             return false;
         }
@@ -884,7 +891,7 @@ namespace jeecs::fimg
 
         if (!closed)
         {
-            report_error("failed to close the current fimg shard.");
+            debug::logerr("failed to close the current fimg shard.");
             m_failed = true;
             return false;
         }
@@ -911,7 +918,7 @@ namespace jeecs::fimg
 
             if (std::fwrite(bytes, 1, write_size, m_shard_file) != write_size)
             {
-                report_error("failed to write to the current fimg shard.");
+                debug::logerr("failed to write to the current fimg shard.");
                 m_failed = true;
                 return false;
             }
@@ -957,7 +964,7 @@ namespace jeecs::fimg
 
         if (result != MZ_OK)
         {
-            report_error("failed to initialize the fimg compressor.");
+            debug::logerr("failed to initialize the fimg compressor.");
             m_deflate_stream.reset();
             m_failed = true;
             return false;
@@ -1012,7 +1019,7 @@ namespace jeecs::fimg
 
                 if (result != MZ_OK)
                 {
-                    report_error("failed to compress a fimg archive entry.");
+                    debug::logerr("failed to compress a fimg archive entry.");
                     end_deflate();
                     m_failed = true;
                     return false;
@@ -1057,14 +1064,14 @@ namespace jeecs::fimg
 
             if (result != MZ_OK && result != MZ_BUF_ERROR)
             {
-                report_error("failed to finish a compressed fimg archive entry.");
+                debug::logerr("failed to finish a compressed fimg archive entry.");
                 end_deflate();
                 m_failed = true;
                 return false;
             }
             if (produced == 0)
             {
-                report_error("the fimg compressor made no progress while finishing.");
+                debug::logerr("the fimg compressor made no progress while finishing.");
                 end_deflate();
                 m_failed = true;
                 return false;
@@ -1082,18 +1089,18 @@ namespace jeecs::fimg
             return false;
         if (archive_path.empty())
         {
-            report_error("fimg writer received an empty archive path.");
+            debug::logerr("fimg writer received an empty archive path.");
             return false;
         }
         if (m_entries.size() >= MAX_FILE_COUNT)
         {
-            report_error("fimg writer exceeded the maximum file count.");
+            debug::logerr("fimg writer exceeded the maximum file count.");
             return false;
         }
         assert(data != nullptr || len == 0);
         if (m_entries.find(archive_path) != m_entries.end())
         {
-            report_warning("duplicate fimg archive path ignored: '" + archive_path + "'.");
+            debug::logwarn("duplicate fimg archive path ignored: '%s'.", archive_path.c_str());
             return false;
         }
 
@@ -1137,25 +1144,26 @@ namespace jeecs::fimg
             return false;
         if (source_path.empty() || archive_path.empty())
         {
-            report_error("fimg writer received an empty source or archive path.");
+            debug::logerr("fimg writer received an empty source or archive path.");
             return false;
         }
         if (m_entries.size() >= MAX_FILE_COUNT)
         {
-            report_error("fimg writer exceeded the maximum file count.");
+            debug::logerr("fimg writer exceeded the maximum file count.");
             return false;
         }
         if (m_entries.find(archive_path) != m_entries.end())
         {
-            report_warning("duplicate fimg archive path ignored: '" + archive_path + "'.");
+            debug::logwarn("duplicate fimg archive path ignored: '%s'.", archive_path.c_str());
             return false;
         }
 
         size_t source_size = 0;
-        io::raw_file source = io::open(source_path.c_str(), &source_size);
+        const je_raw_file_t source = native::open(source_path.c_str(), &source_size);
         if (source == nullptr)
         {
-            report_error("failed to open source file for fimg packing: '" + source_path + "'.");
+            debug::logerr("failed to open source file for fimg packing: '%s'.",
+                source_path.c_str());
             return false;
         }
 
@@ -1169,7 +1177,7 @@ namespace jeecs::fimg
 
         if (codec == CODEC_DEFLATE && !begin_deflate())
         {
-            io::close(source);
+            native::close(source);
             return false;
         }
 
@@ -1179,7 +1187,7 @@ namespace jeecs::fimg
 
         while (true)
         {
-            const size_t this_time = io::read(buffer.data(), 1, buffer.size(), source);
+            const size_t this_time = native::read(buffer.data(), 1, buffer.size(), source);
             if (this_time == 0)
                 break;
 
@@ -1199,7 +1207,7 @@ namespace jeecs::fimg
 
             copied += this_time;
         }
-        io::close(source);
+        native::close(source);
 
         if (!succeeded)
         {
@@ -1209,7 +1217,7 @@ namespace jeecs::fimg
 
         if (copied != static_cast<uint64_t>(source_size))
         {
-            report_error("source file changed while packing into fimg: '" + source_path + "'.");
+            debug::logerr("source file changed while packing into fimg: '%s'.", source_path.c_str());
             end_deflate();
             m_failed = true;
             return false;
@@ -1241,12 +1249,12 @@ namespace jeecs::fimg
         {
             if (path.size() > std::numeric_limits<uint32_t>::max())
             {
-                report_error("fimg archive path is too long: '" + path + "'.");
+                debug::logerr("fimg archive path is too long: '%s'.", path.c_str());
                 return false;
             }
             if (total_stored_size > std::numeric_limits<uint64_t>::max() - ent.stored_size)
             {
-                report_error("fimg archive total size overflows.");
+                debug::logerr("fimg archive total size overflows.");
                 return false;
             }
             total_stored_size += ent.stored_size;
@@ -1278,7 +1286,7 @@ namespace jeecs::fimg
         FILE* const file = std::fopen(manifest_path.c_str(), "wb");
         if (file == nullptr)
         {
-            report_error("failed to create fimg manifest '" + manifest_path + "'.");
+            debug::logerr("failed to create fimg manifest '%s'.", manifest_path.c_str());
             return false;
         }
 
@@ -1289,7 +1297,7 @@ namespace jeecs::fimg
 
         if (!written)
         {
-            report_error("failed to write fimg manifest '" + manifest_path + "'.");
+            debug::logerr("failed to write fimg manifest '%s'.", manifest_path.c_str());
             return false;
         }
 

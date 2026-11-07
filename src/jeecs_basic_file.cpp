@@ -79,27 +79,27 @@ namespace jeecs::file
                     return fclose(reinterpret_cast<FILE*>(file));
                 }
             }
+        }
 
-            je_raw_file_t open(const char* path, size_t* out_len)
-            {
-                return _m_read_file_open_impl(path, out_len);
-            }
-            size_t read(void* buffer, size_t elemsz, size_t elemcount, je_raw_file_t file)
-            {
-                return _m_read_file_impl(buffer, elemsz, elemcount, file);
-            }
-            size_t tell(je_raw_file_t file)
-            {
-                return _m_read_file_tell_impl(file);
-            }
-            int seek(je_raw_file_t file, int64_t offset, je_file_seek_mode_t mode)
-            {
-                return _m_read_file_seek_impl(file, offset, mode);
-            }
-            int close(je_raw_file_t file)
-            {
-                return _m_read_file_close_impl(file);
-            }
+        je_raw_file_t open(const char* path, size_t* out_len)
+        {
+            return _m_read_file_open_impl(path, out_len);
+        }
+        size_t read(void* buffer, size_t elemsz, size_t elemcount, je_raw_file_t file)
+        {
+            return _m_read_file_impl(buffer, elemsz, elemcount, file);
+        }
+        size_t tell(je_raw_file_t file)
+        {
+            return _m_read_file_tell_impl(file);
+        }
+        int seek(je_raw_file_t file, int64_t offset, je_file_seek_mode_t mode)
+        {
+            return _m_read_file_seek_impl(file, offset, mode);
+        }
+        int close(je_raw_file_t file)
+        {
+            return _m_read_file_close_impl(file);
         }
     }
 
