@@ -18,10 +18,10 @@ void _jegl_cmd_begin_deferred_draw(
 
 struct _jewo_log_channel
 {
-    std::atomic_flag                        m_mx;
+    std::atomic_flag                                            m_mx;
 
-    je_log_regid_t                          m_fact_log_id;
-    std::list<std::pair<int, std::string>>  m_buffer;
+    je_log_regid_t                                              m_fact_log_id;
+    std::list<std::pair<je_log_level_t, std::string>>           m_buffer;
 };
 
 WOORT_API woort_api wojeapi_get_current_platform(void)
@@ -307,7 +307,7 @@ WOORT_API woort_api wojeapi_register_log_callback(void)
     channel->m_mx.clear();
 
     channel->m_fact_log_id = je_log_callback_register(
-        [](int level, const char* msg, void* userdata)
+        [](je_log_level_t level, const char* msg, void* userdata)
         {
             auto* const channel = static_cast<_jewo_log_channel*>(userdata);
             while (channel->m_mx.test_and_set());
@@ -346,7 +346,7 @@ WOORT_API woort_api wojeapi_get_all_logs(void)
 
     woort_set_vec(result);
 
-    std::list<std::pair<int, std::string>> logs;
+    std::list<std::pair<je_log_level_t, std::string>> logs;
 
     while (channel->m_mx.test_and_set());
     do
@@ -359,7 +359,7 @@ WOORT_API woort_api wojeapi_get_all_logs(void)
     {
         woort_set_struct(elem, 2);
 
-        woort_struct_set_int(elem, 0, i);
+        woort_struct_set_int(elem, 0, (int)i);
         woort_struct_set_string(elem, 1, s.c_str());
 
         woort_vec_push(result, elem);

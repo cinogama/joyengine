@@ -352,7 +352,7 @@ namespace jeecs::graphic::api::gl3
         }
 
         const char* msg_type = "UNKNOWN";
-        int jelog_level = JE_LOG_INFO;
+        je_log_level_t jelog_level = JE_LOG_INFO;
         switch (type)
         {
         case GL_DEBUG_TYPE_ERROR:

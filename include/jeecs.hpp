@@ -933,55 +933,52 @@ je_build_commit [基本接口]
 JE_API const char* je_build_commit();
 
 /*
-JE_LOG_NORMAL [宏常量]
-用于标志通常日志等级
+je_log_level_t [枚举类型]
+日志等级，各等级取值固定为：
+    JE_LOG_NORMAL  —— 通常（0）
+    JE_LOG_INFO    —— 信息（1）
+    JE_LOG_WARNING —— 警告（2）
+    JE_LOG_ERROR   —— 错误（3）
+    JE_LOG_FATAL   —— 致命错误（4）
+请参见：
+    je_log
 */
-#define JE_LOG_NORMAL 0
-
-/*
-JE_LOG_INFO [宏常量]
-用于标志信息日志等级
-*/
-#define JE_LOG_INFO 1
-
-/*
-JE_LOG_WARNING [宏常量]
-用于标志警告日志等级
-*/
-#define JE_LOG_WARNING 2
-
-/*
-JE_LOG_ERROR [宏常量]
-用于标志错误日志等级
-*/
-#define JE_LOG_ERROR 3
-
-/*
-JE_LOG_FATAL [宏常量]
-用于标志致命错误日志等级
-*/
-#define JE_LOG_FATAL 4
+typedef enum je_log_level_t
+{
+    JE_LOG_NORMAL,
+    JE_LOG_INFO,
+    JE_LOG_WARNING,
+    JE_LOG_ERROR,
+    JE_LOG_FATAL,
+} je_log_level_t;
 
 typedef size_t je_log_regid_t;
-typedef void (*je_log_callback_t)(int level, const char* msg, void* userdata);
+typedef void (*je_log_callback_t)(je_log_level_t level, const char* msg, void* userdata);
 
 /*
 je_log_callback_register [基本接口]
 用于注册一个日志发生时的回调函数，返回注册句柄。
+回调在日志派发线程上按注册顺序被调用；
+msg 缓冲仅在回调返回前有效，需要保留请自行拷贝。
+请参见：
+    je_log_callback_unregister
 */
 JE_API je_log_regid_t je_log_callback_register(je_log_callback_t callback, /* OPTIONAL */ void* userdata);
 
 /*
 je_log_callback_unregister [基本接口]
-用于释放（解除注册）一个之前注册的日志发生时回调函数。
+用于释放（解除注册）一个之前注册的日志发生时回调函数，返回该回调注册时的 userdata。
 */
 JE_API /* OPTIONAL: If registered userdata was null */ void* je_log_callback_unregister(je_log_regid_t regid);
 
 /*
 je_log [基本接口]
-以指定的日志等级，向日志系统提交一条日志
+以指定的日志等级，向日志系统提交一条日志。
+消息文本会自动加上 [时:分:秒.毫秒] 时间戳前缀，随后非阻塞入队，
+由日志派发线程依次调用回调并输出到控制台（Windows 下同时输出到调试器）；
+引擎 bootup 之前 / shutdown 之后的日志会在调用线程上直接派发。
 */
-JE_API void je_log(int level, const char* format, ...);
+JE_API void je_log(je_log_level_t level, const char* format, ...);
 
 typedef enum je_typing_class_t
 {
@@ -7544,6 +7541,7 @@ typedef je_graphic_uhost_t je_GraphicUhost;
 typedef je_render_branch_t je_RenderBranch;
 
 // ---- logging ----
+typedef je_log_level_t je_LogLevel;
 typedef je_log_regid_t je_LogRegid;
 typedef je_log_callback_t je_LogCallback;
 

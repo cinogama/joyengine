@@ -51,7 +51,7 @@ class je_game_engine_context_for_android : jeecs::game_engine_context
     std::optional<application_request> m_request;
 
     je_log_regid_t m_registered_log_callback_id;
-    static void _je_log_to_android(int level, const char* msg, void*)
+    static void _je_log_to_android(je_log_level_t level, const char* msg, void*)
     {
         switch (level)
         {

@@ -3,21 +3,22 @@
 #include "jeecs.hpp"
 #include "jeecs_basic_bootup.hpp"
 
-#include <cstdio>
+#include <atomic>
+#include <cassert>
+#include <chrono>
+#include <condition_variable>
 #include <cstdarg>
+#include <cstdio>
+#include <cstring>
+#include <ctime>
+#include <mutex>
+#include <shared_mutex>
+#include <thread>
+#include <vector>
 
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
-#include <Windows.h>
+#   include <Windows.h>
 #endif
-
-#include <cstdarg>
-#include <cstdlib>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <list>
-
-#include <iostream>
 
 namespace jeecs::log {}
 
@@ -29,172 +30,219 @@ namespace jeecs::log
 {
     namespace
     {
-        struct GBarLogmsg
+        // Pending-queue node; basic::atomic_list chains nodes via `last`.
+        struct log_message
         {
-            int m_level;
-            const char* m_msg;
-
-            GBarLogmsg* last;
-        };
-        struct je_log_context
-        {
-            basic::atomic_list<GBarLogmsg> _gbar_log_list;
-            thread _gbar_log_thread;
-            mutex _gbar_log_thread_mx;
-            condition_variable _gbar_log_thread_cv;
-            atomic_bool _gbar_log_shutdown_flag = false;
+            je_log_level_t m_level;
+            char* m_text; // heap buffer, owned by this node
+            log_message* last;
         };
 
-        atomic_size_t registered_id = 0;
-        shared_mutex registered_callbacks_mx;
-        unordered_map<je_log_regid_t, pair<je_log_callback_t, void*>> registered_callbacks;
+        // One registered log callback; id/callback/userdata are colocated.
+        struct callback_entry
+        {
+            je_log_regid_t m_id;
+            je_log_callback_t m_callback;
+            void* m_userdata;
+        };
 
-        shared_mutex log_context_instance_mx;
-        je_log_context* log_context_instance;
+        // Always available, so logs emitted before bootup can already queue up.
+        basic::atomic_list<log_message> g_pending;
 
+        atomic_size_t g_next_regid = 0;
+        shared_mutex g_callbacks_mx;
+        vector<callback_entry> g_callbacks; // iterated in registration order
 
+        atomic_bool g_worker_running = false;
+        atomic_bool g_worker_shutdown = false;
+        mutex g_worker_mx;
+        condition_variable g_worker_cv;
+        thread g_worker;
 
+        // "[HH:MM:SS.mmm] " local-time prefix, baked into the message text.
+        size_t format_timestamp(char* dst, size_t cap)
+        {
+            using namespace chrono;
+            const auto now = system_clock::now();
+            const auto msec = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
+            const time_t ttime = system_clock::to_time_t(now);
+            tm tmbuf{};
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
+            localtime_s(&tmbuf, &ttime);
+#else
+            localtime_r(&ttime, &tmbuf);
+#endif
+            const int len = snprintf(
+                dst, cap, "[%02d:%02d:%02d.%03d] ",
+                tmbuf.tm_hour, tmbuf.tm_min, tmbuf.tm_sec, (int)msec.count());
+            return (size_t)len;
+        }
 
+        struct level_style
+        {
+            const char* m_tag;
+            const char* m_ansi;
+        };
 
-        void _je_log_work(je_log_context* ctx)
+        level_style level_style_of(je_log_level_t level)
+        {
+            switch (level)
+            {
+            case JE_LOG_NORMAL: return { "NORML", ANSI_HIG };
+            case JE_LOG_INFO: return { "INFOR", ANSI_HIC };
+            case JE_LOG_WARNING: return { "WARNI", ANSI_HIY };
+            case JE_LOG_ERROR: return { "ERROR", ANSI_HIR };
+            case JE_LOG_FATAL: return { "FATAL", ANSI_HIM };
+            }
+            assert(!"unreachable: invalid log level");
+            return { "UNKNO", ANSI_HIC };
+        }
+
+        void print_message(je_log_level_t level, const char* text)
+        {
+            const level_style style = level_style_of(level);
+            fprintf(stdout, "[%s%s%s] ", style.m_ansi, style.m_tag, ANSI_RST);
+            fputs(text, stdout);
+            fputc('\n', stdout);
+            fflush(stdout);
+
+#if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
+            // Plain-text mirror (no ANSI) so logs stay visible in the debugger
+            // of WIN32 GUI builds that have no console attached.
+            char prefix[16];
+            snprintf(prefix, sizeof(prefix), "[%s] ", style.m_tag);
+            OutputDebugStringA(prefix);
+            OutputDebugStringA(text);
+            OutputDebugStringA("\n");
+#endif
+        }
+
+        // Deliver one message: callbacks in registration order, then console.
+        void dispatch_message(log_message* msg)
+        {
+            {
+                shared_lock callbacks_guard(g_callbacks_mx);
+                for (const callback_entry& entry : g_callbacks)
+                    entry.m_callback(msg->m_level, msg->m_text, entry.m_userdata);
+            }
+            print_message(msg->m_level, msg->m_text);
+            delete[] msg->m_text;
+            delete msg;
+        }
+
+        // Drain the pending queue in chronological order.
+        void dispatch_pending()
+        {
+            vector<log_message*> pending;
+            for (log_message* msg = g_pending.pick_all(); msg != nullptr; msg = msg->last)
+                pending.push_back(msg);
+
+            for (auto it = pending.rbegin(); it != pending.rend(); ++it)
+                dispatch_message(*it);
+        }
+
+        void log_worker()
         {
             do
             {
-                do
                 {
-                    unique_lock ug1(ctx->_gbar_log_thread_mx);
-                    ctx->_gbar_log_thread_cv.wait(
-                        ug1,
-                        [ctx]()
+                    unique_lock worker_guard(g_worker_mx);
+                    g_worker_cv.wait(worker_guard, []
                         {
-                            return !ctx->_gbar_log_list.empty() || ctx->_gbar_log_shutdown_flag;
+                            return !g_pending.empty() || g_worker_shutdown.load();
                         });
-                } while (0);
-
-                GBarLogmsg* msg = ctx->_gbar_log_list.pick_all();
-                list<GBarLogmsg*> reverse_msgs;
-
-                while (msg)
-                {
-                    reverse_msgs.push_front(msg);
-                    msg = msg->last;
                 }
 
-                for (auto* rmsg : reverse_msgs)
-                {
-                    switch (rmsg->m_level)
-                    {
-                    case JE_LOG_NORMAL:
-                        printf("[" ANSI_HIG "NORML" ANSI_RST "] ");
-                        break;
-                    case JE_LOG_INFO:
-                        printf("[" ANSI_HIC "INFOR" ANSI_RST "] ");
-                        break;
-                    case JE_LOG_WARNING:
-                        printf("[" ANSI_HIY "WARNI" ANSI_RST "] ");
-                        break;
-                    case JE_LOG_ERROR:
-                        printf("[" ANSI_HIR "ERROR" ANSI_RST "] ");
-                        break;
-                    case JE_LOG_FATAL:
-                        printf("[" ANSI_HIM "FATAL" ANSI_RST "] ");
-                        break;
-                    default:
-                        printf("[" ANSI_HIC "UNKNO" ANSI_RST "] ");
-                        break;
-                    }
-                    puts(rmsg->m_msg);
+                dispatch_pending();
 
-                    free((void*)(rmsg->m_msg));
-                    delete rmsg;
-                }
-
-            } while (!ctx->_gbar_log_shutdown_flag || !ctx->_gbar_log_list.empty());
+            } while (!g_worker_shutdown.load() || !g_pending.empty());
         }
-
     }
 
     void bootup()
     {
-        lock_guard g1(log_context_instance_mx);
-        je_log_context* ctx = new je_log_context;
-        log_context_instance = ctx;
-        ctx->_gbar_log_thread = thread(_je_log_work, ctx);
+        g_worker_shutdown.store(false);
+        g_worker_running.store(true);
+        g_worker = thread(log_worker);
     }
+
     void shutdown()
     {
-        lock_guard g1(log_context_instance_mx);
-        if (log_context_instance != nullptr)
         {
-            do
-            {
-                lock_guard g1(log_context_instance->_gbar_log_thread_mx);
-                log_context_instance->_gbar_log_shutdown_flag = true;
-                log_context_instance->_gbar_log_thread_cv.notify_one();
-            } while (0);
-
-            log_context_instance->_gbar_log_thread.join();
-            delete log_context_instance;
+            lock_guard worker_guard(g_worker_mx);
+            g_worker_shutdown.store(true);
         }
-        log_context_instance = nullptr;
+        g_worker_cv.notify_all();
+
+        if (g_worker.joinable())
+            g_worker.join();
+        g_worker_running.store(false);
+
+        // Flush messages that raced in while the worker was exiting.
+        dispatch_pending();
     }
 }
 
 je_log_regid_t je_log_callback_register(je_log_callback_t callback, /* OPTIONAL */ void* userdata)
 {
-    size_t id = ++registered_id;
+    const je_log_regid_t regid = ++g_next_regid;
 
-    lock_guard lg(registered_callbacks_mx);
+    lock_guard callbacks_guard(g_callbacks_mx);
+    g_callbacks.push_back(callback_entry{ regid, callback, userdata });
 
-    assert(registered_callbacks.find(id) == registered_callbacks.end());
-    registered_callbacks[id] = make_pair(callback, userdata);
-
-    return id;
+    return regid;
 }
 
 /* OPTIONAL: If registered userdata was null */ void* je_log_callback_unregister(je_log_regid_t regid)
 {
-    lock_guard lg(registered_callbacks_mx);
-    assert(registered_callbacks.find(regid) != registered_callbacks.end());
+    lock_guard callbacks_guard(g_callbacks_mx);
 
-    auto* cus = registered_callbacks[regid].second;
-    registered_callbacks.erase(regid);
+    for (auto it = g_callbacks.begin(); it != g_callbacks.end(); ++it)
+    {
+        if (it->m_id == regid)
+        {
+            void* const userdata = it->m_userdata;
+            g_callbacks.erase(it);
+            return userdata;
+        }
+    }
 
-    return cus;
+    assert(!"je_log_callback_unregister: unknown regid");
+    return nullptr;
 }
 
-void je_log(int level, const char* format, ...)
+void je_log(je_log_level_t level, const char* format, ...)
 {
     va_list va, vb;
     va_start(va, format);
     va_copy(vb, va);
 
-    size_t total_buffer_sz = vsnprintf(nullptr, 0, format, va);
+    const size_t text_size = (size_t)vsnprintf(nullptr, 0, format, va);
     va_end(va);
 
-    char* buf = (char*)malloc(total_buffer_sz + 2);
-    vsnprintf(buf, total_buffer_sz + 1, format, vb);
+    char timestamp[16];
+    const size_t timestamp_size = format_timestamp(timestamp, sizeof(timestamp));
+
+    char* const text = new char[timestamp_size + text_size + 1];
+    memcpy(text, timestamp, timestamp_size);
+    vsnprintf(text + timestamp_size, text_size + 1, format, vb);
     va_end(vb);
 
-    shared_lock g1(log_context_instance_mx);
+    g_pending.add_one(new log_message{ level, text, nullptr });
 
-    if (log_context_instance == nullptr)
+    if (g_worker_running.load())
     {
-        printf("[LOG %d] %s\n", level, buf);
-        free(buf);
-        return;
-    }
-
-    do
-    {
-        // Invoke callbacks
-        shared_lock sg(registered_callbacks_mx);
-        for (auto& [_, f] : registered_callbacks)
+        // Take the mutex around the notify so a worker sitting between its
+        // predicate check and the sleep can never miss this wakeup.
         {
-            f.first(level, buf, f.second);
+            lock_guard worker_guard(g_worker_mx);
         }
-    } while (0);
-
-    log_context_instance->_gbar_log_list.add_one(new GBarLogmsg{ level, buf });
-    log_context_instance->_gbar_log_thread_cv.notify_one();
+        g_worker_cv.notify_one();
+    }
+    else
+    {
+        // No worker (pre-bootup / post-shutdown): dispatch on the calling
+        // thread instead of letting messages stall in the queue.
+        dispatch_pending();
+    }
 }
