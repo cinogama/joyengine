@@ -18,11 +18,11 @@ namespace jeecs::file
     {
         namespace
         {
-            je_read_file_open_func_t _m_read_file_open_impl;
-            je_read_file_func_t _m_read_file_impl;
-            je_read_file_tell_func_t _m_read_file_tell_impl;
-            je_read_file_seek_func_t _m_read_file_seek_impl;
-            je_read_file_close_func_t _m_read_file_close_impl;
+            je_read_file_open_func_t open_impl;
+            je_read_file_func_t read_impl;
+            je_read_file_tell_func_t tell_impl;
+            je_read_file_seek_func_t seek_impl;
+            je_read_file_close_func_t close_impl;
 
             /* Default functions */
             namespace default_functions
@@ -83,23 +83,23 @@ namespace jeecs::file
 
         je_raw_file_t open(const char* path, size_t* out_len)
         {
-            return _m_read_file_open_impl(path, out_len);
+            return open_impl(path, out_len);
         }
         size_t read(void* buffer, size_t elemsz, size_t elemcount, je_raw_file_t file)
         {
-            return _m_read_file_impl(buffer, elemsz, elemcount, file);
+            return read_impl(buffer, elemsz, elemcount, file);
         }
         size_t tell(je_raw_file_t file)
         {
-            return _m_read_file_tell_impl(file);
+            return tell_impl(file);
         }
         int seek(je_raw_file_t file, int64_t offset, je_file_seek_mode_t mode)
         {
-            return _m_read_file_seek_impl(file, offset, mode);
+            return seek_impl(file, offset, mode);
         }
         int close(je_raw_file_t file)
         {
-            return _m_read_file_close_impl(file);
+            return close_impl(file);
         }
     }
 
@@ -108,11 +108,11 @@ namespace jeecs::file
         using namespace jeecs::file::native;
         using namespace jeecs::file::native;
 
-        _m_read_file_open_impl = &default_functions::open;
-        _m_read_file_impl = &default_functions::read;
-        _m_read_file_tell_impl = &default_functions::tell;
-        _m_read_file_seek_impl = &default_functions::seek;
-        _m_read_file_close_impl = &default_functions::close;
+        open_impl = &default_functions::open;
+        read_impl = &default_functions::read;
+        tell_impl = &default_functions::tell;
+        seek_impl = &default_functions::seek;
+        close_impl = &default_functions::close;
     }
     void shutdown()
     {
@@ -132,9 +132,9 @@ void je_file_native_operator_register(
         && seeker != nullptr
         && closer != nullptr);
 
-    native::_m_read_file_open_impl = opener;
-    native::_m_read_file_impl = reader;
-    native::_m_read_file_tell_impl = teller;
-    native::_m_read_file_seek_impl = seeker;
-    native::_m_read_file_close_impl = closer;
+    native::open_impl = opener;
+    native::read_impl = reader;
+    native::tell_impl = teller;
+    native::seek_impl = seeker;
+    native::close_impl = closer;
 }

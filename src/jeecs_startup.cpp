@@ -8,23 +8,19 @@
 #include <list>
 
 void jeal_init();
-void je_log_init();
 void jegl_shader_generator_init();
 void je_extern_lib_woo_api_init();
 void je_extern_lib_3rd_pkgs_init();
 void je_extern_lib_module_init();
-void je_internal_script_init();
 
 void je_ecs_finish();
 void jeal_finish();
 void jegl_finish();
 void jetowoo_finish();
-void je_log_finish();
 void jegl_shader_generator_shutdown();
 void je_extern_lib_woo_api_finish();
 void je_extern_lib_3rd_pkgs_finish();
 void je_extern_lib_module_finish();
-void je_internal_script_finish();
 
 struct _je_static_context_t
 {
@@ -218,8 +214,6 @@ void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
 
     _je_global_context._jegl_host_graphic_api = nullptr;
 
-    je_log_init();
-
     jegl_shader_generator_init();
 
     const wo_WooDyn_Functions funcs = {
@@ -270,7 +264,6 @@ void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
     je_extern_lib_woo_api_init();
     je_extern_lib_3rd_pkgs_init();
     je_extern_lib_module_init();
-    je_internal_script_init();
 
     jeal_init();
 
@@ -400,26 +393,20 @@ void je_core_finish()
 
     (void)woort_set_panic_callback(NULL);
 
-    // Drop internal codeenvs.
-    je_internal_script_finish();
+    // Free registered external libraries.
+    je_extern_lib_module_finish();
+    je_extern_lib_3rd_pkgs_finish();
+    je_extern_lib_woo_api_finish();
 
-    wo_finish([](void*)
-        {
-            // Free registered external libraries.
-            je_extern_lib_module_finish();
-            je_extern_lib_3rd_pkgs_finish();
-            je_extern_lib_woo_api_finish();
-        },
-        nullptr);
+    jeecs::shutdown();
+
+    wo_finish(nullptr, nullptr);
 
     delete _je_global_context._je_unregister_guard;
     _je_global_context._je_unregister_guard = nullptr;
 
     je_fimg_default_archive_set(nullptr);
     jegl_shader_generator_shutdown();
-    je_log_finish();
-
-    jeecs::shutdown();
 }
 
 const char* je_build_version()

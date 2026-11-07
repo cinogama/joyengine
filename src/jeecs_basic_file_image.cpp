@@ -21,24 +21,24 @@ namespace jeecs::file
 {
     namespace
     {
-        std::mutex _g_path_mutex;
-        std::string _g_host_path;
-        std::string _g_runtime_path;
+        mutex _g_path_mutex;
+        string _g_host_path;
+        string _g_runtime_path;
 
-        std::shared_mutex _g_default_archive_mutex;
-        std::shared_ptr<const jeecs::fimg::archive> _g_default_archive;
+        shared_mutex _g_default_archive_mutex;
+        shared_ptr<const fimg::archive> _g_default_archive;
 
-        std::string _get_host_path_copy()
+        string _get_host_path_copy()
         {
-            std::lock_guard<std::mutex> lock(_g_path_mutex);
+            lock_guard<mutex> lock(_g_path_mutex);
             return _g_host_path;
         }
-        std::string _get_runtime_path_copy()
+        string _get_runtime_path_copy()
         {
-            std::lock_guard<std::mutex> lock(_g_path_mutex);
+            lock_guard<mutex> lock(_g_path_mutex);
             return _g_runtime_path;
         }
-        std::string _join_root_and_rest(const std::string& root, const std::string& rest)
+        string _join_root_and_rest(const string& root, const string& rest)
         {
             if (root.empty())
                 return rest;
@@ -54,11 +54,11 @@ namespace jeecs::file
                 return root + "/" + rest;
             return root + rest;
         }
-        std::string _resolve_path(const char* path)
+        string _resolve_path(const char* path)
         {
             if (path[0] == '@')
             {
-                std::string root = _get_runtime_path_copy();
+                string root = _get_runtime_path_copy();
                 if (root.empty())
                     root = _get_host_path_copy();
 
@@ -76,44 +76,44 @@ namespace jeecs::file
 struct je_file_t
 {
     je_raw_file_t m_native_file_handle = nullptr;
-    std::unique_ptr<jeecs::fimg::file> m_image_file_handle;
+    unique_ptr<fimg::file> m_image_file_handle;
     size_t m_file_length = 0;
 };
 
 struct je_fimg_archive_t
 {
-    std::shared_ptr<const jeecs::fimg::archive> impl;
+    shared_ptr<const fimg::archive> impl;
 };
 
 struct je_fimg_writer_t
 {
-    std::unique_ptr<jeecs::fimg::writer> impl;
+    unique_ptr<fimg::writer> impl;
 };
 
 
 void je_file_host_path_set(const char* path)
 {
     assert(path != nullptr);
-    std::lock_guard<std::mutex> lock(_g_path_mutex);
+    lock_guard<mutex> lock(_g_path_mutex);
     _g_host_path = path;
 }
 
 void je_file_runtime_path_set(const char* path)
 {
     assert(path != nullptr);
-    std::lock_guard<std::mutex> lock(_g_path_mutex);
+    lock_guard<mutex> lock(_g_path_mutex);
     _g_runtime_path = path;
 }
 
 const char* je_file_host_path_get()
 {
-    std::lock_guard<std::mutex> lock(_g_path_mutex);
+    lock_guard<mutex> lock(_g_path_mutex);
     return _g_host_path.c_str();
 }
 
 const char* je_file_runtime_path_get()
 {
-    std::lock_guard<std::mutex> lock(_g_path_mutex);
+    lock_guard<mutex> lock(_g_path_mutex);
     return _g_runtime_path.c_str();
 }
 
@@ -123,7 +123,7 @@ const char* je_file_runtime_path_get()
     if (path[0] == '\0')
         return nullptr;
 
-    const std::string resolved_path = _resolve_path(path);
+    const string resolved_path = _resolve_path(path);
 
     size_t file_length = 0;
     const je_raw_file_t native_handle =
@@ -140,22 +140,22 @@ const char* je_file_runtime_path_get()
     if (path[0] != '@' && path[0] != '!')
         return nullptr;
 
-    std::shared_ptr<const jeecs::fimg::archive> archive;
+    shared_ptr<const fimg::archive> archive;
     {
-        std::shared_lock<std::shared_mutex> lock(_g_default_archive_mutex);
+        shared_lock<shared_mutex> lock(_g_default_archive_mutex);
         archive = _g_default_archive;
     }
 
     if (archive == nullptr)
         return nullptr;
 
-    const jeecs::fimg::entry* entry = archive->find(path);
+    const fimg::entry* entry = archive->find(path);
     if (entry == nullptr)
         return nullptr;
 
     auto* file = new je_file_t;
     file->m_image_file_handle
-        = std::make_unique<jeecs::fimg::file>(std::move(archive), *entry);
+        = make_unique<fimg::file>(move(archive), *entry);
     file->m_file_length = static_cast<size_t>(entry->size);
     return file;
 }
@@ -168,7 +168,7 @@ void je_file_close(je_file_t* file)
     {
         auto close_state = native::close(file->m_native_file_handle);
         if (close_state != 0)
-            jeecs::debug::logerr("Fail to close file(%d:%d).", (int)close_state, (int)errno);
+            debug::logerr("Fail to close file(%d:%d).", (int)close_state, (int)errno);
     }
 
     file->m_image_file_handle.reset();
@@ -218,17 +218,17 @@ size_t je_file_size(je_file_t* file)
 
 bool je_fimg_default_archive_set(const char* root)
 {
-    std::shared_ptr<const jeecs::fimg::archive> archive;
+    shared_ptr<const fimg::archive> archive;
     if (root != nullptr)
-        archive = jeecs::fimg::archive::open(root);
+        archive = fimg::archive::open(root);
 
     const bool loaded = root == nullptr || archive != nullptr;
 
-    std::shared_ptr<const jeecs::fimg::archive> old_archive;
+    shared_ptr<const fimg::archive> old_archive;
     {
-        std::unique_lock<std::shared_mutex> lock(_g_default_archive_mutex);
-        old_archive = std::move(_g_default_archive);
-        _g_default_archive = std::move(archive);
+        unique_lock<shared_mutex> lock(_g_default_archive_mutex);
+        old_archive = move(_g_default_archive);
+        _g_default_archive = move(archive);
     }
 
     return loaded;
@@ -238,12 +238,12 @@ je_fimg_archive_t* je_fimg_archive_open(const char* root)
 {
     assert(root != nullptr);
 
-    auto impl = jeecs::fimg::archive::open(root);
+    auto impl = fimg::archive::open(root);
     if (impl == nullptr)
         return nullptr;
 
     auto* archive = new je_fimg_archive_t;
-    archive->impl = std::move(impl);
+    archive->impl = move(impl);
     return archive;
 }
 
@@ -266,7 +266,7 @@ size_t je_fimg_archive_file_size(const je_fimg_archive_t* archive, const char* p
     assert(archive != nullptr && archive->impl != nullptr);
     assert(path != nullptr);
 
-    const jeecs::fimg::entry* entry = archive->impl->find(path);
+    const fimg::entry* entry = archive->impl->find(path);
     return entry == nullptr ? 0 : static_cast<size_t>(entry->size);
 }
 
@@ -277,32 +277,32 @@ je_fimg_writer_t* je_fimg_writer_create(
 {
     assert(root != nullptr);
 
-    jeecs::fimg::writer_options resolved;
+    fimg::writer_options resolved;
     if (options != nullptr)
     {
         resolved.compression_level = options->compression_level;
         resolved.min_compress_size = options->min_compress_size;
         resolved.skip_extensions = options->skip_extensions != nullptr
             ? options->skip_extensions
-            : jeecs::fimg::default_skip_extensions();
+            : fimg::default_skip_extensions();
     }
     else
     {
         resolved.compression_level = 6;
         resolved.min_compress_size = 64;
-        resolved.skip_extensions = jeecs::fimg::default_skip_extensions();
+        resolved.skip_extensions = fimg::default_skip_extensions();
     }
 
-    auto impl = jeecs::fimg::writer::create(root, shard_size, std::move(resolved));
+    auto impl = fimg::writer::create(root, shard_size, move(resolved));
 
     auto* writer = new je_fimg_writer_t;
-    writer->impl = std::move(impl);
+    writer->impl = move(impl);
     return writer;
 }
 
 const char* je_fimg_default_skip_extensions()
 {
-    return jeecs::fimg::default_skip_extensions();
+    return fimg::default_skip_extensions();
 }
 
 bool je_fimg_writer_pack_file(

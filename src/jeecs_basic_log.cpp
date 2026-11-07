@@ -1,6 +1,7 @@
 #define JE_IMPL
 #define WO_NEED_ANSI_CONTROL
 #include "jeecs.hpp"
+#include "jeecs_basic_bootup.hpp"
 
 #include <cstdio>
 #include <cstdarg>
@@ -18,127 +19,142 @@
 
 #include <iostream>
 
-struct GBarLogmsg
-{
-    int m_level;
-    const char* m_msg;
+namespace jeecs::log {}
 
-    GBarLogmsg* last;
-};
+using namespace std;
+using namespace jeecs;
+using namespace jeecs::log;
 
-struct je_log_context
+namespace jeecs::log
 {
-    jeecs::basic::atomic_list<GBarLogmsg> _gbar_log_list;
-    std::thread _gbar_log_thread;
-    std::mutex _gbar_log_thread_mx;
-    std::condition_variable _gbar_log_thread_cv;
-    std::atomic_bool _gbar_log_shutdown_flag = false;
-};
-
-void _je_log_work(je_log_context* ctx)
-{
-    do
+    namespace
     {
-        do
+        struct GBarLogmsg
         {
-            std::unique_lock ug1(ctx->_gbar_log_thread_mx);
-            ctx->_gbar_log_thread_cv.wait(
-                ug1,
-                [ctx]()
-                { 
-                    return !ctx->_gbar_log_list.empty() || ctx->_gbar_log_shutdown_flag; 
-                });
-        } while (0);
+            int m_level;
+            const char* m_msg;
 
-        GBarLogmsg* msg = ctx->_gbar_log_list.pick_all();
-        std::list<GBarLogmsg*> reverse_msgs;
-
-        while (msg)
+            GBarLogmsg* last;
+        };
+        struct je_log_context
         {
-            reverse_msgs.push_front(msg);
-            msg = msg->last;
-        }
+            basic::atomic_list<GBarLogmsg> _gbar_log_list;
+            thread _gbar_log_thread;
+            mutex _gbar_log_thread_mx;
+            condition_variable _gbar_log_thread_cv;
+            atomic_bool _gbar_log_shutdown_flag = false;
+        };
 
-        for (auto* rmsg : reverse_msgs)
+        atomic_size_t registered_id = 0;
+        shared_mutex registered_callbacks_mx;
+        unordered_map<je_log_regid_t, pair<je_log_callback_t, void*>> registered_callbacks;
+
+        shared_mutex log_context_instance_mx;
+        je_log_context* log_context_instance;
+
+
+
+
+
+        void _je_log_work(je_log_context* ctx)
         {
-            switch (rmsg->m_level)
+            do
             {
-            case JE_LOG_NORMAL:
-                printf("[" ANSI_HIG "NORML" ANSI_RST "] ");
-                break;
-            case JE_LOG_INFO:
-                printf("[" ANSI_HIC "INFOR" ANSI_RST "] ");
-                break;
-            case JE_LOG_WARNING:
-                printf("[" ANSI_HIY "WARNI" ANSI_RST "] ");
-                break;
-            case JE_LOG_ERROR:
-                printf("[" ANSI_HIR "ERROR" ANSI_RST "] ");
-                break;
-            case JE_LOG_FATAL:
-                printf("[" ANSI_HIM "FATAL" ANSI_RST "] ");
-                break;
-            default:
-                printf("[" ANSI_HIC "UNKNO" ANSI_RST "] ");
-                break;
-            }
-            puts(rmsg->m_msg);
+                do
+                {
+                    unique_lock ug1(ctx->_gbar_log_thread_mx);
+                    ctx->_gbar_log_thread_cv.wait(
+                        ug1,
+                        [ctx]()
+                        {
+                            return !ctx->_gbar_log_list.empty() || ctx->_gbar_log_shutdown_flag;
+                        });
+                } while (0);
 
-            free((void*)(rmsg->m_msg));
-            delete rmsg;
+                GBarLogmsg* msg = ctx->_gbar_log_list.pick_all();
+                list<GBarLogmsg*> reverse_msgs;
+
+                while (msg)
+                {
+                    reverse_msgs.push_front(msg);
+                    msg = msg->last;
+                }
+
+                for (auto* rmsg : reverse_msgs)
+                {
+                    switch (rmsg->m_level)
+                    {
+                    case JE_LOG_NORMAL:
+                        printf("[" ANSI_HIG "NORML" ANSI_RST "] ");
+                        break;
+                    case JE_LOG_INFO:
+                        printf("[" ANSI_HIC "INFOR" ANSI_RST "] ");
+                        break;
+                    case JE_LOG_WARNING:
+                        printf("[" ANSI_HIY "WARNI" ANSI_RST "] ");
+                        break;
+                    case JE_LOG_ERROR:
+                        printf("[" ANSI_HIR "ERROR" ANSI_RST "] ");
+                        break;
+                    case JE_LOG_FATAL:
+                        printf("[" ANSI_HIM "FATAL" ANSI_RST "] ");
+                        break;
+                    default:
+                        printf("[" ANSI_HIC "UNKNO" ANSI_RST "] ");
+                        break;
+                    }
+                    puts(rmsg->m_msg);
+
+                    free((void*)(rmsg->m_msg));
+                    delete rmsg;
+                }
+
+            } while (!ctx->_gbar_log_shutdown_flag || !ctx->_gbar_log_list.empty());
         }
 
-    } while (!ctx->_gbar_log_shutdown_flag || !ctx->_gbar_log_list.empty());
-}
-
-std::shared_mutex log_context_instance_mx;
-je_log_context* log_context_instance = {};
-
-void je_log_init()
-{
-    std::lock_guard g1(log_context_instance_mx);
-    je_log_context* ctx = new je_log_context;
-    log_context_instance = ctx;
-    ctx->_gbar_log_thread = std::thread(_je_log_work, ctx);
-}
-
-void je_log_finish()
-{
-    std::lock_guard g1(log_context_instance_mx);
-    if (log_context_instance != nullptr)
-    {
-        do
-        {
-            std::lock_guard g1(log_context_instance->_gbar_log_thread_mx);
-            log_context_instance->_gbar_log_shutdown_flag = true;
-            log_context_instance->_gbar_log_thread_cv.notify_one();
-        } while (0);
-
-        log_context_instance->_gbar_log_thread.join();
-        delete log_context_instance;
     }
-    log_context_instance = nullptr;
-}
 
-std::atomic_size_t registered_id = 0;
-std::shared_mutex registered_callbacks_mx;
-std::unordered_map<je_log_regid_t, std::pair<je_log_callback_t, void*>> registered_callbacks;
+    void bootup()
+    {
+        lock_guard g1(log_context_instance_mx);
+        je_log_context* ctx = new je_log_context;
+        log_context_instance = ctx;
+        ctx->_gbar_log_thread = thread(_je_log_work, ctx);
+    }
+    void shutdown()
+    {
+        lock_guard g1(log_context_instance_mx);
+        if (log_context_instance != nullptr)
+        {
+            do
+            {
+                lock_guard g1(log_context_instance->_gbar_log_thread_mx);
+                log_context_instance->_gbar_log_shutdown_flag = true;
+                log_context_instance->_gbar_log_thread_cv.notify_one();
+            } while (0);
+
+            log_context_instance->_gbar_log_thread.join();
+            delete log_context_instance;
+        }
+        log_context_instance = nullptr;
+    }
+}
 
 je_log_regid_t je_log_callback_register(je_log_callback_t callback, /* OPTIONAL */ void* userdata)
 {
     size_t id = ++registered_id;
 
-    std::lock_guard lg(registered_callbacks_mx);
+    lock_guard lg(registered_callbacks_mx);
 
     assert(registered_callbacks.find(id) == registered_callbacks.end());
-    registered_callbacks[id] = std::make_pair(callback, userdata);
+    registered_callbacks[id] = make_pair(callback, userdata);
 
     return id;
 }
 
 /* OPTIONAL: If registered userdata was null */ void* je_log_callback_unregister(je_log_regid_t regid)
 {
-    std::lock_guard lg(registered_callbacks_mx);
+    lock_guard lg(registered_callbacks_mx);
     assert(registered_callbacks.find(regid) != registered_callbacks.end());
 
     auto* cus = registered_callbacks[regid].second;
@@ -160,7 +176,7 @@ void je_log(int level, const char* format, ...)
     vsnprintf(buf, total_buffer_sz + 1, format, vb);
     va_end(vb);
 
-    std::shared_lock g1(log_context_instance_mx);
+    shared_lock g1(log_context_instance_mx);
 
     if (log_context_instance == nullptr)
     {
@@ -172,7 +188,7 @@ void je_log(int level, const char* format, ...)
     do
     {
         // Invoke callbacks
-        std::shared_lock sg(registered_callbacks_mx);
+        shared_lock sg(registered_callbacks_mx);
         for (auto& [_, f] : registered_callbacks)
         {
             f.first(level, buf, f.second);
