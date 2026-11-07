@@ -3,6 +3,7 @@
 #include "jeecs_basic_bootup.hpp"
 #include "jeecs_cache_version.hpp"
 #include "jeecs_graphic_shader_wrapper.hpp"
+#include "jeecs_graphic_render_internal.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -11,11 +12,6 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-
-// From jeecs_graphic_api_basic.cpp
-void _jegl_init_resource_handle(
-    je_gl_resource_handle_t* resource_handle,
-    const char* path_may_null_if_builtin);
 
 namespace jeecs::graphic::shader_wrapper {}
 

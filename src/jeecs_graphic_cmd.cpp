@@ -13,6 +13,8 @@
 // command stream to the backend render vtable. All state validation is done
 // with asserts; invalid usage is a programming error, not a recoverable case.
 
+using namespace jeecs::graphic;
+
 namespace
 {
     enum class jegl_cmd_op : uint32_t

@@ -11,13 +11,6 @@
 
 #include "jeecs.hpp"
 
-namespace jeecs::graphic
-{
-    // Defined in jeecs_graphic_api_basic.cpp. The command-buffer commit path
-    // asserts that it runs on the context's graphic thread.
-    extern thread_local je_gl_context_t* _current_graphic_thread;
-}
-
 // Result of preparing a resource on the graphic thread.
 // READY      : already initialized and not modified
 // UPDATED    : backend *_update hook was called
@@ -30,6 +23,34 @@ enum class jegl_resource_prepare_result : uint8_t
     UPDATED,
     INITIALIZED,
 };
+
+namespace jeecs::graphic
+{
+    // Defined in jeecs_graphic_api_basic.cpp. The command-buffer commit path
+    // asserts that it runs on the context's graphic thread.
+    extern thread_local je_gl_context_t* _current_graphic_thread;
+
+    // Resource preparation helpers implemented in jeecs_graphic_api_basic.cpp.
+    // They perform lazy init / update on the graphic thread and do not bind or
+    // draw anything. The render-API commit loop calls them before issuing the
+    // corresponding backend call.
+    jegl_resource_prepare_result _jegl_prepare_shader_resource(je_gl_shader_t* shader);
+    jegl_resource_prepare_result _jegl_prepare_pipeline_resource(je_gl_pipeline_t* pipeline);
+    jegl_resource_prepare_result _jegl_prepare_sampler_resource(je_gl_sampler_t* sampler);
+    bool _jegl_prepare_vertex_resource(je_gl_vertex_t* vertex);
+    bool _jegl_prepare_uniform_buffer_resource(je_gl_uniform_buffer_t* buffer);
+    bool _jegl_prepare_framebuffer_resource(je_gl_frame_buffer_t* framebuffer);
+
+    bool _jegl_prepare_texture_2d_resource(je_gl_texture_2d_t* texture);
+    bool _jegl_prepare_texture_3d_resource(je_gl_texture_3d_t* texture);
+    bool _jegl_prepare_texture_array_resource(je_gl_texture_array_t* texture);
+    bool _jegl_prepare_texture_cube_resource(je_gl_texture_cube_t* texture);
+    bool _jegl_prepare_texture_msaa_resource(je_gl_texture_msaa_t* texture);
+
+    void _jegl_init_resource_handle(
+        je_gl_resource_handle_t* resource_handle,
+        const char* path_may_null_if_builtin);
+}
 
 // Refcounted CPU-side pipeline description. The backend owns any native
 // pipeline object and stores it in m_backend_ptr.
@@ -60,23 +81,6 @@ struct je_gl_sampler_t
     bool m_backend_initialized;
 };
 static_assert(offsetof(je_gl_sampler_t, m_handle) == 0);
-
-// Resource preparation helpers implemented in jeecs_graphic_api_basic.cpp.
-// They perform lazy init / update on the graphic thread and do not bind or
-// draw anything. The render-API commit loop calls them before issuing the
-// corresponding backend call.
-jegl_resource_prepare_result _jegl_prepare_shader_resource(je_gl_shader_t* shader);
-jegl_resource_prepare_result _jegl_prepare_pipeline_resource(je_gl_pipeline_t* pipeline);
-jegl_resource_prepare_result _jegl_prepare_sampler_resource(je_gl_sampler_t* sampler);
-bool _jegl_prepare_vertex_resource(je_gl_vertex_t* vertex);
-bool _jegl_prepare_uniform_buffer_resource(je_gl_uniform_buffer_t* buffer);
-bool _jegl_prepare_framebuffer_resource(je_gl_frame_buffer_t* framebuffer);
-
-bool _jegl_prepare_texture_2d_resource(je_gl_texture_2d_t* texture);
-bool _jegl_prepare_texture_3d_resource(je_gl_texture_3d_t* texture);
-bool _jegl_prepare_texture_array_resource(je_gl_texture_array_t* texture);
-bool _jegl_prepare_texture_cube_resource(je_gl_texture_cube_t* texture);
-bool _jegl_prepare_texture_msaa_resource(je_gl_texture_msaa_t* texture);
 
 // Patch the built-in JE_NDC_SCALE uniform inside an already-copied CPU
 // uniform block. DX11/Metal flip y for offscreen targets; Vulkan flips it

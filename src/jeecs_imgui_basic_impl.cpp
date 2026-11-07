@@ -17,6 +17,8 @@
 // Text editor support:
 #include <TextEditor.h>
 
+using namespace jeecs::graphic;
+
 struct key_state
 {
     bool m_last_frame_down;
