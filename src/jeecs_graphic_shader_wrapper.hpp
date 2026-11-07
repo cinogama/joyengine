@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <optional>
+#include <vector>
 
 namespace jeecs::graphic::shader_wrapper
 {
@@ -56,7 +57,7 @@ namespace jeecs::graphic::shader_wrapper
         uint32_t m_binding_place;
     };
 
-    struct shader_wrapper
+    struct ShaderWrapper
     {
         ShaderConfigs m_shader_config;
 
@@ -71,4 +72,13 @@ namespace jeecs::graphic::shader_wrapper
         std::vector<ShaderTexture> m_textures;
         std::vector<ShaderUniformVariable> m_uniform_vars;
     };
+
+#ifdef JE4_ENABLE_SHADER_WRAP_GENERATOR
+    void _jegl_create_shader_cache(je_gl_shader_t* shader_resource, uint64_t virtual_file_crc64);
+    void jegl_shader_generate_shader_source(ShaderWrapper* shader_generator, je_gl_shader_t* write_to_shader);
+#endif
+
+    je_gl_shader_t* _jegl_create_shader_instance_and_init(void);
+    je_gl_shader_t* _jegl_load_shader_cache(je_file_t* cache_file, const char* path);
+    void jegl_shader_free_generated_shader_source(je_gl_shader_t* write_to_shader);
 }

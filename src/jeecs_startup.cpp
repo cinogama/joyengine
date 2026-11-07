@@ -7,12 +7,9 @@
 
 #include <list>
 
-void jegl_shader_generator_init();
-
 void je_ecs_finish();
 void jegl_finish();
 void jetowoo_finish();
-void jegl_shader_generator_shutdown();
 
 struct _je_static_context_t
 {
@@ -206,8 +203,6 @@ void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
 
     _je_global_context._jegl_host_graphic_api = nullptr;
 
-    jegl_shader_generator_init();
-
     for (int i = 1; i < argc - 1; ++i)
     {
         std::string config = argv[i];
@@ -243,8 +238,6 @@ void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
     je_file_host_path_set(exe_path.c_str());
     je_file_runtime_path_set(exe_path.c_str());
     je_fimg_default_archive_set(exe_path.c_str());
-
-    jeal_init();
 
     assert(_je_global_context._je_unregister_guard == nullptr);
     _je_global_context._je_unregister_guard = new jeecs::typing::type_unregister_guard();
@@ -348,7 +341,6 @@ void je_core_finish()
     jeecs::entry::module_leave(_je_global_context._je_unregister_guard);
 
     je_ecs_finish();
-    jeal_finish();
     jegl_finish();
     jetowoo_finish();
 
@@ -379,7 +371,6 @@ void je_core_finish()
     _je_global_context._je_unregister_guard = nullptr;
 
     je_fimg_default_archive_set(nullptr);
-    jegl_shader_generator_shutdown();
 }
 
 const char* je_build_version()

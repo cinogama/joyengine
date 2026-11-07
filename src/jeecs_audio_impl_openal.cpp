@@ -1,6 +1,6 @@
 #define JE_IMPL
 #include "jeecs.hpp"
-#include "jeecs_basic_bootup.hpp
+#include "jeecs_basic_bootup.hpp"
 
 #include <AL/al.h>
 #include <AL/alc.h>
@@ -2823,7 +2823,7 @@ namespace jeecs::audio
         }
     }
 
-    void bootup()
+    void bootup(int, char**)
     {
         assert(g_engine_audio_context == nullptr);
         g_engine_audio_context = new Context;

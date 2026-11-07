@@ -1,11 +1,10 @@
 #define JE_IMPL
 #include "jeecs.hpp"
-
 #include "jeecs_graphic_render_internal.hpp"
+#include "jeecs_cache_version.hpp"
+#include "jeecs_graphic_shader_wrapper.hpp"
 
 #include "wo.h"
-
-#include "jeecs_cache_version.hpp"
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -181,6 +180,12 @@ namespace Assimp
 #include <stack>
 #include <queue>
 
+namespace jeecs::graphic {}
+
+using namespace std;
+using namespace jeecs;
+using namespace jeecs::graphic;
+
 struct je_gl_resource_bind_counter_t
 {
     JECS_DISABLE_MOVE_AND_COPY(je_gl_resource_bind_counter_t);
@@ -193,349 +198,353 @@ struct je_gl_resource_bind_counter_t
 
 namespace jeecs::graphic
 {
-    struct created_resource
+    namespace
     {
-        enum class kind
+        struct created_resource
         {
-            UNKNOWN,
-            SHADER,
-            TEXTURE_2D,
-            TEXTURE_3D,
-            TEXTURE_ARRAY,
-            TEXTURE_CUBE,
-            TEXTURE_MSAA,
-            VERTEX,
-            UNIFORM_BUFFER,
-            FRAME_BUFFER,
-            PIPELINE,
-            SAMPLER
+            enum class kind
+            {
+                UNKNOWN,
+                SHADER,
+                TEXTURE_2D,
+                TEXTURE_3D,
+                TEXTURE_ARRAY,
+                TEXTURE_CUBE,
+                TEXTURE_MSAA,
+                VERTEX,
+                UNIFORM_BUFFER,
+                FRAME_BUFFER,
+                PIPELINE,
+                SAMPLER
+            };
+            union deleting_graphic_resource
+            {
+                void* m_raw_ptr;
+
+                je_gl_shader_t* m_shader;
+                je_gl_texture_2d_t* m_texture_2d;
+                je_gl_texture_3d_t* m_texture_3d;
+                je_gl_texture_array_t* m_texture_array;
+                je_gl_texture_cube_t* m_texture_cube;
+                je_gl_texture_msaa_t* m_texture_msaa;
+                je_gl_vertex_t* m_vertex;
+                je_gl_uniform_buffer_t* m_uniform_buffer;
+                je_gl_frame_buffer_t* m_frame_buffer;
+                je_gl_pipeline_t* m_pipeline;
+                je_gl_sampler_t* m_sampler;
+            };
+
+            kind m_type;
+            deleting_graphic_resource m_resource;
+
+            created_resource(const created_resource&) = default;
+            created_resource(created_resource&&) = default;
+            created_resource& operator = (const created_resource&) = default;
+            created_resource& operator = (created_resource&&) = default;
+            ~created_resource() = default;
+
+            constexpr created_resource(je_gl_shader_t* shader)
+                : m_type(kind::SHADER)
+            {
+                m_resource.m_shader = shader;
+            }
+            constexpr created_resource(je_gl_texture_2d_t* texture)
+                : m_type(kind::TEXTURE_2D)
+            {
+                m_resource.m_texture_2d = texture;
+            }
+            constexpr created_resource(je_gl_texture_3d_t* texture)
+                : m_type(kind::TEXTURE_3D)
+            {
+                m_resource.m_texture_3d = texture;
+            }
+            constexpr created_resource(je_gl_texture_array_t* texture)
+                : m_type(kind::TEXTURE_ARRAY)
+            {
+                m_resource.m_texture_array = texture;
+            }
+            constexpr created_resource(je_gl_texture_cube_t* texture)
+                : m_type(kind::TEXTURE_CUBE)
+            {
+                m_resource.m_texture_cube = texture;
+            }
+            constexpr created_resource(je_gl_texture_msaa_t* texture)
+                : m_type(kind::TEXTURE_MSAA)
+            {
+                m_resource.m_texture_msaa = texture;
+            }
+            constexpr created_resource(je_gl_vertex_t* vertex)
+                : m_type(kind::VERTEX)
+            {
+                m_resource.m_vertex = vertex;
+            }
+            constexpr created_resource(je_gl_uniform_buffer_t* uniform_buffer)
+                : m_type(kind::UNIFORM_BUFFER)
+            {
+                m_resource.m_uniform_buffer = uniform_buffer;
+            }
+            constexpr created_resource(je_gl_frame_buffer_t* frame_buffer)
+                : m_type(kind::FRAME_BUFFER)
+            {
+                m_resource.m_frame_buffer = frame_buffer;
+            }
+            constexpr created_resource(je_gl_pipeline_t* pipeline)
+                : m_type(kind::PIPELINE)
+            {
+                m_resource.m_pipeline = pipeline;
+            }
+            constexpr created_resource(je_gl_sampler_t* sampler)
+                : m_type(kind::SAMPLER)
+            {
+                m_resource.m_sampler = sampler;
+            }
+            bool operator == (const created_resource& another) const noexcept
+            {
+                return m_resource.m_raw_ptr == another.m_resource.m_raw_ptr;
+            }
+
+            static constexpr bool is_texture_kind(kind k) noexcept
+            {
+                return k == kind::TEXTURE_2D
+                    || k == kind::TEXTURE_3D
+                    || k == kind::TEXTURE_ARRAY
+                    || k == kind::TEXTURE_CUBE
+                    || k == kind::TEXTURE_MSAA;
+            }
+
+            template<requirements::basic_graphic_resource T>
+            T* resource() const
+            {
+                if constexpr (std::is_same_v<T, je_gl_shader_t>)
+                {
+                    assert(m_type == kind::SHADER);
+                    return m_resource.m_shader;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_texture_2d_t>)
+                {
+                    assert(m_type == kind::TEXTURE_2D);
+                    return m_resource.m_texture_2d;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_texture_3d_t>)
+                {
+                    assert(m_type == kind::TEXTURE_3D);
+                    return m_resource.m_texture_3d;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_texture_array_t>)
+                {
+                    assert(m_type == kind::TEXTURE_ARRAY);
+                    return m_resource.m_texture_array;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_texture_cube_t>)
+                {
+                    assert(m_type == kind::TEXTURE_CUBE);
+                    return m_resource.m_texture_cube;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_texture_msaa_t>)
+                {
+                    assert(m_type == kind::TEXTURE_MSAA);
+                    return m_resource.m_texture_msaa;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_vertex_t>)
+                {
+                    assert(m_type == kind::VERTEX);
+                    return m_resource.m_vertex;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_uniform_buffer_t>)
+                {
+                    assert(m_type == kind::UNIFORM_BUFFER);
+                    return m_resource.m_uniform_buffer;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_frame_buffer_t>)
+                {
+                    assert(m_type == kind::FRAME_BUFFER);
+                    return m_resource.m_frame_buffer;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_pipeline_t>)
+                {
+                    assert(m_type == kind::PIPELINE);
+                    return m_resource.m_pipeline;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_sampler_t>)
+                {
+                    assert(m_type == kind::SAMPLER);
+                    return m_resource.m_sampler;
+                }
+                else
+                {
+                    static_assert(!sizeof(T*), "Unsupported resource type.");
+                }
+            }
+
+            template<requirements::basic_graphic_resource T>
+            T* try_resource() const
+            {
+                if constexpr (std::is_same_v<T, je_gl_shader_t>)
+                {
+                    if (m_type != kind::SHADER)
+                        return nullptr;
+                    return m_resource.m_shader;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_texture_2d_t>)
+                {
+                    if (m_type != kind::TEXTURE_2D)
+                        return nullptr;
+                    return m_resource.m_texture_2d;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_texture_3d_t>)
+                {
+                    if (m_type != kind::TEXTURE_3D)
+                        return nullptr;
+                    return m_resource.m_texture_3d;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_texture_array_t>)
+                {
+                    if (m_type != kind::TEXTURE_ARRAY)
+                        return nullptr;
+                    return m_resource.m_texture_array;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_texture_cube_t>)
+                {
+                    if (m_type != kind::TEXTURE_CUBE)
+                        return nullptr;
+                    return m_resource.m_texture_cube;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_texture_msaa_t>)
+                {
+                    if (m_type != kind::TEXTURE_MSAA)
+                        return nullptr;
+                    return m_resource.m_texture_msaa;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_vertex_t>)
+                {
+                    if (m_type != kind::VERTEX)
+                        return nullptr;
+                    return m_resource.m_vertex;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_uniform_buffer_t>)
+                {
+                    if (m_type != kind::UNIFORM_BUFFER)
+                        return nullptr;
+                    return m_resource.m_uniform_buffer;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_frame_buffer_t>)
+                {
+                    if (m_type != kind::FRAME_BUFFER)
+                        return nullptr;
+                    return m_resource.m_frame_buffer;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_pipeline_t>)
+                {
+                    if (m_type != kind::PIPELINE)
+                        return nullptr;
+                    return m_resource.m_pipeline;
+                }
+                else if constexpr (std::is_same_v<T, je_gl_sampler_t>)
+                {
+                    if (m_type != kind::SAMPLER)
+                        return nullptr;
+                    return m_resource.m_sampler;
+                }
+                else
+                {
+                    static_assert(!sizeof(T*), "Unsupported resource type.");
+                }
+            }
+
+            void drop_resource() const
+            {
+                switch (m_type)
+                {
+                case kind::SHADER:
+                    je_graphic_shader_close(m_resource.m_shader);
+                    break;
+                case kind::TEXTURE_2D:
+                    je_graphic_texture_2d_close(m_resource.m_texture_2d);
+                    break;
+                case kind::TEXTURE_3D:
+                    je_graphic_texture_3d_close(m_resource.m_texture_3d);
+                    break;
+                case kind::TEXTURE_ARRAY:
+                    je_graphic_texture_array_close(m_resource.m_texture_array);
+                    break;
+                case kind::TEXTURE_CUBE:
+                    je_graphic_texture_cube_close(m_resource.m_texture_cube);
+                    break;
+                case kind::TEXTURE_MSAA:
+                    je_graphic_texture_msaa_close(m_resource.m_texture_msaa);
+                    break;
+                case kind::VERTEX:
+                    je_graphic_vertex_close(m_resource.m_vertex);
+                    break;
+                case kind::UNIFORM_BUFFER:
+                    je_graphic_uniformbuf_close(m_resource.m_uniform_buffer);
+                    break;
+                case kind::FRAME_BUFFER:
+                    je_graphic_framebuf_close(m_resource.m_frame_buffer);
+                    break;
+                case kind::PIPELINE:
+                    je_graphic_pipeline_close(m_resource.m_pipeline);
+                    break;
+                case kind::SAMPLER:
+                    je_graphic_sampler_close(m_resource.m_sampler);
+                    break;
+
+                default:
+                    abort();
+                }
+            }
+            void free_resource_body() const
+            {
+                free(m_resource.m_raw_ptr);
+            }
+            je_gl_resource_handle_t* get_handle() const
+            {
+                switch (m_type)
+                {
+                case kind::SHADER:
+                    return &m_resource.m_shader->m_handle;
+                case kind::TEXTURE_2D:
+                case kind::TEXTURE_3D:
+                case kind::TEXTURE_ARRAY:
+                case kind::TEXTURE_CUBE:
+                case kind::TEXTURE_MSAA:
+                    // 所有纹理类别的 m_handle 都位于结构体偏移 0 处
+                    return static_cast<je_gl_resource_handle_t*>(m_resource.m_raw_ptr);
+                case kind::VERTEX:
+                    return &m_resource.m_vertex->m_handle;
+                case kind::UNIFORM_BUFFER:
+                    return &m_resource.m_uniform_buffer->m_handle;
+                case kind::FRAME_BUFFER:
+                    return &m_resource.m_frame_buffer->m_handle;
+                case kind::PIPELINE:
+                    return &m_resource.m_pipeline->m_handle;
+                case kind::SAMPLER:
+                    return &m_resource.m_sampler->m_handle;
+                default:
+                    abort();
+                }
+            }
         };
-        union deleting_graphic_resource
+        // Created blobs.
+        struct cached_resource_blob
         {
-            void* m_raw_ptr;
+            using kind = created_resource::kind;
 
-            je_gl_shader_t* m_shader;
-            je_gl_texture_2d_t* m_texture_2d;
-            je_gl_texture_3d_t* m_texture_3d;
-            je_gl_texture_array_t* m_texture_array;
-            je_gl_texture_cube_t* m_texture_cube;
-            je_gl_texture_msaa_t* m_texture_msaa;
-            je_gl_vertex_t* m_vertex;
-            je_gl_uniform_buffer_t* m_uniform_buffer;
-            je_gl_frame_buffer_t* m_frame_buffer;
-            je_gl_pipeline_t* m_pipeline;
-            je_gl_sampler_t* m_sampler;
+            kind m_type;
+            je_gl_resource_blob_t m_blob_may_null;
         };
+        struct resource_to_destroy
+        {
+            resource_to_destroy* last;
+            created_resource m_resource;
 
-        kind m_type;
-        deleting_graphic_resource m_resource;
-
-        created_resource(const created_resource&) = default;
-        created_resource(created_resource&&) = default;
-        created_resource& operator = (const created_resource&) = default;
-        created_resource& operator = (created_resource&&) = default;
-        ~created_resource() = default;
-
-        constexpr created_resource(je_gl_shader_t* shader)
-            : m_type(kind::SHADER)
-        {
-            m_resource.m_shader = shader;
-        }
-        constexpr created_resource(je_gl_texture_2d_t* texture)
-            : m_type(kind::TEXTURE_2D)
-        {
-            m_resource.m_texture_2d = texture;
-        }
-        constexpr created_resource(je_gl_texture_3d_t* texture)
-            : m_type(kind::TEXTURE_3D)
-        {
-            m_resource.m_texture_3d = texture;
-        }
-        constexpr created_resource(je_gl_texture_array_t* texture)
-            : m_type(kind::TEXTURE_ARRAY)
-        {
-            m_resource.m_texture_array = texture;
-        }
-        constexpr created_resource(je_gl_texture_cube_t* texture)
-            : m_type(kind::TEXTURE_CUBE)
-        {
-            m_resource.m_texture_cube = texture;
-        }
-        constexpr created_resource(je_gl_texture_msaa_t* texture)
-            : m_type(kind::TEXTURE_MSAA)
-        {
-            m_resource.m_texture_msaa = texture;
-        }
-        constexpr created_resource(je_gl_vertex_t* vertex)
-            : m_type(kind::VERTEX)
-        {
-            m_resource.m_vertex = vertex;
-        }
-        constexpr created_resource(je_gl_uniform_buffer_t* uniform_buffer)
-            : m_type(kind::UNIFORM_BUFFER)
-        {
-            m_resource.m_uniform_buffer = uniform_buffer;
-        }
-        constexpr created_resource(je_gl_frame_buffer_t* frame_buffer)
-            : m_type(kind::FRAME_BUFFER)
-        {
-            m_resource.m_frame_buffer = frame_buffer;
-        }
-        constexpr created_resource(je_gl_pipeline_t* pipeline)
-            : m_type(kind::PIPELINE)
-        {
-            m_resource.m_pipeline = pipeline;
-        }
-        constexpr created_resource(je_gl_sampler_t* sampler)
-            : m_type(kind::SAMPLER)
-        {
-            m_resource.m_sampler = sampler;
-        }
-        bool operator == (const created_resource& another) const noexcept
-        {
-            return m_resource.m_raw_ptr == another.m_resource.m_raw_ptr;
-        }
-
-        static constexpr bool is_texture_kind(kind k) noexcept
-        {
-            return k == kind::TEXTURE_2D
-                || k == kind::TEXTURE_3D
-                || k == kind::TEXTURE_ARRAY
-                || k == kind::TEXTURE_CUBE
-                || k == kind::TEXTURE_MSAA;
-        }
-
-        template<requirements::basic_graphic_resource T>
-        T* resource() const
-        {
-            if constexpr (std::is_same_v<T, je_gl_shader_t>)
+            template<requirements::basic_graphic_resource T>
+            resource_to_destroy(T* res)
+                : m_resource(res)
             {
-                assert(m_type == kind::SHADER);
-                return m_resource.m_shader;
             }
-            else if constexpr (std::is_same_v<T, je_gl_texture_2d_t>)
-            {
-                assert(m_type == kind::TEXTURE_2D);
-                return m_resource.m_texture_2d;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_texture_3d_t>)
-            {
-                assert(m_type == kind::TEXTURE_3D);
-                return m_resource.m_texture_3d;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_texture_array_t>)
-            {
-                assert(m_type == kind::TEXTURE_ARRAY);
-                return m_resource.m_texture_array;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_texture_cube_t>)
-            {
-                assert(m_type == kind::TEXTURE_CUBE);
-                return m_resource.m_texture_cube;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_texture_msaa_t>)
-            {
-                assert(m_type == kind::TEXTURE_MSAA);
-                return m_resource.m_texture_msaa;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_vertex_t>)
-            {
-                assert(m_type == kind::VERTEX);
-                return m_resource.m_vertex;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_uniform_buffer_t>)
-            {
-                assert(m_type == kind::UNIFORM_BUFFER);
-                return m_resource.m_uniform_buffer;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_frame_buffer_t>)
-            {
-                assert(m_type == kind::FRAME_BUFFER);
-                return m_resource.m_frame_buffer;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_pipeline_t>)
-            {
-                assert(m_type == kind::PIPELINE);
-                return m_resource.m_pipeline;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_sampler_t>)
-            {
-                assert(m_type == kind::SAMPLER);
-                return m_resource.m_sampler;
-            }
-            else
-            {
-                static_assert(!sizeof(T*), "Unsupported resource type.");
-            }
-        }
-
-        template<requirements::basic_graphic_resource T>
-        T* try_resource() const
-        {
-            if constexpr (std::is_same_v<T, je_gl_shader_t>)
-            {
-                if (m_type != kind::SHADER)
-                    return nullptr;
-                return m_resource.m_shader;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_texture_2d_t>)
-            {
-                if (m_type != kind::TEXTURE_2D)
-                    return nullptr;
-                return m_resource.m_texture_2d;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_texture_3d_t>)
-            {
-                if (m_type != kind::TEXTURE_3D)
-                    return nullptr;
-                return m_resource.m_texture_3d;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_texture_array_t>)
-            {
-                if (m_type != kind::TEXTURE_ARRAY)
-                    return nullptr;
-                return m_resource.m_texture_array;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_texture_cube_t>)
-            {
-                if (m_type != kind::TEXTURE_CUBE)
-                    return nullptr;
-                return m_resource.m_texture_cube;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_texture_msaa_t>)
-            {
-                if (m_type != kind::TEXTURE_MSAA)
-                    return nullptr;
-                return m_resource.m_texture_msaa;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_vertex_t>)
-            {
-                if (m_type != kind::VERTEX)
-                    return nullptr;
-                return m_resource.m_vertex;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_uniform_buffer_t>)
-            {
-                if (m_type != kind::UNIFORM_BUFFER)
-                    return nullptr;
-                return m_resource.m_uniform_buffer;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_frame_buffer_t>)
-            {
-                if (m_type != kind::FRAME_BUFFER)
-                    return nullptr;
-                return m_resource.m_frame_buffer;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_pipeline_t>)
-            {
-                if (m_type != kind::PIPELINE)
-                    return nullptr;
-                return m_resource.m_pipeline;
-            }
-            else if constexpr (std::is_same_v<T, je_gl_sampler_t>)
-            {
-                if (m_type != kind::SAMPLER)
-                    return nullptr;
-                return m_resource.m_sampler;
-            }
-            else
-            {
-                static_assert(!sizeof(T*), "Unsupported resource type.");
-            }
-        }
-
-        void drop_resource() const
-        {
-            switch (m_type)
-            {
-            case kind::SHADER:
-                je_graphic_shader_close(m_resource.m_shader);
-                break;
-            case kind::TEXTURE_2D:
-                je_graphic_texture_2d_close(m_resource.m_texture_2d);
-                break;
-            case kind::TEXTURE_3D:
-                je_graphic_texture_3d_close(m_resource.m_texture_3d);
-                break;
-            case kind::TEXTURE_ARRAY:
-                je_graphic_texture_array_close(m_resource.m_texture_array);
-                break;
-            case kind::TEXTURE_CUBE:
-                je_graphic_texture_cube_close(m_resource.m_texture_cube);
-                break;
-            case kind::TEXTURE_MSAA:
-                je_graphic_texture_msaa_close(m_resource.m_texture_msaa);
-                break;
-            case kind::VERTEX:
-                je_graphic_vertex_close(m_resource.m_vertex);
-                break;
-            case kind::UNIFORM_BUFFER:
-                je_graphic_uniformbuf_close(m_resource.m_uniform_buffer);
-                break;
-            case kind::FRAME_BUFFER:
-                je_graphic_framebuf_close(m_resource.m_frame_buffer);
-                break;
-            case kind::PIPELINE:
-                je_graphic_pipeline_close(m_resource.m_pipeline);
-                break;
-            case kind::SAMPLER:
-                je_graphic_sampler_close(m_resource.m_sampler);
-                break;
-
-            default:
-                abort();
-            }
-        }
-        void free_resource_body() const
-        {
-            free(m_resource.m_raw_ptr);
-        }
-        je_gl_resource_handle_t* get_handle() const
-        {
-            switch (m_type)
-            {
-            case kind::SHADER:
-                return &m_resource.m_shader->m_handle;
-            case kind::TEXTURE_2D:
-            case kind::TEXTURE_3D:
-            case kind::TEXTURE_ARRAY:
-            case kind::TEXTURE_CUBE:
-            case kind::TEXTURE_MSAA:
-                // 所有纹理类别的 m_handle 都位于结构体偏移 0 处
-                return static_cast<je_gl_resource_handle_t*>(m_resource.m_raw_ptr);
-            case kind::VERTEX:
-                return &m_resource.m_vertex->m_handle;
-            case kind::UNIFORM_BUFFER:
-                return &m_resource.m_uniform_buffer->m_handle;
-            case kind::FRAME_BUFFER:
-                return &m_resource.m_frame_buffer->m_handle;
-            case kind::PIPELINE:
-                return &m_resource.m_pipeline->m_handle;
-            case kind::SAMPLER:
-                return &m_resource.m_sampler->m_handle;
-            default:
-                abort();
-            }
-        }
-    };
-    // Created blobs.
-    struct cached_resource_blob
-    {
-        using kind = created_resource::kind;
-
-        kind m_type;
-        je_gl_resource_blob_t m_blob_may_null;
-    };
-    struct resource_to_destroy
-    {
-        resource_to_destroy* last;
-        created_resource m_resource;
-
-        template<requirements::basic_graphic_resource T>
-        resource_to_destroy(T* res)
-            : m_resource(res)
-        {}
-    };
+        };
+    }
 }
 
 namespace std
@@ -626,27 +635,23 @@ struct je_gl_context_notifier_t
 namespace jeecs::graphic
 {
     thread_local je_gl_context_t* _current_graphic_thread = nullptr;
-
-    std::vector<je_gl_context_t*> _jegl_alive_glthread_list;
-    std::shared_mutex _jegl_alive_glthread_list_mx;
-
-    je_graphic_sync_callback_func_t _jegl_sync_callback_func = nullptr;
-    void* _jegl_sync_callback_arg = nullptr;
-
-    enum class jegl_resouce_state
+    namespace
     {
-        READY,
-        NEED_INIT,
-        NEED_UPDATE,
-        INVALID_CONTEXT,
-    };
-}
+        std::vector<je_gl_context_t*> _jegl_alive_glthread_list;
+        std::shared_mutex _jegl_alive_glthread_list_mx;
 
-#if JE4_ENABLE_SHADER_WRAP_GENERATOR
-struct shader_wrapper;
-void jegl_shader_generate_shader_source(shader_wrapper* shader_generator, je_gl_shader_t* write_to_shader);
-#endif
-void jegl_shader_free_generated_shader_source(je_gl_shader_t* write_to_shader);
+        je_graphic_sync_callback_func_t _jegl_sync_callback_func = nullptr;
+        void* _jegl_sync_callback_arg = nullptr;
+
+        enum class jegl_resouce_state
+        {
+            READY,
+            NEED_INIT,
+            NEED_UPDATE,
+            INVALID_CONTEXT,
+        };
+    }
+}
 
 //////////////////////////////////// API /////////////////////////////////////////
 void je_graphic_sync_init(je_gl_context_t* thread, bool isreboot)
@@ -1839,7 +1844,7 @@ void je_graphic_shader_close(je_gl_shader_t* shader)
 {
     if (_jegl_close_resource_handle(&shader->m_handle))
     {
-        jegl_shader_free_generated_shader_source(shader);
+        shader_wrapper::jegl_shader_free_generated_shader_source(shader);
         _jegl_free_resource_instance(new jeecs::graphic::resource_to_destroy(shader));
     }
 }
@@ -2237,17 +2242,13 @@ je_gl_texture_msaa_t* je_graphic_texture_msaa_create(
     return texture_instance;
 }
 
-je_gl_shader_t* _jegl_create_shader_instance_and_init(void);
-je_gl_shader_t* _jegl_load_shader_cache(je_file_t* cache_file, const char* path);
-void _jegl_create_shader_cache(je_gl_shader_t* shader_resource, uint64_t virtual_file_crc64);
-
 je_gl_shader_t* _jegl_load_shader_source_impl(
     const char* path, const char* src, bool is_virtual_file)
 {
     if (is_virtual_file)
     {
         if (je_file_t* shader_cache = je_cache_file_load(path, SHADER_CACHE_VERSION, wo_crc64_str(src)))
-            return _jegl_load_shader_cache(shader_cache, path);
+            return shader_wrapper::_jegl_load_shader_cache(shader_cache, path);
     }
 
 #if JE4_ENABLE_SHADER_WRAP_GENERATOR
@@ -2292,15 +2293,15 @@ je_gl_shader_t* _jegl_load_shader_source_impl(
             }
             else
             {
-                shader_wrapper* const shader_graph =
-                    static_cast<shader_wrapper*>(woort_gcpointer(result));
+                shader_wrapper::ShaderWrapper* const shader_graph =
+                    static_cast<shader_wrapper::ShaderWrapper*>(woort_gcpointer(result));
 
-                instance = _jegl_create_shader_instance_and_init();
+                instance = shader_wrapper::_jegl_create_shader_instance_and_init();
 
-                jegl_shader_generate_shader_source(shader_graph, instance);
+                shader_wrapper::jegl_shader_generate_shader_source(shader_graph, instance);
 
                 _jegl_init_resource_handle(&instance->m_handle, path);
-                _jegl_create_shader_cache(instance, is_virtual_file ? wo_crc64_str(src) : 0);
+                shader_wrapper::_jegl_create_shader_cache(instance, is_virtual_file ? wo_crc64_str(src) : 0);
             }
 
             (void)woort_vm_swap(last);
@@ -2349,7 +2350,7 @@ je_gl_shader_t* _jegl_load_shader_source_impl(
 
     if (je_file_t* shader_cache = je_cache_file_load(path, SHADER_CACHE_VERSION, 0))
     {
-        auto* cached_shader_instance = _jegl_load_shader_cache(shader_cache, path);
+        auto* cached_shader_instance = shader_wrapper::_jegl_load_shader_cache(shader_cache, path);
         assert(cached_shader_instance != nullptr);
 
         if (cached_shader_instance->m_enable_to_shared)
