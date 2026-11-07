@@ -1270,7 +1270,7 @@ namespace jeecs::graphic::api::metal
         for (size_t i = 0; i < fbuffer->m_attachment_count; ++i)
         {
             auto* attachment_resource = attachments[i]->resource();
-            (void)_jegl_prepare_texture_2d_resource(attachment_resource);
+            (void)prepare_texture_2d_resource(attachment_resource);
 
             if (attachment_resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH)
             {
@@ -2068,7 +2068,7 @@ namespace jeecs::graphic::api::metal
 
         memcpy(shader->m_uniform_cpu_buffer, uniform_data, uniform_size);
 
-        _jegl_patch_ndc_scale(
+        patch_ndc_scale(
             shader->m_uniform_cpu_buffer, uniform_size,
             shader->m_ndc_scale_uniform_id,
             metal_context->m_render_states.m_current_target_framebuffer_may_null != nullptr);

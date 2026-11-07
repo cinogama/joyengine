@@ -1,10 +1,10 @@
 #pragma once
 
 #ifndef JE_IMPL
-#   error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
+#   define JE_IMPL
 #endif
 #ifndef JE_ENABLE_DEBUG_API
-#   error JE_ENABLE_DEBUG_API must be defined, please check `jeecs_core_systems_and_components.cpp`
+#   define JE_ENABLE_DEBUG_API
 #endif
 #include "jeecs.hpp"
 #include "jeecs_core_tilemap_model.hpp"

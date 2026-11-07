@@ -1028,7 +1028,7 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
 
             if (target != nullptr)
             {
-                const bool ready = _jegl_prepare_framebuffer_resource(target);
+                const bool ready = prepare_framebuffer_resource(target);
                 assert(ready);
                 (void)ready;
             }
@@ -1065,11 +1065,11 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
                 reinterpret_cast<je_gl_pipeline_t*>(command.m_ptr0);
 
             const auto prepare =
-                _jegl_prepare_shader_resource(pipeline->m_shader);
+                prepare_shader_resource(pipeline->m_shader);
             assert(prepare != ResourcePrepareResult::INVALID);
 
             const auto pipeline_prepare =
-                _jegl_prepare_pipeline_resource(pipeline);
+                prepare_pipeline_resource(pipeline);
             assert(pipeline_prepare != ResourcePrepareResult::INVALID);
 
             if (prepare != ResourcePrepareResult::READY
@@ -1091,7 +1091,7 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
             auto* vertex =
                 reinterpret_cast<je_gl_vertex_t*>(command.m_ptr0);
 
-            const bool ready = _jegl_prepare_vertex_resource(vertex);
+            const bool ready = prepare_vertex_resource(vertex);
             assert(ready);
             (void)ready;
 
@@ -1107,7 +1107,7 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
             auto* buffer =
                 reinterpret_cast<je_gl_uniform_buffer_t*>(command.m_ptr0);
 
-            const bool ready = _jegl_prepare_uniform_buffer_resource(buffer);
+            const bool ready = prepare_uniform_buffer_resource(buffer);
             assert(ready);
             (void)ready;
 
@@ -1138,19 +1138,19 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
             switch (command.m_op)
             {
             case jegl_cmd_op::BIND_TEXTURE_2D:
-                ready = _jegl_prepare_texture_2d_resource(
+                ready = prepare_texture_2d_resource(
                     static_cast<je_gl_texture_2d_t*>(texture));
                 break;
             case jegl_cmd_op::BIND_TEXTURE_3D:
-                ready = _jegl_prepare_texture_3d_resource(
+                ready = prepare_texture_3d_resource(
                     static_cast<je_gl_texture_3d_t*>(texture));
                 break;
             case jegl_cmd_op::BIND_TEXTURE_ARRAY:
-                ready = _jegl_prepare_texture_array_resource(
+                ready = prepare_texture_array_resource(
                     static_cast<je_gl_texture_array_t*>(texture));
                 break;
             case jegl_cmd_op::BIND_TEXTURE_CUBE:
-                ready = _jegl_prepare_texture_cube_resource(
+                ready = prepare_texture_cube_resource(
                     static_cast<je_gl_texture_cube_t*>(texture));
                 break;
             default:
@@ -1196,7 +1196,7 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
                 reinterpret_cast<je_gl_sampler_t*>(command.m_ptr0);
 
             const auto sampler_prepare =
-                _jegl_prepare_sampler_resource(sampler);
+                prepare_sampler_resource(sampler);
             assert(sampler_prepare != ResourcePrepareResult::INVALID);
 
             if (sampler_prepare != ResourcePrepareResult::READY)

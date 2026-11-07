@@ -945,7 +945,7 @@ namespace jeecs::graphic
             return jeecs::graphic::jegl_resouce_state::READY;
         }
         template<typename TexT>
-        static bool _jegl_prepare_texture_resource(TexT* texture)
+        static bool prepare_texture_resource(TexT* texture)
         {
             assert(texture != nullptr);
 
@@ -1203,7 +1203,7 @@ namespace jeecs::graphic
 
                         shader_wrapper::jegl_shader_generate_shader_source(shader_graph, instance);
 
-                        _jegl_init_resource_handle(&instance->m_handle, path);
+                        init_resource_handle(&instance->m_handle, path);
                         shader_wrapper::_jegl_create_shader_cache(instance, is_virtual_file ? wo_crc64_str(src) : 0);
                     }
 
@@ -1227,7 +1227,7 @@ namespace jeecs::graphic
    // draw. They intentionally mirror the legacy immediate-API code paths so
    // both paths share the same resource state machine.
    /////////////////////////////////////////////////////////////////////////////
-    ResourcePrepareResult _jegl_prepare_shader_resource(je_gl_shader_t* shader)
+    ResourcePrepareResult prepare_shader_resource(je_gl_shader_t* shader)
     {
         assert(shader != nullptr);
 
@@ -1283,7 +1283,7 @@ namespace jeecs::graphic
             return ResourcePrepareResult::INVALID;
         }
     }
-    ResourcePrepareResult _jegl_prepare_pipeline_resource(je_gl_pipeline_t* pipeline)
+    ResourcePrepareResult prepare_pipeline_resource(je_gl_pipeline_t* pipeline)
     {
         assert(pipeline != nullptr);
         if (jeecs::graphic::_current_graphic_thread == nullptr)
@@ -1302,7 +1302,7 @@ namespace jeecs::graphic
             return ResourcePrepareResult::INVALID;
         }
     }
-    ResourcePrepareResult _jegl_prepare_sampler_resource(je_gl_sampler_t* sampler)
+    ResourcePrepareResult prepare_sampler_resource(je_gl_sampler_t* sampler)
     {
         assert(sampler != nullptr);
         if (jeecs::graphic::_current_graphic_thread == nullptr)
@@ -1322,7 +1322,7 @@ namespace jeecs::graphic
         }
     }
 
-    bool _jegl_prepare_vertex_resource(je_gl_vertex_t* vert)
+    bool prepare_vertex_resource(je_gl_vertex_t* vert)
     {
         assert(vert != nullptr);
 
@@ -1385,7 +1385,7 @@ namespace jeecs::graphic
             return false;
         }
     }
-    bool _jegl_prepare_uniform_buffer_resource(je_gl_uniform_buffer_t* uniformbuf)
+    bool prepare_uniform_buffer_resource(je_gl_uniform_buffer_t* uniformbuf)
     {
         assert(uniformbuf != nullptr);
 
@@ -1416,7 +1416,7 @@ namespace jeecs::graphic
             return false;
         }
     }
-    bool _jegl_prepare_framebuffer_resource(je_gl_frame_buffer_t* framebuffer)
+    bool prepare_framebuffer_resource(je_gl_frame_buffer_t* framebuffer)
     {
         assert(framebuffer != nullptr);
 
@@ -1444,28 +1444,28 @@ namespace jeecs::graphic
             return false;
         }
     }
-    bool _jegl_prepare_texture_2d_resource(je_gl_texture_2d_t* texture)
+    bool prepare_texture_2d_resource(je_gl_texture_2d_t* texture)
     {
-        return _jegl_prepare_texture_resource(texture);
+        return prepare_texture_resource(texture);
     }
-    bool _jegl_prepare_texture_3d_resource(je_gl_texture_3d_t* texture)
+    bool prepare_texture_3d_resource(je_gl_texture_3d_t* texture)
     {
-        return _jegl_prepare_texture_resource(texture);
+        return prepare_texture_resource(texture);
     }
-    bool _jegl_prepare_texture_array_resource(je_gl_texture_array_t* texture)
+    bool prepare_texture_array_resource(je_gl_texture_array_t* texture)
     {
-        return _jegl_prepare_texture_resource(texture);
+        return prepare_texture_resource(texture);
     }
-    bool _jegl_prepare_texture_cube_resource(je_gl_texture_cube_t* texture)
+    bool prepare_texture_cube_resource(je_gl_texture_cube_t* texture)
     {
-        return _jegl_prepare_texture_resource(texture);
+        return prepare_texture_resource(texture);
     }
-    bool _jegl_prepare_texture_msaa_resource(je_gl_texture_msaa_t* texture)
+    bool prepare_texture_msaa_resource(je_gl_texture_msaa_t* texture)
     {
-        return _jegl_prepare_texture_resource(texture);
+        return prepare_texture_resource(texture);
     }
 
-    void _jegl_init_resource_handle(
+    void init_resource_handle(
         je_gl_resource_handle_t* resource_handle,
         const char* path_may_null_if_builtin)
     {
@@ -2033,7 +2033,7 @@ je_gl_pipeline_t* je_graphic_pipeline_create(
     assert(pipeline != nullptr);
     memset(pipeline, 0, sizeof(je_gl_pipeline_t));
 
-    _jegl_init_resource_handle(&pipeline->m_handle, nullptr);
+    init_resource_handle(&pipeline->m_handle, nullptr);
     pipeline->m_context = context;
     pipeline->m_shader = desc->m_shader;
     jegl_share_resource(desc->m_shader);
@@ -2115,7 +2115,7 @@ je_gl_sampler_t* je_graphic_sampler_create(
     assert(sampler != nullptr);
     memset(sampler, 0, sizeof(je_gl_sampler_t));
 
-    _jegl_init_resource_handle(&sampler->m_handle, nullptr);
+    init_resource_handle(&sampler->m_handle, nullptr);
     sampler->m_context = context;
     sampler->m_desc = *desc;
 
@@ -2161,7 +2161,7 @@ je_gl_texture_2d_t* je_graphic_texture_2d_create(size_t width, size_t height, je
     texture_instance->m_height = height;
     texture_instance->m_format = format;
 
-    _jegl_init_resource_handle(&texture_instance->m_handle, nullptr);
+    init_resource_handle(&texture_instance->m_handle, nullptr);
     return texture_instance;
 }
 
@@ -2199,7 +2199,7 @@ je_gl_texture_3d_t* je_graphic_texture_3d_create(
     texture_instance->m_depth = depth;
     texture_instance->m_format = format;
 
-    _jegl_init_resource_handle(&texture_instance->m_handle, nullptr);
+    init_resource_handle(&texture_instance->m_handle, nullptr);
     return texture_instance;
 }
 
@@ -2237,7 +2237,7 @@ je_gl_texture_array_t* je_graphic_texture_array_create(
     texture_instance->m_layers = layers;
     texture_instance->m_format = format;
 
-    _jegl_init_resource_handle(&texture_instance->m_handle, nullptr);
+    init_resource_handle(&texture_instance->m_handle, nullptr);
     return texture_instance;
 }
 
@@ -2277,7 +2277,7 @@ je_gl_texture_cube_t* je_graphic_texture_cube_create(
     texture_instance->m_height = height;
     texture_instance->m_format = format;
 
-    _jegl_init_resource_handle(&texture_instance->m_handle, nullptr);
+    init_resource_handle(&texture_instance->m_handle, nullptr);
     return texture_instance;
 }
 
@@ -2306,7 +2306,7 @@ je_gl_texture_msaa_t* je_graphic_texture_msaa_create(
     texture_instance->m_format =
         (je_gl_texture_format_t)(format | JE_GL_TEXTURE_FORMAT_FRAMEBUF);
 
-    _jegl_init_resource_handle(&texture_instance->m_handle, nullptr);
+    init_resource_handle(&texture_instance->m_handle, nullptr);
     return texture_instance;
 }
 
@@ -2495,7 +2495,7 @@ static bool _jegl_read_image_texture_cache(
             texture_instance->m_format | JE_GL_TEXTURE_FORMAT_SRGB);
     }
 
-    _jegl_init_resource_handle(&texture_instance->m_handle, path);
+    init_resource_handle(&texture_instance->m_handle, path);
 
     return _jegl_try_update_shared_resource(
         context, texture_instance);
@@ -2830,7 +2830,7 @@ je_gl_vertex_t* _jegl_create_vertex_impl(
         vertex->m_bones = cbones;
         vertex->m_bone_count = bones.size();
 
-        _jegl_init_resource_handle(&vertex->m_handle, path);
+        init_resource_handle(&vertex->m_handle, path);
 
         return _jegl_try_update_shared_resource(
             context, vertex);
@@ -2863,7 +2863,7 @@ je_gl_vertex_t* _jegl_create_vertex_impl(
         format_count);
 
     if (vertex != nullptr)
-        _jegl_init_resource_handle(&vertex->m_handle, nullptr);
+        init_resource_handle(&vertex->m_handle, nullptr);
 
     return vertex;
 }
@@ -2955,7 +2955,7 @@ void je_graphic_vertex_buffer_update(
     framebuf->m_output_attachments =
         (je_gl_frame_buffer_attachment_t*)attachments;
 
-    _jegl_init_resource_handle(&framebuf->m_handle, nullptr);
+    init_resource_handle(&framebuf->m_handle, nullptr);
     return framebuf;
 }
 
@@ -2974,7 +2974,7 @@ je_gl_uniform_buffer_t* je_graphic_uniformbuf_create(
     uniformbuf->m_update_begin_offset = 0;
     uniformbuf->m_update_length = 0;
 
-    _jegl_init_resource_handle(&uniformbuf->m_handle, nullptr);
+    init_resource_handle(&uniformbuf->m_handle, nullptr);
     return uniformbuf;
 }
 

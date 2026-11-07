@@ -313,6 +313,7 @@ bool je_core_main_script_entry()
         // Cache loaded, skip,
     }
     else if ((cenv = _je_open_file_to_compile_vm(
+        /* NOTE: Use je_file_host_path_get() to make sure woolang can find import target correctly. */
         (std::string(je_file_host_path_get()) + "/builtin/editor/main.wo").c_str())) != nullptr)
     {
         size_t binary_length;

@@ -5,9 +5,8 @@
 // Must be included AFTER "jeecs.hpp" and with JE_IMPL defined.
 
 #ifndef JE_IMPL
-#   error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
+#   define JE_IMPL
 #endif
-
 #include "jeecs.hpp"
 #include "jeecs_graphic_render_internal.hpp"
 

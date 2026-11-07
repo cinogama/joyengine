@@ -1832,7 +1832,7 @@ namespace jeecs::graphic::api::vk120
                 { JE_GL_TEXTURE_FORMAT_RGBA },
                 true);
             if (!created.has_value()
-                || !_jegl_prepare_framebuffer_resource(
+                || !prepare_framebuffer_resource(
                     created.value()->resource()))
             {
                 jeecs::debug::logerr(
@@ -5566,7 +5566,7 @@ namespace jeecs::graphic::api::vk120
         for (size_t i = 0; i < fbuffer->m_attachment_count; ++i)
         {
             auto& attachment = attachments[i];
-            (void)_jegl_prepare_texture_2d_resource(attachment->resource());
+            (void)prepare_texture_2d_resource(attachment->resource());
 
             auto* attach_texture_instance =
                 static_cast<jevk12_texture*>(attachment->resource()->m_handle.m_ptr);
@@ -5971,7 +5971,7 @@ namespace jeecs::graphic::api::vk120
         if (context->_vk_encoding_srgb_screen
             && context->_vk_current_shader_resource != nullptr)
         {
-            _jegl_patch_ndc_scale(
+            patch_ndc_scale(
                 shader_instance->m_uniform_cpu_buffer, uniform_size,
                 context->_vk_current_shader_resource->m_builtin_uniforms
                     .m_builtin_uniform_ndc_scale,

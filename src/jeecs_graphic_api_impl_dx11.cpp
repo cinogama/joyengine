@@ -1829,7 +1829,7 @@ namespace jeecs::graphic::api::dx11
         for (size_t i = 0; i < resource->m_attachment_count; ++i)
         {
             auto& attachment = attachments[i];
-            (void)_jegl_prepare_texture_2d_resource(attachment->resource());
+            (void)prepare_texture_2d_resource(attachment->resource());
 
             if (0 != (
                 attachment->resource()->m_format
@@ -2389,7 +2389,7 @@ namespace jeecs::graphic::api::dx11
 
         memcpy(mapped.pData, uniform_data, uniform_size);
 
-        _jegl_patch_ndc_scale(
+        patch_ndc_scale(
             mapped.pData, uniform_size,
             shader_instance->m_ndc_scale_uniform_id,
             context->m_current_target_framebuffer != nullptr);

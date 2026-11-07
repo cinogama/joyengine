@@ -455,7 +455,7 @@ namespace jeecs::graphic::api::gl3
             { JE_GL_TEXTURE_FORMAT_RGBA },
             true);
         if (!created.has_value()
-            || !_jegl_prepare_framebuffer_resource(
+            || !prepare_framebuffer_resource(
                 created.value()->resource()))
         {
             jeecs::debug::logerr(
@@ -1680,7 +1680,7 @@ namespace jeecs::graphic::api::gl3
 
             // Ensure the attachment texture has a lazy-initialized GL object
             // before glFramebufferTexture2D.
-            (void)_jegl_prepare_texture_2d_resource(frame_texture);
+            (void)prepare_texture_2d_resource(frame_texture);
 
             GLenum using_attachment = attachment;
             GLenum buffer_texture_type = GL_TEXTURE_2D;

@@ -1151,7 +1151,7 @@ namespace jeecs::graphic::shader_wrapper
 
         je_file_close(cache_file);
 
-        _jegl_init_resource_handle(&shader_instance->m_handle, path);
+        init_resource_handle(&shader_instance->m_handle, path);
         return shader_instance;
     }
     void jegl_shader_free_generated_shader_source(je_gl_shader_t* write_to_shader)

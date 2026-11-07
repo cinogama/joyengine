@@ -22,9 +22,8 @@
 //  * 全部方法必须在逻辑帧窗口内（图形线程静默期）调用。
 
 #ifndef JE_IMPL
-#   error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
+#   define JE_IMPL
 #endif
-
 #include "jeecs.hpp"
 
 #include <algorithm>
