@@ -487,17 +487,3 @@ void je_fimg_writer_abort(je_fimg_writer_t* writer)
     writer->impl->abort();
     delete writer;
 }
-
-WOORT_API woort_api wojeapi_image_texture_cache_ensure(void)
-{
-    const std::string path = woort_string(0);
-
-    je_file_t* cache = je_image_texture_cache_open_or_create(path.c_str());
-    if (cache != nullptr)
-    {
-        je_file_close(cache);
-        return woort_ret_bool(true);
-    }
-
-    return woort_ret_bool(false);
-}

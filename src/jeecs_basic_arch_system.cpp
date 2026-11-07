@@ -29,37 +29,39 @@ namespace jeecs::ecs
     namespace
     {
         class ArchType;
-        using TypesSet = vector<je_type_id_t>;
 
-        // TypesSet 是排序去重的 TypesSet，其不变式只能通过
-        // 以下三个辅助函数维护；archetype 的身份与 map 键序都依赖它是升序无重复的。
-        inline void types_set_insert(TypesSet& _types, je_type_id_t _tid) noexcept
+        using TypesSet = vector<je_type_id_t>;
+        namespace types_set
         {
-            auto _at = std::lower_bound(_types.begin(), _types.end(), _tid);
-            if (_at == _types.end() || *_at != _tid)
-                _types.insert(_at, _tid);
-        }
-        inline bool types_set_contains(const TypesSet& _types, je_type_id_t _tid) noexcept
-        {
-            return std::binary_search(_types.begin(), _types.end(), _tid);
-        }
-        inline bool types_set_erase(TypesSet& _types, je_type_id_t _tid) noexcept
-        {
-            auto _at = std::lower_bound(_types.begin(), _types.end(), _tid);
-            if (_at == _types.end() || *_at != _tid)
-                return false;
-            _types.erase(_at);
-            return true;
-        }
-        // 从未排序数组批量构建，一次分配 + 排序 + 去重；
-        // 优于对逐元素调用 types_set_insert（每次插入都要搬移后半段）。
-        inline TypesSet make_types_set(
-            const je_type_id_t* _type_ids, size_t _count) noexcept
-        {
-            TypesSet _types(_type_ids, _type_ids + _count);
-            std::sort(_types.begin(), _types.end());
-            _types.erase(std::unique(_types.begin(), _types.end()), _types.end());
-            return _types;
+            // TypesSet 是排序去重的 TypesSet，其不变式只能通过
+            // 以下三个辅助函数维护；archetype 的身份与 map 键序都依赖它是升序无重复的。
+            inline void insert(TypesSet& _types, je_type_id_t _tid) noexcept
+            {
+                auto _at = lower_bound(_types.begin(), _types.end(), _tid);
+                if (_at == _types.end() || *_at != _tid)
+                    _types.insert(_at, _tid);
+            }
+            inline bool contains(const TypesSet& _types, je_type_id_t _tid) noexcept
+            {
+                return binary_search(_types.begin(), _types.end(), _tid);
+            }
+            inline bool erase(TypesSet& _types, je_type_id_t _tid) noexcept
+            {
+                auto _at = lower_bound(_types.begin(), _types.end(), _tid);
+                if (_at == _types.end() || *_at != _tid)
+                    return false;
+                _types.erase(_at);
+                return true;
+            }
+            // 从未排序数组批量构建，一次分配 + 排序 + 去重；
+            // 优于对逐元素调用 types_set::insert（每次插入都要搬移后半段）。
+            inline TypesSet make(const je_type_id_t* _type_ids, size_t _count) noexcept
+            {
+                TypesSet _types(_type_ids, _type_ids + _count);
+                sort(_types.begin(), _types.end());
+                _types.erase(unique(_types.begin(), _types.end()), _types.end());
+                return _types;
+            }
         }
 
         struct SelectedArchCache
@@ -102,7 +104,7 @@ namespace jeecs::ecs
 
 // je_game_universe_t/je_game_world_t/je_archtype_t/je_chunk_t 在公开头文件中仅作不透明前向声明，
 // 此处给出空结构体定义，作为实际实现类的公开基类。引擎内部实现类
-// （ecs_universe 等）公开继承它们，使 C ABI 边界处可通过
+// （Universe 等）公开继承它们，使 C ABI 边界处可通过
 // derived↔base 的 static_cast 完成 je_Xxx* 与实现类指针之间的转换，
 // 无需 reinterpret_cast。空基类优化（EBO）保证 je_chunk_t* 与 arch_chunk 对象地址一致。
 struct je_game_universe_t {};
@@ -115,12 +117,12 @@ struct je_collected_requirements_t
     // 排序去重的紧凑类型集合：插入/删除/查找必须走 types_set_* 辅助函数
     TypesSet m_contain_set;
     TypesSet m_except_set;
-    std::map<int /*je_component_requirement_kind_t*/, TypesSet> m_anyof_sets;
+    map<int /*je_component_requirement_kind_t*/, TypesSet> m_anyof_sets;
 
-    std::vector<je_component_requirement_t> m_view_required;
-    std::vector<je_dependence_arch_infos_t> m_selected_archs;
+    vector<je_component_requirement_t> m_view_required;
+    vector<je_dependence_arch_infos_t> m_selected_archs;
 
-    std::unordered_map<const ArchType*, SelectedArchCache>
+    unordered_map<const ArchType*, SelectedArchCache>
         m_selected_arch_cache;
 };
 
@@ -160,8 +162,11 @@ namespace jeecs::ecs
 {
     namespace
     {
+        constexpr size_t CHUNK_SIZE = 16 * 1024; // 16K
+
         struct HoldedRequirementCollection : public je_requirement_collection_t
         {
+            JECS_DISABLE_MOVE_AND_COPY(HoldedRequirementCollection);
             HoldedRequirementCollection()
             {
                 m_collected_requirement = nullptr;
@@ -171,25 +176,11 @@ namespace jeecs::ecs
                 if (m_collected_requirement != nullptr)
                     delete m_collected_requirement;
             }
-
-            HoldedRequirementCollection(const HoldedRequirementCollection&) = delete;
-            HoldedRequirementCollection(HoldedRequirementCollection&&) = delete;
-            HoldedRequirementCollection& operator = (const HoldedRequirementCollection&) = delete;
-            HoldedRequirementCollection& operator = (HoldedRequirementCollection&&) = delete;
         };
 
-        constexpr size_t CHUNK_SIZE = 16 * 1024; // 16K
-
-        class command_buffer;
-        class arch_manager;
-        class ecs_world;
-
-        inline bool is_system_component_depends(je_type_id_t id)
-        {
-            if (typing::of(id) == nullptr)
-                return true;
-            return false;
-        }
+        class CommandBuffer;
+        class ArchManager;
+        class World;
 
         // 基于 Treiber 栈的 MPMC 无锁固定容量 id 栈，用于空闲 eid 池。
         // 约束：入栈值必须是 [0, capacity) 内的下标，且任意时刻每个值在栈中至多
@@ -199,26 +190,26 @@ namespace jeecs::ecs
         // 变更严格递增，用于消除经典 Treiber 栈的 ABA 问题——同一 eid 会被反复
         // 压栈/出栈，仅凭下标无法区分“同一个 id 的两次入栈”。
         template <typename T>
-        class mcmp_lockfree_fixed_id_stack
+        class MCMPLockFreeStack
         {
-            JECS_DISABLE_MOVE_AND_COPY(mcmp_lockfree_fixed_id_stack);
+            JECS_DISABLE_MOVE_AND_COPY(MCMPLockFreeStack);
 
             static constexpr uint64_t NIL = 0xFFFFFFFF;
 
             const uint32_t _m_capacity;
-            std::atomic<uint32_t>* const _m_next; // _m_next[id]：id 在栈内的下一个下标
-            std::atomic<uint64_t> _m_head;        // 低 32 位：栈顶下标或 NIL；高 32 位：ABA 计数
+            atomic<uint32_t>* const _m_next; // _m_next[id]：id 在栈内的下一个下标
+            atomic<uint64_t> _m_head;        // 低 32 位：栈顶下标或 NIL；高 32 位：ABA 计数
 
         public:
-            explicit mcmp_lockfree_fixed_id_stack(size_t capacity)
+            explicit MCMPLockFreeStack(size_t capacity)
                 : _m_capacity(static_cast<uint32_t>(capacity))
-                , _m_next(new std::atomic<uint32_t>[capacity] {})
+                , _m_next(new atomic<uint32_t>[capacity] {})
                 , _m_head(NIL)
             {
                 assert(capacity != 0 && capacity < NIL);
                 assert(_m_head.is_lock_free());
             }
-            ~mcmp_lockfree_fixed_id_stack()
+            ~MCMPLockFreeStack()
             {
                 delete[] _m_next;
             }
@@ -228,33 +219,33 @@ namespace jeecs::ecs
                 const uint64_t idx = static_cast<uint64_t>(elem);
                 assert(idx < _m_capacity);
 
-                uint64_t head = _m_head.load(std::memory_order_relaxed);
+                uint64_t head = _m_head.load(memory_order_relaxed);
                 for (;;)
                 {
                     // 先挂接、再发布。即便与某个迟滞的 pop 并发读写同一槽位，
                     // 对方的 CAS 也会因高位计数不同而失败，不会消费到坏链接。
-                    _m_next[idx].store(static_cast<uint32_t>(head), std::memory_order_relaxed);
+                    _m_next[idx].store(static_cast<uint32_t>(head), memory_order_relaxed);
 
                     const uint64_t new_head = ((head >> 32) + 1) << 32 | idx;
                     if (_m_head.compare_exchange_weak(
-                        head, new_head, std::memory_order_release, std::memory_order_relaxed))
+                        head, new_head, memory_order_release, memory_order_relaxed))
                         return;
                 }
             }
 
             bool pop(T* out_value)
             {
-                uint64_t head = _m_head.load(std::memory_order_acquire);
+                uint64_t head = _m_head.load(memory_order_acquire);
                 for (;;)
                 {
                     const uint64_t idx = head & 0xFFFFFFFF;
                     if (idx == NIL)
                         return false;
 
-                    const uint64_t next = _m_next[idx].load(std::memory_order_relaxed);
+                    const uint64_t next = _m_next[idx].load(memory_order_relaxed);
                     const uint64_t new_head = ((head >> 32) + 1) << 32 | next;
                     if (_m_head.compare_exchange_weak(
-                        head, new_head, std::memory_order_acquire, std::memory_order_acquire))
+                        head, new_head, memory_order_acquire, memory_order_acquire))
                     {
                         *out_value = static_cast<T>(idx);
                         return true;
@@ -275,8 +266,8 @@ namespace jeecs::ecs
             };
 
         public:
-            using types_list = std::vector<const je_type_info_t*>;
-            using archtypes_map = std::unordered_map<je_type_id_t, arch_type_info>;
+            using types_list = vector<const je_type_info_t*>;
+            using archtypes_map = unordered_map<je_type_id_t, arch_type_info>;
 
         private:
             /* Will be init in construction */
@@ -286,7 +277,7 @@ namespace jeecs::ecs
             const TypesSet _m_types_set;
             const size_t _m_entity_size;
             const je_entity_id_in_chunk_t _m_entity_count_per_chunk;
-            arch_manager* _m_arch_manager;
+            ArchManager* _m_arch_manager;
 
         public:
             class arch_chunk : public je_chunk_t
@@ -307,10 +298,10 @@ namespace jeecs::ecs
                 const size_t _m_entity_size;
 
                 ArchType* _m_arch_type;
-                mcmp_lockfree_fixed_id_stack<je_entity_id_in_chunk_t>
+                MCMPLockFreeStack<je_entity_id_in_chunk_t>
                     _m_free_slots;
 #ifndef NDEBUG
-                std::atomic<je_entity_id_in_chunk_t> _m_debug_free_count;
+                atomic<je_entity_id_in_chunk_t> _m_debug_free_count;
 #endif
 
             public:
@@ -416,7 +407,7 @@ namespace jeecs::ecs
                 }
                 inline void close_all_entity(je_game_world_t* by_world)
                 {
-                    std::unordered_set<je_entity_id_in_chunk_t> free_entity_ids;
+                    unordered_set<je_entity_id_in_chunk_t> free_entity_ids;
                     for (;;)
                     {
                         je_entity_id_in_chunk_t freeid;
@@ -448,11 +439,11 @@ namespace jeecs::ecs
                     return _m_entity_size;
                 }
 
-                inline std::unordered_set<je_entity_id_in_chunk_t>
+                inline unordered_set<je_entity_id_in_chunk_t>
                     _take_all_empty_for_defragmentation() noexcept
                 {
                     // 为了碎片整理，我们需要将所有的空位都取出来
-                    std::unordered_set<je_entity_id_in_chunk_t> empty_entity_ids;
+                    unordered_set<je_entity_id_in_chunk_t> empty_entity_ids;
                     for (;;)
                     {
                         je_entity_id_in_chunk_t freeid;
@@ -466,8 +457,8 @@ namespace jeecs::ecs
                 }
 
             private:
-                // Following function only invoke by command_buffer
-                friend class command_buffer;
+                // Following function only invoke by CommandBuffer
+                friend class CommandBuffer;
                 friend class ArchType;
 
                 void command_active_entity(je_entity_id_in_chunk_t eid, je_entity_stat_t stat) noexcept
@@ -495,13 +486,13 @@ namespace jeecs::ecs
             };
 
         private:
-            std::atomic<je_entity_id_in_chunk_t> _m_free_count;
-            std::atomic<je_entity_id_in_chunk_t> _m_total_count;
+            atomic<je_entity_id_in_chunk_t> _m_free_count;
+            atomic<je_entity_id_in_chunk_t> _m_total_count;
 
             basic::atomic_list<arch_chunk> _m_chunks;
 
             // 这个锁用于防止碎片整理的时候，有其他线程在操作chunk链表
-            std::shared_mutex _m_chunk_list_defragmentation_mx;
+            shared_mutex _m_chunk_list_defragmentation_mx;
 
         public:
             struct entity
@@ -549,7 +540,7 @@ namespace jeecs::ecs
             };
 
         public:
-            ArchType(arch_manager* _arch_manager, const TypesSet& _types_set)
+            ArchType(ArchManager* _arch_manager, const TypesSet& _types_set)
                 : _m_types_set(_types_set)
                 , _m_entity_size(0)
                 , _m_entity_count_per_chunk(0)
@@ -567,7 +558,7 @@ namespace jeecs::ecs
                 for (je_type_id_t tid : _types_set)
                     const_cast<types_list&>(_m_arch_typeinfo).push_back(typing::of(tid));
 
-                std::sort(
+                sort(
                     const_cast<types_list&>(_m_arch_typeinfo).begin(),
                     const_cast<types_list&>(_m_arch_typeinfo).end(),
                     [](const je_type_info_t* a, const je_type_info_t* b)
@@ -629,13 +620,13 @@ namespace jeecs::ecs
                     return;
 
                 // NOTE: 我讨厌多线程，不过我们仍然很有机会
-                std::lock_guard g1(_m_chunk_list_defragmentation_mx);
+                lock_guard g1(_m_chunk_list_defragmentation_mx);
 
                 // 1. 为碎片整理准备一个新的临时chunk队列，实际上就是清空整个chunk链表
                 auto* alive_chunks = _m_chunks.pick_all();
 
                 // 2. 转存chunks，然后从尾到头开始整理碎片
-                std::list<arch_chunk*> chunks;
+                list<arch_chunk*> chunks;
                 while (alive_chunks)
                 {
                     // 使得老区块集中于头部，这样方便后续整理
@@ -799,7 +790,7 @@ namespace jeecs::ecs
                 je_entity_id_in_chunk_t* out_eid,
                 je_version_t* out_eversion) noexcept
             {
-                std::shared_lock sg1(_m_chunk_list_defragmentation_mx);
+                shared_lock sg1(_m_chunk_list_defragmentation_mx);
                 while (true)
                 {
                     je_entity_id_in_chunk_t free_entity_count = _m_free_count.load();
@@ -868,7 +859,7 @@ namespace jeecs::ecs
 
                 return entity{ chunk, entity_id, entity_version };
             }
-            inline arch_manager* get_arch_mgr() const noexcept
+            inline ArchManager* get_arch_mgr() const noexcept
             {
                 return _m_arch_manager;
             }
@@ -942,24 +933,22 @@ namespace jeecs::ecs
                 out_arch_info->m_view_component_size = arch_cache.m_view_component_size;
             }
         };
-        class arch_manager
+        class ArchManager
         {
-            JECS_DISABLE_MOVE_AND_COPY(arch_manager);
+            JECS_DISABLE_MOVE_AND_COPY(ArchManager);
 
-            using arch_map_t = std::map<TypesSet, ArchType*>;
+            World* _m_world;
+            map<TypesSet, ArchType*> _m_arch_types_mapping;
 
-            ecs_world* _m_world;
-            arch_map_t _m_arch_types_mapping;
-            mutable std::shared_mutex _m_arch_types_mapping_mx;
-
-            std::atomic_flag _m_arch_modified = {};
+            mutable shared_mutex _m_arch_types_mapping_mx;
+            atomic_flag _m_arch_modified = {};
 
         public:
-            arch_manager(ecs_world* world)
+            ArchManager(World* world)
                 : _m_world(world)
             {
             }
-            ~arch_manager()
+            ~ArchManager()
             {
                 for (auto& [types, archtype] : _m_arch_types_mapping)
                     delete archtype;
@@ -969,7 +958,7 @@ namespace jeecs::ecs
             {
                 do
                 {
-                    std::shared_lock sg1(_m_arch_types_mapping_mx);
+                    shared_lock sg1(_m_arch_types_mapping_mx);
                     auto fnd = _m_arch_types_mapping.find(_types);
                     if (fnd != _m_arch_types_mapping.end())
                     {
@@ -977,7 +966,7 @@ namespace jeecs::ecs
                     }
                 } while (0);
 
-                std::lock_guard g1(_m_arch_types_mapping_mx);
+                lock_guard g1(_m_arch_types_mapping_mx);
                 ArchType*& atype = _m_arch_types_mapping[_types];
                 if (nullptr == atype)
                     atype = new ArchType(this, _types);
@@ -1000,17 +989,17 @@ namespace jeecs::ecs
                 static auto contains = [](const TypesSet& a, const TypesSet& b)
                     {
                         // b ⊆ a（双方均为排序序列）
-                        return std::includes(a.begin(), a.end(), b.begin(), b.end());
+                        return includes(a.begin(), a.end(), b.begin(), b.end());
                     };
                 static auto contain_any = [](const TypesSet& a, const TypesSet& b)
                     {
                         for (auto type_id : b)
-                            if (types_set_contains(a, type_id))
+                            if (types_set::contains(a, type_id))
                                 return true;
                         return b.empty();
                     };
                 static auto contain_all_any = [](
-                    const TypesSet& a, const std::map<int, TypesSet>& b)
+                    const TypesSet& a, const map<int, TypesSet>& b)
                     {
                         for (auto& [_, type_id_set] : b)
                             if (contain_any(a, type_id_set) == false)
@@ -1020,7 +1009,7 @@ namespace jeecs::ecs
                 static auto except = [](const TypesSet& a, const TypesSet& b)
                     {
                         for (auto type_id : b)
-                            if (types_set_contains(a, type_id))
+                            if (types_set::contains(a, type_id))
                                 return false;
                         return true;
                     };
@@ -1028,7 +1017,7 @@ namespace jeecs::ecs
                 auto* const collected_requirement = collection->m_collected_requirement;
                 do
                 {
-                    std::shared_lock sg1(_m_arch_types_mapping_mx);
+                    shared_lock sg1(_m_arch_types_mapping_mx);
                     for (auto& [typeset, arch] : _m_arch_types_mapping)
                     {
                         if (collected_requirement->m_selected_arch_cache.contains(arch))
@@ -1054,65 +1043,62 @@ namespace jeecs::ecs
             }
             inline void close_all_entity(je_game_world_t* by_world)
             {
-                std::shared_lock sg1(_m_arch_types_mapping_mx);
+                shared_lock sg1(_m_arch_types_mapping_mx);
                 for (auto& [types, archtype] : _m_arch_types_mapping)
                 {
                     archtype->close_all_entity(by_world);
                 }
             }
-            inline std::vector<ArchType*> _get_all_arch_types() const noexcept
+            inline vector<ArchType*> _get_all_arch_types() const noexcept
             {
                 // THIS FUNCTION ONLY FOR EDITOR
-                std::vector<ArchType*> arch_list;
-                std::shared_lock sg1(_m_arch_types_mapping_mx);
+                vector<ArchType*> arch_list;
+                shared_lock sg1(_m_arch_types_mapping_mx);
                 for (auto& pair : _m_arch_types_mapping)
                     arch_list.push_back(pair.second);
 
                 return arch_list;
             }
-            inline ecs_world* get_world() const noexcept
+            inline World* get_world() const noexcept
             {
                 return _m_world;
             }
 
         private:
-            friend class command_buffer;
+            friend class CommandBuffer;
             inline void command_defragmentation() noexcept
             {
-                std::shared_lock sg1(_m_arch_types_mapping_mx);
+                shared_lock sg1(_m_arch_types_mapping_mx);
                 for (auto& [types, archtype] : _m_arch_types_mapping)
                     archtype->command_defragmentation();
             }
         };
 
-        class ecs_universe;
+        class Universe;
 
-        struct ecs_job
+        struct Job
         {
-            JECS_DISABLE_MOVE_AND_COPY(ecs_job);
+            JECS_DISABLE_MOVE_AND_COPY(Job);
 
-            using job_for_worlds_t = je_job_for_worlds_t;
-            using job_call_once_t = je_job_call_once_t;
-
-            enum job_type
+            enum kind
             {
                 CALL_ONCE,
                 FOR_WORLDS,
             };
-            job_type m_job_type;
+            kind m_job_type;
 
             union
             {
-                job_for_worlds_t m_for_worlds_job;
-                job_call_once_t m_call_once_job;
+                je_job_for_worlds_t m_for_worlds_job;
+                je_job_call_once_t m_call_once_job;
             };
 
-            ecs_universe* m_universe;
+            Universe* m_universe;
             void* m_custom_data;
             void (*m_free_function)(void*);
 
-            ecs_job(ecs_universe* universe, job_for_worlds_t _job, void* custom_data, void (*free_function)(void*))
-                : m_job_type(job_type::FOR_WORLDS)
+            Job(Universe* universe, je_job_for_worlds_t _job, void* custom_data, void (*free_function)(void*))
+                : m_job_type(kind::FOR_WORLDS)
                 , m_for_worlds_job(_job)
                 , m_universe(universe)
                 , m_custom_data(custom_data)
@@ -1120,8 +1106,8 @@ namespace jeecs::ecs
             {
                 assert(_job != nullptr);
             }
-            ecs_job(ecs_universe* universe, job_call_once_t _job, void* custom_data, void (*free_function)(void*))
-                : m_job_type(job_type::CALL_ONCE)
+            Job(Universe* universe, je_job_call_once_t _job, void* custom_data, void (*free_function)(void*))
+                : m_job_type(kind::CALL_ONCE)
                 , m_call_once_job(_job)
                 , m_universe(universe)
                 , m_custom_data(custom_data)
@@ -1129,16 +1115,16 @@ namespace jeecs::ecs
             {
                 assert(_job != nullptr);
             }
-            ~ecs_job()
+            ~Job()
             {
                 if (m_free_function != nullptr)
                     m_free_function(m_custom_data);
             }
         };
-        class command_buffer
+        class CommandBuffer
         {
-            // command_buffer used to store operations happend in a entity.
-            JECS_DISABLE_MOVE_AND_COPY(command_buffer);
+            // CommandBuffer used to store operations happend in a entity.
+            JECS_DISABLE_MOVE_AND_COPY(CommandBuffer);
 
             struct _entity_command_buffer
             {
@@ -1188,7 +1174,7 @@ namespace jeecs::ecs
                     game_system* m_system_instance_may_not_exist;
 
                     je_type_hash_t m_query_slice_typehash;
-                    std::unique_ptr<HoldedRequirementCollection> m_created_collection;
+                    unique_ptr<HoldedRequirementCollection> m_created_collection;
 
                     append_slice_query_cache* last;
                 };
@@ -1196,7 +1182,7 @@ namespace jeecs::ecs
                 bool m_destroy_world;
 
                 // Update configs ?
-                std::optional<bool> m_update_enabled;
+                optional<bool> m_update_enabled;
 
                 basic::atomic_list<typed_system> m_adding_or_removing_systems;
                 basic::atomic_list<append_slice_query_cache> m_adding_query_caches;
@@ -1204,13 +1190,13 @@ namespace jeecs::ecs
                 _world_command_buffer() = default;
             };
 
-            std::shared_mutex _m_command_buffer_mx;
-            std::shared_mutex _m_command_executer_guard_mx;
+            shared_mutex _m_command_buffer_mx;
+            shared_mutex _m_command_executer_guard_mx;
 
             using entity_command_buffer_map_t =
-                std::map<ArchType::entity, _entity_command_buffer*>;
+                map<ArchType::entity, _entity_command_buffer*>;
 
-            ecs_world* _m_world;
+            World* _m_world;
             _world_command_buffer* _m_world_command_buffer;
             entity_command_buffer_map_t _m_entity_command_buffers;
 
@@ -1218,14 +1204,14 @@ namespace jeecs::ecs
             {
                 do
                 {
-                    std::shared_lock sg1(_m_command_buffer_mx);
+                    shared_lock sg1(_m_command_buffer_mx);
                     auto fnd = _m_entity_command_buffers.find(e);
                     if (fnd != _m_entity_command_buffers.end())
                         return fnd->second;
 
                 } while (0);
 
-                std::lock_guard g1(_m_command_buffer_mx);
+                lock_guard g1(_m_command_buffer_mx);
                 auto fnd = _m_entity_command_buffers.find(e);
                 if (fnd != _m_entity_command_buffers.end())
                     return fnd->second;
@@ -1244,44 +1230,44 @@ namespace jeecs::ecs
             {
                 do
                 {
-                    std::shared_lock sg1(_m_command_buffer_mx);
+                    shared_lock sg1(_m_command_buffer_mx);
                     if (_m_world_command_buffer != nullptr)
                         return _m_world_command_buffer;
 
                 } while (0);
 
-                std::lock_guard g1(_m_command_buffer_mx);
+                lock_guard g1(_m_command_buffer_mx);
                 if (_m_world_command_buffer != nullptr)
                     return _m_world_command_buffer;
 
                 auto* wbuf = new _world_command_buffer{};
 
                 wbuf->m_destroy_world = false;
-                wbuf->m_update_enabled = std::nullopt;
+                wbuf->m_update_enabled = nullopt;
 
                 return _m_world_command_buffer = wbuf;
             }
 
         public:
-            command_buffer(ecs_world* world)
+            CommandBuffer(World* world)
                 : _m_world(world), _m_world_command_buffer(nullptr)
             {
             }
-            ~command_buffer()
+            ~CommandBuffer()
             {
                 assert(_m_entity_command_buffers.empty() && _m_world_command_buffer == nullptr);
             }
 
             void init_new_entity(const ArchType::entity& e, je_entity_stat_t stat)
             {
-                std::shared_lock sl(_m_command_executer_guard_mx);
+                shared_lock sl(_m_command_executer_guard_mx);
                 assert(stat != JE_ENTITY_STAT_UNAVAILABLE);
                 _find_or_create_buffer_for_entity(e)->m_entity_active_stat = stat;
             }
 
             void remove_entity(const ArchType::entity& e)
             {
-                std::shared_lock sl(_m_command_executer_guard_mx);
+                shared_lock sl(_m_command_executer_guard_mx);
 
                 _find_or_create_buffer_for_entity(e)->m_entity_removed_flag = true;
             }
@@ -1294,7 +1280,7 @@ namespace jeecs::ecs
                 void* created_component = malloc(tinfo->m_size);
                 typing::construct(tinfo, created_component, nullptr);
 
-                std::shared_lock sl(_m_command_executer_guard_mx);
+                shared_lock sl(_m_command_executer_guard_mx);
 
                 _find_or_create_buffer_for_entity(e)->m_adding_or_removing_components.add_one(
                     new _entity_command_buffer::typed_component(component_type, created_component));
@@ -1303,14 +1289,14 @@ namespace jeecs::ecs
             }
             void remove_component(const ArchType::entity& e, je_type_id_t component_type)
             {
-                std::shared_lock sl(_m_command_executer_guard_mx);
+                shared_lock sl(_m_command_executer_guard_mx);
 
                 _find_or_create_buffer_for_entity(e)->m_adding_or_removing_components.add_one(
                     new _entity_command_buffer::typed_component(component_type, nullptr));
             }
             void close_world()
             {
-                std::shared_lock sl(_m_command_executer_guard_mx);
+                shared_lock sl(_m_command_executer_guard_mx);
 
                 DEBUG_ARCH_LOG("World: %p the destroy world operation has been committed to the command buffer.",
                     _m_world);
@@ -1320,7 +1306,7 @@ namespace jeecs::ecs
 
             void set_enable_world(bool enable)
             {
-                std::shared_lock sl(_m_command_executer_guard_mx);
+                shared_lock sl(_m_command_executer_guard_mx);
 
                 if (enable)
                     DEBUG_ARCH_LOG("World: %p trying to enable world.",
@@ -1329,12 +1315,12 @@ namespace jeecs::ecs
                     DEBUG_ARCH_LOG("World: %p trying to disable world.",
                         _m_world);
 
-                _find_or_create_buffer_for_world()->m_update_enabled = std::optional(enable);
+                _find_or_create_buffer_for_world()->m_update_enabled = optional(enable);
             }
 
             void add_system_instance(const je_type_info_t* type, je_system_t sys_instance)
             {
-                std::shared_lock sl(_m_command_executer_guard_mx);
+                shared_lock sl(_m_command_executer_guard_mx);
 
                 DEBUG_ARCH_LOG("World: %p want to add system(%p) named '%s', operation has been committed.",
                     _m_world, sys_instance, type->m_typename);
@@ -1346,7 +1332,7 @@ namespace jeecs::ecs
             }
             void remove_system_instance(const je_type_info_t* type)
             {
-                std::shared_lock sl(_m_command_executer_guard_mx);
+                shared_lock sl(_m_command_executer_guard_mx);
 
                 DEBUG_ARCH_LOG("World: %p want to remove system named '%s', operation has been committed.",
                     _m_world, type->m_typename);
@@ -1357,41 +1343,41 @@ namespace jeecs::ecs
             void add_system_query_cache(
                 game_system* system_instance,
                 je_type_hash_t hash,
-                std::unique_ptr<HoldedRequirementCollection>&& collection)
+                unique_ptr<HoldedRequirementCollection>&& collection)
             {
-                std::shared_lock sl(_m_command_executer_guard_mx);
+                shared_lock sl(_m_command_executer_guard_mx);
 
                 _find_or_create_buffer_for_world()->m_adding_query_caches.add_one(
                     new _world_command_buffer::append_slice_query_cache{
                         system_instance,
                         hash,
-                        std::move(collection),
+                        move(collection),
                     });
             }
 
         public:
             void update();
         };
-        class ecs_world : public je_game_world_t
+        class World : public je_game_world_t
         {
-            JECS_DISABLE_MOVE_AND_COPY(ecs_world);
+            JECS_DISABLE_MOVE_AND_COPY(World);
 
         public:
             using system_container_t =
-                std::unordered_map<const je_type_info_t*, je_system_t>;
+                unordered_map<const je_type_info_t*, je_system_t>;
             using slice_cache_container_t =
-                std::unordered_map<je_type_hash_t, std::unique_ptr<HoldedRequirementCollection>>;
+                unordered_map<je_type_hash_t, unique_ptr<HoldedRequirementCollection>>;
 
             // NOTE: 此处之所以要根据不同系统实例缓存不同的切片，是考虑到编译防火墙，不同编译器/库对
             //      相同/不同的切片类型哈希可能不同/相同；为了规避因此导致的哈希冲突或者重复，针对不同
             //      实例缓存，这样确保一个实例对应的始终是相同的模块（库），避免编译防火墙问题。
             using system_slice_cache_container_t =
-                std::unordered_map<je_system_t, slice_cache_container_t>;
+                unordered_map<je_system_t, slice_cache_container_t>;
         private:
-            ecs_universe* _m_universe;
+            Universe* _m_universe;
 
-            command_buffer _m_command_buffer;
-            arch_manager _m_arch_manager;
+            CommandBuffer _m_command_buffer;
+            ArchManager _m_arch_manager;
 
             // Monotonically increasing counter bumped in update() whenever the arch-type set
             // changed. Unlike _m_arch_modified (which is test-and-set / consumed by update()),
@@ -1405,11 +1391,11 @@ namespace jeecs::ecs
             system_container_t m_systems;
             system_slice_cache_container_t m_system_slice_caches;
         private:
-            inline static std::shared_mutex _m_alive_worlds_mx;
-            inline static std::unordered_set<ecs_world*> _m_alive_worlds;
+            inline static shared_mutex _m_alive_worlds_mx;
+            inline static unordered_set<World*> _m_alive_worlds;
 
         public:
-            ecs_world(ecs_universe* universe)
+            World(Universe* universe)
                 : _m_universe(universe)
                 , _m_command_buffer(this)
                 , _m_arch_manager(this)
@@ -1417,15 +1403,15 @@ namespace jeecs::ecs
                 , _m_world_enabled(false)
                 , _m_destroying_flag(false)
             {
-                std::lock_guard g1(_m_alive_worlds_mx);
+                lock_guard g1(_m_alive_worlds_mx);
                 _m_alive_worlds.emplace(this);
             }
-            ~ecs_world()
+            ~World()
             {
                 // Must be destroyed before destruct.
                 assert(_m_destroying_flag);
 
-                std::lock_guard g1(_m_alive_worlds_mx);
+                lock_guard g1(_m_alive_worlds_mx);
                 _m_alive_worlds.erase(this);
             }
             system_container_t& get_system_instances() noexcept
@@ -1441,9 +1427,9 @@ namespace jeecs::ecs
                 typing::destruct(type, sys);
                 free(sys);
             }
-            void execute_world_job(ecs_job* job) noexcept
+            void execute_world_job(Job* job) noexcept
             {
-                assert(job->m_job_type == ecs_job::job_type::FOR_WORLDS);
+                assert(job->m_job_type == Job::kind::FOR_WORLDS);
                 if (_m_world_enabled)
                     job->m_for_worlds_job(this, job->m_custom_data);
             }
@@ -1509,14 +1495,14 @@ namespace jeecs::ecs
             void append_slice_cache_for_system_instance(
                 game_system* sys,
                 je_type_hash_t hash,
-                std::unique_ptr<HoldedRequirementCollection>&& collection)
+                unique_ptr<HoldedRequirementCollection>&& collection)
             {
                 auto fnd = m_system_slice_caches.find(sys);
                 if (fnd != m_system_slice_caches.end())
                 {
                     auto& slice_caches = fnd->second;
 
-                    if (slice_caches.emplace(hash, std::move(collection)).second)
+                    if (slice_caches.emplace(hash, move(collection)).second)
                         return;
 
                     // Else, already exist, do nothing.
@@ -1533,13 +1519,13 @@ namespace jeecs::ecs
 #endif
             }
 
-            arch_manager& _get_arch_mgr() noexcept
+            ArchManager& _get_arch_mgr() noexcept
             {
                 // NOTE: This function used for editor
                 return _m_arch_manager;
             }
 
-            const arch_manager& _get_arch_mgr() const noexcept
+            const ArchManager& _get_arch_mgr() const noexcept
             {
                 // NOTE: This function used for editor
                 return _m_arch_manager;
@@ -1566,7 +1552,7 @@ namespace jeecs::ecs
                 if (_m_destroying_flag)
                 {
                     // Remove all system from world.
-                    std::vector<const je_type_info_t*> _removing_sys_types;
+                    vector<const je_type_info_t*> _removing_sys_types;
                     _removing_sys_types.reserve(m_systems.size());
 
                     for (auto& [sys_type, sys_instance] : m_systems)
@@ -1656,8 +1642,8 @@ namespace jeecs::ecs
                     }
                 }
 
-                std::unique_ptr<HoldedRequirementCollection> created_collection =
-                    std::make_unique<HoldedRequirementCollection>();
+                unique_ptr<HoldedRequirementCollection> created_collection =
+                    make_unique<HoldedRequirementCollection>();
 
                 *out_collection = created_collection.get();
 
@@ -1665,11 +1651,11 @@ namespace jeecs::ecs
                 get_command_buffer().add_system_query_cache(
                     system_instance,
                     hash,
-                    std::move(created_collection));
+                    move(created_collection));
 
                 return false;
             }
-            inline command_buffer& get_command_buffer() noexcept
+            inline CommandBuffer& get_command_buffer() noexcept
             {
                 return _m_command_buffer;
             }
@@ -1705,29 +1691,29 @@ namespace jeecs::ecs
                     _m_world_enabled = enable;
                 }
             }
-            inline ecs_universe* get_universe() const noexcept
+            inline Universe* get_universe() const noexcept
             {
                 return _m_universe;
             }
         };
 
-        void command_buffer::update()
+        void CommandBuffer::update()
         {
             // 太可怕了，这个函数实在是太可怕了……
             // 丑陋而混乱的实现！简直是灾难的起点！
-            std::lock_guard g1(_m_command_executer_guard_mx);
+            lock_guard g1(_m_command_executer_guard_mx);
 
             // Update all operate in this buffer
             ::parallel_foreach(
                 _m_entity_command_buffers.begin(), _m_entity_command_buffers.end(),
-                [](std::pair<const ArchType::entity, _entity_command_buffer*>& _buf_in_entity)
+                [](pair<const ArchType::entity, _entity_command_buffer*>& _buf_in_entity)
                 {
                     //  If entity not valid, skip component append&remove&active, but need
                     // free temp components.
                     ArchType::entity current_entity = _buf_in_entity.first;
 
                     auto* modify_typed_components = _buf_in_entity.second->m_adding_or_removing_components.pick_all();
-                    std::unordered_map<je_type_id_t, void*> modifying_component_type_and_instances;
+                    unordered_map<je_type_id_t, void*> modifying_component_type_and_instances;
 
                     while (modify_typed_components != nullptr)
                     {
@@ -1817,13 +1803,13 @@ namespace jeecs::ecs
                                 TypesSet new_chunk_types = *current_entity.chunk()->types();
 
                                 // 2. Apply modify!
-                                std::unordered_map<je_type_id_t, void*> append_component_type_addr_map;
+                                unordered_map<je_type_id_t, void*> append_component_type_addr_map;
                                 for (auto& [tid, instance] : modifying_component_type_and_instances)
                                 {
                                     if (instance == nullptr)
                                     {
                                         // Trying to remove.
-                                        if (types_set_erase(new_chunk_types, tid))
+                                        if (types_set::erase(new_chunk_types, tid))
                                         {
                                             current_entity.chunk()->destruct_component_addr_with_typeid(
                                                 current_entity._m_id,
@@ -1842,8 +1828,8 @@ namespace jeecs::ecs
                                         append_component_type_addr_map[tid] = instance;
 
                                         // Trying to append.
-                                        if (!types_set_contains(new_chunk_types, tid))
-                                            types_set_insert(new_chunk_types, tid);
+                                        if (!types_set::contains(new_chunk_types, tid))
+                                            types_set::insert(new_chunk_types, tid);
                                         else
                                         {
 #ifndef NDEBUG
@@ -1962,12 +1948,12 @@ namespace jeecs::ecs
                 if (_m_world_command_buffer->m_update_enabled.has_value())
                 {
                     _m_world->_set_enable_world(_m_world_command_buffer->m_update_enabled.value());
-                    _m_world_command_buffer->m_update_enabled = std::nullopt;
+                    _m_world_command_buffer->m_update_enabled = nullopt;
                 }
 
                 if (_m_world->is_enabled() || _m_world->_is_destroying())
                 {
-                    std::unordered_map<const je_type_info_t*, je_system_t> modifying_system_type_and_instances;
+                    unordered_map<const je_type_info_t*, je_system_t> modifying_system_type_and_instances;
 
                     auto* append_or_remove_system = _m_world_command_buffer->m_adding_or_removing_systems.pick_all();
                     while (append_or_remove_system)
@@ -2007,7 +1993,7 @@ namespace jeecs::ecs
                         _m_world->append_slice_cache_for_system_instance(
                             cur_append_query_caches->m_system_instance_may_not_exist,
                             cur_append_query_caches->m_query_slice_typehash,
-                            std::move(cur_append_query_caches->m_created_collection));
+                            move(cur_append_query_caches->m_created_collection));
 
                         delete cur_append_query_caches;
                     }
@@ -2018,27 +2004,27 @@ namespace jeecs::ecs
             }
         }
 
-        // ecs_universe
-        class ecs_universe : public je_game_universe_t
+        // Universe
+        class Universe : public je_game_universe_t
         {
-            inline static std::mutex _m_alive_universes_mx;
-            inline static std::list<ecs_universe*> _m_alive_universes;
+            inline static mutex _m_alive_universes_mx;
+            inline static list<Universe*> _m_alive_universes;
 
-            std::mutex _m_removing_worlds_appending_mx;
-            std::thread _m_universe_update_thread;
+            mutex _m_removing_worlds_appending_mx;
+            thread _m_universe_update_thread;
 
-            std::vector<ecs_world*> _m_world_list;
+            vector<World*> _m_world_list;
 
             // Used for store shared jobs instance.
-            std::vector<ecs_job*> _m_shared_pre_jobs;
-            std::vector<ecs_job*> _m_shared_jobs;
-            std::vector<ecs_job*> _m_shared_after_jobs;
+            vector<Job*> _m_shared_pre_jobs;
+            vector<Job*> _m_shared_jobs;
+            vector<Job*> _m_shared_after_jobs;
 
-            std::mutex _m_next_execute_interval_mx;
+            mutex _m_next_execute_interval_mx;
 
             // 以下字段需要初始化
-            std::atomic_bool _m_universe_update_thread_stop_flag;
-            std::atomic_size_t _m_universe_life;
+            atomic_bool _m_universe_update_thread_stop_flag;
+            atomic_size_t _m_universe_life;
 
             double _m_frame_current_time;
             double _m_real_current_time;
@@ -2083,9 +2069,9 @@ namespace jeecs::ecs
 
                 union
                 {
-                    ecs_world* m_adding_world;
-                    ecs_job::job_call_once_t m_call_once_job;
-                    ecs_job::job_for_worlds_t m_for_worlds_job;
+                    World* m_adding_world;
+                    je_job_call_once_t m_call_once_job;
+                    je_job_for_worlds_t m_for_worlds_job;
                 };
                 universe_action* last;
             };
@@ -2098,56 +2084,56 @@ namespace jeecs::ecs
             }
             static void default_job_for_execute_sys_update_for_worlds_in_universe(je_game_world_t* _ecs_world, void* _)
             {
-                ecs_world* cur_world = static_cast<ecs_world*>(_ecs_world);
+                World* cur_world = static_cast<World*>(_ecs_world);
 
-                ecs_world::system_container_t& active_systems =
+                World::system_container_t& active_systems =
                     cur_world->get_system_instances();
 
                 ::parallel_foreach(
                     active_systems.begin(), active_systems.end(),
-                    [](ecs_world::system_container_t::value_type& val)
+                    [](World::system_container_t::value_type& val)
                     {
                         val.first->m_system_updaters->m_pre_update(val.second);
                     });
                 ::parallel_foreach(
                     active_systems.begin(), active_systems.end(),
-                    [](ecs_world::system_container_t::value_type& val)
+                    [](World::system_container_t::value_type& val)
                     {
                         val.first->m_system_updaters->m_state_update(val.second);
                     });
                 ::parallel_foreach(
                     active_systems.begin(), active_systems.end(),
-                    [](ecs_world::system_container_t::value_type& val)
+                    [](World::system_container_t::value_type& val)
                     {
                         val.first->m_system_updaters->m_update(val.second);
                     });
                 ::parallel_foreach(
                     active_systems.begin(), active_systems.end(),
-                    [](ecs_world::system_container_t::value_type& val)
+                    [](World::system_container_t::value_type& val)
                     {
                         val.first->m_system_updaters->m_transform_update(val.second);
                     });
                 ::parallel_foreach(
                     active_systems.begin(), active_systems.end(),
-                    [](ecs_world::system_container_t::value_type& val)
+                    [](World::system_container_t::value_type& val)
                     {
                         val.first->m_system_updaters->m_physics_update(val.second);
                     });
                 ::parallel_foreach(
                     active_systems.begin(), active_systems.end(),
-                    [](ecs_world::system_container_t::value_type& val)
+                    [](World::system_container_t::value_type& val)
                     {
                         val.first->m_system_updaters->m_late_update(val.second);
                     });
                 ::parallel_foreach(
                     active_systems.begin(), active_systems.end(),
-                    [](ecs_world::system_container_t::value_type& val)
+                    [](World::system_container_t::value_type& val)
                     {
                         val.first->m_system_updaters->m_commit_update(val.second);
                     });
                 ::parallel_foreach(
                     active_systems.begin(), active_systems.end(),
-                    [](ecs_world::system_container_t::value_type& val)
+                    [](World::system_container_t::value_type& val)
                     {
                         val.first->m_system_updaters->m_graphic_update(val.second);
                     });
@@ -2186,20 +2172,20 @@ namespace jeecs::ecs
             }
             void set_time_scale(double scale)
             {
-                _m_time_scale = std::max(0., scale);
+                _m_time_scale = max(0., scale);
             }
 
             void update_universe_action_and_worlds() noexcept
             {
-                std::vector<ecs_world*> _m_removing_worlds;
+                vector<World*> _m_removing_worlds;
 
                 // Update all worlds, if world is closing, add it to _m_removing_worlds.
                 ::parallel_foreach(_m_world_list.begin(), _m_world_list.end(),
-                    [this, &_m_removing_worlds](ecs_world* world)
+                    [this, &_m_removing_worlds](World* world)
                     {
                         if (!world->update())
                         {
-                            std::lock_guard g1(_m_removing_worlds_appending_mx);
+                            lock_guard g1(_m_removing_worlds_appending_mx);
 
                             // Ready remove the world from list;
                             _m_removing_worlds.push_back(world);
@@ -2207,9 +2193,9 @@ namespace jeecs::ecs
                     });
 
                 // Remove all closed worlds
-                for (ecs_world* removed_world : _m_removing_worlds)
+                for (World* removed_world : _m_removing_worlds)
                 {
-                    auto fnd = std::find(_m_world_list.begin(), _m_world_list.end(), removed_world);
+                    auto fnd = find(_m_world_list.begin(), _m_world_list.end(), removed_world);
                     if (fnd != _m_world_list.end())
                         _m_world_list.erase(fnd);
                     else
@@ -2235,30 +2221,30 @@ namespace jeecs::ecs
                         break;
 
                     case universe_action::action_type::ADD_PRE_JOB_FOR_WORLDS:
-                        _m_shared_pre_jobs.push_back(new ecs_job(this, cur_action->m_for_worlds_job, cur_action->m_custom_data, cur_action->m_free_function));
+                        _m_shared_pre_jobs.push_back(new Job(this, cur_action->m_for_worlds_job, cur_action->m_custom_data, cur_action->m_free_function));
                         break;
                     case universe_action::action_type::ADD_PRE_JOB_CALL_ONCE:
-                        _m_shared_pre_jobs.push_back(new ecs_job(this, cur_action->m_call_once_job, cur_action->m_custom_data, cur_action->m_free_function));
+                        _m_shared_pre_jobs.push_back(new Job(this, cur_action->m_call_once_job, cur_action->m_custom_data, cur_action->m_free_function));
                         break;
                     case universe_action::action_type::ADD_NORMAL_JOB_FOR_WORLDS:
-                        _m_shared_jobs.push_back(new ecs_job(this, cur_action->m_for_worlds_job, cur_action->m_custom_data, cur_action->m_free_function));
+                        _m_shared_jobs.push_back(new Job(this, cur_action->m_for_worlds_job, cur_action->m_custom_data, cur_action->m_free_function));
                         break;
                     case universe_action::action_type::ADD_NORMAL_JOB_CALL_ONCE:
-                        _m_shared_jobs.push_back(new ecs_job(this, cur_action->m_call_once_job, cur_action->m_custom_data, cur_action->m_free_function));
+                        _m_shared_jobs.push_back(new Job(this, cur_action->m_call_once_job, cur_action->m_custom_data, cur_action->m_free_function));
                         break;
                     case universe_action::action_type::ADD_AFTER_JOB_FOR_WORLDS:
-                        _m_shared_after_jobs.push_back(new ecs_job(this, cur_action->m_for_worlds_job, cur_action->m_custom_data, cur_action->m_free_function));
+                        _m_shared_after_jobs.push_back(new Job(this, cur_action->m_for_worlds_job, cur_action->m_custom_data, cur_action->m_free_function));
                         break;
                     case universe_action::action_type::ADD_AFTER_JOB_CALL_ONCE:
-                        _m_shared_after_jobs.push_back(new ecs_job(this, cur_action->m_call_once_job, cur_action->m_custom_data, cur_action->m_free_function));
+                        _m_shared_after_jobs.push_back(new Job(this, cur_action->m_call_once_job, cur_action->m_custom_data, cur_action->m_free_function));
                         break;
 
                     case universe_action::action_type::REMOVE_PRE_JOB_FOR_WORLDS:
                     {
-                        auto fnd = std::find_if(_m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
-                            [cur_action](ecs_job* _job)
+                        auto fnd = find_if(_m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
+                            [cur_action](Job* _job)
                             {
-                                return _job->m_job_type == ecs_job::job_type::FOR_WORLDS && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
+                                return _job->m_job_type == Job::kind::FOR_WORLDS && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
                             });
 
                         if (fnd == _m_shared_pre_jobs.end())
@@ -2276,10 +2262,10 @@ namespace jeecs::ecs
                     }
                     case universe_action::action_type::REMOVE_PRE_JOB_CALL_ONCE:
                     {
-                        auto fnd = std::find_if(_m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
-                            [cur_action](ecs_job* _job)
+                        auto fnd = find_if(_m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
+                            [cur_action](Job* _job)
                             {
-                                return _job->m_job_type == ecs_job::job_type::CALL_ONCE && _job->m_call_once_job == cur_action->m_call_once_job;
+                                return _job->m_job_type == Job::kind::CALL_ONCE && _job->m_call_once_job == cur_action->m_call_once_job;
                             });
 
                         if (fnd == _m_shared_pre_jobs.end())
@@ -2295,10 +2281,10 @@ namespace jeecs::ecs
                     }
                     case universe_action::action_type::REMOVE_NORMAL_JOB_FOR_WORLDS:
                     {
-                        auto fnd = std::find_if(_m_shared_jobs.begin(), _m_shared_jobs.end(),
-                            [cur_action](ecs_job* _job)
+                        auto fnd = find_if(_m_shared_jobs.begin(), _m_shared_jobs.end(),
+                            [cur_action](Job* _job)
                             {
-                                return _job->m_job_type == ecs_job::job_type::FOR_WORLDS && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
+                                return _job->m_job_type == Job::kind::FOR_WORLDS && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
                             });
 
                         if (fnd == _m_shared_jobs.end())
@@ -2313,10 +2299,10 @@ namespace jeecs::ecs
                     }
                     case universe_action::action_type::REMOVE_NORMAL_JOB_CALL_ONCE:
                     {
-                        auto fnd = std::find_if(_m_shared_jobs.begin(), _m_shared_jobs.end(),
-                            [cur_action](ecs_job* _job)
+                        auto fnd = find_if(_m_shared_jobs.begin(), _m_shared_jobs.end(),
+                            [cur_action](Job* _job)
                             {
-                                return _job->m_job_type == ecs_job::job_type::CALL_ONCE && _job->m_call_once_job == cur_action->m_call_once_job;
+                                return _job->m_job_type == Job::kind::CALL_ONCE && _job->m_call_once_job == cur_action->m_call_once_job;
                             });
 
                         if (fnd == _m_shared_jobs.end())
@@ -2331,10 +2317,10 @@ namespace jeecs::ecs
                     }
                     case universe_action::action_type::REMOVE_AFTER_JOB_FOR_WORLDS:
                     {
-                        auto fnd = std::find_if(_m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
-                            [cur_action](ecs_job* _job)
+                        auto fnd = find_if(_m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
+                            [cur_action](Job* _job)
                             {
-                                return _job->m_job_type == ecs_job::job_type::FOR_WORLDS && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
+                                return _job->m_job_type == Job::kind::FOR_WORLDS && _job->m_for_worlds_job == cur_action->m_for_worlds_job;
                             });
 
                         if (fnd == _m_shared_after_jobs.end())
@@ -2349,10 +2335,10 @@ namespace jeecs::ecs
                     }
                     case universe_action::action_type::REMOVE_AFTER_JOB_CALL_ONCE:
                     {
-                        auto fnd = std::find_if(_m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
-                            [cur_action](ecs_job* _job)
+                        auto fnd = find_if(_m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
+                            [cur_action](Job* _job)
                             {
-                                return _job->m_job_type == ecs_job::job_type::CALL_ONCE && _job->m_call_once_job == cur_action->m_call_once_job;
+                                return _job->m_job_type == Job::kind::CALL_ONCE && _job->m_call_once_job == cur_action->m_call_once_job;
                             });
 
                         if (fnd == _m_shared_after_jobs.end())
@@ -2389,11 +2375,11 @@ namespace jeecs::ecs
                 // 1. 完成预先任务
                 ::parallel_foreach(
                     _m_shared_pre_jobs.begin(), _m_shared_pre_jobs.end(),
-                    [this](ecs_job* shared_job)
+                    [this](Job* shared_job)
                     {
-                        if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
+                        if (shared_job->m_job_type == Job::kind::FOR_WORLDS)
                             ::parallel_foreach(_m_world_list.begin(), _m_world_list.end(),
-                                [shared_job](ecs_world* world)
+                                [shared_job](World* world)
                                 {
                                     world->execute_world_job(shared_job);
                                 });
@@ -2404,11 +2390,11 @@ namespace jeecs::ecs
                 // 2. 完成常规任务
                 ::parallel_foreach(
                     _m_shared_jobs.begin(), _m_shared_jobs.end(),
-                    [this](ecs_job* shared_job)
+                    [this](Job* shared_job)
                     {
-                        if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
+                        if (shared_job->m_job_type == Job::kind::FOR_WORLDS)
                             ::parallel_foreach(_m_world_list.begin(), _m_world_list.end(),
-                                [shared_job](ecs_world* world)
+                                [shared_job](World* world)
                                 {
                                     world->execute_world_job(shared_job);
                                 });
@@ -2435,11 +2421,11 @@ namespace jeecs::ecs
                 //      了图形资源安全和基本正确性保证；
                 ::parallel_foreach(
                     _m_shared_after_jobs.begin(), _m_shared_after_jobs.end(),
-                    [this](ecs_job* shared_job)
+                    [this](Job* shared_job)
                     {
-                        if (shared_job->m_job_type == ecs_job::job_type::FOR_WORLDS)
+                        if (shared_job->m_job_type == Job::kind::FOR_WORLDS)
                             ::parallel_foreach(_m_world_list.begin(), _m_world_list.end(),
-                                [shared_job](ecs_world* world)
+                                [shared_job](World* world)
                                 {
                                     world->execute_world_job(shared_job);
                                 });
@@ -2449,7 +2435,7 @@ namespace jeecs::ecs
             }
 
         public:
-            ecs_universe()
+            Universe()
                 : _m_universe_update_thread_stop_flag(false)
                 , _m_universe_life(1)
                 , _m_frame_current_time(0.)
@@ -2460,16 +2446,16 @@ namespace jeecs::ecs
                 , _m_max_deltatime(0.2)
                 , _m_time_scale(1.0)
             {
-                std::lock_guard g1(_m_alive_universes_mx);
+                lock_guard g1(_m_alive_universes_mx);
                 _m_alive_universes.push_back(this);
 
-                DEBUG_ARCH_LOG("Ready to create ecs_universe: %p.", this);
+                DEBUG_ARCH_LOG("Ready to create Universe: %p.", this);
 
                 // Append default jobs for updating systems.
                 je_ecs_universe_for_worlds_job_register(this,
-                    ecs_universe::default_job_for_execute_sys_update_for_worlds_in_universe, nullptr, nullptr);
+                    Universe::default_job_for_execute_sys_update_for_worlds_in_universe, nullptr, nullptr);
 
-                _m_universe_update_thread = std::thread(
+                _m_universe_update_thread = thread(
                     [this]()
                     {
                         while (true)
@@ -2477,7 +2463,7 @@ namespace jeecs::ecs
                             update();
 
                             bool exit_flag = _m_universe_update_thread_stop_flag.load(
-                                std::memory_order_relaxed);
+                                memory_order_relaxed);
 
                             if (exit_flag)
                             {
@@ -2510,11 +2496,11 @@ namespace jeecs::ecs
                         } while (_m_universe_actions.peek() != nullptr);
 
                         // Free all ecs_jobs.
-                        for (ecs_job* pre_job : _m_shared_pre_jobs)
+                        for (Job* pre_job : _m_shared_pre_jobs)
                             delete pre_job;
-                        for (ecs_job* job : _m_shared_jobs)
+                        for (Job* job : _m_shared_jobs)
                             delete job;
-                        for (ecs_job* after_job : _m_shared_after_jobs)
+                        for (Job* after_job : _m_shared_after_jobs)
                             delete after_job;
 
                         // Clear all jobs.
@@ -2529,11 +2515,11 @@ namespace jeecs::ecs
             struct callback_function_node
             {
                 callback_function_node* last;
-                std::function<void(void)> m_method;
+                function<void(void)> m_method;
             };
             basic::atomic_list<callback_function_node> m_exit_callback_list;
 
-            inline void register_exit_callback(const std::function<void(void)>& function) noexcept
+            inline void register_exit_callback(const function<void(void)>& function) noexcept
             {
                 callback_function_node* node = new callback_function_node();
                 node->m_method = function;
@@ -2643,12 +2629,12 @@ namespace jeecs::ecs
 
                 append_universe_action(action);
             }
-            ~ecs_universe()
+            ~Universe()
             {
                 do
                 {
-                    std::lock_guard g1(_m_alive_universes_mx);
-                    auto fnd = std::find(_m_alive_universes.begin(), _m_alive_universes.end(), this);
+                    lock_guard g1(_m_alive_universes_mx);
+                    auto fnd = find(_m_alive_universes.begin(), _m_alive_universes.end(), this);
                     assert(fnd != _m_alive_universes.end());
                     _m_alive_universes.erase(fnd);
                 } while (0);
@@ -2665,7 +2651,7 @@ namespace jeecs::ecs
             void stop_universe_loop() noexcept
             {
                 _m_universe_update_thread_stop_flag.store(
-                    true, std::memory_order_relaxed);
+                    true, memory_order_relaxed);
             }
         public:
             void grow_lifetime() noexcept
@@ -2701,11 +2687,11 @@ namespace jeecs::ecs
                     }
                 }
             }
-            ecs_world* create_world()
+            World* create_world()
             {
                 DEBUG_ARCH_LOG("Universe: %p want to create a world.", this);
 
-                ecs_world* new_world = new ecs_world(this);
+                World* new_world = new World(this);
 
                 universe_action* add_world_action = new universe_action;
                 add_world_action->m_type = universe_action::ADD_WORLD;
@@ -2715,7 +2701,7 @@ namespace jeecs::ecs
 
                 return new_world;
             }
-            std::vector<ecs_world*> _get_all_worlds()
+            vector<World*> _get_all_worlds()
             {
                 // NOTE: This function is designed for editor
                 return _m_world_list;
@@ -2724,8 +2710,8 @@ namespace jeecs::ecs
         public:
             static void _shutdown_all_universe()
             {
-                std::lock_guard g1(_m_alive_universes_mx);
-                std::unordered_set<ecs_universe*> shutdown_universes;
+                lock_guard g1(_m_alive_universes_mx);
+                unordered_set<Universe*> shutdown_universes;
                 for (;;)
                 {
                     bool all_universe_has_shutdown = true;
@@ -2753,12 +2739,12 @@ namespace jeecs::ecs
 
 je_game_universe_t* je_ecs_universe_create()
 {
-    return new ecs_universe();
+    return new Universe();
 }
 
 void je_ecs_universe_exit_callback_register(je_game_universe_t* universe, void (*callback)(void*), /* OPTIONAL */ void* arg)
 {
-    static_cast<ecs_universe*>(universe)->register_exit_callback(
+    static_cast<Universe*>(universe)->register_exit_callback(
         [callback, arg]()
         {
             callback(arg);
@@ -2767,22 +2753,22 @@ void je_ecs_universe_exit_callback_register(je_game_universe_t* universe, void (
 
 void je_ecs_universe_loop(je_game_universe_t* universe_instance)
 {
-    std::condition_variable exit_cv;
-    std::mutex exit_mx;
-    std::atomic_flag exit_flag = {};
+    condition_variable exit_cv;
+    mutex exit_mx;
+    atomic_flag exit_flag = {};
     exit_flag.test_and_set();
 
-    static_cast<ecs_universe*>(universe_instance)->register_exit_callback(
+    static_cast<Universe*>(universe_instance)->register_exit_callback(
         [&]()
         {
-            std::lock_guard g1(exit_mx);
+            lock_guard g1(exit_mx);
             exit_flag.clear();
             exit_cv.notify_all();
         });
 
     do
     {
-        std::unique_lock uq1(exit_mx);
+        unique_lock uq1(exit_mx);
         exit_cv.wait(uq1, [&]() -> bool
             { return !exit_flag.test_and_set(); });
     } while (0);
@@ -2790,17 +2776,17 @@ void je_ecs_universe_loop(je_game_universe_t* universe_instance)
 
 void je_ecs_universe_destroy(je_game_universe_t* universe_instance)
 {
-    delete static_cast<ecs_universe*>(universe_instance);
+    delete static_cast<Universe*>(universe_instance);
 }
 
 void je_ecs_universe_lifetime_grow(je_game_universe_t* universe_instance)
 {
-    static_cast<ecs_universe*>(universe_instance)->grow_lifetime();
+    static_cast<Universe*>(universe_instance)->grow_lifetime();
 }
 
 void je_ecs_universe_lifetime_trim(je_game_universe_t* universe_instance)
 {
-    static_cast<ecs_universe*>(universe_instance)->trim_lifetime();
+    static_cast<Universe*>(universe_instance)->trim_lifetime();
 }
 
 je_chunk_t* je_arch_chunk_get(je_archtype_t* archtype)
@@ -2815,22 +2801,22 @@ je_chunk_t* je_arch_chunk_get(je_archtype_t* archtype)
 
 je_game_world_t* je_ecs_world_create(je_game_universe_t* in_universe)
 {
-    return static_cast<ecs_universe*>(in_universe)->create_world();
+    return static_cast<Universe*>(in_universe)->create_world();
 }
 
 void je_ecs_world_destroy(je_game_world_t* world)
 {
-    static_cast<ecs_world*>(world)->get_command_buffer().close_world();
+    static_cast<World*>(world)->get_command_buffer().close_world();
 }
 
 /* OPTIONAL */ je_system_t je_ecs_world_system_instance_add(je_game_world_t* world, je_type_id_t type)
 {
-    return static_cast<ecs_world*>(world)->request_to_append_system(typing::of(type));
+    return static_cast<World*>(world)->request_to_append_system(typing::of(type));
 }
 
 /* OPTIONAL */ je_system_t je_ecs_world_system_instance_get(je_game_world_t* world, je_type_id_t type)
 {
-    auto& syss = static_cast<ecs_world*>(world)->get_system_instances();
+    auto& syss = static_cast<World*>(world)->get_system_instances();
     auto fnd = syss.find(typing::of(type));
     if (fnd == syss.end())
         return nullptr;
@@ -2839,12 +2825,12 @@ void je_ecs_world_destroy(je_game_world_t* world)
 
 void je_ecs_world_system_instance_remove(je_game_world_t* world, je_type_id_t type)
 {
-    static_cast<ecs_world*>(world)->request_to_remove_system(typing::of(type));
+    static_cast<World*>(world)->request_to_remove_system(typing::of(type));
 }
 
 void je_ecs_world_enable_set(je_game_world_t* world, bool enable)
 {
-    static_cast<ecs_world*>(world)->request_to_set_enable(enable);
+    static_cast<World*>(world)->request_to_set_enable(enable);
 }
 
 void je_ecs_world_entity_create_with_components(
@@ -2856,9 +2842,9 @@ void je_ecs_world_entity_create_with_components(
     assert(component_count != 0);
 
     const TypesSet types =
-        make_types_set(component_ids, component_count);
+        types_set::make(component_ids, component_count);
 
-    auto&& entity = static_cast<ecs_world*>(world)
+    auto&& entity = static_cast<World*>(world)
         ->create_entity_with_component(types, JE_ENTITY_STAT_READY);
 
     out_entity->_m_in_chunk = entity._m_in_chunk;
@@ -2874,9 +2860,9 @@ void je_ecs_world_prefab_create_with_components(
     assert(component_count != 0);
 
     const TypesSet types =
-        make_types_set(component_ids, component_count);
+        types_set::make(component_ids, component_count);
 
-    auto entity = static_cast<ecs_world*>(world)
+    auto entity = static_cast<World*>(world)
         ->create_entity_with_component(types, JE_ENTITY_STAT_PREFAB);
     out_entity->_m_in_chunk = entity._m_in_chunk;
     out_entity->_m_id = entity._m_id;
@@ -2888,7 +2874,7 @@ void je_ecs_world_entity_create_with_prefab(
     je_game_entity_t* out_entity,
     const je_game_entity_t* prefab)
 {
-    auto entity = static_cast<ecs_world*>(world)
+    auto entity = static_cast<World*>(world)
         ->create_entity_with_prefab(
             reinterpret_cast<const ArchType::entity*>(prefab));
     out_entity->_m_in_chunk = entity._m_in_chunk;
@@ -2918,15 +2904,15 @@ je_collected_requirements_t* je_ecs_requirements_collect(
         switch (requirement.m_kind)
         {
         case JE_COMPONENT_REQUIRE_CONTAINS:
-            types_set_insert(new_collected->m_contain_set, requirement.m_typeid);
+            types_set::insert(new_collected->m_contain_set, requirement.m_typeid);
             break;
         case JE_COMPONENT_REQUIRE_MAYNOT:
             break;
         case JE_COMPONENT_REQUIRE_EXCEPT:
-            types_set_insert(new_collected->m_except_set, requirement.m_typeid);
+            types_set::insert(new_collected->m_except_set, requirement.m_typeid);
             break;
         default /* JE_COMPONENT_REQUIRE_ANYOF_0... */:
-            types_set_insert(
+            types_set::insert(
                 new_collected->m_anyof_sets[requirement.m_kind], requirement.m_typeid);
             break;
 
@@ -2939,12 +2925,12 @@ void je_ecs_world_collection_update(
     je_game_world_t* world,
     je_requirement_collection_t* collection)
 {
-    static_cast<ecs_world*>(world)->update_collection_archinfo(collection);
+    static_cast<World*>(world)->update_collection_archinfo(collection);
 }
 
 size_t je_ecs_world_arch_change_version_get(je_game_world_t* world)
 {
-    return static_cast<ecs_world*>(world)->get_arch_change_version();
+    return static_cast<World*>(world)->get_arch_change_version();
 }
 
 /* OPTIONAL: If entity is invalid */ void* je_ecs_world_entity_component_add(
@@ -2952,7 +2938,7 @@ size_t je_ecs_world_arch_change_version_get(je_game_world_t* world)
     je_type_id_t type)
 {
     auto* entity_located_world =
-        static_cast<ecs_world*>(je_ecs_world_of_entity(entity));
+        static_cast<World*>(je_ecs_world_of_entity(entity));
     if (entity_located_world != nullptr)
         return entity_located_world->get_command_buffer().append_component(
             *reinterpret_cast<const ArchType::entity*>(entity),
@@ -2965,7 +2951,7 @@ void je_ecs_world_entity_component_remove(
     je_type_id_t type)
 {
     auto* entity_located_world =
-        static_cast<ecs_world*>(je_ecs_world_of_entity(entity));
+        static_cast<World*>(je_ecs_world_of_entity(entity));
     if (entity_located_world != nullptr)
         entity_located_world->get_command_buffer().remove_component(
             *reinterpret_cast<const ArchType::entity*>(entity),
@@ -2990,14 +2976,14 @@ void je_ecs_world_entity_destroy(
     je_game_world_t* world,
     const je_game_entity_t* entity)
 {
-    static_cast<ecs_world*>(world)
+    static_cast<World*>(world)
         ->get_command_buffer().remove_entity(
             *reinterpret_cast<const ArchType::entity*>(entity));
 }
 
 je_game_universe_t* je_ecs_world_in_universe(je_game_world_t* world)
 {
-    return static_cast<ecs_world*>(world)->get_universe();
+    return static_cast<World*>(world)->get_universe();
 }
 
 /* OPTIONAL: If entity is invalid */ je_game_world_t* je_ecs_world_of_entity(const je_game_entity_t* entity)
@@ -3014,7 +3000,7 @@ bool je_ecs_world_slice_dependence_query(
     je_type_hash_t slice_type_hash,
     je_requirement_collection_t** out_collection)
 {
-    return static_cast<ecs_world*>(world)
+    return static_cast<World*>(world)
         ->fetch_and_request_slice_cache_dependence(
             system_instance, slice_type_hash, out_collection);
 }
@@ -3022,7 +3008,7 @@ bool je_ecs_world_slice_dependence_query(
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
 je_game_world_t** je_debug_universe_worlds_get_all(je_game_universe_t* _universe)
 {
-    ecs_universe* universe = static_cast<ecs_universe*>(_universe);
+    Universe* universe = static_cast<Universe*>(_universe);
     auto result = universe->_get_all_worlds();
 
     je_game_world_t** out_result = (je_game_world_t**)je_mem_alloc(sizeof(je_game_world_t*) * (result.size() + 1));
@@ -3042,9 +3028,9 @@ void je_debug_entity_free(je_game_entity_t* _entity_list)
 
 je_game_entity_t** je_debug_world_entities_get_all(je_game_world_t* _world)
 {
-    ecs_world* world = static_cast<ecs_world*>(_world);
+    World* world = static_cast<World*>(_world);
 
-    std::vector<je_game_entity_t*> out_entities;
+    vector<je_game_entity_t*> out_entities;
 
     auto&& archs = world->_get_arch_mgr()._get_all_arch_types();
     for (auto& arch : archs)
@@ -3093,7 +3079,7 @@ const je_type_info_t** je_debug_entity_components_get_all(const je_game_entity_t
     *write_result = nullptr;
 
     // Sort by id.
-    std::sort(outresult, write_result,
+    sort(outresult, write_result,
         [](const je_type_info_t* a, const je_type_info_t* b)
         {
             return a->m_id < b->m_id;
@@ -3104,10 +3090,10 @@ const je_type_info_t** je_debug_entity_components_get_all(const je_game_entity_t
 
 const je_type_info_t** je_debug_world_systems_attached_get_all(je_game_world_t* _world)
 {
-    ecs_world* world = static_cast<ecs_world*>(_world);
+    World* world = static_cast<World*>(_world);
     auto& syss = world->get_system_instances();
 
-    std::vector<const je_type_info_t*> attached_result;
+    vector<const je_type_info_t*> attached_result;
     attached_result.reserve(syss.size());
 
     for (auto& attached_sys : syss)
@@ -3137,94 +3123,94 @@ void je_debug_entity_arch_information_get(
 
 void je_ecs_universe_pre_for_worlds_job_register(je_game_universe_t* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
-    static_cast<ecs_universe*>(universe)->register_pre_for_worlds_job(job, data, freefunc);
+    static_cast<Universe*>(universe)->register_pre_for_worlds_job(job, data, freefunc);
 }
 void je_ecs_universe_pre_call_once_job_register(je_game_universe_t* universe, je_job_call_once_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
-    static_cast<ecs_universe*>(universe)->register_pre_call_once_job(job, data, freefunc);
+    static_cast<Universe*>(universe)->register_pre_call_once_job(job, data, freefunc);
 }
 void je_ecs_universe_for_worlds_job_register(je_game_universe_t* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
-    static_cast<ecs_universe*>(universe)->register_for_worlds_job(job, data, freefunc);
+    static_cast<Universe*>(universe)->register_for_worlds_job(job, data, freefunc);
 }
 void je_ecs_universe_call_once_job_register(je_game_universe_t* universe, je_job_call_once_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
-    static_cast<ecs_universe*>(universe)->register_call_once_job(job, data, freefunc);
+    static_cast<Universe*>(universe)->register_call_once_job(job, data, freefunc);
 }
 void je_ecs_universe_after_for_worlds_job_register(je_game_universe_t* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
-    static_cast<ecs_universe*>(universe)->register_after_for_worlds_job(job, data, freefunc);
+    static_cast<Universe*>(universe)->register_after_for_worlds_job(job, data, freefunc);
 }
 void je_ecs_universe_after_call_once_job_register(je_game_universe_t* universe, je_job_call_once_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
-    static_cast<ecs_universe*>(universe)->register_after_call_once_job(job, data, freefunc);
+    static_cast<Universe*>(universe)->register_after_call_once_job(job, data, freefunc);
 }
 
 void je_ecs_universe_pre_for_worlds_job_unregister(je_game_universe_t* universe, je_job_for_worlds_t job)
 {
-    static_cast<ecs_universe*>(universe)->unregister_pre_for_worlds_job(job);
+    static_cast<Universe*>(universe)->unregister_pre_for_worlds_job(job);
 }
 void je_ecs_universe_pre_call_once_job_unregister(je_game_universe_t* universe, je_job_call_once_t job)
 {
-    static_cast<ecs_universe*>(universe)->unregister_pre_call_once_job(job);
+    static_cast<Universe*>(universe)->unregister_pre_call_once_job(job);
 }
 void je_ecs_universe_for_worlds_job_unregister(je_game_universe_t* universe, je_job_for_worlds_t job)
 {
-    static_cast<ecs_universe*>(universe)->unregister_for_worlds_job(job);
+    static_cast<Universe*>(universe)->unregister_for_worlds_job(job);
 }
 void je_ecs_universe_call_once_job_unregister(je_game_universe_t* universe, je_job_call_once_t job)
 {
-    static_cast<ecs_universe*>(universe)->unregister_call_once_job(job);
+    static_cast<Universe*>(universe)->unregister_call_once_job(job);
 }
 void je_ecs_universe_after_for_worlds_job_unregister(je_game_universe_t* universe, je_job_for_worlds_t job)
 {
-    static_cast<ecs_universe*>(universe)->unregister_after_for_worlds_job(job);
+    static_cast<Universe*>(universe)->unregister_after_for_worlds_job(job);
 }
 void je_ecs_universe_after_call_once_job_unregister(je_game_universe_t* universe, je_job_call_once_t job)
 {
-    static_cast<ecs_universe*>(universe)->unregister_after_call_once_job(job);
+    static_cast<Universe*>(universe)->unregister_after_call_once_job(job);
 }
 
 double je_ecs_universe_frame_deltatime_get(je_game_universe_t* universe)
 {
-    return static_cast<ecs_universe*>(universe)->get_frame_deltatime();
+    return static_cast<Universe*>(universe)->get_frame_deltatime();
 }
 void je_ecs_universe_frame_deltatime_set(je_game_universe_t* universe, double delta)
 {
-    static_cast<ecs_universe*>(universe)->set_frame_deltatime(delta);
+    static_cast<Universe*>(universe)->set_frame_deltatime(delta);
 }
 
 double je_ecs_universe_real_deltatime_get(je_game_universe_t* universe)
 {
-    return static_cast<ecs_universe*>(universe)->get_real_deltatime();
+    return static_cast<Universe*>(universe)->get_real_deltatime();
 }
 double je_ecs_universe_smooth_deltatime_get(je_game_universe_t* universe)
 {
-    return static_cast<ecs_universe*>(universe)->get_smooth_deltatime();
+    return static_cast<Universe*>(universe)->get_smooth_deltatime();
 }
 
 double je_ecs_universe_max_deltatime_get(je_game_universe_t* universe)
 {
-    return static_cast<ecs_universe*>(universe)->get_max_deltatime();
+    return static_cast<Universe*>(universe)->get_max_deltatime();
 }
 void je_ecs_universe_max_deltatime_set(je_game_universe_t* universe, double val)
 {
-    static_cast<ecs_universe*>(universe)->set_max_deltatime(val);
+    static_cast<Universe*>(universe)->set_max_deltatime(val);
 }
 void je_ecs_universe_time_scale_set(je_game_universe_t* universe, double scale)
 {
-    static_cast<ecs_universe*>(universe)->set_time_scale(scale);
+    static_cast<Universe*>(universe)->set_time_scale(scale);
 }
 double je_ecs_universe_time_scale_get(je_game_universe_t* universe)
 {
-    return static_cast<ecs_universe*>(universe)->get_time_scale();
+    return static_cast<Universe*>(universe)->get_time_scale();
 }
 
 ///////////////////////
 
 void je_ecs_finish()
 {
-    ecs_universe::_shutdown_all_universe();
+    Universe::_shutdown_all_universe();
 }
 
 #undef DEBUG_ARCH_LOG
