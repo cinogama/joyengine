@@ -9,18 +9,12 @@
 
 void jeal_init();
 void jegl_shader_generator_init();
-void je_extern_lib_woo_api_init();
-void je_extern_lib_3rd_pkgs_init();
-void je_extern_lib_module_init();
 
 void je_ecs_finish();
 void jeal_finish();
 void jegl_finish();
 void jetowoo_finish();
 void jegl_shader_generator_shutdown();
-void je_extern_lib_woo_api_finish();
-void je_extern_lib_3rd_pkgs_finish();
-void je_extern_lib_module_finish();
 
 struct _je_static_context_t
 {
@@ -260,10 +254,6 @@ void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
     je_file_host_path_set(exe_path.c_str());
     je_file_runtime_path_set(exe_path.c_str());
     je_fimg_default_archive_set(exe_path.c_str());
-
-    je_extern_lib_woo_api_init();
-    je_extern_lib_3rd_pkgs_init();
-    je_extern_lib_module_init();
 
     jeal_init();
 

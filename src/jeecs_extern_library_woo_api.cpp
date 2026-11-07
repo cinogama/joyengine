@@ -3,6 +3,7 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
+#include "jeecs_basic_bootup.hpp"
 
 #ifdef JE_HAVE_EXTERN_LIB_WOO_API
 #   error Cannot define JE_HAVE_EXTERN_LIB_WOO_API manually.
@@ -13,19 +14,33 @@
 #   define JE_HAVE_EXTERN_LIB_WOO_API
 #endif
 
-woort_Dylib* _je_api_lib_handle = nullptr;
-void je_extern_lib_woo_api_init()
-{
-    assert(_je_api_lib_handle == nullptr);
-#ifdef JE_HAVE_EXTERN_LIB_WOO_API
-    _je_api_lib_handle = je_extern_lib_woo_api_init_impl();
-#endif
-}
+namespace jeecs::engine_woolang_api {}
 
-void je_extern_lib_woo_api_finish()
+using namespace std;
+using namespace jeecs;
+using namespace jeecs::engine_woolang_api;
+
+namespace jeecs::engine_woolang_api
 {
+    namespace
+    {
+        woort_Dylib* engine_api_lib_handle = nullptr;
+    }
+
+    void bootup()
+    {
+        assert(engine_api_lib_handle == nullptr);
 #ifdef JE_HAVE_EXTERN_LIB_WOO_API
-    je_extern_lib_woo_api_finish_impl(_je_api_lib_handle);
+        engine_api_lib_handle = je_extern_lib_woo_api_init_impl();
 #endif
-    assert(_je_api_lib_handle != nullptr);
+    }
+
+    void shutdown()
+    {
+#ifdef JE_HAVE_EXTERN_LIB_WOO_API
+        je_extern_lib_woo_api_finish_impl(engine_api_lib_handle);
+#endif
+        assert(_je_api_lib_handle != nullptr);
+    }
+
 }
