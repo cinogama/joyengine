@@ -1,6 +1,7 @@
 #pragma once
 
 #define MODULE_LIST                     \
+    JE_MODULE_MACRO(time)               \
     JE_MODULE_MACRO(file)               \
     JE_MODULE_MACRO(log)                \
     JE_MODULE_MACRO(internal_script)

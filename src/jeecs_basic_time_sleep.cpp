@@ -1,47 +1,59 @@
 #define JE_IMPL
 #include "jeecs.hpp"
+#include "jeecs_basic_bootup.hpp"
 
 #include <chrono>
 #include <thread>
 
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
-#include <Windows.h>
+#   include <Windows.h>
 #endif
 
-namespace jeecs
-{
-    struct time_context
-    {
-        std::chrono::steady_clock::time_point _start_time =
-            std::chrono::steady_clock::now();
+namespace jeecs::time {}
 
-        // 此值应该是是操作系统最小分片时间的二分之一，单位是秒
-        // Linux平台下尚未考虑，Windows下设置了一毫秒的间隔
-        // 因此此处是0.0005
-        double _sleep_suppression = 0.0005;
-    };
-    time_context _g_time_ctx;
+using namespace std;
+using namespace std::chrono;
+using namespace jeecs;
+using namespace jeecs::time;
+
+namespace jeecs::time
+{
+    namespace
+    {
+        steady_clock::time_point epoch_point;
+        double sleep_suppression;
+    }
+
+    void bootup()
+    {
+        epoch_point = steady_clock::now();
+        sleep_suppression = 0.0005;
+    }
+    void shutdown()
+    {
+    }
 }
+
 double je_clock_sleep_suppression_get()
 {
-    return jeecs::_g_time_ctx._sleep_suppression;
+    return sleep_suppression;
 }
 
 void je_clock_sleep_suppression_set(double v)
 {
-    jeecs::_g_time_ctx._sleep_suppression = v;
+    sleep_suppression = v;
 }
 
 double je_clock_time()
 {
     using namespace std;
-    return (chrono::steady_clock::now() - jeecs::_g_time_ctx._start_time) / 1.0s;
+    return (steady_clock::now() - epoch_point) / 1.0s;
 }
 je_timestamp_ms_t je_clock_time_stamp()
 {
     using namespace std;
     return (je_timestamp_ms_t)(
-        chrono::steady_clock::now().time_since_epoch() / 1ms);
+        steady_clock::now().time_since_epoch() / 1ms);
 }
 
 void je_clock_sleep_until(double time)
@@ -62,7 +74,7 @@ void je_clock_sleep_for(double time)
     auto _result = timeBeginPeriod(1);
     assert(_result == TIMERR_NOERROR);
 #endif
-    this_thread::sleep_for((time - jeecs::_g_time_ctx._sleep_suppression) * 1s);
+    this_thread::sleep_for((time - sleep_suppression) * 1s);
 
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_WINDOWS
     _result = timeEndPeriod(1);
