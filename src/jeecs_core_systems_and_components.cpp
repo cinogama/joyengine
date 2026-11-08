@@ -78,6 +78,36 @@ const char* je_ecs_entity_name_set(const je_game_entity_t* entity, const char* n
     return "";
 }
 
+je_debug_eid_t je_debug_entity_uid_get(const je_game_entity_t* e)
+{
+    auto* eid = static_cast<jeecs::Editor::EntityId*>(
+        je_ecs_world_entity_component_get(
+            e, jeecs::typing::id<jeecs::Editor::EntityId>()));
+    if (eid == nullptr)
+    {
+        (void)je_ecs_world_entity_component_add(
+            e, jeecs::typing::id<jeecs::Editor::EntityId>());
+        return 0 /* invalid */;
+    }
+    return eid->eid;
+}
+
+void je_debug_entity_uid_set(const je_game_entity_t* e, je_debug_eid_t uid)
+{
+    auto* eid = static_cast<jeecs::Editor::EntityId*>(
+        je_ecs_world_entity_component_get(
+            e, jeecs::typing::id<jeecs::Editor::EntityId>()));
+
+    if (eid == nullptr)
+    {
+        eid = static_cast<jeecs::Editor::EntityId*>(
+            je_ecs_world_entity_component_add(
+                e, jeecs::typing::id<jeecs::Editor::EntityId>()));
+    }
+
+    eid->eid = uid;
+}
+
 WOORT_API woort_api wojeapi_deltatime(void)
 {
     if (script::current_script_game_system_instance == nullptr)

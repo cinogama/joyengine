@@ -595,7 +595,7 @@ import je::graphic;
 import je::input;
 import je::typeinfo;
 import je::towoo;
-import je::types;
+import je::towoo::types;
 )";
 
             for (auto* typeinfo : all_registed_types)
@@ -642,7 +642,7 @@ import je::types;
 
                             component_decl +=
                                 string("    public ") + registed_member->m_member_name
-                                + ": je::member<" + real_type_name + ", "
+                                + ": je::towoo::member<" + real_type_name + ", "
                                 + parser->m_woolang_typename + "::type" + ">,\n";
                         }
                         registed_member = registed_member->m_next_member;
