@@ -1,6 +1,6 @@
 #define JE_IMPL
 #include "jeecs.hpp"
-#include "jeecs_fimg_archive.hpp"
+#include "jeecs_basic_file_fimg_archive.hpp"
 #include "jeecs_basic_file.hpp"
 
 #include "wo.h"
@@ -14,158 +14,173 @@
 #include <cstring>
 #include <limits>
 
+namespace jeecs::file::fimg {};
+
 using namespace std;
 using namespace jeecs;
 using namespace jeecs::file;
+using namespace jeecs::file::fimg;
 
-namespace
+namespace jeecs::file::fimg
 {
-    using namespace jeecs::fimg;
-
-    constexpr uint8_t MANIFEST_MAGIC[8] = { 'J', 'E', '4', 'F', 'I', 'M', 'G', '\0' };
-    constexpr size_t HEADER_SIZE = 56;
-    // path_len + path + shard + offset + stored_size + size + codec
-    constexpr size_t ENTRY_MIN_SIZE = 4 + 1 + 8 + 8 + 8 + 8 + 4;
-
-    constexpr const char* DEFAULT_SKIP_EXTENSIONS =
-        "png,jpg,jpeg,gif,webp,ico,psd,pdf,"
-        "zip,jar,apk,gz,tgz,bz2,xz,7z,rar,zst,br,"
-        "mp3,ogg,oga,opus,m4a,aac,flac,"
-        "mp4,m4v,webm,mkv,avi,mov,wmv,"
-        "woff,woff2,dds,ktx,ktx2,basis";
-
-    std::string join_path(const std::string& root, const std::string& name)
+    namespace
     {
-        if (root.empty())
-            return name;
+        constexpr const char* MANIFEST_FILE_NAME = "fimg.je4index";
+        constexpr const char* SHARD_FILE_PREFIX = "fimg.";
+        constexpr const char* SHARD_FILE_EXTENSION = ".je4image";
 
-        const char last = root.back();
-        if (last == '/' || last == '\\')
-            return root + name;
+        constexpr uint32_t FORMAT_VERSION = 3;
 
-        return root + "/" + name;
-    }
+        constexpr uint32_t CODEC_STORE = 0;
+        constexpr uint32_t CODEC_DEFLATE = 1;
 
-    std::string shard_file_name(uint64_t index)
-    {
-        return std::string(SHARD_FILE_PREFIX) + std::to_string(index) + SHARD_FILE_EXTENSION;
-    }
+        constexpr size_t DEFAULT_SHARD_SIZE = 1 * 1024 * 1024;
+        constexpr size_t MAX_MANIFEST_SIZE = 64 * 1024 * 1024;
+        constexpr uint64_t MAX_FILE_COUNT = 1 * 1024 * 1024;
+        constexpr size_t COMPRESSION_BUFFER_SIZE = 64 * 1024;
 
-    std::string to_lower(std::string value)
-    {
-        for (char& ch : value)
-            ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-        return value;
-    }
+        constexpr uint8_t MANIFEST_MAGIC[8] = { 'J', 'E', '4', 'F', 'I', 'M', 'G', '\0' };
+        constexpr size_t HEADER_SIZE = 56;
+        // path_len + path + shard + offset + stored_size + size + codec
+        constexpr size_t ENTRY_MIN_SIZE = 4 + 1 + 8 + 8 + 8 + 8 + 4;
 
-    std::string extension_of(const std::string& path)
-    {
-        const size_t separator = path.find_last_of("/\\");
-        const size_t dot = path.find_last_of('.');
+        constexpr const char* DEFAULT_SKIP_EXTENSIONS =
+            "png,jpg,jpeg,gif,webp,ico,psd,pdf,"
+            "zip,jar,apk,gz,tgz,bz2,xz,7z,rar,zst,br,"
+            "mp3,ogg,oga,opus,m4a,aac,flac,"
+            "mp4,m4v,webm,mkv,avi,mov,wmv,"
+            "woff,woff2,dds,ktx,ktx2,basis";
 
-        if (dot == std::string::npos || (separator != std::string::npos && dot < separator))
-            return {};
-
-        return to_lower(path.substr(dot + 1));
-    }
-
-    bool is_extension_separator(char ch)
-    {
-        return ch == ',' || ch == ';' || ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
-    }
-
-    std::unordered_set<std::string> parse_extensions(const std::string& list)
-    {
-        std::unordered_set<std::string> result;
-        size_t cursor = 0;
-
-        while (cursor < list.size())
+        string join_path(const string& root, const string& name)
         {
-            while (cursor < list.size() && is_extension_separator(list[cursor]))
-                ++cursor;
+            if (root.empty())
+                return name;
 
-            const size_t begin = cursor;
-            while (cursor < list.size() && !is_extension_separator(list[cursor]))
-                ++cursor;
+            const char last = root.back();
+            if (last == '/' || last == '\\')
+                return root + name;
 
-            if (cursor == begin)
-                continue;
-
-            std::string extension = list.substr(begin, cursor - begin);
-            if (!extension.empty() && extension.front() == '.')
-                extension.erase(extension.begin());
-
-            if (!extension.empty())
-                result.insert(to_lower(std::move(extension)));
+            return root + "/" + name;
         }
 
-        return result;
+        string shard_file_name(uint64_t index)
+        {
+            return string(SHARD_FILE_PREFIX) + to_string(index) + SHARD_FILE_EXTENSION;
+        }
+
+        string to_lower(string value)
+        {
+            for (char& ch : value)
+                ch = static_cast<char>(tolower(static_cast<unsigned char>(ch)));
+            return value;
+        }
+
+        string extension_of(const string& path)
+        {
+            const size_t separator = path.find_last_of("/\\");
+            const size_t dot = path.find_last_of('.');
+
+            if (dot == string::npos || (separator != string::npos && dot < separator))
+                return {};
+
+            return to_lower(path.substr(dot + 1));
+        }
+
+        bool is_extension_separator(char ch)
+        {
+            return ch == ',' || ch == ';' || ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
+        }
+
+        unordered_set<string> parse_extensions(const string& list)
+        {
+            unordered_set<string> result;
+            size_t cursor = 0;
+
+            while (cursor < list.size())
+            {
+                while (cursor < list.size() && is_extension_separator(list[cursor]))
+                    ++cursor;
+
+                const size_t begin = cursor;
+                while (cursor < list.size() && !is_extension_separator(list[cursor]))
+                    ++cursor;
+
+                if (cursor == begin)
+                    continue;
+
+                string extension = list.substr(begin, cursor - begin);
+                if (!extension.empty() && extension.front() == '.')
+                    extension.erase(extension.begin());
+
+                if (!extension.empty())
+                    result.insert(to_lower(move(extension)));
+            }
+
+            return result;
+        }
+
+        void put_u32(vector<uint8_t>& out, uint32_t value)
+        {
+            out.push_back(static_cast<uint8_t>(value & 0xFF));
+            out.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+            out.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
+            out.push_back(static_cast<uint8_t>((value >> 24) & 0xFF));
+        }
+
+        void put_u64(vector<uint8_t>& out, uint64_t value)
+        {
+            for (int i = 0; i < 8; ++i)
+                out.push_back(static_cast<uint8_t>((value >> (i * 8)) & 0xFF));
+        }
+
+        bool read_u32(const uint8_t*& cursor, const uint8_t* end, uint32_t& value)
+        {
+            if (static_cast<size_t>(end - cursor) < 4)
+                return false;
+
+            value = static_cast<uint32_t>(cursor[0])
+                | (static_cast<uint32_t>(cursor[1]) << 8)
+                | (static_cast<uint32_t>(cursor[2]) << 16)
+                | (static_cast<uint32_t>(cursor[3]) << 24);
+            cursor += 4;
+            return true;
+        }
+
+        bool read_u64(const uint8_t*& cursor, const uint8_t* end, uint64_t& value)
+        {
+            if (static_cast<size_t>(end - cursor) < 8)
+                return false;
+
+            value = 0;
+            for (int i = 0; i < 8; ++i)
+                value |= static_cast<uint64_t>(cursor[i]) << (i * 8);
+            cursor += 8;
+            return true;
+        }
+
+        uint64_t crc64(const uint8_t* data, size_t length)
+        {
+            uint64_t crc = 0;
+            for (size_t i = 0; i < length; ++i)
+                crc = wo_crc64_u8(data[i], crc);
+            return crc;
+        }
     }
-
-    void put_u32(std::vector<uint8_t>& out, uint32_t value)
-    {
-        out.push_back(static_cast<uint8_t>(value & 0xFF));
-        out.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
-        out.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
-        out.push_back(static_cast<uint8_t>((value >> 24) & 0xFF));
-    }
-
-    void put_u64(std::vector<uint8_t>& out, uint64_t value)
-    {
-        for (int i = 0; i < 8; ++i)
-            out.push_back(static_cast<uint8_t>((value >> (i * 8)) & 0xFF));
-    }
-
-    bool read_u32(const uint8_t*& cursor, const uint8_t* end, uint32_t& value)
-    {
-        if (static_cast<size_t>(end - cursor) < 4)
-            return false;
-
-        value = static_cast<uint32_t>(cursor[0])
-            | (static_cast<uint32_t>(cursor[1]) << 8)
-            | (static_cast<uint32_t>(cursor[2]) << 16)
-            | (static_cast<uint32_t>(cursor[3]) << 24);
-        cursor += 4;
-        return true;
-    }
-
-    bool read_u64(const uint8_t*& cursor, const uint8_t* end, uint64_t& value)
-    {
-        if (static_cast<size_t>(end - cursor) < 8)
-            return false;
-
-        value = 0;
-        for (int i = 0; i < 8; ++i)
-            value |= static_cast<uint64_t>(cursor[i]) << (i * 8);
-        cursor += 8;
-        return true;
-    }
-
-    uint64_t crc64(const uint8_t* data, size_t length)
-    {
-        uint64_t crc = 0;
-        for (size_t i = 0; i < length; ++i)
-            crc = wo_crc64_u8(data[i], crc);
-        return crc;
-    }
-}
-
-namespace jeecs::fimg
-{
+    
     const char* default_skip_extensions()
     {
         return DEFAULT_SKIP_EXTENSIONS;
     }
 
-    archive::archive(std::string root, uint64_t shard_size)
-        : m_root(std::move(root))
+    Archive::Archive(string root, uint64_t shard_size)
+        : m_root(move(root))
         , m_shard_size(shard_size)
     {
     }
 
-    std::shared_ptr<const archive> archive::open(const std::string& root)
+    shared_ptr<const Archive> Archive::open(const string& root)
     {
-        const std::string manifest_path = join_path(root, MANIFEST_FILE_NAME);
+        const string manifest_path = join_path(root, MANIFEST_FILE_NAME);
 
         size_t manifest_size = 0;
         je_raw_file_t handle = native::open(manifest_path.c_str(), &manifest_size);
@@ -189,7 +204,7 @@ namespace jeecs::fimg
             return nullptr;
         }
 
-        std::vector<uint8_t> data(manifest_size);
+        vector<uint8_t> data(manifest_size);
         size_t read_size = 0;
         while (read_size < manifest_size)
         {
@@ -212,7 +227,7 @@ namespace jeecs::fimg
         const uint8_t* cursor = data.data();
         const uint8_t* const end = cursor + data.size();
 
-        if (std::memcmp(cursor, MANIFEST_MAGIC, sizeof(MANIFEST_MAGIC)) != 0)
+        if (memcmp(cursor, MANIFEST_MAGIC, sizeof(MANIFEST_MAGIC)) != 0)
         {
             debug::logerr("fimg manifest '%s' has an invalid magic.", manifest_path.c_str());
             return nullptr;
@@ -250,7 +265,7 @@ namespace jeecs::fimg
             debug::logerr("fimg manifest '%s' uses unknown flags.", manifest_path.c_str());
             return nullptr;
         }
-        if (shard_size == 0 || shard_size > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+        if (shard_size == 0 || shard_size > static_cast<uint64_t>(numeric_limits<int64_t>::max()))
         {
             debug::logerr("fimg manifest '%s' has an invalid shard size.", manifest_path.c_str());
             return nullptr;
@@ -273,7 +288,7 @@ namespace jeecs::fimg
             return nullptr;
         }
 
-        auto result = std::shared_ptr<archive>(new archive(root, shard_size));
+        auto result = shared_ptr<Archive>(new Archive(root, shard_size));
         result->m_entries.reserve(static_cast<size_t>(file_count));
 
         uint64_t sum_stored_size = 0;
@@ -292,16 +307,16 @@ namespace jeecs::fimg
                 debug::logerr("fimg manifest '%s' has an invalid entry path.", manifest_path.c_str());
                 return nullptr;
             }
-            if (std::memchr(cursor, 0, path_length) != nullptr)
+            if (memchr(cursor, 0, path_length) != nullptr)
             {
                 debug::logerr("fimg manifest '%s' contains a NUL in a path.", manifest_path.c_str());
                 return nullptr;
             }
 
-            std::string entry_path(reinterpret_cast<const char*>(cursor), path_length);
+            string entry_path(reinterpret_cast<const char*>(cursor), path_length);
             cursor += path_length;
 
-            entry ent;
+            Entry ent;
             if (!read_u64(cursor, end, ent.shard)
                 || !read_u64(cursor, end, ent.offset)
                 || !read_u64(cursor, end, ent.stored_size)
@@ -346,7 +361,7 @@ namespace jeecs::fimg
                 }
 
                 const uint64_t last_byte_in_shard = ent.stored_size - 1;
-                if (ent.offset > std::numeric_limits<uint64_t>::max() - last_byte_in_shard)
+                if (ent.offset > numeric_limits<uint64_t>::max() - last_byte_in_shard)
                 {
                     debug::logerr("fimg manifest '%s' has an overflowing stored size for '%s'.",
                         manifest_path.c_str(), entry_path.c_str());
@@ -354,7 +369,7 @@ namespace jeecs::fimg
                 }
 
                 const uint64_t shard_delta = (ent.offset + last_byte_in_shard) / shard_size;
-                if (ent.shard > std::numeric_limits<uint64_t>::max() - shard_delta
+                if (ent.shard > numeric_limits<uint64_t>::max() - shard_delta
                     || ent.shard + shard_delta >= shard_count)
                 {
                     debug::logerr("fimg manifest '%s' references a missing shard for '%s'.",
@@ -371,8 +386,8 @@ namespace jeecs::fimg
 
             if constexpr (sizeof(size_t) < sizeof(uint64_t))
             {
-                if (ent.size > static_cast<uint64_t>(std::numeric_limits<size_t>::max())
-                    || ent.stored_size > static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
+                if (ent.size > static_cast<uint64_t>(numeric_limits<size_t>::max())
+                    || ent.stored_size > static_cast<uint64_t>(numeric_limits<size_t>::max()))
                 {
                     debug::logerr(
                         "fimg manifest '%s' contains a file too large for this platform: '%s'.",
@@ -381,14 +396,14 @@ namespace jeecs::fimg
                 }
             }
 
-            if (sum_stored_size > std::numeric_limits<uint64_t>::max() - ent.stored_size)
+            if (sum_stored_size > numeric_limits<uint64_t>::max() - ent.stored_size)
             {
                 debug::logerr("fimg manifest '%s' has an overflowing total size.", manifest_path.c_str());
                 return nullptr;
             }
             sum_stored_size += ent.stored_size;
 
-            auto insert_result = result->m_entries.emplace(std::move(entry_path), ent);
+            auto insert_result = result->m_entries.emplace(move(entry_path), ent);
             if (!insert_result.second)
                 debug::logwarn(
                     "fimg manifest '%s' contains a duplicate path, keeping the first entry: '%s'.",
@@ -409,31 +424,31 @@ namespace jeecs::fimg
         return result;
     }
 
-    const entry* archive::find(const std::string& path) const
+    const Entry* Archive::find(const string& path) const
     {
         const auto iterator = m_entries.find(path);
         return iterator == m_entries.end() ? nullptr : &iterator->second;
     }
 
-    std::string archive::shard_path(uint64_t index) const
+    string Archive::shard_path(uint64_t index) const
     {
         return join_path(m_root, shard_file_name(index));
     }
 
-    file::file(std::shared_ptr<const archive> owner, const entry& ent)
-        : m_owner(std::move(owner))
+    File::File(shared_ptr<const Archive> owner, const Entry& ent)
+        : m_owner(move(owner))
         , m_entry(ent)
     {
         assert(m_owner != nullptr);
     }
 
-    file::~file()
+    File::~File()
     {
         end_inflater();
         close_shard();
     }
 
-    void file::close_shard()
+    void File::close_shard()
     {
         if (m_handle != nullptr)
         {
@@ -444,7 +459,7 @@ namespace jeecs::fimg
         m_open_shard = 0;
     }
 
-    bool file::ensure_shard(uint64_t shard, uint64_t offset_in_shard)
+    bool File::ensure_shard(uint64_t shard, uint64_t offset_in_shard)
     {
         if (m_failed)
             return false;
@@ -454,7 +469,7 @@ namespace jeecs::fimg
             if (m_open_shard_pos != offset_in_shard)
             {
                 if (native::seek(
-                    m_handle, 
+                    m_handle,
                     static_cast<int64_t>(offset_in_shard),
                     je_file_seek_mode_t::JE_READ_FILE_SEEK_SET) != 0)
                 {
@@ -470,7 +485,7 @@ namespace jeecs::fimg
 
         close_shard();
 
-        const std::string path = m_owner->shard_path(shard);
+        const string path = m_owner->shard_path(shard);
         size_t shard_size = 0;
         m_handle = native::open(path.c_str(), &shard_size);
         if (m_handle == nullptr)
@@ -487,7 +502,7 @@ namespace jeecs::fimg
         {
             if (native::seek(
                 m_handle,
-                static_cast<int64_t>(offset_in_shard), 
+                static_cast<int64_t>(offset_in_shard),
                 je_file_seek_mode_t::JE_READ_FILE_SEEK_SET) != 0)
             {
                 debug::logerr("failed to seek inside fimg shard '%s'.", path.c_str());
@@ -500,7 +515,7 @@ namespace jeecs::fimg
         return true;
     }
 
-    bool file::read_stored_bytes(void* buffer, size_t len)
+    bool File::read_stored_bytes(void* buffer, size_t len)
     {
         auto* out = static_cast<uint8_t*>(buffer);
         size_t done = 0;
@@ -511,7 +526,7 @@ namespace jeecs::fimg
             const uint64_t absolute = m_entry.offset + m_stored_cursor;
             const uint64_t shard = m_entry.shard + absolute / shard_size;
             const uint64_t offset_in_shard = absolute % shard_size;
-            const uint64_t chunk = std::min<uint64_t>(
+            const uint64_t chunk = min<uint64_t>(
                 static_cast<uint64_t>(len - done), shard_size - offset_in_shard);
 
             if (!ensure_shard(shard, offset_in_shard))
@@ -534,7 +549,7 @@ namespace jeecs::fimg
         return true;
     }
 
-    void file::end_inflater()
+    void File::end_inflater()
     {
         if (m_inflate_stream != nullptr)
         {
@@ -546,7 +561,7 @@ namespace jeecs::fimg
         m_stream_ended = false;
     }
 
-    void file::reset_inflater()
+    void File::reset_inflater()
     {
         end_inflater();
         m_stored_cursor = 0;
@@ -554,13 +569,13 @@ namespace jeecs::fimg
         close_shard();
     }
 
-    bool file::ensure_inflater()
+    bool File::ensure_inflater()
     {
         if (m_entry.codec == CODEC_STORE || m_inflate_initialized)
             return true;
 
-        m_inflate_stream = std::make_unique<mz_stream_s>();
-        std::memset(m_inflate_stream.get(), 0, sizeof(mz_stream_s));
+        m_inflate_stream = make_unique<mz_stream_s>();
+        memset(m_inflate_stream.get(), 0, sizeof(mz_stream_s));
 
         if (mz_inflateInit2(m_inflate_stream.get(), -MZ_DEFAULT_WINDOW_BITS) != MZ_OK)
         {
@@ -584,14 +599,14 @@ namespace jeecs::fimg
         return true;
     }
 
-    bool file::fill_input()
+    bool File::fill_input()
     {
         assert(m_inflate_stream != nullptr);
 
         if (m_stored_cursor >= m_entry.stored_size)
             return false;
 
-        const size_t want = static_cast<size_t>(std::min<uint64_t>(
+        const size_t want = static_cast<size_t>(min<uint64_t>(
             m_input_buffer.size(), m_entry.stored_size - m_stored_cursor));
 
         if (!read_stored_bytes(m_input_buffer.data(), want))
@@ -602,7 +617,7 @@ namespace jeecs::fimg
         return true;
     }
 
-    bool file::inflate_some(void* out, size_t capacity, size_t& produced)
+    bool File::inflate_some(void* out, size_t capacity, size_t& produced)
     {
         produced = 0;
         if (capacity == 0)
@@ -664,7 +679,7 @@ namespace jeecs::fimg
         return true;
     }
 
-    bool file::skip_to_position()
+    bool File::skip_to_position()
     {
         if (m_entry.codec == CODEC_STORE)
             return true;
@@ -675,7 +690,7 @@ namespace jeecs::fimg
         {
             const uint64_t remain = m_position - m_stream_position;
             const size_t want = static_cast<size_t>(
-                std::min<uint64_t>(remain, m_skip_buffer.size()));
+                min<uint64_t>(remain, m_skip_buffer.size()));
 
             size_t produced = 0;
             if (!inflate_some(m_skip_buffer.data(), want, produced))
@@ -694,18 +709,18 @@ namespace jeecs::fimg
         return true;
     }
 
-    size_t file::read_stored(void* buffer, size_t elem_size, size_t count)
+    size_t File::read_stored(void* buffer, size_t elem_size, size_t count)
     {
         const uint64_t shard_size = m_owner->shard_size();
 
         uint64_t requested_size = 0;
-        if (count > std::numeric_limits<uint64_t>::max() / elem_size)
-            requested_size = std::numeric_limits<uint64_t>::max();
+        if (count > numeric_limits<uint64_t>::max() / elem_size)
+            requested_size = numeric_limits<uint64_t>::max();
         else
             requested_size = static_cast<uint64_t>(elem_size) * static_cast<uint64_t>(count);
 
         const uint64_t remaining = m_entry.stored_size - m_position;
-        const uint64_t to_read = std::min(requested_size, remaining);
+        const uint64_t to_read = min(requested_size, remaining);
 
         auto* out = static_cast<uint8_t*>(buffer);
         uint64_t done = 0;
@@ -714,7 +729,7 @@ namespace jeecs::fimg
             const uint64_t absolute = m_entry.offset + m_position;
             const uint64_t shard = m_entry.shard + absolute / shard_size;
             const uint64_t offset_in_shard = absolute % shard_size;
-            const uint64_t chunk = std::min(to_read - done, shard_size - offset_in_shard);
+            const uint64_t chunk = min(to_read - done, shard_size - offset_in_shard);
 
             if (!ensure_shard(shard, offset_in_shard))
                 break;
@@ -739,16 +754,16 @@ namespace jeecs::fimg
         return static_cast<size_t>(done / elem_size);
     }
 
-    size_t file::read_compressed(void* buffer, size_t elem_size, size_t count)
+    size_t File::read_compressed(void* buffer, size_t elem_size, size_t count)
     {
         uint64_t requested_size = 0;
-        if (count > std::numeric_limits<uint64_t>::max() / elem_size)
-            requested_size = std::numeric_limits<uint64_t>::max();
+        if (count > numeric_limits<uint64_t>::max() / elem_size)
+            requested_size = numeric_limits<uint64_t>::max();
         else
             requested_size = static_cast<uint64_t>(elem_size) * static_cast<uint64_t>(count);
 
         const uint64_t remaining = m_entry.size - m_position;
-        const uint64_t to_read = std::min(requested_size, remaining);
+        const uint64_t to_read = min(requested_size, remaining);
 
         // Avoid inflating the rest of the entry when the caller seeks to the
         // end and then performs a zero-length read.
@@ -761,7 +776,7 @@ namespace jeecs::fimg
         {
             size_t this_time = 0;
             if (!inflate_some(out + produced,
-                    static_cast<size_t>(to_read - produced), this_time))
+                static_cast<size_t>(to_read - produced), this_time))
                 break;
 
             if (this_time == 0)
@@ -781,7 +796,7 @@ namespace jeecs::fimg
         return produced / elem_size;
     }
 
-    bool file::seek(int64_t offset, je_file_seek_mode_t origin)
+    bool File::seek(int64_t offset, je_file_seek_mode_t origin)
     {
         uint64_t base = 0;
         switch (origin)
@@ -801,8 +816,8 @@ namespace jeecs::fimg
         if (offset >= 0)
         {
             const uint64_t delta = static_cast<uint64_t>(offset);
-            target = base > std::numeric_limits<uint64_t>::max() - delta
-                ? std::numeric_limits<uint64_t>::max()
+            target = base > numeric_limits<uint64_t>::max() - delta
+                ? numeric_limits<uint64_t>::max()
                 : base + delta;
         }
         else
@@ -811,7 +826,7 @@ namespace jeecs::fimg
             target = base >= magnitude ? base - magnitude : 0;
         }
 
-        const uint64_t clamped = std::min(target, m_entry.size);
+        const uint64_t clamped = min(target, m_entry.size);
 
         if (m_entry.codec == CODEC_DEFLATE && clamped < m_stream_position)
             reset_inflater();
@@ -820,7 +835,7 @@ namespace jeecs::fimg
         return true;
     }
 
-    size_t file::read(void* buffer, size_t elem_size, size_t count)
+    size_t File::read(void* buffer, size_t elem_size, size_t count)
     {
         assert(buffer != nullptr || elem_size == 0 || count == 0);
 
@@ -833,8 +848,8 @@ namespace jeecs::fimg
         return read_compressed(buffer, elem_size, count);
     }
 
-    writer::writer(std::string root, uint64_t shard_size, writer_options options)
-        : m_root(std::move(root))
+    Writer::Writer(string root, uint64_t shard_size, WriterOptions options)
+        : m_root(move(root))
         , m_shard_size(shard_size)
         , m_compression_level(options.compression_level)
         , m_min_compress_size(options.min_compress_size)
@@ -846,29 +861,29 @@ namespace jeecs::fimg
             m_compression_level = 9;
     }
 
-    writer::~writer()
+    Writer::~Writer()
     {
         end_deflate();
         close_current_shard();
     }
 
-    std::unique_ptr<writer> writer::create(
-        std::string root, uint64_t shard_size, writer_options options)
+    unique_ptr<Writer> Writer::create(
+        string root, uint64_t shard_size, WriterOptions options)
     {
         if (shard_size == 0)
             shard_size = DEFAULT_SHARD_SIZE;
 
-        return std::unique_ptr<writer>(new writer(
-            std::move(root), shard_size, std::move(options)));
+        return unique_ptr<Writer>(new Writer(
+            move(root), shard_size, move(options)));
     }
 
-    bool writer::open_next_shard()
+    bool Writer::open_next_shard()
     {
         if (m_shard_file != nullptr)
             return true;
 
-        const std::string path = join_path(m_root, shard_file_name(m_shard_count));
-        FILE* const file = std::fopen(path.c_str(), "wb");
+        const string path = join_path(m_root, shard_file_name(m_shard_count));
+        FILE* const file = fopen(path.c_str(), "wb");
         if (file == nullptr)
         {
             debug::logerr("failed to create fimg shard '%s'.", path.c_str());
@@ -881,12 +896,12 @@ namespace jeecs::fimg
         return true;
     }
 
-    bool writer::close_current_shard()
+    bool Writer::close_current_shard()
     {
         if (m_shard_file == nullptr)
             return true;
 
-        const bool closed = std::fclose(m_shard_file) == 0;
+        const bool closed = fclose(m_shard_file) == 0;
         m_shard_file = nullptr;
 
         if (!closed)
@@ -901,7 +916,7 @@ namespace jeecs::fimg
         return true;
     }
 
-    bool writer::append(const void* data, size_t len)
+    bool Writer::append(const void* data, size_t len)
     {
         const auto* bytes = static_cast<const uint8_t*>(data);
         while (len != 0)
@@ -914,9 +929,9 @@ namespace jeecs::fimg
 
             const uint64_t free_space = m_shard_size - m_shard_offset;
             const size_t write_size = static_cast<size_t>(
-                std::min<uint64_t>(free_space, static_cast<uint64_t>(len)));
+                min<uint64_t>(free_space, static_cast<uint64_t>(len)));
 
-            if (std::fwrite(bytes, 1, write_size, m_shard_file) != write_size)
+            if (fwrite(bytes, 1, write_size, m_shard_file) != write_size)
             {
                 debug::logerr("failed to write to the current fimg shard.");
                 m_failed = true;
@@ -934,7 +949,7 @@ namespace jeecs::fimg
         return true;
     }
 
-    uint32_t writer::select_codec(const std::string& archive_path, uint64_t size) const
+    uint32_t Writer::select_codec(const string& archive_path, uint64_t size) const
     {
         if (m_compression_level == 0 || size == 0 || size < m_min_compress_size)
             return CODEC_STORE;
@@ -946,13 +961,13 @@ namespace jeecs::fimg
         return CODEC_DEFLATE;
     }
 
-    bool writer::begin_deflate()
+    bool Writer::begin_deflate()
     {
         if (m_compress_buffer.empty())
             m_compress_buffer.resize(COMPRESSION_BUFFER_SIZE);
 
-        m_deflate_stream = std::make_unique<mz_stream_s>();
-        std::memset(m_deflate_stream.get(), 0, sizeof(mz_stream_s));
+        m_deflate_stream = make_unique<mz_stream_s>();
+        memset(m_deflate_stream.get(), 0, sizeof(mz_stream_s));
 
         const int result = mz_deflateInit2(
             m_deflate_stream.get(),
@@ -975,7 +990,7 @@ namespace jeecs::fimg
         return true;
     }
 
-    void writer::end_deflate()
+    void Writer::end_deflate()
     {
         if (m_deflate_stream != nullptr)
         {
@@ -986,7 +1001,7 @@ namespace jeecs::fimg
         m_deflate_active = false;
     }
 
-    bool writer::deflate_append(const void* data, size_t len)
+    bool Writer::deflate_append(const void* data, size_t len)
     {
         assert(m_deflate_active && m_deflate_stream != nullptr);
 
@@ -995,7 +1010,7 @@ namespace jeecs::fimg
 
         while (len != 0)
         {
-            const size_t chunk_size = std::min<size_t>(len, COMPRESSION_BUFFER_SIZE);
+            const size_t chunk_size = min<size_t>(len, COMPRESSION_BUFFER_SIZE);
             stream->next_in = bytes;
             stream->avail_in = static_cast<unsigned int>(chunk_size);
 
@@ -1033,7 +1048,7 @@ namespace jeecs::fimg
         return true;
     }
 
-    bool writer::finish_deflate(uint64_t& stored_size)
+    bool Writer::finish_deflate(uint64_t& stored_size)
     {
         assert(m_deflate_active && m_deflate_stream != nullptr);
 
@@ -1083,7 +1098,7 @@ namespace jeecs::fimg
         return true;
     }
 
-    bool writer::pack_buffer(const void* data, size_t len, std::string archive_path)
+    bool Writer::pack_buffer(const void* data, size_t len, string archive_path)
     {
         if (m_failed || m_finished)
             return false;
@@ -1106,7 +1121,7 @@ namespace jeecs::fimg
 
         const uint32_t codec = select_codec(archive_path, len);
 
-        entry ent;
+        Entry ent;
         ent.shard = m_shard_count;
         ent.offset = m_shard_offset;
         ent.size = static_cast<uint64_t>(len);
@@ -1134,11 +1149,11 @@ namespace jeecs::fimg
             ent.stored_size = static_cast<uint64_t>(len);
         }
 
-        m_entries.emplace(std::move(archive_path), ent);
+        m_entries.emplace(move(archive_path), ent);
         return true;
     }
 
-    bool writer::pack_file(const std::string& source_path, std::string archive_path)
+    bool Writer::pack_file(const string& source_path, string archive_path)
     {
         if (m_failed || m_finished)
             return false;
@@ -1169,7 +1184,7 @@ namespace jeecs::fimg
 
         const uint32_t codec = select_codec(archive_path, source_size);
 
-        entry ent;
+        Entry ent;
         ent.shard = m_shard_count;
         ent.offset = m_shard_offset;
         ent.size = static_cast<uint64_t>(source_size);
@@ -1181,7 +1196,7 @@ namespace jeecs::fimg
             return false;
         }
 
-        std::vector<uint8_t> buffer(COMPRESSION_BUFFER_SIZE);
+        vector<uint8_t> buffer(COMPRESSION_BUFFER_SIZE);
         uint64_t copied = 0;
         bool succeeded = true;
 
@@ -1236,23 +1251,23 @@ namespace jeecs::fimg
             ent.stored_size = copied;
         }
 
-        m_entries.emplace(std::move(archive_path), ent);
+        m_entries.emplace(move(archive_path), ent);
         return true;
     }
 
-    bool writer::write_manifest()
+    bool Writer::write_manifest()
     {
-        std::vector<uint8_t> entries_data;
+        vector<uint8_t> entries_data;
         uint64_t total_stored_size = 0;
 
         for (const auto& [path, ent] : m_entries)
         {
-            if (path.size() > std::numeric_limits<uint32_t>::max())
+            if (path.size() > numeric_limits<uint32_t>::max())
             {
                 debug::logerr("fimg archive path is too long: '%s'.", path.c_str());
                 return false;
             }
-            if (total_stored_size > std::numeric_limits<uint64_t>::max() - ent.stored_size)
+            if (total_stored_size > numeric_limits<uint64_t>::max() - ent.stored_size)
             {
                 debug::logerr("fimg archive total size overflows.");
                 return false;
@@ -1268,7 +1283,7 @@ namespace jeecs::fimg
             put_u32(entries_data, ent.codec);
         }
 
-        std::vector<uint8_t> manifest;
+        vector<uint8_t> manifest;
         manifest.reserve(HEADER_SIZE + entries_data.size());
         manifest.insert(manifest.end(), MANIFEST_MAGIC,
             MANIFEST_MAGIC + sizeof(MANIFEST_MAGIC));
@@ -1281,18 +1296,18 @@ namespace jeecs::fimg
         put_u64(manifest, crc64(entries_data.data(), entries_data.size()));
         manifest.insert(manifest.end(), entries_data.begin(), entries_data.end());
 
-        const std::string manifest_path = join_path(m_root, MANIFEST_FILE_NAME);
+        const string manifest_path = join_path(m_root, MANIFEST_FILE_NAME);
 
-        FILE* const file = std::fopen(manifest_path.c_str(), "wb");
+        FILE* const file = fopen(manifest_path.c_str(), "wb");
         if (file == nullptr)
         {
             debug::logerr("failed to create fimg manifest '%s'.", manifest_path.c_str());
             return false;
         }
 
-        bool written = std::fwrite(manifest.data(), 1, manifest.size(), file) == manifest.size()
-            && std::fflush(file) == 0;
-        if (std::fclose(file) != 0)
+        bool written = fwrite(manifest.data(), 1, manifest.size(), file) == manifest.size()
+            && fflush(file) == 0;
+        if (fclose(file) != 0)
             written = false;
 
         if (!written)
@@ -1304,7 +1319,7 @@ namespace jeecs::fimg
         return true;
     }
 
-    bool writer::finish()
+    bool Writer::finish()
     {
         if (m_finished)
             return true;
@@ -1324,7 +1339,7 @@ namespace jeecs::fimg
         return true;
     }
 
-    void writer::abort()
+    void Writer::abort()
     {
         end_deflate();
         close_current_shard();

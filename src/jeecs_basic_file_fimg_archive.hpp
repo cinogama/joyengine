@@ -28,47 +28,33 @@ struct mz_stream_s;
 // Every entry is either stored verbatim or compressed as an independent raw
 // deflate stream. This module only depends on the standard library, miniz and
 // the platform file operations supplied by the `io` facade.
-namespace jeecs::fimg
+namespace jeecs::file::fimg
 {
-    inline constexpr const char* MANIFEST_FILE_NAME = "fimg.je4index";
-    inline constexpr const char* SHARD_FILE_PREFIX = "fimg.";
-    inline constexpr const char* SHARD_FILE_EXTENSION = ".je4image";
-
-    inline constexpr uint32_t FORMAT_VERSION = 3;
-
-    inline constexpr uint32_t CODEC_STORE = 0;
-    inline constexpr uint32_t CODEC_DEFLATE = 1;
-
-    inline constexpr size_t DEFAULT_SHARD_SIZE = 1 * 1024 * 1024;
-    inline constexpr size_t MAX_MANIFEST_SIZE = 64 * 1024 * 1024;
-    inline constexpr uint64_t MAX_FILE_COUNT = 1 * 1024 * 1024;
-    inline constexpr size_t COMPRESSION_BUFFER_SIZE = 64 * 1024;
-
     // Comma/semicolon separated default list of already-compressed extensions.
     const char* default_skip_extensions();
 
-    struct entry
+    struct Entry
     {
-        uint64_t shard = 0;
-        uint64_t offset = 0;
-        uint64_t stored_size = 0; // bytes in the shard
-        uint64_t size = 0;        // logical (uncompressed) size
-        uint32_t codec = CODEC_STORE;
+        uint64_t shard;
+        uint64_t offset;
+        uint64_t stored_size; // bytes in the shard
+        uint64_t size;        // logical (uncompressed) size
+        uint32_t codec;
     };
 
-    struct writer_options
+    struct WriterOptions
     {
-        int compression_level = 6;      // 0 = store, 1-9 = deflate
-        uint64_t min_compress_size = 64;
-        std::string skip_extensions;    // empty = no skipping
+        int compression_level;        // 0 = store, 1-9 = deflate
+        uint64_t min_compress_size;
+        std::string skip_extensions;  // empty = no skipping
     };
 
-    class archive
+    class Archive
     {
     public:
         // Returns nullptr when the manifest does not exist (a normal
         // development setup) or when it is malformed.
-        static std::shared_ptr<const archive> open(const std::string& root);
+        static std::shared_ptr<const Archive> open(const std::string& root);
 
         const std::string& root() const
         {
@@ -79,25 +65,25 @@ namespace jeecs::fimg
             return m_shard_size;
         }
 
-        const entry* find(const std::string& path) const;
+        const Entry* find(const std::string& path) const;
         std::string shard_path(uint64_t index) const;
 
     private:
-        archive(std::string root, uint64_t shard_size);
+        Archive(std::string root, uint64_t shard_size);
 
         std::string m_root;
         uint64_t m_shard_size;
-        std::unordered_map<std::string, entry> m_entries;
+        std::unordered_map<std::string, Entry> m_entries;
     };
 
-    class file
+    class File
     {
     public:
-        file(std::shared_ptr<const archive> owner, const entry& ent);
-        ~file();
+        File(std::shared_ptr<const Archive> owner, const Entry& ent);
+        ~File();
 
-        file(const file&) = delete;
-        file& operator=(const file&) = delete;
+        File(const File&) = delete;
+        File& operator=(const File&) = delete;
 
         uint64_t size() const
         {
@@ -133,8 +119,8 @@ namespace jeecs::fimg
         bool inflate_some(void* out, size_t capacity, size_t& produced);
         bool skip_to_position();
 
-        std::shared_ptr<const archive> m_owner;
-        entry m_entry;
+        std::shared_ptr<const Archive> m_owner;
+        Entry m_entry;
         uint64_t m_position = 0;
 
         uint64_t m_open_shard = 0;
@@ -151,15 +137,15 @@ namespace jeecs::fimg
         std::vector<uint8_t> m_skip_buffer;
     };
 
-    class writer
+    class Writer
     {
     public:
-        static std::unique_ptr<writer> create(
-            std::string root, uint64_t shard_size, writer_options options);
-        ~writer();
+        static std::unique_ptr<Writer> create(
+            std::string root, uint64_t shard_size, WriterOptions options);
+        ~Writer();
 
-        writer(const writer&) = delete;
-        writer& operator=(const writer&) = delete;
+        Writer(const Writer&) = delete;
+        Writer& operator=(const Writer&) = delete;
 
         bool pack_buffer(const void* data, size_t len, std::string archive_path);
         bool pack_file(const std::string& source_path, std::string archive_path);
@@ -175,7 +161,7 @@ namespace jeecs::fimg
         }
 
     private:
-        writer(std::string root, uint64_t shard_size, writer_options options);
+        Writer(std::string root, uint64_t shard_size, WriterOptions options);
 
         bool append(const void* data, size_t len);
         bool open_next_shard();
@@ -193,7 +179,7 @@ namespace jeecs::fimg
         uint64_t m_shard_count = 0;
         uint64_t m_shard_offset = 0;
         FILE* m_shard_file = nullptr;
-        std::map<std::string, entry> m_entries;
+        std::map<std::string, Entry> m_entries;
         bool m_failed = false;
         bool m_finished = false;
 
