@@ -1,5 +1,6 @@
 #define JE_IMPL
 #include "jeecs.hpp"
+#include "jeecs_basic_bootup.hpp"
 #include "jeecs_graphic_render_internal.hpp"
 #include "jeecs_cache_version.hpp"
 #include "jeecs_graphic_shader_wrapper.hpp"
@@ -641,9 +642,9 @@ namespace jeecs::graphic
     {
         vector<je_gl_context_t*> _jegl_alive_glthread_list;
         shared_mutex _jegl_alive_glthread_list_mx;
-
         je_graphic_sync_callback_func_t _jegl_sync_callback_func = nullptr;
         void* _jegl_sync_callback_arg = nullptr;
+        je_gl_graphic_api_entry_t _jegl_host_graphic_api = nullptr;
 
         enum class jegl_resouce_state
         {
@@ -652,6 +653,26 @@ namespace jeecs::graphic
             NEED_UPDATE,
             INVALID_CONTEXT,
         };
+
+        void je_default_graphic_interface_sync_func(je_gl_context_t* gthread, void*)
+        {
+            thread([=]()
+                {
+                    je_gl_sync_state_t state = je_gl_sync_state_t::JE_GL_SYNC_SHUTDOWN;
+                    for (;;)
+                    {
+                        je_graphic_sync_init(gthread, state == je_gl_sync_state_t::JE_GL_SYNC_REBOOT);
+                        do
+                        {
+                            state = je_graphic_sync_update(gthread);
+                        } while (state == je_gl_sync_state_t::JE_GL_SYNC_COMPLETE);
+
+                        if (je_graphic_sync_shutdown(gthread, state == je_gl_sync_state_t::JE_GL_SYNC_REBOOT))
+                            break;
+                    }
+                })
+                .detach();
+        }
 
         void _jegl_close_resouce_instance_by_api(
             je_gl_context_t* thread, const created_resource* res)
@@ -1220,6 +1241,61 @@ namespace jeecs::graphic
         }
     }
 
+    void bootup(int argc, char** argv)
+    {
+        _jegl_host_graphic_api = nullptr;
+
+        // Update default graphic sync funciton
+        je_graphic_sync_thread_callback_register(
+            je_default_graphic_interface_sync_func, nullptr);
+
+        for (int i = 1; i < argc - 1; ++i)
+        {
+            string config = argv[i];
+            string value = argv[i + 1];
+            if (config == "-gapi")
+            {
+                if (false)
+                    ;
+#if defined(JE_ENABLE_DX11_GAPI)
+                else if (value == "dx11")
+                    je_graphic_host_api_set(je_graphic_using_dx11_apis);
+#endif
+#if defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
+                else if (value == "gl3")
+                    je_graphic_host_api_set(je_graphic_using_opengl3_apis);
+#endif
+#if defined(JE_ENABLE_VK120_GAPI)
+                else if (value == "vk120")
+                    je_graphic_host_api_set(je_graphic_using_vk120_apis);
+#endif
+#if defined(JE_ENABLE_METAL_GAPI)
+                else if (value == "metal")
+                    je_graphic_host_api_set(je_graphic_using_metal_apis);
+#endif
+                else if (value == "none")
+                    je_graphic_host_api_set(je_graphic_using_none_apis);
+                else
+                    debug::logwarn("Unknown graphic api named: '%s'.", value.c_str());
+            }
+        }
+    }
+
+    void shutdown()
+    {
+        vector<je_gl_context_t*> shutdown_glthreads;
+        do
+        {
+            lock_guard g1(_jegl_alive_glthread_list_mx);
+            shutdown_glthreads = _jegl_alive_glthread_list;
+        } while (0);
+
+        for (auto alive_glthread : shutdown_glthreads)
+        {
+            je_graphic_thread_terminate(alive_glthread);
+        }
+    }
+
     /////////////////////////////////////////////////////////////////////////////
    // Resource preparation helpers for the render API (je_gl_command_buffer_t).
    // These perform lazy init/update on the graphic thread, but never bind or
@@ -1486,6 +1562,31 @@ namespace jeecs::graphic
 }
 
 //////////////////////////////////// API /////////////////////////////////////////
+void je_graphic_host_api_set(/* OPTIONAL: nullptr to use platform default */ je_gl_graphic_api_entry_t api)
+{
+    _jegl_host_graphic_api = api;
+}
+
+je_gl_graphic_api_entry_t je_graphic_host_api_get(void)
+{
+    if (_jegl_host_graphic_api == nullptr)
+    {
+#if defined(JE_ENABLE_DX11_GAPI)
+        return je_graphic_using_dx11_apis;
+#elif defined(JE_ENABLE_METAL_GAPI)
+        return je_graphic_using_metal_apis;
+#elif defined(JE_ENABLE_VK120_GAPI)
+        return je_graphic_using_vk120_apis;
+#elif defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
+        return je_graphic_using_opengl3_apis;
+#else
+        return je_graphic_using_none_apis;
+#endif
+    }
+    return _jegl_host_graphic_api;
+}
+
+
 void je_graphic_sync_init(je_gl_context_t* thread, bool isreboot)
 {
     if (_current_graphic_thread == nullptr)
@@ -1780,21 +1881,6 @@ void je_graphic_sync_thread_callback_register(
         debug::logfatal("Fail to start up graphic thread, abort and return nullptr.");
 
     return thread_handle;
-}
-
-void jegl_finish()
-{
-    vector<je_gl_context_t*> shutdown_glthreads;
-    do
-    {
-        lock_guard g1(_jegl_alive_glthread_list_mx);
-        shutdown_glthreads = _jegl_alive_glthread_list;
-    } while (0);
-
-    for (auto alive_glthread : shutdown_glthreads)
-    {
-        je_graphic_thread_terminate(alive_glthread);
-    }
 }
 
 void je_graphic_thread_terminate(je_gl_context_t* thread)

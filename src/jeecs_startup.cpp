@@ -8,8 +8,6 @@
 
 #include <list>
 
-void je_ecs_finish();
-void jegl_finish();
 void jetowoo_finish();
 
 struct _je_static_context_t
@@ -17,36 +15,9 @@ struct _je_static_context_t
     woort_vm* _je_global_panic_hooker = nullptr;
     woort_GCPin* _je_global_panic_hook_function;
     woort_PanicHandlerFunction _je_global_last_panic_handler;
-
-    je_gl_graphic_api_entry_t _jegl_host_graphic_api = nullptr;
-
-    jeecs::typing::type_unregister_guard* _je_unregister_guard = nullptr;
 };
 static _je_static_context_t _je_global_context;
 
-void je_graphic_host_api_set(/* OPTIONAL: nullptr to use platform default */ je_gl_graphic_api_entry_t api)
-{
-    _je_global_context._jegl_host_graphic_api = api;
-}
-
-je_gl_graphic_api_entry_t je_graphic_host_api_get(void)
-{
-    if (_je_global_context._jegl_host_graphic_api == nullptr)
-    {
-#if defined(JE_ENABLE_DX11_GAPI)
-        return je_graphic_using_dx11_apis;
-#elif defined(JE_ENABLE_METAL_GAPI)
-        return je_graphic_using_metal_apis;
-#elif defined(JE_ENABLE_VK120_GAPI)
-        return je_graphic_using_vk120_apis;
-#elif defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
-        return je_graphic_using_opengl3_apis;
-#else
-        return je_graphic_using_none_apis;
-#endif
-    }
-    return _je_global_context._jegl_host_graphic_api;
-}
 
 static woort_PanicHandler_Action _jedbg_hook_woolang_panic(
     woort_vm* vm,
@@ -156,74 +127,9 @@ WOORT_API woort_api wojeapi_editor_register_panic_hook(void)
     return woort_ret_void();
 }
 
-static void je_default_graphic_interface_sync_func(je_gl_context_t* gthread, void*)
-{
-    std::thread([=]()
-        {
-            je_gl_sync_state_t state = je_gl_sync_state_t::JE_GL_SYNC_SHUTDOWN;
-            for (;;)
-            {
-                je_graphic_sync_init(gthread, state == je_gl_sync_state_t::JE_GL_SYNC_REBOOT);
-                do
-                {
-                    state = je_graphic_sync_update(gthread);
-                } while (state == je_gl_sync_state_t::JE_GL_SYNC_COMPLETE);
-
-                if (je_graphic_sync_shutdown(gthread, state == je_gl_sync_state_t::JE_GL_SYNC_REBOOT))
-                    break;
-            }
-        })
-        .detach();
-}
-
-void _jeecs_entry_register_core_systems(
-    jeecs::typing::type_unregister_guard* guard);
-
 void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
 {
     jeecs::bootup(argc, argv);
-
-    // Update default graphic sync funciton
-    je_graphic_sync_thread_callback_register(
-        je_default_graphic_interface_sync_func, nullptr);
-
-    _je_global_context._jegl_host_graphic_api = nullptr;
-
-    for (int i = 1; i < argc - 1; ++i)
-    {
-        std::string config = argv[i];
-        std::string value = argv[i + 1];
-        if (config == "-gapi")
-        {
-            if (false)
-                ;
-#if defined(JE_ENABLE_DX11_GAPI)
-            else if (value == "dx11")
-                je_graphic_host_api_set(je_graphic_using_dx11_apis);
-#endif
-#if defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
-            else if (value == "gl3")
-                je_graphic_host_api_set(je_graphic_using_opengl3_apis);
-#endif
-#if defined(JE_ENABLE_VK120_GAPI)
-            else if (value == "vk120")
-                je_graphic_host_api_set(je_graphic_using_vk120_apis);
-#endif
-#if defined(JE_ENABLE_METAL_GAPI)
-            else if (value == "metal")
-                je_graphic_host_api_set(je_graphic_using_metal_apis);
-#endif
-            else if (value == "none")
-                je_graphic_host_api_set(je_graphic_using_none_apis);
-            else
-                jeecs::debug::logwarn("Unknown graphic api named: '%s'.", value.c_str());
-        }
-    }
-
-    assert(_je_global_context._je_unregister_guard == nullptr);
-    _je_global_context._je_unregister_guard = new jeecs::typing::type_unregister_guard();
-    jeecs::entry::module_entry(_je_global_context._je_unregister_guard);
-    _jeecs_entry_register_core_systems(_je_global_context._je_unregister_guard);
 }
 
 static /* OPTIONAL */ woort_CodeEnv* _je_open_binary_to_compile_vm(
@@ -379,11 +285,6 @@ bool je_core_main_script_entry()
 
 void je_core_finish()
 {
-    assert(_je_global_context._je_unregister_guard != nullptr);
-    jeecs::entry::module_leave(_je_global_context._je_unregister_guard);
-
-    je_ecs_finish();
-    jegl_finish();
     jetowoo_finish();
 
     if (_je_global_context._je_global_panic_hooker != nullptr)
@@ -408,9 +309,6 @@ void je_core_finish()
 
 
     jeecs::shutdown();
-
-    delete _je_global_context._je_unregister_guard;
-    _je_global_context._je_unregister_guard = nullptr;
 
     je_fimg_default_archive_set(nullptr);
 }

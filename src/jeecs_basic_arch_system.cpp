@@ -1,6 +1,7 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
+#include "jeecs_basic_bootup.hpp"
 
 #include <list>
 #include <thread>
@@ -3207,10 +3208,16 @@ double je_ecs_universe_time_scale_get(je_game_universe_t* universe)
 }
 
 ///////////////////////
-
-void je_ecs_finish()
+namespace jeecs::ecs
 {
-    Universe::_shutdown_all_universe();
+    void bootup(int, char**)
+    {
+    }
+
+    void shutdown()
+    {
+        Universe::_shutdown_all_universe();
+    }
 }
 
 #undef DEBUG_ARCH_LOG

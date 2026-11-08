@@ -10,7 +10,10 @@
     JE_MODULE_MACRO(external_woolang_packages)  \
     JE_MODULE_MACRO(external_modules)           \
     JE_MODULE_MACRO(internal_script)            \
-    JE_MODULE_MACRO(graphic::shader_wrapper)
+    JE_MODULE_MACRO(graphic::shader_wrapper)    \
+    JE_MODULE_MACRO(core_components_and_systems)\
+    JE_MODULE_MACRO(graphic)                    \
+    JE_MODULE_MACRO(ecs)
 
 namespace jeecs
 {
