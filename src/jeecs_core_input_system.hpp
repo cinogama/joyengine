@@ -8,7 +8,7 @@
 #endif
 #include "jeecs.hpp"
 
-namespace jeecs
+namespace jeecs::io
 {
     using namespace slice_requirement;
 

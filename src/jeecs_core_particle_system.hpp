@@ -3,9 +3,6 @@
 #ifndef JE_IMPL
 #   define JE_IMPL
 #endif
-#ifndef JE_ENABLE_DEBUG_API
-#   define JE_ENABLE_DEBUG_API
-#endif
 #include "jeecs.hpp"
 
 #include <vector>
@@ -14,7 +11,7 @@
 #include <algorithm>
 #include <bit>
 
-namespace jeecs
+namespace jeecs::particle
 {
     using namespace Particle;
     using namespace Renderer;
