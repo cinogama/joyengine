@@ -17,67 +17,77 @@
 // Text editor support:
 #include <TextEditor.h>
 
+namespace jeecs::graphic::gui {}
+
+using namespace std;
+using namespace jeecs;
 using namespace jeecs::graphic;
+using namespace jeecs::graphic::gui;
 
-struct key_state
+namespace jeecs::graphic::gui
 {
-    bool m_last_frame_down;
-    bool m_this_frame_down;
-};
+    namespace
+    {
+        struct KeyState
+        {
+            bool m_last_frame_down;
+            bool m_this_frame_down;
+        };
+        struct WoolangJobCoroutine
+        {
+            optional<woort_value> function_to_spawn;
+            woort_vm* work_vm;
 
-std::mutex _key_state_record_mx;
-std::unordered_map<ImGuiKey, key_state> _key_state_record;
+            WoolangJobCoroutine* last;
+        };
+        struct GUIThreadContext
+        {
+            je_gl_context_t* _jegl_context = nullptr;
+            bool _jegui_stop_work_flag = false;
 
-struct gui_wo_job_coroutine
-{
-    std::optional<woort_value> function_to_spawn;
-    woort_vm* work_vm;
+            je_gui_user_image_loader_t _jegl_get_native_texture = nullptr;
+            je_gui_user_sampler_loader_t _jegl_bind_shader_sampler_state = nullptr;
 
-    gui_wo_job_coroutine* last;
-};
-jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_job_list;
-jeecs::basic::atomic_list<gui_wo_job_coroutine> _wo_new_job_list;
+            string _jegui_imgui_config_path;
+            optional<basic::resource<graphic::shader>>
+                _jegl_rend_texture_shader;
 
-struct _jegui_thread_local_context
-{
-    je_gl_context_t* _jegl_context = nullptr;
-    bool _jegui_stop_work_flag = false;
+            // 默认帧缓冲不支持硬件 sRGB 时的全屏编码资源。着色器通过
+            // graphic::shader::load 加载，由引擎翻译为各后端代码。
+            optional<basic::resource<graphic::shader>>
+                _jegl_srgb_encode_shader;
+            optional<basic::resource<graphic::vertex>>
+                _jegl_srgb_encode_quad;
+            je_gl_pipeline_t* _jegl_srgb_encode_pipeline = nullptr;
+            je_gl_command_buffer_t* _jegl_srgb_encode_cmd = nullptr;
+        };
+        struct GUIContext
+        {
+            woort_vm* _jegui_exit_callback_handler_vm = nullptr;
+            woort_GCPin* _jegui_exit_callback_function = nullptr;
+            optional<string> _jegui_specify_font_path = nullopt;
+            optional<string> _jegui_specify_latin_font_path = nullopt;
+            size_t _jegui_specify_font_size = 18;
+        };
 
-    je_gui_user_image_loader_t _jegl_get_native_texture = nullptr;
-    je_gui_user_sampler_loader_t _jegl_bind_shader_sampler_state = nullptr;
+        GUIContext _je_gui_static_ctx;
+        thread_local GUIThreadContext _je_gui_tls_ctx;
 
-    std::string _jegui_imgui_config_path;
-    std::optional<jeecs::basic::resource<jeecs::graphic::shader>>
-        _jegl_rend_texture_shader;
+        mutex _key_state_record_mx;
+        unordered_map<ImGuiKey, KeyState> _key_state_record;
 
-    // 默认帧缓冲不支持硬件 sRGB 时的全屏编码资源。着色器通过
-    // jeecs::graphic::shader::load 加载，由引擎翻译为各后端代码。
-    std::optional<jeecs::basic::resource<jeecs::graphic::shader>>
-        _jegl_srgb_encode_shader;
-    std::optional<jeecs::basic::resource<jeecs::graphic::vertex>>
-        _jegl_srgb_encode_quad;
-    je_gl_pipeline_t* _jegl_srgb_encode_pipeline = nullptr;
-    je_gl_command_buffer_t* _jegl_srgb_encode_cmd = nullptr;
-};
-thread_local _jegui_thread_local_context _je_gui_tls_ctx;
-
-struct _jegui_static_context
-{
-    woort_vm* _jegui_exit_callback_handler_vm = nullptr;
-    woort_GCPin* _jegui_exit_callback_function = nullptr;
-    std::optional<std::string> _jegui_specify_font_path = std::nullopt;
-    std::optional<std::string> _jegui_specify_latin_font_path = std::nullopt;
-    size_t _jegui_specify_font_size = 18;
-};
-_jegui_static_context _je_gui_static_ctx;
+        basic::atomic_list<WoolangJobCoroutine> _wo_job_list;
+        basic::atomic_list<WoolangJobCoroutine> _wo_new_job_list;
+    }
+}
 
 void je_gui_backend_font_set(
     /* OPTIONAL */ const char* general_font_path,
     /* OPTIONAL */ const char* latin_font_path,
     size_t size)
 {
-    _je_gui_static_ctx._jegui_specify_font_path = general_font_path ? std::optional(general_font_path) : std::nullopt;
-    _je_gui_static_ctx._jegui_specify_latin_font_path = latin_font_path ? std::optional(latin_font_path) : std::nullopt;
+    _je_gui_static_ctx._jegui_specify_font_path = general_font_path ? optional(general_font_path) : nullopt;
+    _je_gui_static_ctx._jegui_specify_latin_font_path = latin_font_path ? optional(latin_font_path) : nullopt;
 
     _je_gui_static_ctx._jegui_specify_font_size = size;
 }
@@ -474,7 +484,7 @@ WOORT_API woort_api je_gui_draw_list_add_image(void)
 {
     ImDrawList* dlist = (ImDrawList*)woort_pointer(0);
 
-    jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(3);
+    basic::resource<graphic::texture2d>* texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(3);
     (void)prepare_texture_2d_resource((*texture)->resource());
 
     const ImVec2 uvmin = ImVec2(0.0f, 1.0f), uvmax = ImVec2(1.0f, 0.0f);
@@ -729,7 +739,7 @@ WOORT_API woort_api je_gui_listbox(void)
     int selected_item = -1;
     int max_height_item = -1;
 
-    std::vector<const char*> items((size_t)woort_vec_len(1));
+    vector<const char*> items((size_t)woort_vec_len(1));
     woort_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
@@ -752,7 +762,7 @@ WOORT_API woort_api je_gui_listbox_select(void)
     int selected_item = (int)woort_int(2);
     int max_height_item = -1;
 
-    std::vector<const char*> items((size_t)woort_vec_len(1));
+    vector<const char*> items((size_t)woort_vec_len(1));
     woort_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
@@ -775,7 +785,7 @@ WOORT_API woort_api je_gui_listbox_select_height(void)
     int selected_item = (int)woort_int(2);
     int max_height_item = (int)woort_int(3);
 
-    std::vector<const char*> items((size_t)woort_vec_len(1));
+    vector<const char*> items((size_t)woort_vec_len(1));
     woort_value elem = s + 0;
     for (size_t i = 0; i < items.size(); i++)
     {
@@ -1053,7 +1063,7 @@ WOORT_API woort_api je_gui_label_text(void)
 
 WOORT_API woort_api je_gui_image(void)
 {
-    jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
+    basic::resource<graphic::texture2d>* texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(0);
 
     (void)prepare_texture_2d_resource((*texture)->resource());
 
@@ -1081,7 +1091,7 @@ WOORT_API woort_api je_gui_image(void)
 }
 WOORT_API woort_api je_gui_image_scale(void)
 {
-    jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
+    basic::resource<graphic::texture2d>* texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(0);
 
     (void)prepare_texture_2d_resource((*texture)->resource());
 
@@ -1108,7 +1118,7 @@ WOORT_API woort_api je_gui_image_scale(void)
 }
 WOORT_API woort_api je_gui_image_size(void)
 {
-    jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
+    basic::resource<graphic::texture2d>* texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(0);
 
     (void)prepare_texture_2d_resource((*texture)->resource());
 
@@ -1136,8 +1146,8 @@ WOORT_API woort_api je_gui_image_size(void)
 
 WOORT_API woort_api je_gui_image_size_color(void)
 {
-    jeecs::basic::resource<jeecs::graphic::texture2d>* texture =
-        (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(0);
+    basic::resource<graphic::texture2d>* texture =
+        (basic::resource<graphic::texture2d> *)woort_gcpointer(0);
 
     (void)prepare_texture_2d_resource((*texture)->resource());
 
@@ -1167,7 +1177,7 @@ WOORT_API woort_api je_gui_image_size_color(void)
 WOORT_API woort_api je_gui_imagebutton(void)
 {
     woort_U8CString label = woort_string(0);
-    jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(1);
+    basic::resource<graphic::texture2d>* texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(1);
 
     (void)prepare_texture_2d_resource((*texture)->resource());
 
@@ -1199,7 +1209,7 @@ WOORT_API woort_api je_gui_imagebutton(void)
 WOORT_API woort_api je_gui_imagebutton_scale(void)
 {
     woort_U8CString label = woort_string(0);
-    jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(1);
+    basic::resource<graphic::texture2d>* texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(1);
 
     (void)prepare_texture_2d_resource((*texture)->resource());
 
@@ -1230,7 +1240,7 @@ WOORT_API woort_api je_gui_imagebutton_scale(void)
 WOORT_API woort_api je_gui_imagebutton_size(void)
 {
     woort_U8CString label = woort_string(0);
-    jeecs::basic::resource<jeecs::graphic::texture2d>* texture = (jeecs::basic::resource<jeecs::graphic::texture2d> *)woort_gcpointer(1);
+    basic::resource<graphic::texture2d>* texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(1);
 
     (void)prepare_texture_2d_resource((*texture)->resource());
 
@@ -1378,7 +1388,7 @@ WOORT_API woort_api je_gui_pop_item_width(void)
 
 WOORT_API woort_api je_gui_input_text_box(void)
 {
-    std::string buf = woort_string(1);
+    string buf = woort_string(1);
     if (ImGui::InputText(woort_string(0), &buf))
     {
         return woort_ret_option_string(buf.c_str());
@@ -1388,7 +1398,7 @@ WOORT_API woort_api je_gui_input_text_box(void)
 
 WOORT_API woort_api je_gui_input_text_attr_box(void)
 {
-    std::string buf = woort_string(1);
+    string buf = woort_string(1);
     if (ImGui::InputText(woort_string(0), &buf, (ImGuiInputFlags)woort_int(2)))
     {
         return woort_ret_option_string(buf.c_str());
@@ -1656,7 +1666,7 @@ WOORT_API woort_api je_gui_input_float4_format_box(void)
 
 WOORT_API woort_api je_gui_input_text_multiline(void)
 {
-    std::string buf = woort_string(1);
+    string buf = woort_string(1);
     bool updated = false;
 
     updated = ImGui::InputTextMultiline(woort_string(0), &buf);
@@ -1668,7 +1678,7 @@ WOORT_API woort_api je_gui_input_text_multiline(void)
 
 WOORT_API woort_api je_gui_input_text_multiline_size(void)
 {
-    std::string buf = woort_string(1);
+    string buf = woort_string(1);
     bool updated = false;
 
     updated = ImGui::InputTextMultiline(woort_string(0), &buf,
@@ -1685,7 +1695,7 @@ WOORT_API woort_api je_gui_combo(void)
     if (!woort_push_reserve(1, &s))
         return woort_ret_panic("Stack overflow.");
 
-    std::vector<const char*> combo_items;
+    vector<const char*> combo_items;
     woort_value elem = s + 0;
     for (size_t i = 0; i < woort_vec_len(1); ++i)
     {
@@ -1720,7 +1730,7 @@ WOORT_API woort_api je_gui_launch(void)
     }
     (void)woort_vm_swap(last);
 
-    gui_wo_job_coroutine* guico = new gui_wo_job_coroutine;
+    WoolangJobCoroutine* guico = new WoolangJobCoroutine;
 
     guico->function_to_spawn.emplace(fn);
     guico->work_vm = new_vm;
@@ -1743,11 +1753,11 @@ WOORT_API woort_api je_gui_get_input_state(void)
         return woort_ret_panic("Stack overflow.");
     ImGuiKey kcode = (ImGuiKey)woort_int(0);
 
-    std::lock_guard g1(_key_state_record_mx);
+    lock_guard g1(_key_state_record_mx);
     auto fnd = _key_state_record.find(kcode);
     if (fnd == _key_state_record.end())
     {
-        _key_state_record[kcode] = key_state{
+        _key_state_record[kcode] = KeyState{
             false,
             ImGui::IsKeyDown(kcode),
         };
@@ -1958,7 +1968,7 @@ WOORT_API woort_api je_gui_code_editor_language_definition_add_token_regex(void)
         static_cast<TextEditor::LanguageDefinition*>(woort_gcpointer(0));
 
     defs->mTokenRegexStrings.push_back(
-        std::make_pair(woort_string(1), (TextEditor::PaletteIndex)woort_int(2)));
+        make_pair(woort_string(1), (TextEditor::PaletteIndex)woort_int(2)));
 
     return woort_ret_void();
 }
@@ -2748,7 +2758,7 @@ WOORT_API woort_api je_gui_is_key_released(void)
 // Image() binding behaves (which uses uvmin=(0,1),uvmax=(1,0)). Callers pass
 // uv0 as the min corner and uv1 as the max corner in engine UV space.
 static inline void je_gui_image_uv_impl(
-    jeecs::basic::resource<jeecs::graphic::texture2d>* texture,
+    basic::resource<graphic::texture2d>* texture,
     float w, float h, woort_value uv0v, woort_value uv1v, ImVec4 tint, bool use_tint)
 {
     (void)prepare_texture_2d_resource((*texture)->resource());
@@ -2778,20 +2788,20 @@ static inline void je_gui_image_uv_impl(
 
 WOORT_API woort_api je_gui_image_uv(void)
 {
-    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture2d>*)woort_gcpointer(0);
+    auto* texture = (basic::resource<graphic::texture2d>*)woort_gcpointer(0);
     je_gui_image_uv_impl(texture, woort_float(1), woort_float(2), 3, 4, ImVec4(1, 1, 1, 1), false);
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_image_uv_color(void)
 {
-    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture2d>*)woort_gcpointer(0);
+    auto* texture = (basic::resource<graphic::texture2d>*)woort_gcpointer(0);
     je_gui_image_uv_impl(texture, woort_float(1), woort_float(2), 3, 4, val2colorf4(5), true);
     return woort_ret_void();
 }
 WOORT_API woort_api je_gui_imagebutton_uv(void)
 {
     woort_U8CString label = woort_string(0);
-    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture2d>*)woort_gcpointer(1);
+    auto* texture = (basic::resource<graphic::texture2d>*)woort_gcpointer(1);
     (void)prepare_texture_2d_resource((*texture)->resource());
 
     ImVec2 uv0 = val2vec2(4);
@@ -2816,7 +2826,7 @@ WOORT_API woort_api je_gui_imagebutton_uv(void)
 WOORT_API woort_api je_gui_draw_list_add_image_uv(void)
 {
     ImDrawList* dlist = (ImDrawList*)woort_pointer(0);
-    auto* texture = (jeecs::basic::resource<jeecs::graphic::texture2d>*)woort_gcpointer(5);
+    auto* texture = (basic::resource<graphic::texture2d>*)woort_gcpointer(5);
     (void)prepare_texture_2d_resource((*texture)->resource());
 
     ImVec2 uv0 = val2vec2(3);
@@ -2864,13 +2874,13 @@ void je_gui_backend_init(
     _je_gui_tls_ctx._jegl_bind_shader_sampler_state = apply_shader_sampler;
 
     _je_gui_tls_ctx._jegl_rend_texture_shader =
-        jeecs::graphic::shader::load(
+        graphic::shader::load(
             gl_context,
             "!/builtin/shader/internal/imgui_image_displayer.shader")
         .value();
 
     _je_gui_tls_ctx._jegui_imgui_config_path =
-        je_file_host_path_get() + std::string("/builtin/imgui.ini.je4cache");
+        je_file_host_path_get() + string("/builtin/imgui.ini.je4cache");
 
     _je_gui_tls_ctx._jegui_stop_work_flag = false;
     ImGui::CreateContext();
@@ -2983,12 +2993,12 @@ void jegui_commit_srgb_encode_pass(je_gl_texture_2d_t* source_texture)
 
     if (!_je_gui_tls_ctx._jegl_srgb_encode_shader.has_value())
     {
-        auto shader = jeecs::graphic::shader::load(
+        auto shader = graphic::shader::load(
             _je_gui_tls_ctx._jegl_context,
             "!/builtin/shader/internal/srgb_encode.shader");
         if (!shader.has_value())
         {
-            jeecs::debug::logfatal(
+            debug::logfatal(
                 "Failed to load the sRGB encode shader: %s",
                 "!/builtin/shader/internal/srgb_encode.shader");
             abort();
@@ -3003,7 +3013,7 @@ void jegui_commit_srgb_encode_pass(je_gl_texture_2d_t* source_texture)
                 _je_gui_tls_ctx._jegl_srgb_encode_shader.value()->resource())
             == ResourcePrepareResult::INVALID)
         {
-            jeecs::debug::logfatal(
+            debug::logfatal(
                 "Failed to prepare the sRGB encode shader.");
             abort();
         }
@@ -3015,7 +3025,7 @@ void jegui_commit_srgb_encode_pass(je_gl_texture_2d_t* source_texture)
             -1.f,  1.f, 0.f,  0.f, 1.f,
              1.f,  1.f, 0.f,  1.f, 1.f,
         };
-        auto quad = jeecs::graphic::vertex::create(
+        auto quad = graphic::vertex::create(
             JE_GL_VERTEX_TYPE_TRIANGLESTRIP,
             quad_data,
             sizeof(quad_data),
@@ -3026,7 +3036,7 @@ void jegui_commit_srgb_encode_pass(je_gl_texture_2d_t* source_texture)
             });
         if (!quad.has_value())
         {
-            jeecs::debug::logfatal(
+            debug::logfatal(
                 "Failed to create the sRGB encode full-screen quad.");
             abort();
         }
@@ -3101,9 +3111,9 @@ namespace
                 const float a = (float)((col >> 24) & 0xFF) / 255.f;
 
                 verts[i].col = IM_COL32(
-                    (int)(jeecs::math::srgb_to_linear(r) * 255.f + 0.5f),
-                    (int)(jeecs::math::srgb_to_linear(g) * 255.f + 0.5f),
-                    (int)(jeecs::math::srgb_to_linear(b) * 255.f + 0.5f),
+                    (int)(math::srgb_to_linear(r) * 255.f + 0.5f),
+                    (int)(math::srgb_to_linear(g) * 255.f + 0.5f),
+                    (int)(math::srgb_to_linear(b) * 255.f + 0.5f),
                     (int)(a * 255.f + 0.5f));
             }
         }
@@ -3165,7 +3175,7 @@ void je_gui_backend_update(
 
     do
     {
-        std::lock_guard g1(_key_state_record_mx);
+        lock_guard g1(_key_state_record_mx);
         for (auto& [k, v] : _key_state_record)
         {
             v.m_last_frame_down = v.m_this_frame_down;
@@ -3258,7 +3268,7 @@ void je_gui_backend_shutdown(bool reboot)
 bool je_gui_backend_shutdown_callback()
 {
 #ifndef NDEBUG
-    jeecs::debug::loginfo("Graphic interface has been requested to close.");
+    debug::loginfo("Graphic interface has been requested to close.");
 #endif
 
     if (_je_gui_static_ctx._jegui_exit_callback_handler_vm == nullptr)

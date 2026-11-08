@@ -513,6 +513,13 @@ namespace jeecs::woolang_runtime::towoo
 
     namespace
     {
+        enum class _jetowoo_job_type
+        {
+            PRE_UPDATE,
+            UPDATE,
+            LATE_UPDATE,
+        };
+
         // ==========================================================================
         // File-scope helpers and WOORT_API / free functions (global scope)
         // ==========================================================================
@@ -1151,13 +1158,6 @@ void je_towoo_api_update()
 // ==========================================================================
 // System job registration
 // ==========================================================================
-
-enum _jetowoo_job_type
-{
-    PRE_UPDATE,
-    UPDATE,
-    LATE_UPDATE,
-};
 
 WOORT_API woort_api wojeapi_towoo_register_system_job(void)
 {
