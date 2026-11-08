@@ -37,7 +37,7 @@ namespace jeecs::core_components_and_systems
         typing::register_type<Editor::EntityId>(&core_type_guard, "Editor::EntityId");
 
         // ===== 系统类型注册 =====
-        typing::register_type<TranslationUpdatingSystem>(&core_type_guard, "Translation::TranslationUpdatingSystem");
+        typing::register_type<translation::TranslationUpdatingSystem>(&core_type_guard, "Translation::TranslationUpdatingSystem");
         typing::register_type<physics::Physics2DUpdatingSystem>(&core_type_guard, "Physics::Physics2DUpdatingSystem");
         typing::register_type<frame_animation::FrameAnimationSystem>(&core_type_guard, "Animation::FrameAnimationSystem");
         typing::register_type<particle::ParticleSystem>(&core_type_guard, "Particle::ParticleSystem");
