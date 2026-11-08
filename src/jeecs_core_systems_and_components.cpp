@@ -14,15 +14,11 @@
 #include "jeecs_core_input_system.hpp"
 #include "jeecs_core_tilemap_system.hpp"
 
-namespace jeecs::core_components_and_systems {}
-
-using namespace std;
 using namespace jeecs;
-using namespace jeecs::core_components_and_systems;
 
 namespace jeecs::core_components_and_systems
 {
-    namespace 
+    namespace
     {
         typing::type_unregister_guard core_type_guard;
     }
@@ -31,6 +27,7 @@ namespace jeecs::core_components_and_systems
     {
         entry::module_entry(&core_type_guard);
 
+        // ===== 组件类型注册 =====
         typing::register_type<script::woovalue>(&core_type_guard, nullptr);
 
         typing::register_type<Editor::Name>(&core_type_guard, "Editor::Name");
@@ -39,23 +36,26 @@ namespace jeecs::core_components_and_systems
         typing::register_type<Editor::Invisible>(&core_type_guard, "Editor::Invisible");
         typing::register_type<Editor::EntityId>(&core_type_guard, "Editor::EntityId");
 
+        // ===== 系统类型注册 =====
         typing::register_type<TranslationUpdatingSystem>(&core_type_guard, "Translation::TranslationUpdatingSystem");
         typing::register_type<Physics2DUpdatingSystem>(&core_type_guard, "Physics::Physics2DUpdatingSystem");
-        typing::register_type<FrameAnimationSystem>(&core_type_guard, "Animation::FrameAnimationSystem");
-        typing::register_type<ParticleSystem>(&core_type_guard, "Particle::ParticleSystem");
+        typing::register_type<frame_animation::FrameAnimationSystem>(&core_type_guard, "Animation::FrameAnimationSystem");
+        typing::register_type<particle::ParticleSystem>(&core_type_guard, "Particle::ParticleSystem");
         typing::register_type<UserInterfaceGraphicPipelineSystem>(&core_type_guard, "Graphic::UserInterfaceGraphicPipelineSystem");
         typing::register_type<UnlitGraphicPipelineSystem>(&core_type_guard, "Graphic::UnlitGraphicPipelineSystem");
         typing::register_type<DeferLight2DGraphicPipelineSystem>(&core_type_guard, "Graphic::DeferLight2DGraphicPipelineSystem");
-        typing::register_type<AudioUpdatingSystem>(&core_type_guard, "Audio::AudioUpdatingSystem");
-        typing::register_type<VirtualGamepadInputSystem>(&core_type_guard, "Input::VirtualGamepadInputSystem");
-
-        typing::register_type<TilemapSystem>(&core_type_guard, "Tilemap::TilemapSystem");
+        typing::register_type<audio::AudioUpdatingSystem>(&core_type_guard, "Audio::AudioUpdatingSystem");
+        typing::register_type<io::VirtualGamepadInputSystem>(&core_type_guard, "Input::VirtualGamepadInputSystem");
+        typing::register_type<tilemap::TilemapSystem>(&core_type_guard, "Tilemap::TilemapSystem");
     }
+
     void shutdown()
     {
         entry::module_leave(&core_type_guard);
     }
 }
+
+// ===== C API：实体名称与调试 EID =====
 
 const char* je_ecs_entity_name_get(const je_game_entity_t* entity)
 {
@@ -65,6 +65,7 @@ const char* je_ecs_entity_name_get(const je_game_entity_t* entity)
         return c_name->name.c_str();
     return "";
 }
+
 const char* je_ecs_entity_name_set(const je_game_entity_t* entity, const char* name)
 {
     auto* c_name = (Editor::Name*)je_ecs_world_entity_component_get(
@@ -80,13 +81,13 @@ const char* je_ecs_entity_name_set(const je_game_entity_t* entity, const char* n
 
 je_debug_eid_t je_debug_entity_uid_get(const je_game_entity_t* e)
 {
-    auto* eid = static_cast<jeecs::Editor::EntityId*>(
+    auto* eid = static_cast<Editor::EntityId*>(
         je_ecs_world_entity_component_get(
-            e, jeecs::typing::id<jeecs::Editor::EntityId>()));
+            e, typing::id<Editor::EntityId>()));
     if (eid == nullptr)
     {
         (void)je_ecs_world_entity_component_add(
-            e, jeecs::typing::id<jeecs::Editor::EntityId>());
+            e, typing::id<Editor::EntityId>());
         return 0 /* invalid */;
     }
     return eid->eid;
@@ -94,19 +95,21 @@ je_debug_eid_t je_debug_entity_uid_get(const je_game_entity_t* e)
 
 void je_debug_entity_uid_set(const je_game_entity_t* e, je_debug_eid_t uid)
 {
-    auto* eid = static_cast<jeecs::Editor::EntityId*>(
+    auto* eid = static_cast<Editor::EntityId*>(
         je_ecs_world_entity_component_get(
-            e, jeecs::typing::id<jeecs::Editor::EntityId>()));
+            e, typing::id<Editor::EntityId>()));
 
     if (eid == nullptr)
     {
-        eid = static_cast<jeecs::Editor::EntityId*>(
+        eid = static_cast<Editor::EntityId*>(
             je_ecs_world_entity_component_add(
-                e, jeecs::typing::id<jeecs::Editor::EntityId>()));
+                e, typing::id<Editor::EntityId>()));
     }
 
     eid->eid = uid;
 }
+
+// ===== Woolang API =====
 
 WOORT_API woort_api wojeapi_deltatime(void)
 {
