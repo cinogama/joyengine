@@ -8,201 +8,97 @@
 
 #include <list>
 
-void jetowoo_finish();
+namespace jeecs::core {}
 
-struct _je_static_context_t
+using namespace std;
+using namespace jeecs;
+using namespace jeecs::core;
+
+namespace jeecs::core
 {
-    woort_vm* _je_global_panic_hooker = nullptr;
-    woort_GCPin* _je_global_panic_hook_function;
-    woort_PanicHandlerFunction _je_global_last_panic_handler;
-};
-static _je_static_context_t _je_global_context;
-
-
-static woort_PanicHandler_Action _jedbg_hook_woolang_panic(
-    woort_vm* vm,
-    const char* functionname,
-    const char* src_file,
-    int lineno,
-    int rterrcode,
-    const char* reason)
-{
-    std::string trace;
-
-    if (vm == nullptr)
-        trace = "<No vm running>";
-    else
+    namespace
     {
-        woort_VMRuntime_TraceCallstack_Iter trace_iter;
-        woort_VMRuntime_trace_begin(vm, &trace_iter);
-
-        woort_VMRuntime_TraceCallstack frame;
-        while (woort_VMRuntime_trace_next(&trace_iter, &frame))
+        /* OPTIONAL */ woort_CodeEnv* _je_open_binary_to_compile_vm(
+            const char* vpath, const void* buf, size_t buf_len)
         {
-            const char* const func = frame.m_function_name;
-            const char* const file = frame.m_file_or_lib_name;
-            const size_t line = frame.m_location_begin[0];
-            const size_t col = frame.m_location_begin[1];
+            wo_CompileErrors* cerror;
+            woort_CodeEnv* const cenv =
+                wo_load_binary(vpath, buf, buf_len, &cerror);
 
-            char buf[512];
-            if (func != nullptr && file != nullptr)
-            {
-                if (frame.m_has_location)
-                    snprintf(buf, sizeof(buf), "    at %s (%s:%zu:%zu)\n",
-                        func, file, line + 1, col + 1);
-                else
-                    snprintf(buf, sizeof(buf), "    at %s (%s)\n", func, file);
-            }
-            else if (func != nullptr)
-                snprintf(buf, sizeof(buf), "    at %s\n", func);
-            else if (file != nullptr)
-            {
-                if (frame.m_has_location && line != 0)
-                    snprintf(buf, sizeof(buf), "    at <unknown> (%s:%zu:%zu)\n",
-                        file, line + 1, col + 1);
-                else
-                    snprintf(buf, sizeof(buf), "    at <unknown> (%s)\n", file);
-            }
-            else
-                snprintf(buf, sizeof(buf), "    at <unknown>\n");
+            if (cenv != nullptr)
+                return cenv;
 
-            trace += buf;
+            debug::logwarn("Failed to load & create woolang source '%s':\n%s",
+                vpath,
+                wo_get_compile_error(cerror, WO_COLORFUL));
+
+            wo_compile_errors_free(cerror);
+            return nullptr;
+        }
+        /* OPTIONAL */ woort_CodeEnv* _je_open_file_to_compile_vm(const char* vpath)
+        {
+            auto* src_file_handle = je_file_open(vpath);
+            if (src_file_handle == nullptr)
+                return nullptr;
+
+            vector<char> src_buffer(je_file_size(src_file_handle));
+            je_file_read(src_buffer.data(), sizeof(char), src_buffer.size(), src_file_handle);
+            je_file_close(src_file_handle);
+
+            return _je_open_binary_to_compile_vm(vpath, src_buffer.data(), src_buffer.size());
+        }
+        /* OPTIONAL */ woort_CodeEnv* _je_try_open_cached_binary(const char* vpath)
+        {
+            auto* const cache = je_cache_file_load(
+                vpath,
+                EDITOR_SCRIPT_CACHE_VERSION,
+                EDITOR_SCRIPT_CACHE_VERSION);
+
+            if (cache == nullptr)
+                return nullptr;
+
+            woort_CodeEnv* cenv = nullptr;
+            do
+            {
+                je_cache_binary_document_t doc;
+                if (!je_cache_binary_document_open(cache, &doc))
+                    break;
+
+                je_cache_binary_buffer_t buf;
+                if (!je_cache_binary_document_index(
+                    &doc,
+                    "content",
+                    je_cache_binary_value_type_t::JE_CACHE_BINARY_VALUE_BUFFER,
+                    &buf))
+                    break;
+
+                size_t len = 0;
+                if (!je_cache_binary_buffer_read(nullptr, &len, &buf))
+                    break;
+
+                vector<char> src_buffer(len);
+                if (!je_cache_binary_buffer_read(src_buffer.data(), &len, &buf))
+                    break;
+
+                cenv = _je_open_binary_to_compile_vm(
+                    vpath, src_buffer.data(), src_buffer.size());
+
+            } while (0);
+
+            je_file_close(cache);
+            return cenv;
         }
     }
-
-    jeecs::debug::logerr("Woolang Panic(%x):%s (%s in %s: %u):\n%s",
-        rterrcode, reason, functionname, src_file, lineno, trace.c_str());
-
-    woort_vm* const last_vm = woort_vm_swap(_je_global_context._je_global_panic_hooker);
-    {
-        woort_value _je_global_panic_hooker_s;
-        if (!woort_push_reserve(7, &_je_global_panic_hooker_s))
-            // Stack overflow.
-            return WOORT_PANIC_HANDLER_ACTION_USE_DEFAULT_HANDLER;
-
-        woort_set_string(_je_global_panic_hooker_s + 0, src_file);
-        woort_set_int(_je_global_panic_hooker_s + 1, (woort_Int)lineno);
-        woort_set_string(_je_global_panic_hooker_s + 2, functionname);
-        woort_set_int(_je_global_panic_hooker_s + 3, (woort_Int)rterrcode);
-        woort_set_string(_je_global_panic_hooker_s + 4, reason);
-        woort_set_string(_je_global_panic_hooker_s + 5, trace.c_str());
-
-        woort_GCPin_get(
-            _je_global_panic_hooker_s + 6,
-            _je_global_context._je_global_panic_hook_function,
-            0);
-
-        const auto invoke_result =
-            woort_invoke(WOORT_IGNORE, _je_global_panic_hooker_s + 6);
-
-        woort_pop(7);
-
-        if (invoke_result != WOORT_VM_CALL_STATUS_NORMAL)
-        {
-            jeecs::debug::logwarn("Engine's woolang panic hook failed, try default.");
-            return WOORT_PANIC_HANDLER_ACTION_USE_DEFAULT_HANDLER;
-        }
-    }
-    (void)woort_vm_swap(last_vm);
-
-    return WOORT_PANIC_HANDLER_ACTION_ABORT;
-}
-
-WOORT_API woort_api wojeapi_editor_register_panic_hook(void)
-{
-    if (_je_global_context._je_global_panic_hooker != nullptr)
-        // ATTENTION: Unsafe for multi thread.
-        woort_vm_close(_je_global_context._je_global_panic_hooker);
-
-    _je_global_context._je_global_panic_hooker = woort_vm_create();
-    if (_je_global_context._je_global_panic_hooker == nullptr)
-        return woort_ret_panic("Unable to register panic hook: Failed to create vm.");
-
-    _je_global_context._je_global_panic_hook_function = woort_GCPin_create(1);
-    woort_GCPin_set(_je_global_context._je_global_panic_hook_function, 0, 0);
-
-    _je_global_context._je_global_last_panic_handler =
-        woort_set_panic_callback(&_jedbg_hook_woolang_panic);
-
-    return woort_ret_void();
 }
 
 void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
 {
-    jeecs::bootup(argc, argv);
+    bootup(argc, argv);
 }
 
-static /* OPTIONAL */ woort_CodeEnv* _je_open_binary_to_compile_vm(
-    const char* vpath, const void* buf, size_t buf_len)
+void je_core_finish()
 {
-    wo_CompileErrors* cerror;
-    woort_CodeEnv* const cenv =
-        wo_load_binary(vpath, buf, buf_len, &cerror);
-
-    if (cenv != nullptr)
-        return cenv;
-
-    jeecs::debug::logwarn("Failed to load & create woolang source '%s':\n%s",
-        vpath,
-        wo_get_compile_error(cerror, WO_COLORFUL));
-
-    wo_compile_errors_free(cerror);
-    return nullptr;
-}
-
-static /* OPTIONAL */ woort_CodeEnv* _je_open_file_to_compile_vm(const char* vpath)
-{
-    auto* src_file_handle = je_file_open(vpath);
-    if (src_file_handle == nullptr)
-        return nullptr;
-
-    std::vector<char> src_buffer(je_file_size(src_file_handle));
-    je_file_read(src_buffer.data(), sizeof(char), src_buffer.size(), src_file_handle);
-    je_file_close(src_file_handle);
-
-    return _je_open_binary_to_compile_vm(vpath, src_buffer.data(), src_buffer.size());
-}
-
-static /* OPTIONAL */ woort_CodeEnv* _je_try_open_cached_binary(const char* vpath)
-{
-    auto* const cache = je_cache_file_load(
-        vpath, 
-        EDITOR_SCRIPT_CACHE_VERSION, 
-        EDITOR_SCRIPT_CACHE_VERSION);
-
-    if (cache == nullptr)
-        return nullptr;
-
-    woort_CodeEnv* cenv = nullptr;
-    do
-    {
-        je_cache_binary_document_t doc;
-        if (!je_cache_binary_document_open(cache, &doc))
-            break;
-
-        je_cache_binary_buffer_t buf;
-        if (!je_cache_binary_document_index(
-            &doc,
-            "content",
-            je_cache_binary_value_type_t::JE_CACHE_BINARY_VALUE_BUFFER,
-            &buf))
-            break;
-
-        size_t len = 0;
-        if (!je_cache_binary_buffer_read(nullptr, &len, &buf))
-            break;
-
-        std::vector<char> src_buffer(len);
-        if (!je_cache_binary_buffer_read(src_buffer.data(), &len, &buf))
-            break;
-
-        cenv = _je_open_binary_to_compile_vm(
-            vpath, src_buffer.data(), src_buffer.size());
-
-    } while (0);
-
-    je_file_close(cache);
-    return cenv;
+    shutdown();
 }
 
 bool je_core_main_script_entry()
@@ -220,7 +116,7 @@ bool je_core_main_script_entry()
     }
     else if ((cenv = _je_open_file_to_compile_vm(
         /* NOTE: Use je_file_host_path_get() to make sure woolang can find import target correctly. */
-        (std::string(je_file_host_path_get()) + "/builtin/editor/main.wo").c_str())) != nullptr)
+        (string(je_file_host_path_get()) + "/builtin/editor/main.wo").c_str())) != nullptr)
     {
         size_t binary_length;
         void* buffer;
@@ -248,7 +144,7 @@ bool je_core_main_script_entry()
             } while (0);
 
             if (!succ)
-                jeecs::debug::logwarn("Failed to create editor script binary cache.");
+                debug::logwarn("Failed to create editor script binary cache.");
 
             if (cache != nullptr)
                 je_cache_file_close(cache, succ);
@@ -265,7 +161,7 @@ bool je_core_main_script_entry()
     {
         woort_vm* const vmm = woort_vm_create();
         if (vmm == nullptr)
-            jeecs::debug::logerr("Failed to create vm instance.");
+            debug::logerr("Failed to create vm instance.");
         else
         {
             woort_vm* const last = woort_vm_swap(vmm);
@@ -281,36 +177,6 @@ bool je_core_main_script_entry()
     }
 
     return !failed_in_start_script;
-}
-
-void je_core_finish()
-{
-    jetowoo_finish();
-
-    if (_je_global_context._je_global_panic_hooker != nullptr)
-    {
-        woort_vm_close(_je_global_context._je_global_panic_hooker);
-
-        const bool entry_tmp_gc_guard = woort_GC_sync_marking_lock();
-        {
-            woort_GCPin_destroy(_je_global_context._je_global_panic_hook_function);
-        }
-        if (entry_tmp_gc_guard)
-            woort_GC_sync_marking_unlock();
-
-        _je_global_context._je_global_panic_hooker = nullptr;
-        _je_global_context._je_global_panic_hook_function = nullptr;
-
-        (void)woort_set_panic_callback(_je_global_context._je_global_last_panic_handler);
-        _je_global_context._je_global_last_panic_handler = nullptr;
-    }
-
-    (void)woort_set_panic_callback(NULL);
-
-
-    jeecs::shutdown();
-
-    je_fimg_default_archive_set(nullptr);
 }
 
 const char* je_build_version()
@@ -335,14 +201,14 @@ const char* je_build_commit()
 {
     if (woort_Dylib* lib = woort_dylib_load(name, path, nullptr, false))
     {
-        if (auto entry = (jeecs::typing::module_entry_t)
+        if (auto entry = (typing::module_entry_t)
             woort_dylib_load_func(lib, "jeecs_module_entry"))
             entry(lib);
 
-        jeecs::debug::loginfo("Module: '%s'(%p) loaded", path, lib);
+        debug::loginfo("Module: '%s'(%p) loaded", path, lib);
         return lib;
     }
-    jeecs::debug::logerr("Failed to load module: '%s'", path);
+    debug::logerr("Failed to load module: '%s'", path);
     return nullptr;
 }
 
@@ -355,8 +221,8 @@ const char* je_build_commit()
 void je_module_unload(woort_Dylib* lib)
 {
     assert(lib);
-    if (auto leave = (jeecs::typing::module_leave_t)woort_dylib_load_func(lib, "jeecs_module_leave"))
+    if (auto leave = (typing::module_leave_t)woort_dylib_load_func(lib, "jeecs_module_leave"))
         leave();
-    jeecs::debug::loginfo("Module: '%p' request to unload.", lib);
+    debug::loginfo("Module: '%p' request to unload.", lib);
     woort_dylib_unload(lib, WOORT_DYLIB_UNREF_AND_BURY);
 }

@@ -129,6 +129,7 @@ namespace jeecs::file
     }
     void shutdown()
     {
+        je_fimg_default_archive_set(nullptr);
     }
 }
 
