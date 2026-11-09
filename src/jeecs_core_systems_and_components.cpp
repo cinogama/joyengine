@@ -41,9 +41,9 @@ namespace jeecs::core_components_and_systems
         typing::register_type<physics::Physics2DUpdatingSystem>(&core_type_guard, "Physics::Physics2DUpdatingSystem");
         typing::register_type<frame_animation::FrameAnimationSystem>(&core_type_guard, "Animation::FrameAnimationSystem");
         typing::register_type<particle::ParticleSystem>(&core_type_guard, "Particle::ParticleSystem");
-        typing::register_type<UserInterfaceGraphicPipelineSystem>(&core_type_guard, "Graphic::UserInterfaceGraphicPipelineSystem");
-        typing::register_type<UnlitGraphicPipelineSystem>(&core_type_guard, "Graphic::UnlitGraphicPipelineSystem");
-        typing::register_type<DeferLight2DGraphicPipelineSystem>(&core_type_guard, "Graphic::DeferLight2DGraphicPipelineSystem");
+        typing::register_type<graphic::UserInterfaceGraphicPipelineSystem>(&core_type_guard, "Graphic::UserInterfaceGraphicPipelineSystem");
+        typing::register_type<graphic::UnlitGraphicPipelineSystem>(&core_type_guard, "Graphic::UnlitGraphicPipelineSystem");
+        typing::register_type<graphic::DeferLight2DGraphicPipelineSystem>(&core_type_guard, "Graphic::DeferLight2DGraphicPipelineSystem");
         typing::register_type<audio::AudioUpdatingSystem>(&core_type_guard, "Audio::AudioUpdatingSystem");
         typing::register_type<io::VirtualGamepadInputSystem>(&core_type_guard, "Input::VirtualGamepadInputSystem");
         typing::register_type<tilemap::TilemapSystem>(&core_type_guard, "Tilemap::TilemapSystem");
