@@ -176,14 +176,14 @@ namespace jeecs::frame_animation
 
                 if (active_action == nullptr)
                 {
-                    // Èç¹ûÃ»ÓĞÕÒµ½¶ÔÓ¦µÄ¶¯»­£¬ÄÇÃ´ÖÕÖ¹¶¯»­
+                    // å¦‚æœæ²¡æœ‰æ‰¾åˆ°å¯¹åº”çš„åŠ¨ç”»ï¼Œé‚£ä¹ˆç»ˆæ­¢åŠ¨ç”»
                     animation.stop();
                     continue;
                 }
                 if (active_action->m_frame_count == 0)
                     continue;
 
-                // µ±Ç°¶¯»­Êı¾İÕÒµ½£¬Èç¹ûµ±Ç°Ö¡ÊÇ SIZEMAX£¬»òÕßÒÑ¾­µ½ÁËÒª¸üĞÂÖ¡µÄÊ±ºò£¬
+                // å½“å‰åŠ¨ç”»æ•°æ®æ‰¾åˆ°ï¼Œå¦‚æœå½“å‰å¸§æ˜¯ SIZEMAXï¼Œæˆ–è€…å·²ç»åˆ°äº†è¦æ›´æ–°å¸§çš„æ—¶å€™ï¼Œ
                 if (animation.m_current_frame_index == SIZE_MAX
                     || animation.m_next_update_time <= _fixed_time)
                 {
@@ -199,7 +199,7 @@ namespace jeecs::frame_animation
                     }
                     else
                     {
-                        // µ½´ïÏÂÒ»´Î¸üĞÂÊ±¼ä£¡¼ì²é¼ä¸ôÊ±¼ä£¬²¢Ìø×ªµ½¶ÔÓ¦µÄÖ¡
+                        // åˆ°è¾¾ä¸‹ä¸€æ¬¡æ›´æ–°æ—¶é—´ï¼æ£€æŸ¥é—´éš”æ—¶é—´ï¼Œå¹¶è·³è½¬åˆ°å¯¹åº”çš„å¸§
                         const size_t frame_count = active_action->m_frame_count;
                         auto delta_time_between_frams =
                             _fixed_time - animation.m_next_update_time;
@@ -216,7 +216,7 @@ namespace jeecs::frame_animation
                                 && next_frame_index == frame_count - 1)
                                 break;
 
-                            // ÔÚ´ËÓ¦ÓÃÌø¹ıÖ¡µÄdeltaframeÊı¾İ
+                            // åœ¨æ­¤åº”ç”¨è·³è¿‡å¸§çš„deltaframeæ•°æ®
                             _apply_component_and_uniform_frame_data(e, shaders, frame);
 
                             delta_time_between_frams -= frame.m_frame_time
@@ -247,7 +247,7 @@ namespace jeecs::frame_animation
                     _apply_component_and_uniform_frame_data(e, shaders, updating_frame);
 
                     if (finish_animation)
-                        // ÖÕÖ¹¶¯»­
+                        // ç»ˆæ­¢åŠ¨ç”»
                         animation.stop();
 
                     animation.m_last_speed = frame_animation.speed;
