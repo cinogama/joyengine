@@ -34,12 +34,13 @@ void je_uid_generate(je_uuid_t *uid)
     // 2 -> INC HIGH 16
     // 6 -> RANDOM
 
-    uint32_t count = uid_counter++;
-    auto tm_st = je_clock_time_stamp();
-    uid->x = (decltype(uid->x))(tm_st >> 16);
-    uid->y = (decltype(uid->y))tm_st;
+    const uint32_t count = uid_counter.fetch_add(1, memory_order::relaxed);
+    const auto tm_st = je_clock_time_stamp();
+
+    uid->x = static_cast<decltype(uid->x)>(tm_st >> 16);
+    uid->y = static_cast<decltype(uid->y)>(tm_st);
     uid->z = dist_ushort(mt);
-    uid->w = (decltype(uid->w))(count);
-    uid->u = (decltype(uid->u))(count >> 16);
+    uid->w = static_cast<decltype(uid->w)>(count);
+    uid->u = static_cast<decltype(uid->u)>(count >> 16);
     uid->v = dist_uint(mt);
 }

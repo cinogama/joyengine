@@ -43,9 +43,7 @@ namespace jeecs::type
         public:
             ~FactoryHolder()
             {
-#ifndef NDEBUG
                 debug::loginfo("Factory manager shutdown.");
-#endif
             }
 
             static FactoryHolder* holder() noexcept
