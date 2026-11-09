@@ -6,6 +6,7 @@
 
 #include <cstdio>
 #include <string>
+#include <sys/stat.h>
 
 namespace jeecs::file {}
 
