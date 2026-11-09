@@ -4,7 +4,7 @@
 #   define JE_IMPL
 #endif
 #include "jeecs.hpp"
-#include "jeecs_ui_text_renderer.hpp"
+#include "jeecs_graphic_ui_text_renderer.hpp"
 
 #include <map>
 #include <utility>
@@ -242,8 +242,8 @@ namespace jeecs::graphic
         ~UserInterfaceGraphicPipelineSystem();
 
         // ---- 文本逐字渲染运行时 ----
-        // 字形图集 + 行网格布局引擎（LRU、脏检查细节见 jeecs_ui_text_renderer.hpp）。
-        ui_text_renderer m_text_renderer;
+        // 字形图集 + 行网格布局引擎（LRU、脏检查细节见 jeecs_graphic_ui_text_renderer.hpp）。
+        ui::TextRenderer m_text_renderer;
 
         // 动态顶点缓冲池：跨帧复用；同一帧内每个运行段独占一块（command buffer
         // 记录绘制动作后图形线程滞后消费，同帧内重复更新同一缓冲会互相覆盖）。

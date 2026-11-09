@@ -343,7 +343,7 @@ namespace jeecs::graphic
         const float s = base_axis / (float)layout.key_font_px;
 
         // 文本块左下角（矩形局部像素系，原点=矩形中心）与单位矩形换算。
-        const math::vec2 block_origin = ui_text_renderer::block_origin_local(
+        const math::vec2 block_origin = ui::TextRenderer::block_origin_local(
             rect, layout, text.alignment, s);
         const float inv_size_x = 1.f / rect.size.x;
         const float inv_size_y = 1.f / rect.size.y;

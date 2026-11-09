@@ -36,9 +36,9 @@
 #include <unordered_map>
 #include <vector>
 
-namespace jeecs
+namespace jeecs::graphic::ui
 {
-    class ui_text_renderer final
+    class TextRenderer final
     {
     public:
         // 图集页边长（像素，RGBA）。典型 CJK 字体在常用字号下 1-2 页即可
@@ -562,7 +562,7 @@ namespace jeecs
             {
                 m_warned_page_eviction = true;
                 jeecs::debug::logwarn(
-                    "ui_text_renderer: glyph atlas page limit (%zu) reached, "
+                    "TextRenderer: glyph atlas page limit (%zu) reached, "
                     "evicting least-recently-used pages; heavy glyph load "
                     "may cause re-rasterization.",
                     MAX_TOTAL_PAGES);
