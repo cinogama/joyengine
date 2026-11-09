@@ -107,23 +107,3 @@ void je_debug_entity_uid_set(const je_game_entity_t* e, je_debug_eid_t uid)
 
     eid->eid = uid;
 }
-
-// ===== Woolang API =====
-
-WOORT_API woort_api wojeapi_entity_get_prefab_path(void)
-{
-    game_entity* const entity = static_cast<game_entity*>(woort_gcpointer(0));
-    if (auto* prefab = entity->get_component<Editor::Prefab>())
-        return woort_ret_option_string(prefab->path.c_str());
-    return woort_ret_option_none();
-}
-
-WOORT_API woort_api wojeapi_entity_set_prefab_path(void)
-{
-    game_entity* const entity = static_cast<game_entity*>(woort_gcpointer(0));
-    if (auto* prefab = entity->get_component<Editor::Prefab>())
-    {
-        prefab->path = woort_string(1);
-    }
-    return woort_ret_void();
-}

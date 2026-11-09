@@ -780,17 +780,3 @@ void je_animation_close(je_animation_t* animation)
     }
     return nullptr;
 }
-
-WOORT_API woort_api wojeapi_animation_cache_ensure(void)
-{
-    const string path = woort_string(0);
-
-    je_file_t* cache = je_animation_cache_open_or_create(path.c_str());
-    if (nullptr != cache)
-    {
-        je_file_close(cache);
-        return woort_ret_bool(true);
-    }
-
-    return woort_ret_bool(false);
-}

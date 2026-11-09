@@ -42,7 +42,7 @@ There is no unit-test infrastructure; `script/prebuild/test/test_prebuild.wo` on
 - C-API type naming: canonical declarations are `je_<domain>_<subject...>_t` (e.g. `je_game_entity_t`, `je_gl_shader_t`); every canonical type also has a PascalCase alias `je_<DomainSubject>` (e.g. `je_GameEntity`, `je_GlShader`). Named nested types are declared at global scope, never inside another type; split-out unscoped enums prefix their enumerators with `JE_<DOMAIN>_...` (e.g. `JE_GL_TEXTURE_FORMAT_RGBA`).
 - Graphic work goes through the abstraction in `jeecs_graphic_api_interface.hpp`; a new backend means a new `jeecs_graphic_api_impl_*.cpp` plus an imgui backend file.
 - openal-soft must stay a **shared** library (LGPL compliance) — never static-link it.
-- Woolang ↔ C++: C side implements `wojeapi_*` functions (see `src/jeecs_woolang_api.cpp`); Woolang side declares them with `extern("libjoyecs", ...)` (see `je/typeinfo.wo`).
+- Woolang ↔ C++: C side implements `wojeapi_*` functions in the per-module `src/jeecs_*_woolang_api.cpp` files (`basic/file/ecs/typeinfo/input/graphic/audio/editor/gui/tilemap`; towoo bindings live in `src/jeecs_woolang_towoo_script_basic.cpp`); Woolang side declares them with `extern("libjoyecs", ...)` (see `je/typeinfo.wo`).
 
 ## C/C++ style rules
 
