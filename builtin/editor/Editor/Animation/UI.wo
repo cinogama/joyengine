@@ -52,6 +52,10 @@ namespace JEEditor::Editor::Animation
     let RULER_H = 20.;
     let EVENT_ROW_H = 22.;
     let TRACK_ROW_H = 24.;
+    // 同一轨道同一时刻的多个关键帧横向错开显示，避免完全重叠
+    let KEY_STACK_STEP = 7.;
+    // 时刻相等判定（秒）
+    let KEY_TIME_EPS = 0.0001;
 
     // 强调色：选中行、分隔条悬停等（与帧菱形选中色一致）
     let ACCENT = (0.42, 0.62, 0.94, 1.);
@@ -62,6 +66,9 @@ namespace JEEditor::Editor::Animation
     // 上一帧时间轴画布的纵向滚动量：左侧标签栏没有独立滚动条，
     // 用同样的偏移绘制行标签，保证与右侧画布逐行对齐
     let mut s_timeline_scroll_y = 0.;
+    // 时间轴右键菜单的目标：右键时刻与命中的轨道（-1 表示不在轨道行上）
+    let mut s_ctx_time = 0.;
+    let mut s_ctx_track = -1;
 
     // 定点小数格式化：直接按整数拼小数位，避免浮点除法产生
     // 4.5999999999999996 这类显示（引擎未提供格式化 API）。
@@ -130,6 +137,51 @@ namespace JEEditor::Editor::Animation
                     state.m_selected_keys->add((ti, ki));
             none?;
         }
+    }
+
+    // 同一轨道内，比 ki 更早且时刻相同的关键帧数量：用于把同刻关键帧
+    // 横向错开绘制，并在命中检测中使用同一位置
+    func key_stack_index(track: Track, ki: int) => int
+    {
+        let t = track.m_keys[ki].m_time;
+        let mut idx = 0;
+        for (let mut j = 0; j < ki; j += 1)
+        {
+            if (math::abs(track.m_keys[j].m_time - t) <= KEY_TIME_EPS)
+                idx += 1;
+        }
+        return idx;
+    }
+    func key_screen_x(track: Track, ki: int, draw_x0: real, pps: real) => real
+    {
+        return draw_x0 + track.m_keys[ki].m_time * pps
+            + key_stack_index(track, ki) as real * KEY_STACK_STEP;
+    }
+
+    // 关键帧视图命中：返回鼠标附近最近的关键帧（考虑同刻错开后的位置）
+    func key_hit_at(
+        action: ActionData, origin: ImVec2, draw_x0: real, pps: real,
+        mp: ImVec2) => option<(int, int)>
+    {
+        let mut hit = option::none: option<(int, int)>;
+        let mut best = 999999.;
+        for (let (ti, track) : action.m_tracks->iter |> iterator::enumerate)
+        {
+            let row_mid = origin[1] + RULER_H + EVENT_ROW_H
+                + ti as real * TRACK_ROW_H + TRACK_ROW_H / 2.;
+            if (math::abs(mp[1] - row_mid) > TRACK_ROW_H / 2.)
+                continue;
+            for (let mut ki = 0; ki < track.m_keys->len; ki += 1)
+            {
+                let d = math::abs(mp[0] - key_screen_x(track, ki, draw_x0, pps));
+                if (d <= 7.5 && d < best)
+                {
+                    best = d;
+                    hit = option::value((ti, ki));
+                }
+            }
+        }
+        return hit;
     }
 
     // 预览/时间轴之间的水平分隔条：6px 命中区，拖拽改变时间轴高度。
@@ -697,6 +749,22 @@ namespace JEEditor::Editor::Animation
         do dl->AddTriangleFilled((x, y + r), (x - r, y), (x, y - r), color);
     }
 
+    // 关键帧/事件标记：选中时加光晕、放大并描白边，保证在密集轨道上醒目
+    func _draw_marker(
+        dl: DrawListT, x: real, y: real, r: real,
+        fill: Color32RGBA, selected: bool) => void
+    {
+        if (selected)
+            do dl->AddCircleFilled((x, y), r + 3.5, (245, 200, 70, 60));
+        do _draw_diamond(dl, x, y, r, fill);
+        if (selected)
+        {
+            let outline = (255, 250, 225, 235);
+            do dl->AddTriangle((x, y - r), (x + r, y), (x, y + r), outline, 1.5);
+            do dl->AddTriangle((x, y + r), (x - r, y), (x, y - r), outline, 1.5);
+        }
+    }
+
     // 供属性面板与时间轴共用的辅助：取第一条选中轨道的索引
     func selected_track_of(state: EditorState, track_count: int)=> option<int>
     {
@@ -997,6 +1065,36 @@ namespace JEEditor::Editor::Animation
             // 交互：点击空白选择/scrub；拖拽中移动所选关键帧/事件
             do handle_timeline_input(state, action, origin, draw_x0, pps, hovered);
 
+            // 右键：记录目标时刻/轨道，并把光标下的关键帧设为选中，
+            // 供“复制选中关键帧”“在此时添加关键帧”等菜单项使用
+            if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Right))
+            {
+                let rmp = GetMousePos();
+                s_ctx_time = snap_time(state,
+                    math::max(0., (rmp[0] - draw_x0) / pps));
+                s_ctx_track = -1;
+                if (state.m_timeline_mode == 0)
+                {
+                    for (let (ti, _) : action.m_tracks->iter |> iterator::enumerate)
+                    {
+                        let row_y = origin[1] + RULER_H + EVENT_ROW_H
+                            + ti as real * TRACK_ROW_H;
+                        if (rmp[1] >= row_y && rmp[1] < row_y + TRACK_ROW_H)
+                            s_ctx_track = ti;
+                    }
+                    match (key_hit_at(action, origin, draw_x0, pps, rmp))
+                    {
+                        // 右键已选中的关键帧时保留多选，便于复制整组
+                        value((ti, ki))?
+                            if (!state->is_key_selected(ti, ki))
+                                do state->select_key(ti, ki, false);
+                        none?;
+                    }
+                }
+                else
+                    s_ctx_track = selected_track_of(state, track_count)->or(-1);
+            }
+
             // 播放头跟随
             if (state.m_playing)
             {
@@ -1012,16 +1110,24 @@ namespace JEEditor::Editor::Animation
         // 画布右键菜单（空白处）
         do canvas_context_menu(state, action);
 
-        // 快捷键（时间轴窗口聚焦时）
-        if (IsWindowFocused())
+        // 快捷键（时间轴或其子窗口聚焦时）
+        if (IsWindowFocusedFlags(FocusedFlags::ImGuiFocusedFlags_ChildWindows))
         {
             if (IsKeyPressed(ImGuiKey::ImGuiKey_Space, false))
                 state.m_playing = !state.m_playing;
             if (IsKeyPressed(ImGuiKey::ImGuiKey_Delete, false))
                 do delete_selected(state, action);
-            if (IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl) && IsKeyPressed(ImGuiKey::ImGuiKey_Z, false))
+
+            let ctrl = IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl)
+                || IsKeyDown(ImGuiKey::ImGuiKey_RightCtrl);
+            if (ctrl && IsKeyPressed(ImGuiKey::ImGuiKey_C, false))
+                do copy_selected_keys(state, action);
+            if (ctrl && IsKeyPressed(ImGuiKey::ImGuiKey_V, false))
+                do paste_key_clipboard(state, action, state.m_play_time);
+
+            if (ctrl && IsKeyPressed(ImGuiKey::ImGuiKey_Z, false))
                 do state->undo;
-            if (IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl) && IsKeyPressed(ImGuiKey::ImGuiKey_Y, false))
+            if (ctrl && IsKeyPressed(ImGuiKey::ImGuiKey_Y, false))
                 do state->redo;
         }
     }
@@ -1041,8 +1147,9 @@ namespace JEEditor::Editor::Animation
             let selected = ei == state.m_selected_event;
             do dl->AddLine((x, row_y), (x, row_y + EVENT_ROW_H),
                 (170, 120, 60, 255), 1.);
-            do _draw_diamond(dl, x, row_y + EVENT_ROW_H / 2., 5.,
-                selected ? SELECT_KEY_COLOR | (200, 150, 90, 255));
+            do _draw_marker(dl, x, row_y + EVENT_ROW_H / 2.,
+                selected ? 6.5 | 5., selected ? SELECT_KEY_COLOR | (200, 150, 90, 255),
+                selected);
             do dl->AddText((x + 8., row_y + 4.), (170, 140, 100, 255),
                 e.m_name->sub_len(0, 16));
 
@@ -1114,9 +1221,11 @@ namespace JEEditor::Editor::Animation
 
             for (let (ki, key) : track.m_keys->iter |> iterator::enumerate)
             {
-                let x = draw_x0 + key.m_time * pps;
-                do _draw_diamond(dl, x, row_y + TRACK_ROW_H / 2., 5.5,
-                    key_color(key.m_interp, state->is_key_selected(ti, ki)));
+                let selected = state->is_key_selected(ti, ki);
+                let x = key_screen_x(track, ki, draw_x0, pps);
+                do _draw_marker(dl, x, row_y + TRACK_ROW_H / 2.,
+                    selected ? 7. | 5.5, key_color(key.m_interp, selected),
+                    selected);
             }
         }
 
@@ -1257,10 +1366,11 @@ namespace JEEditor::Editor::Animation
         // 切线手柄与关键帧圆点（选中关键帧显示手柄）
         for (let (ki, key) : track.m_keys->iter |> iterator::enumerate)
         {
-            let x = draw_x0 + key.m_time * pps;
+            let x = key_screen_x(track, ki, draw_x0, pps);
             let v = key.m_value->channel(channel);
             let y = to_y(v);
-            if (state->is_key_selected(ti, ki))
+            let selected = state->is_key_selected(ti, ki);
+            if (selected)
             {
                 let d_prev = ki > 0 ? key.m_time - track.m_keys[ki - 1].m_time | 0.4;
                 let d_next = ki + 1 < n ? track.m_keys[ki + 1].m_time - key.m_time | 0.4;
@@ -1272,9 +1382,14 @@ namespace JEEditor::Editor::Animation
                 do dl->AddCircle(hin, 4., (220, 220, 220, 255), 1.);
                 do dl->AddCircle(hout, 4., (220, 220, 220, 255), 1.);
             }
-            do dl->AddCircleFilled((x, y), 5.5,
-                state->is_key_selected(ti, ki)
-                ? (245, 200, 70, 255) | (230, 230, 230, 255));
+            if (selected)
+            {
+                do dl->AddCircleFilled((x, y), 10., (245, 200, 70, 55));
+                do dl->AddCircleFilled((x, y), 7., SELECT_KEY_COLOR);
+                do dl->AddCircle((x, y), 7., (255, 250, 225, 235), 1.5);
+            }
+            else
+                do dl->AddCircleFilled((x, y), 5.5, (230, 230, 230, 255));
         }
 
         // 通道切换标签
@@ -1392,7 +1507,7 @@ namespace JEEditor::Editor::Animation
         {
             if (!state->is_key_selected(track_idx, ki))
                 continue;
-            let x = draw_x0 + key.m_time * pps;
+            let x = key_screen_x(track, ki, draw_x0, pps);
             let v = key.m_value->channel(channel);
             let d_prev = ki > 0 ? key.m_time - track.m_keys[ki - 1].m_time | 0.4;
             let d_next = ki + 1 < n ? track.m_keys[ki + 1].m_time - key.m_time | 0.4;
@@ -1437,12 +1552,25 @@ namespace JEEditor::Editor::Animation
         }
 
         // 2) 关键帧命中：选中并开始拖拽（时间 + 当前通道的值）
+        let mut key_hit = option::none: option<int>;
+        let mut key_best = 999999.;
         for (let (ki, key) : track.m_keys->iter |> iterator::enumerate)
         {
-            let x = draw_x0 + key.m_time * pps;
+            let x = key_screen_x(track, ki, draw_x0, pps);
             let y = to_y(key.m_value->channel(channel));
-            if (math::abs(mp[0] - x) <= 7. && math::abs(mp[1] - y) <= 7.)
+            let d = math::abs(mp[0] - x) + math::abs(mp[1] - y);
+            if (math::abs(mp[0] - x) <= 7. && math::abs(mp[1] - y) <= 7.
+                && d < key_best)
             {
+                key_best = d;
+                key_hit = option::value(ki);
+            }
+        }
+        match (key_hit)
+        {
+            value(ki)?
+            {
+                let key = track.m_keys[ki];
                 do state->select_key(track_idx, ki, false);
                 state.m_drag_active = true;
                 state.m_drag_moved = false;
@@ -1452,8 +1580,8 @@ namespace JEEditor::Editor::Animation
                 state.m_drag_orig_time = key.m_time;
                 state.m_drag_orig_value = key.m_value->channel(channel);
                 state.m_drag_snap = option::value(action->dup());
-                return;
             }
+            none?;
         }
     }
 
@@ -1481,20 +1609,7 @@ namespace JEEditor::Editor::Animation
         {
             let ctrl = IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl)
                 || IsKeyDown(ImGuiKey::ImGuiKey_RightCtrl);
-            let mut hit = option::none: option<(int, int)>;
-            for (let (ti, track) : action.m_tracks->iter |> iterator::enumerate)
-            {
-                let row_y = origin[1] + RULER_H + EVENT_ROW_H
-                    + ti as real * TRACK_ROW_H + TRACK_ROW_H / 2.;
-                if (mp[1] < row_y - 7. || mp[1] > row_y + 7.)
-                    continue;
-                for (let (ki, key) : track.m_keys->iter |> iterator::enumerate)
-                {
-                    let x = draw_x0 + key.m_time * pps;
-                    if (math::abs(mp[0] - x) <= 7.)
-                        hit = option::value((ti, ki));
-                }
-            }
+            let hit = key_hit_at(action, origin, draw_x0, pps, mp);
 
             match (hit)
             {
@@ -1624,6 +1739,9 @@ namespace JEEditor::Editor::Animation
             {
                 let snap = action->dup();
                 do add_key_to_all_tracks(action, state.m_play_time);
+                // 插入会改变下标，清空选区避免指向错误的关键帧
+                state.m_selected_keys->clear();
+                state.m_selected_event = -1;
                 do state->record(snap, "添加关键帧");
             }
             Separator();
@@ -1636,15 +1754,176 @@ namespace JEEditor::Editor::Animation
         }
     }
 
-    // 画布空白右键
+    // 画布右键：单轨道添加关键帧、复制/粘贴关键帧、删除
     func canvas_context_menu(state: EditorState, action: ActionData) => void
     {
         if (BeginPopupContextItem())
         {
+            // 右键落在某条轨道行时，可以只给该轨道添加关键帧
+            if (s_ctx_track >= 0 && s_ctx_track < action.m_tracks->len)
+            {
+                if (MenuItem("在此时添加关键帧"))
+                    do add_key_to_track(state, action, s_ctx_track, s_ctx_time);
+                if (MenuItem("在播放头添加关键帧"))
+                    do add_key_to_track(state, action, s_ctx_track, state.m_play_time);
+                Separator();
+            }
+
+            if (MenuItemEnabled("复制选中关键帧（Ctrl+C）",
+                    state.m_selected_keys->len > 0))
+                do copy_selected_keys(state, action);
+            if (MenuItemEnabled("粘贴到此处",
+                    state.m_key_clipboard->len > 0))
+                do paste_key_clipboard(state, action, s_ctx_time);
+            if (MenuItemEnabled("粘贴到播放头（Ctrl+V）",
+                    state.m_key_clipboard->len > 0))
+                do paste_key_clipboard(state, action, state.m_play_time);
+
+            Separator();
             if (MenuItemEnabled("删除选中（Del）",
                     state.m_selected_keys->len > 0 || state.m_selected_event >= 0))
                 do delete_selected(state, action);
             EndPopup();
+        }
+    }
+
+    // 给单条轨道在指定时刻补一个关键帧（值为该时刻的采样值）
+    func add_key_to_track(
+        state: EditorState, action: ActionData, ti: int, t: real) => void
+    {
+        match (action.m_tracks->get(ti))
+        {
+            value(track)?
+            {
+                match (track->sample_track(t))
+                {
+                    value(v)?
+                    {
+                        let snap = action->dup();
+                        let at = add_key(track, t, v);
+                        state.m_selected_keys->clear();
+                        state.m_selected_event = -1;
+                        state.m_selected_keys->add((ti, at));
+                        do state->record(snap, "添加关键帧");
+                    }
+                    none?;
+                }
+            }
+            none?;
+        }
+    }
+
+    // 复制选中的关键帧：记录轨道标签与相对复制组最早时刻的偏移
+    func copy_selected_keys(state: EditorState, action: ActionData) => void
+    {
+        if (state.m_selected_keys->len == 0)
+            return;
+
+        state.m_key_clipboard->clear();
+
+        // 先确定复制组的最早时刻，粘贴时以它为锚点
+        let mut t0 = 0.;
+        let mut first = true;
+        for (let (ti, ki) : state.m_selected_keys->to_array)
+        {
+            match (action.m_tracks->get(ti))
+            {
+                value(track)?
+                {
+                    match (track.m_keys->get(ki))
+                    {
+                        value(key)?
+                        {
+                            if (first || key.m_time < t0)
+                                t0 = key.m_time;
+                            first = false;
+                        }
+                        none?;
+                    }
+                }
+                none?;
+            }
+        }
+
+        for (let (ti, ki) : state.m_selected_keys->to_array)
+        {
+            match (action.m_tracks->get(ti))
+            {
+                value(track)?
+                {
+                    match (track.m_keys->get(ki))
+                    {
+                        value(key)?
+                            state.m_key_clipboard->add((
+                                TrackTarget::label(track.m_target),
+                                key.m_time - t0,
+                                key->dup()));
+                        none?;
+                    }
+                }
+                none?;
+            }
+        }
+
+        let copied_count = state.m_key_clipboard->len;
+        if (copied_count > 0)
+        {
+            Statebar::showState(2.) <| func(){
+                Text(F"已复制 {copied_count} 个关键帧");
+            };
+        }
+    }
+
+    // 按轨道标签把剪贴板关键帧粘贴到 at 时刻
+    func paste_key_clipboard(
+        state: EditorState, action: ActionData, at: real) => void
+    {
+        if (state.m_key_clipboard->len == 0)
+            return;
+
+        let snap = action->dup();
+        let mut pasted = 0;
+        for (let (label, rel, key) : state.m_key_clipboard->to_array)
+        {
+            let mut target = option::none: option<int>;
+            for (let (ti, track) : action.m_tracks->iter |> iterator::enumerate)
+            {
+                if (TrackTarget::label(track.m_target) == label)
+                {
+                    target = option::value(ti);
+                    break;
+                }
+            }
+            match (target)
+            {
+                value(ti)?
+                {
+                    match (action.m_tracks->get(ti))
+                    {
+                        value(track)?
+                        {
+                            let nk = key->dup();
+                            nk.m_time = math::max(0., at + rel);
+                            do track.m_keys->add(nk);
+                            do track->sort_keys;
+                            pasted += 1;
+                        }
+                        none?;
+                    }
+                }
+                none?;
+            }
+        }
+        if (pasted > 0)
+        {
+            // 排序会改变下标，清空选区避免指向错误的关键帧
+            state.m_selected_keys->clear();
+            state.m_selected_event = -1;
+            do state->record(snap, "粘贴关键帧");
+            let pasted_count = pasted;
+            Statebar::showState(2.) <| func(){
+                Text(F"已粘贴 {pasted_count} 个关键帧");
+            };
         }
     }
 
@@ -1743,6 +2022,9 @@ namespace JEEditor::Editor::Animation
 
                 do action.m_tracks->add(offset_track);
                 do action.m_tracks->add(tiling_track);
+                // 轨道整体重建，旧选区下标已失效
+                state.m_selected_keys->clear();
+                state.m_selected_event = -1;
                 do state->record(snap, "切片生成");
                 state.m_play_time = 0.;
                 do CloseCurrentPopup();
