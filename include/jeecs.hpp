@@ -1,6 +1,6 @@
 #pragma once
 
-#define JE_CORE_VERSION JE_VERSION_WRAP(4, 9, 0)
+#define JE_CORE_VERSION JE_VERSION_WRAP(4, 9, 1)
 
 #ifndef JE_MSVC_RC_INCLUDE
 
