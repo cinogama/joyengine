@@ -2,7 +2,7 @@
 #include "jeecs.hpp"
 
 #ifdef JE_ENABLE_METAL_GAPI
-#include "jeecs_imgui_backend_api.hpp"
+#include "jeecs_graphic_imgui_backend_api.hpp"
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>

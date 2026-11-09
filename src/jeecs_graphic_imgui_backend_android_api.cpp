@@ -6,7 +6,7 @@
 #   include <imgui_impl_android.h>
 #   include <jni.h>
 #   include <game-activity/native_app_glue/android_native_app_glue.h>
-#   include "jeecs_imgui_backend_android_api.hpp"
+#   include "jeecs_graphic_imgui_backend_android_api.hpp"
 #   include "jeecs_graphic_api_interface_egl.hpp"
 
 thread_local struct android_app* _je_tg_android_app = nullptr;

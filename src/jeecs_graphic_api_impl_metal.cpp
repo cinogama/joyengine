@@ -5,7 +5,7 @@
 
 #ifdef JE_ENABLE_METAL_GAPI
 
-#include "jeecs_imgui_backend_api.hpp"
+#include "jeecs_graphic_imgui_backend_api.hpp"
 
 #define NS_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION

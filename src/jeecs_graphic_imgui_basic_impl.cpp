@@ -2,7 +2,7 @@
 #include "jeecs.hpp"
 #include "jeecs_graphic_render_internal.hpp"
 
-#include "jeecs_imgui_backend_api.hpp"
+#include "jeecs_graphic_imgui_backend_api.hpp"
 
 #include <string>
 #include <unordered_set>

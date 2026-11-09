@@ -1,7 +1,7 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 
-#include "jeecs_imgui_backend_api.hpp"
+#include "jeecs_graphic_imgui_backend_api.hpp"
 
 namespace jeecs::graphic::api::none
 {

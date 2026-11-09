@@ -5,7 +5,7 @@
 
 #ifdef JE_ENABLE_VK120_GAPI
 
-#include "jeecs_imgui_backend_api.hpp"
+#include "jeecs_graphic_imgui_backend_api.hpp"
 
 #include <vulkan/vulkan.h>
 

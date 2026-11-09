@@ -9,7 +9,7 @@
 
 #include <cstring>
 
-#include "jeecs_imgui_backend_api.hpp"
+#include "jeecs_graphic_imgui_backend_api.hpp"
 
 #ifndef GL_FRAMEBUFFER_SRGB_EXT
 #   define GL_FRAMEBUFFER_SRGB_EXT 0x8DB9

@@ -3,7 +3,7 @@
 
 #if defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
 
-#include "jeecs_imgui_backend_api.hpp"
+#include "jeecs_graphic_imgui_backend_api.hpp"
 
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>
@@ -11,7 +11,7 @@
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
 #   if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
 #       include <imgui_impl_android.h>
-#       include "jeecs_imgui_backend_android_api.hpp"
+#       include "jeecs_graphic_imgui_backend_android_api.hpp"
 #   endif
 #else
 #   include <imgui_impl_glfw.h>
