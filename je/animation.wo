@@ -1,0 +1,110 @@
+// Joyengine 4.x
+// 动画播放控制：je_animation_entity_* C API 的 Woolang 封装。
+//
+// 实体须持有 Animation::Animator 组件（绑定一个 .je4animation 动画集），
+// 由 Animation::AnimatorSystem 在 StateUpdate 阶段推进播放、按关键帧插值
+// 并写入目标组件成员/着色器 uniform。
+//
+//     import je::animation;
+//
+//     je::animation::play(e, "idle");
+//     je::animation::crossfade(e, "run", 0.2);   // 0.2 秒内平滑过渡
+//     for (let ev : je::animation::events(e))     // 本帧越过的事件点
+//         ...
+import pkg::std;
+import je::ecs;
+
+namespace je::animation
+{
+    // 立即播放指定动作，重置进度并清除淡入淡出
+    extern("libjoyecs", "wojeapi_animation_play")
+        public func play(e: je::entity, action_name: string)=> void;
+
+    // 在 fade_duration 秒内从当前动作平滑过渡到指定动作；
+    // 当前无动作或时长为 0 时等价于 play
+    extern("libjoyecs", "wojeapi_animation_crossfade")
+        public func crossfade(e: je::entity, action_name: string, fade_duration: real)=> void;
+
+    extern("libjoyecs", "wojeapi_animation_stop")
+        public func stop(e: je::entity)=> void;
+
+    extern("libjoyecs", "wojeapi_animation_pause")
+        public func pause(e: je::entity)=> void;
+
+    extern("libjoyecs", "wojeapi_animation_resume")
+        public func resume(e: je::entity)=> void;
+
+    // 已指定动作、未暂停且未结束（非循环动作播放到结尾即为结束）
+    extern("libjoyecs", "wojeapi_animation_is_playing")
+        public func is_playing(e: je::entity)=> bool;
+
+    extern("libjoyecs", "wojeapi_animation_current_action")
+        public func current_action(e: je::entity)=> option<string>;
+
+    // 当前动作总时长（秒），未播放时为 0
+    extern("libjoyecs", "wojeapi_animation_duration")
+        public func duration(e: je::entity)=> real;
+
+    // 当前动作播放进度 (0..1)，未播放时为 0
+    extern("libjoyecs", "wojeapi_animation_progress")
+        public func progress(e: je::entity)=> real;
+
+    // 本帧播放越过的事件点名称；同一帧内可重复读取，不会消费事件
+    extern("libjoyecs", "wojeapi_animation_events")
+        public func events(e: je::entity)=> array<string>;
+
+    // 关键帧曲线的数学规则。缓存生成器（builtin/script/internal/cache/animation.wo）
+    // 与动画编辑器的预览共用这里的实现，保证编辑器所见即运行时所得。
+    // 切线均为导数（值/秒），按通道独立计算：
+    //   AUTO   —— Catmull-Rom；端点、局部极值与平台处取 0，避免过冲
+    //   LINEAR —— 与相邻关键帧连线的斜率；入/出分别计算，缺一侧时取另一侧
+    namespace curve
+    {
+        func _slope(times: array<real>, values: array<real>, a: int, b: int)=> real
+        {
+            let dt = times[b] - times[a];
+            return dt > 0. ? (values[b] - values[a]) / dt | 0.;
+        }
+
+        public func auto_tangent(times: array<real>, values: array<real>, index: int)=> real
+        {
+            let n = times->len;
+            if (index <= 0 || index >= n - 1)
+                return 0.;
+
+            let d0 = values[index] - values[index - 1];
+            let d1 = values[index + 1] - values[index];
+            if (d0 * d1 <= 0.)
+                return 0.;
+
+            return _slope(times, values, index - 1, index + 1);
+        }
+
+        // 返回 (入导数, 出导数)
+        public func linear_tangents(times: array<real>, values: array<real>, index: int)=> (real, real)
+        {
+            let n = times->len;
+            let has_prev = index > 0;
+            let has_next = index < n - 1;
+
+            let prev_slope = has_prev ? _slope(times, values, index - 1, index) | 0.;
+            let next_slope = has_next ? _slope(times, values, index, index + 1) | 0.;
+
+            return (
+                has_prev ? prev_slope | next_slope,
+                has_next ? next_slope | prev_slope);
+        }
+
+        // 三次 hermite 求值：p0/p1 为区段端点值，m0/m1 为端点导数，
+        // dt 为区段时长，u 为区段内归一化位置 [0, 1]
+        public func hermite(p0: real, p1: real, m0: real, m1: real, dt: real, u: real)=> real
+        {
+            let u2 = u * u;
+            let u3 = u2 * u;
+            return (2. * u3 - 3. * u2 + 1.) * p0
+                + (u3 - 2. * u2 + u) * (dt * m0)
+                + (-2. * u3 + 3. * u2) * p1
+                + (u3 - u2) * (dt * m1);
+        }
+    }
+}

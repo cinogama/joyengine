@@ -627,7 +627,7 @@ namespace je::gui
     // pass uv0 as the min corner and uv1 as the max corner; V is flipped internally
     // so the region displays upright (consistent with Image/ImageSize).
     // This lets you display an arbitrary sub-region of a sprite-sheet, matching
-    // the Renderer::Textures2D offset/tiling convention used by FrameAnimation.
+    // the Renderer::Textures2D offset/tiling convention used by the animation system.
     extern("libjoyecs", "je_gui_image_uv")
         public func ImageUV(tex: je::graphic::texture2d, width: real, height: real, uv0: ImVec2, uv1: ImVec2)=> void;
     extern("libjoyecs", "je_gui_image_uv_color")

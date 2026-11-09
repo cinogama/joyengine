@@ -1,0 +1,97 @@
+// “常用组件组合”的菜单操作：将组合整组添加到实体（可撤销）。
+// 数据本体在 ComponentPresets.wo（纯数据叶子模块，见其头注释），
+// 依赖视口与撤销动作的操作放在这里，避免 ComponentPresets 经
+// EditSession → WorldEditorViewport 形成循环 import。
+
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::gui;
+import je::typeinfo;
+
+import pkg::iterator;
+
+import WorldEditorViewport;
+import EditSession;
+import Action::AddComponentBatch;
+import ComponentPresets;
+
+using std;
+using je;
+using je::gui;
+using iterator;
+using JEEditor::Editor::Action;
+using JEEditor::Editor::ComponentPresets;
+
+namespace JEEditor::Editor::ComponentPresetMenu
+{
+    // 统计组合内可添加到该实体的组件数（类型已注册且实体尚未持有），
+    // 为 0 时组合项整体禁用
+    func countAddableComponents(e: entity, cnames: array<string>)=> int
+    {
+        let mut addable_count = 0;
+        for (let cname : cnames)
+        {
+            match (typeinfo::load(cname))
+            {
+                none?;
+                value(ctype)?
+                    if (e->get_component(ctype)->is_none)
+                        addable_count = addable_count + 1;
+            }
+        }
+        return addable_count;
+    }
+
+    // 将组合内实体还缺少的组件作为一步可撤销操作批量添加；
+    // 没有 EUID 的实体退化为逐个直接添加（无法支持撤销）
+    public func addPresetToEntity(
+        wctx: WorldEditorViewport, e: entity, cnames: array<string>)=> void
+    {
+        // 先结束可能进行中的编辑手势，再发布整组添加的操作
+        EditSession::commit();
+
+        let ctypes = cnames->iter
+            |> filter_map(\cname = typeinfo::load(cname);)
+            |> filter(\ctype = e->get_component(ctype)->is_none;)
+            |> collect;
+        if (ctypes->len == 0)
+            return;
+
+        match (AddComponentBatch::try_create(e, ctypes))
+        {
+            none?
+                for (let ctype : ctypes)
+                    do e->add_component(ctype);
+            value(action)?
+                wctx->doAction(action);
+        }
+    }
+
+    // “点击即整组添加”的常用组合菜单：分组为一级子菜单，子项即组合，
+    // 悬停提示该组合包含的全部组件，实体已持有的组件不计入添加，
+    // 全部已持有（或类型全部失效）的组合项禁用。供“添加组件”弹窗与
+    // 实体右键菜单共用；点击子项只收起子菜单以上的弹窗层，调用方的
+    // 外层弹窗/菜单保持打开，可连续添加多个组合
+    public func showAddPresetMenu(wctx: WorldEditorViewport, e: entity)=> void
+    {
+        for (let (group_title, presets) : s_component_presets)
+        {
+            if (BeginMenu(group_title))
+            {
+                defer EndMenu();
+                for (let (preset_name, cnames) : presets)
+                {
+                    BeginDisabled(countAddableComponents(e, cnames) == 0);
+                    if (Selectable(F"{preset_name}##add_preset_{group_title}"))
+                        addPresetToEntity(wctx, e, cnames);
+                    EndDisabled();
+
+                    if (IsItemHovered())
+                        do SetTooltip(presetTipText(cnames));
+                }
+            }
+        }
+    }
+}

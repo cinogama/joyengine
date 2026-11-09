@@ -49,7 +49,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     let DEFAULT_GRAPHIC_SYSTEM_TYPE =
         typeinfo::load("Graphic::UnlitGraphicPipelineSystem")->unwrap;
     let ANIMATION_SYSTEM_TYPE = 
-        typeinfo::load("Animation::FrameAnimationSystem")->unwrap;
+        typeinfo::load("Animation::AnimatorSystem")->unwrap;
     let PARTICLE_SYSTEM_TYPE =
         typeinfo::load("Particle::ParticleSystem")->unwrap;
         

@@ -1,36 +1,71 @@
-// 帧动画缓存生成器：把 .je4animation TOML 源转换为引擎可读的
-// 二进制缓存文档（je_cache_binary_* 格式）。
+// 动画集缓存生成器：把 .je4animation（v2 轨道/关键帧模型）的 TOML 源
+// 转换为引擎可读的二进制缓存文档（je_cache_binary_* 格式）。
 //
 // 由引擎在 .je4cache 缺失或失效时加载，调用 generate：
 //   cache  —— C 侧创建好的缓存写入器（文件头已写入）
 //   source —— 动画 TOML 的引擎路径（@/ 或 !/），经 je::file::readall 读取
 //
-// 文档结构与 src/jeecs_frame_animation_cache.cpp 中的读取逻辑一一对应：
-//   DOCUMENT "animations" -> LIST of DOCUMENT(action)
-//       "name" -> STRING
-//       "frames" -> LIST of DOCUMENT(frame)
-//           "time" -> FLOAT32
-//           "components" -> LIST of DOCUMENT
-//               "name" -> STRING, "member" -> STRING, "offset" -> BOOL,
-//               "type" -> INT32, "value" -> 值
-//           "uniforms" -> LIST of DOCUMENT
-//               "name" -> STRING, "type" -> INT32, "value" -> 值
-// 值类型标记与 jeecs.hpp 的 je_animation_value_type_t 一致：
-//   0 INT / 1 FLOAT / 2 VEC2 / 3 VEC3 / 4 VEC4 / 5 QUAT4
-// QUAT4 在 TOML 中保存欧拉角（度）[ex, ey, ez]，这里换算成四元数
-// (x, y, z, w) 写入缓存。
+// TOML 源结构（由动画编辑器写出，亦可手写）：
+//   version = 2
+//   [[actions]]                     动作
+//   name = "walk"
+//   loop = "loop"                   none | loop | pingpong
+//   duration = 1.0                  可省略，缺省为全部关键帧/事件时间的最大值
+//   [[actions.events]]              事件点
+//   time = 0.5 ; name = "footstep"
+//   [[actions.tracks]]              轨道：组件成员或着色器 uniform 二选一
+//   component = "Renderer::Textures2D" ; member = "offset"
+//   uniform = "u_param"
+//   type = "vec2"                   int | float | vec2 | vec3 | vec4 | quat4
+//   mode = "absolute"               absolute | additive
+//   [[actions.tracks.keys]]         关键帧
+//   time = 0.0 ; value = [0.0, 0.0]
+//   interp = "linear"               constant | linear | hermite（缺省 linear）
+//   tangent = "auto"                auto | linear | free（hermite 用，缺省 auto）
+//   tangent_in = [...] ; tangent_out = [...]   free 切线（每通道导数）
+// quat4 的 value 保存欧拉角（度）[ex, ey, ez]，这里换算成四元数写入缓存；
+// hermite 只对 float/vec2/vec3/vec4 开放。
+//
+// 缓存文档结构与 src/jeecs_graphic_animation_cache.cpp 的读取逻辑一一对应：
+//   DOCUMENT "actions" -> LIST of DOCUMENT(action)
+//       "name" STRING, "duration" FLOAT32, "loop" INT32
+//       "tracks" -> LIST of DOCUMENT(track)
+//           "kind" INT32, "component"/"member" STRING | "uniform" STRING,
+//           "offset" BOOL
+//           "keys" -> LIST of DOCUMENT(key)
+//               "time" FLOAT32, "interp" INT32, "tangent" INT32,
+//               "type" INT32, "value" 值,
+//               "tangents" LIST of FLOAT32   轨道含 hermite 区段时写出，
+//                                            每通道 (入导数, 出导数)
+//       "events" -> LIST of DOCUMENT  "time" FLOAT32, "name" STRING
+// 枚举值与 jeecs.hpp 中 je_animation_*_t 的定义一致。
+// AUTO/LINEAR 切线在这里烘焙为导数值，规则见 je::animation::curve。
 
 import pkg::std;
 import pkg::math;
 import pkg::toml;
+import pkg::worst;
 
 import je;
 import je::cache;
+import je::animation;
 
 using std;
 using toml;
 
 let DEG2RAD = 3.14159265358979323846 / 180.;
+
+let TRACK_KIND_MEMBER = 0;
+let TRACK_KIND_UNIFORM = 1;
+
+let INTERP_HERMITE = 2;
+
+let TANGENT_LINEAR = 1;
+let TANGENT_FREE = 2;
+
+let VALUE_INT = 0;
+let VALUE_FLOAT = 1;
+let VALUE_QUAT4 = 5;
 
 func array_of(value: Toml)=> array<Toml>
 {
@@ -47,24 +82,14 @@ func array_of(value: Toml)=> array<Toml>
     return result->to_array;
 }
 
-func string_of(value: Toml)=> string
+func string_of(value: Toml, default_value: string)=> string
 {
     match (value->as_string)
     {
         value(str)? return str;
         none?;
     }
-    return "";
-}
-
-func bool_of(value: Toml)=> bool
-{
-    match (value->as_bool)
-    {
-        value(flag)? return flag;
-        none?;
-    }
-    return false;
+    return default_value;
 }
 
 func int_of(value: Toml)=> int
@@ -77,19 +102,24 @@ func int_of(value: Toml)=> int
     return 0;
 }
 
-func real_of(value: Toml)=> real
+func option_real_of(value: Toml)=> option<real>
 {
     match (value->as_float)
     {
-        value(number)? return number;
+        value(number)? return option::value(number);
         none?;
     }
     match (value->as_int)
     {
-        value(number)? return number as real;
+        value(number)? return option::value(number as real);
         none?;
     }
-    return 0.;
+    return option::none;
+}
+
+func real_of(value: Toml)=> real
+{
+    return option_real_of(value)->or(0.);
 }
 
 func real_at(values: array<Toml>, index: int)=> real
@@ -97,6 +127,11 @@ func real_at(values: array<Toml>, index: int)=> real
     if (index < 0 || index >= values->len)
         return 0.;
     return real_of(values[index]);
+}
+
+func reals_of(value: Toml)=> array<real>
+{
+    return array_of(value)->map(\v = real_of(v););
 }
 
 func value_type_tag(type_name: string)=> int
@@ -108,6 +143,41 @@ func value_type_tag(type_name: string)=> int
     if (kind == "vec3") return 3;
     if (kind == "vec4") return 4;
     if (kind == "quat4") return 5;
+    return -1;
+}
+
+func value_channels(type_tag: int)=> int
+{
+    if (type_tag == 2) return 2;
+    if (type_tag == 3) return 3;
+    if (type_tag == 4 || type_tag == 5) return 4;
+    return 1;
+}
+
+func loop_tag(name: string)=> int
+{
+    let kind = name->lower;
+    if (kind == "none") return 0;
+    if (kind == "loop") return 1;
+    if (kind == "pingpong") return 2;
+    return -1;
+}
+
+func interp_tag(name: string)=> int
+{
+    let kind = name->lower;
+    if (kind == "constant") return 0;
+    if (kind == "linear") return 1;
+    if (kind == "hermite") return 2;
+    return -1;
+}
+
+func tangent_tag(name: string)=> int
+{
+    let kind = name->lower;
+    if (kind == "auto") return 0;
+    if (kind == "linear") return 1;
+    if (kind == "free") return 2;
     return -1;
 }
 
@@ -149,7 +219,7 @@ func append_quat4(
     let x = rcos * pcos * ysin - rsin * psin * ycos;
     let z = rsin * pcos * ycos - rcos * psin * ysin;
     let w = rcos * pcos * ycos + rsin * psin * ysin;
-    let mag = x * x + y * y + z * z + w * w;
+    let mag = math::sqrt(x * x + y * y + z * z + w * w);
 
     if (!cache->append_list())
         return false;
@@ -167,21 +237,284 @@ func append_quat4(
 func append_data_value(
     cache: je::cache::binary_writer, type_tag: int, value: Toml)=> bool
 {
-    if (type_tag == 0)
+    if (type_tag == VALUE_INT)
         return cache->append_int32(int_of(value));
-    if (type_tag == 1)
+    if (type_tag == VALUE_FLOAT)
         return cache->append_float32(real_of(value));
 
     let values = array_of(value);
-    if (type_tag == 2)
-        return append_float_values(cache, values, 2);
-    if (type_tag == 3)
-        return append_float_values(cache, values, 3);
-    if (type_tag == 4)
-        return append_float_values(cache, values, 4);
-    if (type_tag == 5)
+    if (type_tag == VALUE_QUAT4)
         return append_quat4(cache, values);
-    return false;
+    return append_float_values(cache, values, value_channels(type_tag));
+}
+
+// 关键帧的数值通道（用于计算切线）
+func channels_of(type_tag: int, value: Toml)=> array<real>
+{
+    if (type_tag == VALUE_INT)
+        return [int_of(value) as real];
+    if (type_tag == VALUE_FLOAT)
+        return [real_of(value)];
+
+    let values = array_of(value);
+    let mut result = []mut: vec<real>;
+    for (let mut i = 0; i < value_channels(type_tag); i += 1)
+        result->add(real_at(values, i));
+    return result->to_array;
+}
+
+func real_at_array(values: array<real>, index: int)=> real
+{
+    return values->get_or(index, 0.);
+}
+
+using KeySource = struct{
+    public time: real,
+    public interp: int,
+    public tangent: int,
+    public value: Toml,
+    public channels: array<real>,
+    public free_in: array<real>,
+    public free_out: array<real>,
+};
+
+// 解析并校验一条轨道的关键帧，按时间升序返回；出错时记录日志并返回 none
+func collect_keys(
+    source: string, action_name: string, type_tag: int, track: Toml)=> option<array<KeySource>>
+{
+    let mut keys = []mut: vec<KeySource>;
+    for (let key : array_of(track["keys"]))
+    {
+        let interp = interp_tag(string_of(key["interp"], "linear"));
+        if (interp < 0)
+        {
+            je::logerr(F"动画 {source} 动作 {action_name} 中存在未知的插值方式：{string_of(key["interp"], "")}");
+            return option::none;
+        }
+        if (interp == INTERP_HERMITE
+            && (type_tag == VALUE_INT || type_tag == VALUE_QUAT4))
+        {
+            je::logerr(F"动画 {source} 动作 {action_name} 中 int/quat4 轨道不支持 hermite 插值");
+            return option::none;
+        }
+
+        let tangent = tangent_tag(string_of(key["tangent"], "auto"));
+        if (tangent < 0)
+        {
+            je::logerr(F"动画 {source} 动作 {action_name} 中存在未知的切线模式：{string_of(key["tangent"], "")}");
+            return option::none;
+        }
+
+        keys->add(KeySource{
+            time = real_of(key["time"]),
+            interp = interp,
+            tangent = tangent,
+            value = key["value"],
+            channels = channels_of(type_tag, key["value"]),
+            free_in = reals_of(key["tangent_in"]),
+            free_out = reals_of(key["tangent_out"]),
+        });
+    }
+    return option::value(std::sort(keys->to_array, \a, b = a.time < b.time;));
+}
+
+// 计算关键帧 index 在通道 channel 上的 (入导数, 出导数)
+func key_tangents(
+    keys: array<KeySource>, times: array<real>, channel_values: array<array<real>>,
+    index: int, channel: int)=> (real, real)
+{
+    let key = keys[index];
+    if (key.tangent == TANGENT_FREE)
+        return (
+            real_at_array(key.free_in, channel),
+            real_at_array(key.free_out, channel));
+
+    let values = channel_values[channel];
+    if (key.tangent == TANGENT_LINEAR)
+        return je::animation::curve::linear_tangents(times, values, index);
+
+    let m = je::animation::curve::auto_tangent(times, values, index);
+    return (m, m);
+}
+
+func write_track(
+    cache: je::cache::binary_writer, source: string, action_name: string, track: Toml)=> bool
+{
+    let type_name = string_of(track["type"], "");
+    let type_tag = value_type_tag(type_name);
+    if (type_tag < 0)
+    {
+        je::logerr(F"动画 {source} 动作 {action_name} 中存在未知的值类型：{type_name}");
+        return false;
+    }
+
+    let mode = string_of(track["mode"], "absolute")->lower;
+    if (mode != "absolute" && mode != "additive")
+    {
+        je::logerr(F"动画 {source} 动作 {action_name} 中存在未知的轨道模式：{mode}");
+        return false;
+    }
+
+    let keys_opt = collect_keys(source, action_name, type_tag, track);
+    if (keys_opt->is_none)
+        return false;
+    let keys = keys_opt->unwrap;
+
+    let has_hermite = keys->find_if(\k = k.interp == INTERP_HERMITE;)->is_value;
+    let times = keys->map(\k = k.time;);
+    let channel_count = value_channels(type_tag);
+    let mut channel_values = []mut: vec<array<real>>;
+    for (let mut c = 0; c < channel_count; c += 1)
+        channel_values->add(keys->map(\k = real_at_array(k.channels, c);));
+    let channel_values_array = channel_values->to_array;
+
+    if (!cache->append_document())
+        return false;
+
+    match (track["uniform"]->as_string)
+    {
+        value(uniform_name)?
+        {
+            if (!append_key(cache, "kind") || !cache->append_int32(TRACK_KIND_UNIFORM))
+                return false;
+            if (!append_key(cache, "uniform") || !cache->append_string(uniform_name))
+                return false;
+        }
+        none?
+        {
+            if (!append_key(cache, "kind") || !cache->append_int32(TRACK_KIND_MEMBER))
+                return false;
+            if (!append_key(cache, "component")
+                || !cache->append_string(string_of(track["component"], "")))
+                return false;
+            if (!append_key(cache, "member")
+                || !cache->append_string(string_of(track["member"], "")))
+                return false;
+        }
+    }
+
+    if (!append_key(cache, "offset") || !cache->append_bool(mode == "additive"))
+        return false;
+
+    if (!append_key(cache, "keys") || !cache->append_list())
+        return false;
+
+    for (let mut i = 0; i < keys->len; i += 1)
+    {
+        let key = keys[i];
+        if (!cache->append_document())
+            return false;
+
+        if (!append_key(cache, "time") || !cache->append_float32(key.time))
+            return false;
+        if (!append_key(cache, "interp") || !cache->append_int32(key.interp))
+            return false;
+        if (!append_key(cache, "tangent") || !cache->append_int32(key.tangent))
+            return false;
+        if (!append_key(cache, "type") || !cache->append_int32(type_tag))
+            return false;
+        if (!append_key(cache, "value")
+            || !append_data_value(cache, type_tag, key.value))
+            return false;
+
+        // hermite 区段两端的关键帧都需要切线，这里为整条轨道烘焙
+        if (has_hermite)
+        {
+            if (!append_key(cache, "tangents") || !cache->append_list())
+                return false;
+            for (let mut c = 0; c < channel_count; c += 1)
+            {
+                let (tangent_in, tangent_out) =
+                    key_tangents(keys, times, channel_values_array, i, c);
+                if (!cache->append_float32(tangent_in)
+                    || !cache->append_float32(tangent_out))
+                    return false;
+            }
+            if (!cache->append_end())
+                return false;
+        }
+
+        // 关闭 key 文档
+        if (!cache->append_end())
+            return false;
+    }
+    // 关闭 keys 列表
+    if (!cache->append_end())
+        return false;
+
+    // 关闭 track 文档
+    return cache->append_end();
+}
+
+// 动作时长缺省为全部关键帧与事件时间的最大值
+func computed_duration(action: Toml)=> real
+{
+    let mut duration = 0.;
+    for (let track : array_of(action["tracks"]))
+        for (let key : array_of(track["keys"]))
+            duration = math::max(duration, real_of(key["time"]));
+    for (let event : array_of(action["events"]))
+        duration = math::max(duration, real_of(event["time"]));
+    return duration;
+}
+
+func write_action(
+    cache: je::cache::binary_writer, source: string, action: Toml)=> bool
+{
+    let action_name = string_of(action["name"], "");
+
+    let loop_name = string_of(action["loop"], "none");
+    let loop_mode = loop_tag(loop_name);
+    if (loop_mode < 0)
+    {
+        je::logerr(F"动画 {source} 动作 {action_name} 中存在未知的循环方式：{loop_name}");
+        return false;
+    }
+
+    let duration = option_real_of(action["duration"])
+        ->or(computed_duration(action));
+
+    if (!cache->append_document())
+        return false;
+
+    if (!append_key(cache, "name") || !cache->append_string(action_name))
+        return false;
+    if (!append_key(cache, "duration") || !cache->append_float32(math::max(duration, 0.)))
+        return false;
+    if (!append_key(cache, "loop") || !cache->append_int32(loop_mode))
+        return false;
+
+    if (!append_key(cache, "tracks") || !cache->append_list())
+        return false;
+    for (let track : array_of(action["tracks"]))
+    {
+        if (!write_track(cache, source, action_name, track))
+            return false;
+    }
+    // 关闭 tracks 列表
+    if (!cache->append_end())
+        return false;
+
+    if (!append_key(cache, "events") || !cache->append_list())
+        return false;
+    for (let event : array_of(action["events"]))
+    {
+        if (!cache->append_document())
+            return false;
+        if (!append_key(cache, "time") || !cache->append_float32(real_of(event["time"])))
+            return false;
+        if (!append_key(cache, "name")
+            || !cache->append_string(string_of(event["name"], "")))
+            return false;
+        if (!cache->append_end())
+            return false;
+    }
+    // 关闭 events 列表
+    if (!cache->append_end())
+        return false;
+
+    // 关闭 action 文档
+    return cache->append_end();
 }
 
 extern func generate(
@@ -210,118 +543,28 @@ extern func generate(
     }
     let root = loaded->unwrap;
 
+    let version = int_of(root["version"]);
+    if (version != 2)
+    {
+        je::logerr(F"动画文件 {source} 的格式版本（{version}）不受支持，仅支持 v2 轨道/关键帧格式，请在动画编辑器中重新创建");
+        return false;
+    }
+
     if (!cache->append_document())
         return false;
 
-    if (!append_key(cache, "animations") || !cache->append_list())
+    if (!append_key(cache, "actions") || !cache->append_list())
         return false;
 
-    for (let action : array_of(root["animations"]))
+    for (let action : array_of(root["actions"]))
     {
-        if (!cache->append_document())
-            return false;
-        if (!append_key(cache, "name")
-            || !cache->append_string(string_of(action["name"])))
-            return false;
-
-        if (!append_key(cache, "frames") || !cache->append_list())
-            return false;
-
-        for (let frame : array_of(action["frames"]))
-        {
-            if (!cache->append_document())
-                return false;
-            if (!append_key(cache, "time")
-                || !cache->append_float32(real_of(frame["time"])))
-                return false;
-
-            if (!append_key(cache, "components") || !cache->append_list())
-                return false;
-
-            for (let component : array_of(frame["components"]))
-            {
-                if (!cache->append_document())
-                    return false;
-                if (!append_key(cache, "name")
-                    || !cache->append_string(string_of(component["name"])))
-                    return false;
-                if (!append_key(cache, "member")
-                    || !cache->append_string(string_of(component["member"])))
-                    return false;
-                if (!append_key(cache, "offset")
-                    || !cache->append_bool(bool_of(component["offset"])))
-                    return false;
-
-                let type_name = string_of(component["type"]);
-                let type_tag = value_type_tag(type_name);
-                if (type_tag < 0)
-                {
-                    je::logerr(F"动画 {source} 中存在未知的值类型：{type_name}");
-                    return false;
-                }
-                if (!append_key(cache, "type") || !cache->append_int32(type_tag))
-                    return false;
-                if (!append_key(cache, "value")
-                    || !append_data_value(cache, type_tag, component["value"]))
-                    return false;
-
-                if (!cache->append_end())
-                    return false;
-            }
-            // 关闭 components 列表
-            if (!cache->append_end())
-                return false;
-
-            if (!append_key(cache, "uniforms") || !cache->append_list())
-                return false;
-
-            for (let uniform : array_of(frame["uniforms"]))
-            {
-                if (!cache->append_document())
-                    return false;
-                if (!append_key(cache, "name")
-                    || !cache->append_string(string_of(uniform["name"])))
-                    return false;
-
-                let type_name = string_of(uniform["type"]);
-                let type_tag = value_type_tag(type_name);
-                if (type_tag < 0)
-                {
-                    je::logerr(F"动画 {source} 中存在未知的值类型：{type_name}");
-                    return false;
-                }
-                if (!append_key(cache, "type") || !cache->append_int32(type_tag))
-                    return false;
-                if (!append_key(cache, "value")
-                    || !append_data_value(cache, type_tag, uniform["value"]))
-                    return false;
-
-                if (!cache->append_end())
-                    return false;
-            }
-            // 关闭 uniforms 列表
-            if (!cache->append_end())
-                return false;
-
-            // 关闭 frame 文档
-            if (!cache->append_end())
-                return false;
-        }
-        // 关闭 frames 列表
-        if (!cache->append_end())
-            return false;
-
-        // 关闭 action 文档
-        if (!cache->append_end())
+        if (!write_action(cache, source, action))
             return false;
     }
-    // 关闭 animations 列表
+    // 关闭 actions 列表
     if (!cache->append_end())
         return false;
 
     // 关闭根文档
-    if (!cache->append_end())
-        return false;
-
-    return true;
+    return cache->append_end();
 }

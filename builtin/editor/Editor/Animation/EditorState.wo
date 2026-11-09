@@ -1,0 +1,377 @@
+// 动画编辑器 —— 撤销/重做与编辑期状态。
+// 撤销采用命令模式：闭包捕获动画集 map 与动作名，以深拷贝快照恢复
+//（切换动作时清空撤销栈，因此栈内快照始终只对应当前动作）。
+// 播放预览基于连续时间轴：按动作自身的循环方式推进，采样由
+// DataModel 的 Track 采样器完成（与运行时插值一致）。
+
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::gui;
+import je::graphic;
+import je::typeinfo;
+
+import pkg::fsys;
+import pkg::worst;
+
+import DataModel;
+
+using std;
+using je;
+using je::gui;
+using je::graphic;
+using fsys;
+
+namespace JEEditor::Editor::Animation
+{
+    // ======================================================================
+    // 撤销/重做（命令模式）
+    // ======================================================================
+    using UndoCommand = struct{
+        m_apply: ()=>void,
+        m_undo: ()=>void,
+        m_desc: string,
+    };
+    public using UndoStack = struct{
+        protected m_past: vec<UndoCommand>,
+        protected m_future: vec<UndoCommand>,
+    }
+    {
+        public func create() => UndoStack
+        {
+            return UndoStack{ m_past = []mut, m_future = []mut };
+        }
+        public func can_undo(self: UndoStack) => bool { return self.m_past->len > 0; }
+        public func can_redo(self: UndoStack) => bool { return self.m_future->len > 0; }
+        public func clear(self: UndoStack)
+        {
+            self.m_past->clear();
+            self.m_future->clear();
+        }
+    }
+
+    // 把“编辑前/编辑后”的两份动作快照注册为一个可撤销/重做的命令。
+    // before 是编辑前的深拷贝；调用此函数时动作已是编辑后状态。
+    // 恢复用 dup 快照写入 map，保持原始快照不被污染，支持反复 undo/redo。
+    func commit_snapshot(
+        stack: UndoStack, actions: map<string, ActionData>,
+        action_name: string, before: ActionData, desc: string) => void
+    {
+        let after_copy = actions->get(action_name)->unwrap->dup();
+        stack.m_future->clear();
+        stack.m_past->add(UndoCommand{
+                m_apply = func() {
+                    do actions->set(action_name, after_copy->dup());
+                },
+                m_undo = func() {
+                    do actions->set(action_name, before->dup());
+                },
+                m_desc = desc,
+            });
+    }
+
+    // ======================================================================
+    // 编辑器状态
+    // ======================================================================
+    public using EditorState = struct{
+        protected m_context: AnimationContext,
+        protected m_universe: option<universe>,
+
+        // 播放预览（循环方式跟随动作自身的 m_loop_mode）
+        protected m_playing: mut bool,
+        protected m_preview_speed: mut real,
+        protected m_play_time: mut real,
+        protected m_last_tick: mut real,
+
+        // 时间轴
+        protected m_px_per_sec: mut real,
+        // 0 = 关键帧(dope-sheet)视图；1 = 曲线视图
+        protected m_timeline_mode: mut int,
+        // 曲线视图当前显示的通道（0..通道数-1）
+        protected m_curve_channel: mut int,
+        // 曲线视图值轴缩放（1 = 恰好适配数据范围）
+        protected m_curve_zoom: mut real,
+
+        // 选区：关键帧 (track_idx, key_idx) 列表；事件为单选
+        protected m_selected_keys: vec<(int, int)>,
+        protected m_selected_event: mut int,
+
+        // 预览（源贴图路径为本地路径，载入时经 ResourcePath 转运行时路径）
+        protected m_source_texture: mut option<texture2d>,
+        protected m_source_path: mut option<fsys::path_t>,
+        protected m_preview_zoom: mut real,
+        protected m_show_checker: mut bool,
+
+        // 撤销
+        protected m_undo: UndoStack,
+        protected m_dirty: mut bool,
+        // 值编辑合并：进入一次连续编辑时取快照，边界处 flush
+        protected m_pending_before: mut option<ActionData>,
+
+        // 切片弹窗
+        protected m_ss_cols: mut int,
+        protected m_ss_rows: mut int,
+        protected m_ss_ftime: mut real,
+
+        // “添加轨道（组件成员）”弹窗的编辑期选择状态
+        protected m_addc_sel_type: mut option<int>,
+        protected m_addc_sel_member: mut option<int>,
+        protected m_addc_editing_value: mut DataValue,
+        protected m_addc_last_type: mut option<typeinfo>,
+
+        // “添加 uniform 轨道”弹窗的编辑期输入状态
+        protected m_addu_name: mut string,
+        protected m_addu_sel_type: mut option<int>,
+        protected m_addu_types: array<(string, mut DataValue)>,
+
+        // “添加事件”弹窗
+        protected m_adde_time: mut real,
+        protected m_adde_name: mut string,
+
+        // 关键帧/事件拖拽（拖拽中的持续状态；起始快照在拖拽开始时取）
+        // m_drag_kind：0 无 / 1 dope 关键帧组 / 2 事件 / 3 曲线关键帧 / 4 曲线切线手柄
+        protected m_drag_active: mut bool,
+        protected m_drag_moved: mut bool,
+        protected m_drag_kind: mut int,
+        protected m_drag_keys: vec<(int, int, real)>,  // (轨道, 关键帧, 原始时间)
+        protected m_drag_start_x: mut real,
+        protected m_drag_snap: mut option<ActionData>,
+        protected m_drag_event_orig: mut real,         // 事件拖拽的原始时间
+        protected m_drag_curve_ki: mut int,            // 曲线视图拖拽的关键帧
+        protected m_drag_curve_handle: mut int,        // 1 入手柄 / 2 出手柄
+        protected m_drag_orig_time: mut real,
+        protected m_drag_orig_value: mut real,
+    }
+    {
+        public func create(context: AnimationContext, universe: option<universe>) => EditorState
+        {
+            return EditorState{
+                m_context = context,
+                m_universe = universe,
+
+                m_playing = mut false,
+                m_preview_speed = mut 1.,
+                m_play_time = mut 0.,
+                m_last_tick = mut 0.,
+
+                m_px_per_sec = mut 200.,
+                m_timeline_mode = mut 0,
+                m_curve_channel = mut 0,
+                m_curve_zoom = mut 1.,
+
+                m_selected_keys = []mut,
+                m_selected_event = mut -1,
+
+                m_source_texture = mut option::none,
+                m_source_path = mut option::none,
+                m_preview_zoom = mut 1.,
+                m_show_checker = mut true,
+
+                m_undo = UndoStack::create(),
+                m_dirty = mut false,
+                m_pending_before = mut option::none,
+
+                m_ss_cols = mut 4,
+                m_ss_rows = mut 4,
+                m_ss_ftime = mut 0.1,
+
+                m_addc_sel_type = mut option::none,
+                m_addc_sel_member = mut option::none,
+                m_addc_editing_value = mut DataValue::INT(0),
+                m_addc_last_type = mut option::none,
+
+                m_addu_name = mut "",
+                m_addu_sel_type = mut option::none,
+                // uniform 轨道不支持 quat4（着色器自定义 uniform 无四元数入口）
+                m_addu_types = [
+                    ("int", mut DataValue::INT(0)),
+                    ("float", mut DataValue::FLOAT(0.)),
+                    ("vec2", mut DataValue::VEC2((0., 0.))),
+                    ("vec3", mut DataValue::VEC3((0., 0., 0.))),
+                    ("vec4", mut DataValue::VEC4((0., 0., 0., 0.))),
+                ],
+
+                m_adde_time = mut 0.,
+                m_adde_name = mut "",
+
+                m_drag_active = mut false,
+                m_drag_moved = mut false,
+                m_drag_kind = mut 0,
+                m_drag_keys = []mut,
+                m_drag_start_x = mut 0.,
+                m_drag_snap = mut option::none,
+                m_drag_event_orig = mut 0.,
+                m_drag_curve_ki = mut -1,
+                m_drag_curve_handle = mut 0,
+                m_drag_orig_time = mut 0.,
+                m_drag_orig_value = mut 0.,
+            };
+        }
+
+        // 当前编辑的动作数据
+        public func cur_action(self: EditorState) => option<ActionData>
+        {
+            return self.m_context->current_action;
+        }
+
+        // 切换选中动作：清空选区/撤销栈并复位播放
+        public func select_action(self: EditorState, name: string) => void
+        {
+            do self->flush_value_edit;
+            do self.m_undo->clear();
+            self.m_pending_before = option::none;
+            self.m_context.m_selected_action = name;
+            self.m_selected_keys->clear();
+            self.m_selected_event = -1;
+            self.m_curve_channel = 0;
+            self.m_play_time = 0.;
+            self.m_playing = false;
+        }
+
+        // 开始一次值编辑（若尚未开始则抓快照）
+        public func begin_value_edit(self: EditorState) => void
+        {
+            if (self.m_pending_before->is_none)
+            {
+                match (self->cur_action)
+                {
+                    value(action)?
+                        self.m_pending_before = option::value(action->dup());
+                    none?;
+                }
+            }
+        }
+        // 在边界处（切动作/按钮操作/保存）提交挂起的值编辑
+        public func flush_value_edit(self: EditorState) => void
+        {
+            match (self.m_pending_before)
+            {
+                value(before)?
+                {
+                    do commit_snapshot(self.m_undo, self.m_context.m_actions,
+                        self.m_context.m_selected_action, before, "编辑值");
+                    self.m_pending_before = option::none;
+                    self.m_dirty = true;
+                }
+                none?;
+            }
+        }
+
+        public func mark_dirty(self: EditorState) => void { self.m_dirty = true; }
+
+        // 用快照方式记录一次离散操作。调用方先 snap = dup，再改数据，再 record(snap, desc)。
+        public func record(self: EditorState, snap: ActionData, desc: string) => void
+        {
+            do self->flush_value_edit;
+            do commit_snapshot(self.m_undo, self.m_context.m_actions,
+                self.m_context.m_selected_action, snap, desc);
+            self.m_dirty = true;
+        }
+        public func undo(self: EditorState) => void
+        {
+            do self->flush_value_edit;
+            match (self.m_undo.m_past->pop())
+            {
+                value(cmd)?
+                {
+                    do cmd.m_undo();
+                    self.m_undo.m_future->add(cmd);
+                    self.m_dirty = true;
+                    // 快照恢复后选区索引可能失效
+                    self.m_selected_keys->clear();
+                    self.m_selected_event = -1;
+                }
+                none?;
+            }
+        }
+        public func redo(self: EditorState) => void
+        {
+            do self->flush_value_edit;
+            match (self.m_undo.m_future->pop())
+            {
+                value(cmd)?
+                {
+                    do cmd.m_apply();
+                    self.m_undo.m_past->add(cmd);
+                    self.m_dirty = true;
+                    self.m_selected_keys->clear();
+                    self.m_selected_event = -1;
+                }
+                none?;
+            }
+        }
+
+        public func is_key_selected(self: EditorState, track_idx: int, key_idx: int) => bool
+        {
+            return self.m_selected_keys->find((track_idx, key_idx))->is_value;
+        }
+        public func select_key(self: EditorState, track_idx: int, key_idx: int, toggle: bool) => void
+        {
+            if (toggle)
+            {
+                match (self.m_selected_keys->find((track_idx, key_idx)))
+                {
+                    value(pos)? do self.m_selected_keys->remove(pos);
+                    none? self.m_selected_keys->add((track_idx, key_idx));
+                }
+            }
+            else
+            {
+                self.m_selected_keys->clear();
+                self.m_selected_keys->add((track_idx, key_idx));
+            }
+            self.m_selected_event = -1;
+        }
+
+        // 播放：按动作自身的循环方式推进连续时间轴，返回推进后的时间。
+        // 到达终点（非循环）或反向越过起点时自动停止。
+        public func advance_playback(self: EditorState, action: ActionData) => real
+        {
+            let now = GetTime();
+            let dt = self.m_last_tick <= 0. ? 0. | (now - self.m_last_tick);
+            self.m_last_tick = now;
+
+            let duration = action->duration;
+            if (duration <= 0.)
+            {
+                self.m_play_time = 0.;
+                return 0.;
+            }
+
+            if (self.m_playing)
+            {
+                self.m_play_time += dt * self.m_preview_speed;
+
+                if (action.m_loop_mode == LoopMode::REPEAT)
+                {
+                    if (self.m_play_time >= duration)
+                        self.m_play_time = self.m_play_time % duration;
+                    if (self.m_play_time < 0.)
+                        self.m_play_time = 0.;
+                }
+                else if (action.m_loop_mode == LoopMode::PINGPONG)
+                {
+                    if (self.m_play_time >= duration)
+                        self.m_play_time = duration * 2. - self.m_play_time;
+                    if (self.m_play_time < 0.)
+                        self.m_play_time = -self.m_play_time;
+                }
+                else
+                {
+                    if (self.m_play_time >= duration)
+                    {
+                        self.m_play_time = duration;
+                        self.m_playing = false;
+                    }
+                    if (self.m_play_time < 0.)
+                    {
+                        self.m_play_time = 0.;
+                        self.m_playing = false;
+                    }
+                }
+            }
+            return self.m_play_time;
+        }
+    }
+}

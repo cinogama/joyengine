@@ -5,7 +5,7 @@
 #include "jeecs_woolang_value.hpp"
 #include "jeecs_core_translation_system.hpp"
 #include "jeecs_core_graphic_system.hpp"
-#include "jeecs_core_frame_animation_system.hpp"
+#include "jeecs_core_animation_system.hpp"
 #include "jeecs_core_particle_system.hpp"
 #include "jeecs_core_editor_components.hpp"
 #include "jeecs_core_physics_system.hpp"
@@ -38,7 +38,7 @@ namespace jeecs::core_components_and_systems
         // ===== 系统类型注册 =====
         typing::register_type<translation::TranslationUpdatingSystem>(&core_type_guard, "Translation::TranslationUpdatingSystem");
         typing::register_type<physics::Physics2DUpdatingSystem>(&core_type_guard, "Physics::Physics2DUpdatingSystem");
-        typing::register_type<frame_animation::FrameAnimationSystem>(&core_type_guard, "Animation::FrameAnimationSystem");
+        typing::register_type<animation::AnimatorSystem>(&core_type_guard, "Animation::AnimatorSystem");
         typing::register_type<particle::ParticleSystem>(&core_type_guard, "Particle::ParticleSystem");
         typing::register_type<graphic::UserInterfaceGraphicPipelineSystem>(&core_type_guard, "Graphic::UserInterfaceGraphicPipelineSystem");
         typing::register_type<graphic::UnlitGraphicPipelineSystem>(&core_type_guard, "Graphic::UnlitGraphicPipelineSystem");

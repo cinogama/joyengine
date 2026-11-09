@@ -1,0 +1,20 @@
+// 动画编辑器（包入口）。
+// 编辑 .je4animation（v2 轨道/关键帧模型）：动作 / 轨道 / 插值关键帧 /
+// 动画事件，提供关键帧（dope-sheet）与曲线双时间轴视图、精灵图切片、
+// 撤销重做与预览播放。运行时由 Animation::Animator 组件播放，
+// 引擎侧经 builtin/script/internal/cache/animation.wo 生成 .je4cache。
+//
+// 使用方式不变：
+//   import Animation;
+//   import builtin::editor::Editor::Animation;
+// 各部分均在命名空间 JEEditor::Editor::Animation 下：
+//
+//   DataModel.wo     数据模型、采样与 AnimationContext 序列化
+//   EditorState.wo   撤销/重做栈与编辑期状态
+//   UI.wo            工具栏/动作列表/预览画布/时间轴/属性面板渲染
+//   Window.wo        AnimationEditor 窗口（IWindows）与静态入口
+
+export import DataModel;
+export import EditorState;
+export import UI;
+export import Window;

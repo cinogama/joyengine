@@ -13,6 +13,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdio>
+#include <vector>
 
 namespace jeecs::woolang_runtime::towoo {}
 
@@ -1885,28 +1886,102 @@ WOORT_API woort_api wojeapi_towoo_transform_translation_set_global_rot(void)
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_towoo_animation_frameanimation_active_animation(void)
+// ===== 动画播放控制：je_animation_entity_* C API 的 Woolang 转发 =====
+// 参数槽位：0 = je::entity（gchandle 持有 game_entity*），其后为各调用参数。
+namespace
 {
-    auto& anim = wo_component<Animation::FrameAnimation>(0, WOORT_RETURN_SLOT);
-    anim.animations.active_action(
-        static_cast<size_t>(woort_int(1)), woort_string(2), woort_bool(3));
+    const je_game_entity_t* _wo_animation_entity()
+    {
+        return &static_cast<game_entity*>(woort_gcpointer(0))->_m_raw;
+    }
+}
 
+WOORT_API woort_api wojeapi_animation_play(void)
+{
+    je_animation_entity_play(
+        _wo_animation_entity(), woort_string(1));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_towoo_animation_frameanimation_stop_animation(void)
+WOORT_API woort_api wojeapi_animation_crossfade(void)
 {
-    auto& anim = wo_component<Animation::FrameAnimation>(0, WOORT_RETURN_SLOT);
-    anim.animations.stop_action(static_cast<size_t>(woort_int(1)));
-
+    je_animation_entity_crossfade(
+        _wo_animation_entity(), woort_string(1),
+        woort_float(2));
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_towoo_animation_frameanimation_is_playing(void)
+WOORT_API woort_api wojeapi_animation_stop(void)
 {
-    auto& anim = wo_component<Animation::FrameAnimation>(0, WOORT_RETURN_SLOT);
+    je_animation_entity_stop(_wo_animation_entity());
+    return woort_ret_void();
+}
 
-    return woort_ret_bool(anim.animations.is_playing(static_cast<size_t>(woort_int(1))));
+WOORT_API woort_api wojeapi_animation_pause(void)
+{
+    je_animation_entity_pause(_wo_animation_entity());
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_animation_resume(void)
+{
+    je_animation_entity_resume(_wo_animation_entity());
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_animation_is_playing(void)
+{
+    return woort_ret_bool(je_animation_entity_is_playing(
+        _wo_animation_entity()));
+}
+
+WOORT_API woort_api wojeapi_animation_current_action(void)
+{
+    const char* action = je_animation_entity_action_get(
+        _wo_animation_entity());
+    if (action == nullptr)
+        return woort_ret_option_none();
+    return woort_ret_option_string(action);
+}
+
+WOORT_API woort_api wojeapi_animation_duration(void)
+{
+    return woort_ret_float(je_animation_entity_duration_get(
+        _wo_animation_entity()));
+}
+
+WOORT_API woort_api wojeapi_animation_progress(void)
+{
+    return woort_ret_float(je_animation_entity_progress_get(
+        _wo_animation_entity()));
+}
+
+WOORT_API woort_api wojeapi_animation_events(void)
+{
+    // 返回本帧事件名数组；同一帧内可重复读取
+    woort_value s;
+    if (!woort_push_reserve(2, &s))
+        return woort_ret_panic("Stack overflow.");
+
+    const woort_value out_array = s + 0;
+    const woort_value elem = s + 1;
+
+    woort_set_vec(out_array);
+
+    const je_game_entity_t* entity =
+        _wo_animation_entity();
+    const size_t event_count = je_animation_entity_events_get(entity, nullptr, 0);
+    if (event_count > 0)
+    {
+        std::vector<const char*> names(event_count);
+        je_animation_entity_events_get(entity, names.data(), event_count);
+        for (const char* name : names)
+        {
+            woort_set_string(elem, name);
+            woort_vec_push(out_array, elem);
+        }
+    }
+    return woort_ret_value(out_array);
 }
 
 WOORT_API woort_api wojeapi_towoo_audio_playing_set_buffer(void)

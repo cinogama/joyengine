@@ -1,0 +1,1847 @@
+// 动画编辑器 —— UI 渲染层。
+// 三栏布局：左动作列表 / 中预览画布+时间轴 / 右属性面板。
+// 时间轴有两种视图：
+//   关键帧视图（dope-sheet）：每条轨道一行，关键帧画为菱形，可拖拽改时间、
+//     多选、右键改插值/切线/删除；顶部为时间标尺与事件行。
+//   曲线视图：选中轨道的某一条通道画为 hermite/线性/常值曲线，
+//     可拖拽关键帧与切线手柄（拖动手柄会把关键帧转为 free 切线）。
+// 以及精灵图切片、添加轨道、添加事件等弹窗。
+
+import pkg::std;
+
+import je;
+import je::gui;
+import je::graphic;
+import je::typeinfo;
+
+import pkg::fsys;
+import pkg::iterator;
+import pkg::math;
+import pkg::worst;
+
+import builtin::editor::GUI::Forms::MsgBox;
+import builtin::editor::GUI::Forms::InputBox;
+import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Statebar;
+import builtin::editor::GUI::FileDrop;
+import builtin::editor::GUI::Widgets;
+
+import builtin::editor::Editor::ResourcePath;
+
+import DataModel;
+import EditorState;
+
+using std;
+using iterator;
+using je;
+using je::gui;
+using je::graphic;
+using fsys;
+using JEEditor::GUI;
+using JEEditor::GUI::Forms;
+using JEEditor::Editor::ResourcePath;
+
+namespace JEEditor::Editor::Animation
+{
+    // ======================================================================
+    // 时间轴布局常量（左侧标签栏与滚动画布共用，保证行对齐）
+    // ======================================================================
+    let GUTTER_W = 200.;
+    let RULER_H = 20.;
+    let EVENT_ROW_H = 22.;
+    let TRACK_ROW_H = 24.;
+
+    func action_names_of(ctx: AnimationContext) => array<string>
+    {
+        return ctx.m_actions->keys;
+    }
+
+    public func _render_toolbar(state: EditorState) => void
+    {
+        let ctx = state.m_context;
+        let names = action_names_of(ctx);
+
+        // 动作选择
+        let cur_idx = func(){
+            let mut found = option::none: option<int>;
+            for (let (i, n) : names->iter |> iterator::enumerate)
+            {
+                if (n == ctx.m_selected_action)
+                    found = option::value(i);
+            }
+            return found;
+        };
+        match (Combo("##action_combo", names, cur_idx()))
+        {
+            value(idx)?
+            {
+                let nm = names->get_or(idx, "");
+                if (nm != ctx.m_selected_action)
+                    do state->select_action(nm);
+            }
+            none?;
+        }
+        SameLine();
+
+        // 播放控制
+        let has_action = state->cur_action
+            ->map(\a = a->duration > 0.;)
+            ->or(false);
+        if (Button(state.m_playing ? "暂停##play" | "播放##play") && has_action)
+        {
+            state.m_playing = !state.m_playing;
+            state.m_last_tick = 0.;
+        }
+        SameLine();
+        if (Button("停止##stop") && has_action)
+        {
+            state.m_playing = false;
+            state.m_play_time = 0.;
+        }
+        SameLine();
+        // 速度
+        SetNextItemWidth(80.);
+        do DragFloat("##speed", state.m_preview_speed, 0.05, 0.05, 8.)
+            ->> \v = state.m_preview_speed = (v > 0.01 ? v | 0.01);;
+        SameLine();
+        match (state->cur_action)
+        {
+            value(action)?
+            {
+                let duration = action->duration;
+                if (duration > 0.)
+                {
+                    SameLine();
+                    TextDisabled(F"{math::round(state.m_play_time * 1000.) as real / 1000.}"
+                        + F" / {math::round(duration * 1000.) as real / 1000.}s");
+                }
+            }
+            none?;
+        }
+        if (state.m_dirty)
+        {
+            SameLine();
+            TextColored((240, 200, 80, 255), "● 未保存");
+        }
+    }
+
+    public func try_save(state: EditorState) => void
+    {
+        do state->flush_value_edit;
+        if (state.m_context->save())
+        {
+            state.m_dirty = false;
+
+            // 闭包按创建时的值捕获文本，之后每帧由 Statebar 调用绘制
+            let path_str = state.m_context.m_path->to_string;
+            Statebar::showState(3.) <| func(){
+                Text(F"动画已保存到 {path_str}");
+            };
+        }
+        else
+        {
+            let path_str = state.m_context.m_path->to_string;
+            MsgBox::err("保存失败", F"未能保存到 {path_str}");
+        }
+    }
+
+    // 新建动作（输入对话框）
+    public func ask_new_action(state: EditorState) => void
+    {
+        do InputBox::show("新建动作", "请输入动作名称", "NewAction")
+            ->then(func(name)
+                {
+                    if (name == "")
+                    {
+                        MsgBox::err("无法创建", "动作名不能为空");
+                        return;
+                    }
+                    if (state.m_context.m_actions->contains(name))
+                    {
+                        MsgBox::err("无法创建", F"名为 {name} 的动作已经存在");
+                        return;
+                    }
+                    state.m_context.m_actions->set(name, ActionData{
+                        m_loop_mode = mut LoopMode::NONE,
+                        m_duration = mut 0.,
+                        m_tracks = []mut,
+                        m_events = []mut,
+                    });
+                    do state->select_action(name);
+                    state.m_dirty = true;
+                });
+    }
+
+    // 左侧：动作列表
+    public func _render_action_panel(state: EditorState) => void
+    {
+        let ctx = state.m_context;
+        if (Button("+ 新建动作"))
+            do ask_new_action(state);
+        Separator();
+        if (BeginListBox("##action_list", 0., GetContentRegionAvail()[1]))
+        {
+            // 复制一份键名，避免迭代中修改
+            let mut keys = []mut as vec<string>;
+            for (let (name, _) : ctx.m_actions)
+                keys->add(name);
+            for (let name : keys->to_array)
+            {
+                let selected = ctx.m_selected_action == name;
+                if (SelectableSelected(name, selected))
+                {
+                    if (!selected)
+                        do state->select_action(name);
+                }
+                if (BeginPopupContextItem())
+                {
+                    if (MenuItem("复制此动作"))
+                    {
+                        let act = ctx.m_actions->get(name)->unwrap;
+                        ctx.m_actions->set(name + "_副本", act->dup());
+                        state.m_dirty = true;
+                    }
+                    if (MenuItem("重命名"))
+                    {
+                        let act = ctx.m_actions->get(name)->unwrap;
+                        do InputBox::show("重命名动作", "请输入新名称", name)
+                            ->then(func(newname)
+                                {
+                                    if (newname != "" && newname != name && !ctx.m_actions->contains(newname))
+                                    {
+                                        assert(ctx.m_actions->remove(name));
+                                        ctx.m_actions->set(newname, act);
+                                        if (ctx.m_selected_action == name)
+                                            ctx.m_selected_action = newname;
+                                        state.m_dirty = true;
+                                    }
+                                });
+                    }
+                    if (MenuItem("导出此动作..."))
+                        do export_action(state, name);
+                    Separator();
+                    if (MenuItem("删除"))
+                    {
+                        do AskBox::show("删除动作", F"确认删除动作 {name} 吗？")
+                            ->onYes(func()
+                                {
+                                    do ctx.m_actions->remove(name);
+                                    if (ctx.m_selected_action == name)
+                                    {
+                                        ctx.m_selected_action = "";
+                                        state.m_selected_keys->clear();
+                                    }
+                                    state.m_dirty = true;
+                                });
+                    }
+                    EndPopup();
+                }
+            }
+            EndListBox();
+        }
+    }
+
+    // 导出动作：把单个动作写到一个独立 .je4animation 文件
+    func export_action(state: EditorState, action_name: string) => void
+    {
+        let ctx = state.m_context;
+        match (ctx.m_actions->get(action_name))
+        {
+            value(act)?
+                do InputBox::show("导出动作", "输入导出路径（.je4animation）", "")
+                    ->then(func(p)
+                        {
+                            if (p == "")
+                                return;
+                            let out_ctx = AnimationContext::create(fsys::normalize(p));
+                            out_ctx.m_actions->set(action_name, act->dup());
+                            out_ctx.m_selected_action = action_name;
+                            if (out_ctx->save())
+                            {
+                                MsgBox::msg("导出成功", F"动作已导出到 {p}");
+                            }
+                            else
+                                MsgBox::err("导出失败", F"无法保存到 {p}");
+                        });
+            none?;
+        }
+    }
+
+    public func import_action(state: EditorState) => void
+    {
+        do InputBox::show("导入动作", "输入 .je4animation 文件路径", "")
+            ->then(func(p)
+                {
+                    if (p == "")
+                        return;
+                    match (AnimationContext::open(fsys::normalize(p)))
+                    {
+                        ok(other)?
+                        {
+                            for (let (src_name, act) : other.m_actions)
+                            {
+                                let mut target = src_name;
+                                if (state.m_context.m_actions->contains(target))
+                                    target = src_name + "_导入";
+                                state.m_context.m_actions->set(target, act->dup());
+                            }
+                            state.m_dirty = true;
+                            MsgBox::msg("导入成功", F"已从 {p} 导入动作");
+                        }
+                        err(_)?
+                            MsgBox::err("导入失败", "无法打开该动画文件（仅支持 v2 格式）");
+                    }
+                });
+    }
+
+    // ---- 中央区：预览 + 时间轴 ----
+    public func _render_center(state: EditorState, action: ActionData) => void
+    {
+        let avail = GetContentRegionAvail();
+        let tl_h = 220.;
+        let mut preview_h = avail[1] - tl_h - GetFrameHeightWithSpacing() * 2. - 8.;
+        if (preview_h < 80.)
+            preview_h = 80.;
+
+        // 源贴图选择行：从资源管理器拖入贴图文件
+        match (FileDrop::File("源贴图", state.m_source_path))
+        {
+            none?;
+            value(new_path)?
+                match (new_path)
+                {
+                    none?
+                    {
+                        state.m_source_path = option::none;
+                        state.m_source_texture = option::none;
+                    }
+                    value(p)?
+                    {
+                        state.m_source_path = option::value(p);
+                        do reload_source_texture(state);
+                    }
+                }
+        }
+        SameLine();
+        match (CheckBox("棋盘##chk", state.m_show_checker))
+        {
+            value(v)? state.m_show_checker = v;
+            none?;
+        }
+        SameLine();
+        do DragFloat("缩放##zoom", state.m_preview_zoom, 0.1, 0.1, 8.)->> \v = state.m_preview_zoom = v;;
+
+        // 预览画布
+        if (BeginChildSize("##preview", avail[0], preview_h))
+        {
+            let t = state->advance_playback(action);
+            do _render_preview_canvas(state, action, t);
+        }
+        EndChild();
+
+        // 时间轴
+        if (BeginChildSize("##timeline", avail[0], tl_h))
+            do _render_timeline(state, action);
+        EndChild();
+    }
+
+    func reload_source_texture(state: EditorState) => void
+    {
+        match (state.m_source_path)
+        {
+            none?
+                state.m_source_texture = option::none;
+            value(p)?
+                match (texture2d::load(state.m_universe, ResourcePath::toRuntimeResourcePath(p)))
+                {
+                    value(tex)? state.m_source_texture = option::value(tex);
+                    none?
+                    {
+                        state.m_source_texture = option::none;
+                        MsgBox::err("载入失败", F"无法载入贴图：{p->to_string}");
+                    }
+                }
+        }
+    }
+
+    func _draw_checkerboard(dl: DrawListT, pmin: ImVec2, pmax: ImVec2, cell: real, a: int) => void
+    {
+        let dark = (40, 40, 40, a);
+        let light = (70, 70, 70, a);
+        let mut y = pmin[1];
+        let mut row = 0;
+        while (y < pmax[1])
+        {
+            let y2 = y + cell < pmax[1] ? y + cell | pmax[1];
+            let mut x = pmin[0];
+            let mut col = 0;
+            while (x < pmax[0])
+            {
+                let x2 = x + cell < pmax[0] ? x + cell | pmax[0];
+                do dl->AddRectFilled((x, y), (x2, y2), ((row + col) % 2 == 0 ? light | dark));
+                x = x2;
+                col += 1;
+            }
+            y = y2;
+            row += 1;
+        }
+    }
+
+    // 把时刻 t 采样出的精灵帧绘制到指定屏幕矩形（按贴图实际尺寸保持比例）
+    func _draw_sprite_at(
+        tex: texture2d, action: ActionData, t: real,
+        cx: real, cy: real, avail_w: real, avail_h: real, zoom: real, tint: Color32RGBA) => void
+    {
+        let (tw, th) = tex->size();
+        let mut uv0 = (0., 0.);
+        let mut uv1 = (1., 1.);
+        match (frame_uv_at(action, t))
+        {
+            value((a, b))?
+            {
+                uv0 = a;
+                uv1 = b;
+            }
+            none?;
+        }
+        let u0 = uv0[0];
+        let v0 = uv0[1];
+        let u1 = uv1[0];
+        let v1 = uv1[1];
+        let cell_w = (tw as real) * (u1 - u0);
+        let cell_h = (th as real) * (v1 - v0);
+        if (cell_w <= 0. || cell_h <= 0.)
+            return;
+        let scale = math::min(avail_w / cell_w, avail_h / cell_h) * zoom;
+        let dw = cell_w * scale;
+        let dh = cell_h * scale;
+        let dx = cx - dw / 2.;
+        let dy = cy - dh / 2.;
+        let dl = GetWindowDrawList();
+        do dl->AddImageUV((dx, dy), (dx + dw, dy + dh), uv0, uv1, tex, tint);
+    }
+
+    func _render_preview_canvas(state: EditorState, action: ActionData, t: real) => void
+    {
+        let avail = GetContentRegionAvail();
+        let pmin = GetCursorScreenPos();
+        let pmax = (pmin[0] + avail[0], pmin[1] + avail[1]);
+        let cx = (pmin[0] + pmax[0]) / 2.;
+        let cy = (pmin[1] + pmax[1]) / 2.;
+
+        let dl = GetWindowDrawList();
+        do dl->AddRectFilled(pmin, pmax, (30, 30, 30, 255));
+        if (state.m_show_checker)
+            do _draw_checkerboard(dl, pmin, pmax, 16., 120);
+
+        // 占位以便获取可点击区域
+        do Dummy(avail);
+
+        match (state.m_source_texture)
+        {
+            none?
+            {
+                do dl->AddText((pmin[0] + 8., pmin[1] + 8.), (180, 180, 180, 255),
+                    "拖拽贴图到上方路径框，或点击选择源贴图");
+            }
+            value(tex)?
+                do _draw_sprite_at(tex, action, t, cx, cy, avail[0], avail[1],
+                    state.m_preview_zoom, (255, 255, 255, 255));
+        }
+    }
+
+    // ======================================================================
+    // 时间轴
+    // ======================================================================
+    func key_color(interp: InterpMode, selected: bool)=> Color32RGBA
+    {
+        if (selected)
+            return (245, 200, 70, 255);
+        if (interp == InterpMode::CONSTANT)
+            return (150, 150, 165, 255);
+        if (interp == InterpMode::HERMITE)
+            return (110, 200, 110, 255);
+        return (90, 160, 240, 255);
+    }
+
+    func _draw_diamond(dl: DrawListT, x: real, y: real, r: real, color: Color32RGBA) => void
+    {
+        do dl->AddTriangleFilled((x, y - r), (x + r, y), (x, y + r), color);
+        do dl->AddTriangleFilled((x, y + r), (x - r, y), (x, y - r), color);
+    }
+
+    // 供属性面板与时间轴共用的辅助：取第一条选中轨道的索引
+    func selected_track_of(state: EditorState, track_count: int)=> option<int>
+    {
+        let mut found = option::none: option<int>;
+        for (let (ti, _) : state.m_selected_keys->to_array)
+        {
+            if (ti >= 0 && ti < track_count)
+                found = option::value(ti);
+        }
+        return found;
+    }
+
+    func _render_timeline(state: EditorState, action: ActionData) => void
+    {
+        // 顶部控制行
+        if (RadioButton("关键帧##mode_dope", state.m_timeline_mode == 0))
+            state.m_timeline_mode = 0;
+        SameLine();
+        if (RadioButton("曲线##mode_curve", state.m_timeline_mode == 1))
+            state.m_timeline_mode = 1;
+        SameLine();
+        do DragFloat("缩放##pps", state.m_px_per_sec, 8., 16., 2000.)
+            ->> \v = state.m_px_per_sec = v;;
+        SameLine();
+        if (Button("⚙用精灵图切片生成"))
+            do OpenPopup("##spritesheet_popup");
+        do render_spritesheet_popup(state, action);
+        do render_add_event_popup(state, action);
+
+        let duration = action->duration;
+        let content_w = math::max(duration * state.m_px_per_sec + 64., 100.);
+
+        // 左侧固定标签栏 + 右侧滚动画布，行高常量一致保证对齐
+        let avail = GetContentRegionAvail();
+        let canvas_h = avail[1];
+        if (canvas_h < 60.)
+            return;
+
+        let track_count = action.m_tracks->len;
+        let dope_rows_h = EVENT_ROW_H + track_count as real * TRACK_ROW_H;
+
+        if (BeginChildSizeFlags("##tl_gutter", GUTTER_W, canvas_h,
+                WindowsAttribute::ImGuiWindowFlags_NoScrollbar
+                    + WindowsAttribute::ImGuiWindowFlags_NoScrollWithMouse))
+        {
+            let origin = GetCursorScreenPos();
+            let dl = GetWindowDrawList();
+            do Dummy((0., canvas_h - 4.));
+
+            // 标尺行
+            do dl->AddText((origin[0], origin[1] + 3.), (160, 160, 160, 255), "时间");
+            // 事件行
+            do dl->AddText((origin[0], origin[1] + RULER_H + 4.), (200, 150, 90, 255),
+                state.m_selected_event >= 0
+                && state.m_selected_event < action.m_events->len
+                ? F"事件 {state.m_selected_event}" | "事件");
+            // 轨道行
+            for (let (ti, track) : action.m_tracks->iter |> iterator::enumerate)
+            {
+                let y = origin[1] + RULER_H + EVENT_ROW_H
+                    + ti as real * TRACK_ROW_H + 3.;
+                let label = TrackTarget::label(track.m_target);
+                do dl->AddText((origin[0], y), (200, 200, 200, 255),
+                    label->sub_len(0, 24));
+                do dl->AddText((origin[0] + GUTTER_W - 120., y), (140, 140, 140, 255),
+                    track.m_additive ? "叠加" | "绝对");
+                if (state.m_timeline_mode == 1 && ti == selected_track_of(state, track_count)->or(-1))
+                    do dl->AddRect((origin[0] - 3., y - 3.),
+                        (origin[0] + GUTTER_W - 2., y + TRACK_ROW_H - 5.), (90, 160, 240, 255), 0.);
+            }
+
+            do gutter_context_menu(state, action);
+        }
+        EndChild();
+        SameLine();
+
+        if (BeginChildSizeFlags("##tl_canvas", avail[0] - GUTTER_W, canvas_h,
+                WindowsAttribute::ImGuiWindowFlags_HorizontalScrollbar
+                    + WindowsAttribute::ImGuiWindowFlags_NoScrollWithMouse))
+        {
+            let origin = GetCursorScreenPos();
+            let inner = GetContentRegionAvail();
+            let dl = GetWindowDrawList();
+            let scroll_x = GetScrollX();
+            let draw_x0 = origin[0] - scroll_x;
+            let pps = state.m_px_per_sec;
+            let visible_w = inner[0];
+
+            let view_h = state.m_timeline_mode == 0
+                ? dope_rows_h | inner[1];
+            do InvisibleButton("##tl_area", (content_w, view_h < inner[1] ? inner[1] | view_h));
+            let hovered = IsItemHovered();
+
+            // 背景
+            do dl->AddRectFilled((origin[0], origin[1]),
+                (origin[0] + visible_w, origin[1] + RULER_H), (52, 52, 56, 255));
+
+            // 标尺刻度：步长取“50~120px 之间”的 1/2/5 次幂
+            let mut step = 0.01;
+            while (step * pps < 50.)
+                step *= 10.;
+            if (step * pps > 120.)
+                step /= 2.;
+            let mut tick = math::ceilf(scroll_x / pps / step) * step;
+            while (tick * pps < scroll_x + visible_w)
+            {
+                let x = draw_x0 + tick * pps;
+                do dl->AddLine((x, origin[1]), (x, origin[1] + RULER_H), (90, 90, 90, 255), 1.);
+                do dl->AddText((x + 2., origin[1] + 3.), (150, 150, 150, 255),
+                    F"{math::round(tick * 1000.) as real / 1000.}");
+                tick += step;
+            }
+
+            // 垂直网格线（贯穿事件行与轨道行）
+            let content_bottom = origin[1] + RULER_H + EVENT_ROW_H
+                + track_count as real * TRACK_ROW_H;
+            do dl->AddRectFilled((origin[0], origin[1] + RULER_H),
+                (origin[0] + visible_w,
+                    content_bottom < origin[1] + inner[1]
+                    ? content_bottom | origin[1] + inner[1]),
+                (45, 45, 48, 255));
+            tick = math::ceilf(scroll_x / pps / step) * step;
+            while (tick * pps < scroll_x + visible_w)
+            {
+                let x = draw_x0 + tick * pps;
+                do dl->AddLine((x, origin[1] + RULER_H), (x, content_bottom),
+                    (58, 58, 62, 255), 1.);
+                tick += step;
+            }
+
+            // 事件行背景
+            do dl->AddRectFilled((origin[0], origin[1] + RULER_H),
+                (origin[0] + visible_w, origin[1] + RULER_H + EVENT_ROW_H),
+                (52, 48, 42, 255));
+
+            // 各视图内容
+            if (state.m_timeline_mode == 0)
+            {
+                do draw_events_row(state, action, origin, draw_x0, pps, hovered);
+                do draw_dope_rows(state, action, origin, draw_x0, pps);
+            }
+            else
+                do draw_curve_view(state, action, origin, draw_x0, pps,
+                    (visible_w, inner[1]), hovered);
+
+            // 播放头
+            let ph_x = draw_x0 + state.m_play_time * pps;
+            let ph_bottom = state.m_timeline_mode == 0
+                ? content_bottom | origin[1] + inner[1];
+            do dl->AddLine((ph_x, origin[1]), (ph_x, ph_bottom), (240, 60, 60, 255), 2.);
+            do dl->AddTriangleFilled((ph_x, origin[1] + 8.), (ph_x - 5., origin[1]),
+                (ph_x + 5., origin[1]), (240, 60, 60, 255));
+
+            // 交互：点击空白选择/scrub；拖拽中移动所选关键帧/事件
+            do handle_timeline_input(state, action, origin, draw_x0, pps, hovered);
+
+            // 播放头跟随
+            if (state.m_playing)
+            {
+                let ph_local = state.m_play_time * pps;
+                if (ph_local < scroll_x || ph_local > scroll_x + visible_w)
+                    do SetScrollFromPosX(ph_local, 0.5);
+            }
+        }
+        EndChild();
+
+        // 画布右键菜单（空白处）
+        do canvas_context_menu(state, action);
+
+        // 快捷键（时间轴窗口聚焦时）
+        if (IsWindowFocused())
+        {
+            if (IsKeyPressed(ImGuiKey::ImGuiKey_Space, false))
+                state.m_playing = !state.m_playing;
+            if (IsKeyPressed(ImGuiKey::ImGuiKey_Delete, false))
+                do delete_selected(state, action);
+            if (IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl) && IsKeyPressed(ImGuiKey::ImGuiKey_Z, false))
+                do state->undo;
+            if (IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl) && IsKeyPressed(ImGuiKey::ImGuiKey_Y, false))
+                do state->redo;
+        }
+    }
+
+    // 事件行绘制与拖拽命中
+    func draw_events_row(
+        state: EditorState, action: ActionData,
+        origin: ImVec2, draw_x0: real, pps: real, hovered: bool) => void
+    {
+        let dl = GetWindowDrawList();
+        let row_y = origin[1] + RULER_H;
+
+        let mut hit = option::none: option<int>;
+        for (let (ei, e) : action.m_events->iter |> iterator::enumerate)
+        {
+            let x = draw_x0 + e.m_time * pps;
+            let selected = ei == state.m_selected_event;
+            do dl->AddLine((x, row_y), (x, row_y + EVENT_ROW_H),
+                (170, 120, 60, 255), 1.);
+            do _draw_diamond(dl, x, row_y + EVENT_ROW_H / 2., 5.,
+                selected ? (245, 200, 70, 255) | (200, 150, 90, 255));
+            do dl->AddText((x + 8., row_y + 4.), (170, 140, 100, 255),
+                e.m_name->sub_len(0, 16));
+
+            let mp = GetMousePos();
+            if (hovered && math::abs(mp[0] - x) <= 6.
+                && mp[1] >= row_y && mp[1] < row_y + EVENT_ROW_H)
+                hit = option::value(ei);
+        }
+
+        // 事件选择与拖拽（按下/拖动/释放都在 InvisibleButton 区域内）
+        let mp = GetMousePos();
+        if (hovered && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            match (hit)
+            {
+                value(ei)?
+                {
+                    state.m_selected_event = ei;
+                    state.m_selected_keys->clear();
+                    state.m_drag_active = true;
+                    state.m_drag_moved = false;
+                    state.m_drag_kind = 2;
+                    state.m_drag_event_orig = action.m_events[ei].m_time;
+                    state.m_drag_snap = option::value(action->dup());
+                }
+                none? state.m_selected_event = -1;
+            }
+        }
+        if (state.m_drag_active && state.m_selected_event >= 0 && IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            let nt = math::max(0., (mp[0] - draw_x0) / pps);
+            if (math::abs(nt - state.m_drag_event_orig) > 0.0001)
+            {
+                action.m_events[state.m_selected_event].m_time = nt;
+                state.m_drag_moved = true;
+            }
+        }
+    }
+
+    // 关键帧视图：轨道行绘制
+    func draw_dope_rows(
+        state: EditorState, action: ActionData,
+        origin: ImVec2, draw_x0: real, pps: real) => void
+    {
+        let dl = GetWindowDrawList();
+        let mp = GetMousePos();
+
+        for (let (ti, track) : action.m_tracks->iter |> iterator::enumerate)
+        {
+            let row_y = origin[1] + RULER_H + EVENT_ROW_H
+                + ti as real * TRACK_ROW_H;
+            if (ti % 2 == 1)
+                do dl->AddRectFilled((origin[0], row_y),
+                    (origin[0] + 4096., row_y + TRACK_ROW_H), (50, 50, 52, 255));
+
+            for (let (ki, key) : track.m_keys->iter |> iterator::enumerate)
+            {
+                let x = draw_x0 + key.m_time * pps;
+                do _draw_diamond(dl, x, row_y + TRACK_ROW_H / 2., 5.5,
+                    key_color(key.m_interp, state->is_key_selected(ti, ki)));
+            }
+        }
+
+        // 拖拽处理（按下命中在 handle_timeline_input 里统一做）
+        if (state.m_drag_active && IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            let dt = (mp[0] - state.m_drag_start_x) / pps;
+            if (math::abs(dt) > 0.0001)
+            {
+                state.m_drag_moved = true;
+                for (let (ti, ki, orig) : state.m_drag_keys->to_array)
+                {
+                    match (action.m_tracks->get(ti))
+                    {
+                        value(track)?
+                        {
+                            match (track.m_keys->get(ki))
+                            {
+                                value(key)? key.m_time = math::max(0., orig + dt);
+                                none?;
+                            }
+                        }
+                        none?;
+                    }
+                }
+            }
+        }
+    }
+
+    // 曲线视图通道标签（单通道 v；多通道 x/y/z/w）
+    func channel_labels_of(track: Track)=> array<string>
+    {
+        match (track->value_type)
+        {
+            value(vt)?
+            {
+                if (vt == DataValueType::VEC2)
+                    return ["x", "y"];
+                if (vt == DataValueType::VEC3)
+                    return ["x", "y", "z"];
+                if (vt == DataValueType::VEC4 || vt == DataValueType::QUAT4)
+                    return ["x", "y", "z", "w"];
+                return ["v"];
+            }
+            none? return ["v"];
+        }
+    }
+
+    // 曲线视图：绘制选中轨道的当前通道
+    func draw_curve_view(
+        state: EditorState, action: ActionData,
+        origin: ImVec2, draw_x0: real, pps: real,
+        view_size: (real, real), hovered: bool) => void
+    {
+        let dl = GetWindowDrawList();
+        let area_top = origin[1] + RULER_H;
+        let area_bottom = origin[1] + view_size[1];
+        let ti_opt = selected_track_of(state, action.m_tracks->len);
+        if (ti_opt->is_none)
+        {
+            do dl->AddText((origin[0] + 12., area_top + 12.),
+                (170, 170, 170, 255), "在关键帧视图或轨道表中选择一条轨道以显示曲线");
+            return;
+        }
+        let ti = ti_opt->unwrap;
+        let track = action.m_tracks[ti];
+        let channel_labels = channel_labels_of(track);
+        let channel = math::min(state.m_curve_channel, channel_labels->len - 1);
+
+        // 值域自适应：取关键帧值的 min/max 加 15% 边距，再按缩放系数放大
+        let mut vmin = 0.;
+        let mut vmax = 0.;
+        let mut first = true;
+        for (let key : track.m_keys)
+        {
+            let v = key.m_value->channel(channel);
+            if (first)
+            {
+                vmin = v;
+                vmax = v;
+                first = false;
+            }
+            else
+            {
+                vmin = math::min(vmin, v);
+                vmax = math::max(vmax, v);
+            }
+        }
+        if (vmin == vmax)
+        {
+            vmin -= 1.;
+            vmax += 1.;
+        }
+        let pad = (vmax - vmin) * 0.15 / math::max(state.m_curve_zoom, 0.05);
+        vmin -= pad;
+        vmax += pad;
+        let mid_v = (vmin + vmax) / 2.;
+        let px_per_v = (area_bottom - area_top) / (vmax - vmin);
+        let to_y = \v = area_bottom - (v - mid_v) * px_per_v;;
+        let from_y = \y = mid_v + (area_bottom - y) / px_per_v;;
+
+        // 零线
+        if (0. >= vmin && 0. <= vmax)
+            do dl->AddLine((origin[0], to_y(0.)), (origin[0] + view_size[0], to_y(0.)),
+                (60, 70, 60, 255), 1.);
+
+        // 曲线段
+        let n = track.m_keys->len;
+        for (let mut i = 0; i + 1 < n; i += 1)
+        {
+            let k0 = track.m_keys[i];
+            let k1 = track.m_keys[i + 1];
+            let x0 = draw_x0 + k0.m_time * pps;
+            let x1 = draw_x0 + k1.m_time * pps;
+            let y0 = to_y(k0.m_value->channel(channel));
+            let y1 = to_y(k1.m_value->channel(channel));
+
+            if (k0.m_interp == InterpMode::CONSTANT)
+                do dl->AddLine((x0, y0), (x1, y0), (150, 150, 165, 255), 2.);
+            else if (k0.m_interp == InterpMode::LINEAR)
+                do dl->AddLine((x0, y0), (x1, y1), (90, 160, 240, 255), 2.);
+            else
+            {
+                // hermite 导数精确换算为三次贝塞尔控制点
+                let d = k1.m_time - k0.m_time;
+                let (_, m0) = track->tangents_of(i, channel);
+                let (m1, _) = track->tangents_of(i + 1, channel);
+                do dl->AddBezierCubic(
+                    (x0, y0),
+                    (x0 + d / 3. * pps, to_y(k0.m_value->channel(channel) + m0 * d / 3.)),
+                    (x1 - d / 3. * pps, to_y(k1.m_value->channel(channel) - m1 * d / 3.)),
+                    (x1, y1),
+                    (110, 200, 110, 255), 2.);
+            }
+        }
+
+        // 切线手柄与关键帧圆点（选中关键帧显示手柄）
+        for (let (ki, key) : track.m_keys->iter |> iterator::enumerate)
+        {
+            let x = draw_x0 + key.m_time * pps;
+            let v = key.m_value->channel(channel);
+            let y = to_y(v);
+            if (state->is_key_selected(ti, ki))
+            {
+                let d_prev = ki > 0 ? key.m_time - track.m_keys[ki - 1].m_time | 0.4;
+                let d_next = ki + 1 < n ? track.m_keys[ki + 1].m_time - key.m_time | 0.4;
+                let (tin, tout) = track->tangents_of(ki, channel);
+                let hin = (x - d_prev / 3. * pps, to_y(v - tin * d_prev / 3.));
+                let hout = (x + d_next / 3. * pps, to_y(v + tout * d_next / 3.));
+                do dl->AddLine((x, y), hin, (120, 120, 120, 255), 1.);
+                do dl->AddLine((x, y), hout, (120, 120, 120, 255), 1.);
+                do dl->AddCircle(hin, 4., (220, 220, 220, 255), 1.);
+                do dl->AddCircle(hout, 4., (220, 220, 220, 255), 1.);
+            }
+            do dl->AddCircleFilled((x, y), 5.5,
+                state->is_key_selected(ti, ki)
+                ? (245, 200, 70, 255) | (230, 230, 230, 255));
+        }
+
+        // 通道切换标签
+        let mut chip_x = origin[0] + 8.;
+        for (let (ci, label) : channel_labels->iter |> iterator::enumerate)
+        {
+            let active = ci == channel;
+            do dl->AddText((chip_x, area_top + 6.),
+                active ? (240, 200, 80, 255) | (150, 150, 150, 255), label);
+            chip_x += CalcTextSize(label)[0] + 10.;
+        }
+
+        // 值轴刻度（左侧 3 档）
+        for (let mut r = 0; r <= 2; r += 1)
+        {
+            let v = vmin + (vmax - vmin) * r as real / 2.;
+            let y = to_y(v);
+            do dl->AddLine((origin[0], y), (origin[0] + view_size[0], y), (58, 58, 62, 255), 1.);
+            do dl->AddText((origin[0] + 4., y + 2.), (140, 140, 140, 255),
+                F"{math::round(v * 100.) as real / 100.}");
+        }
+
+        // 交互
+        let mp = GetMousePos();
+        if (hovered)
+        {
+            // 通道切换点击
+            let mut chip_x2 = origin[0] + 8.;
+            for (let (ci, label) : channel_labels->iter |> iterator::enumerate)
+            {
+                let w = CalcTextSize(label)[0];
+                if (IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left)
+                    && mp[0] >= chip_x2 && mp[0] <= chip_x2 + w + 4.
+                    && mp[1] >= area_top && mp[1] <= area_top + 20.)
+                    state.m_curve_channel = ci;
+                chip_x2 += w + 10.;
+            }
+
+            // 滚轮缩放值轴
+            if (GetMouseWheel()[1] != 0.)
+                state.m_curve_zoom = math::max(0.05,
+                    math::min(20., state.m_curve_zoom
+                        * (GetMouseWheel()[1] > 0. ? 1.15 | 0.87)));
+        }
+
+        do curve_input(state, action, ti, channel, draw_x0, pps,
+            to_y, from_y, hovered);
+    }
+
+    // 曲线视图交互：命中关键帧/手柄并拖拽（拖手柄会把关键帧转为 free 切线）
+    func curve_input(
+        state: EditorState, action: ActionData, track_idx: int, channel: int,
+        draw_x0: real, pps: real,
+        to_y: (real)=>real, from_y: (real)=>real, hovered: bool) => void
+    {
+        let track = action.m_tracks[track_idx];
+        let n = track.m_keys->len;
+        let mp = GetMousePos();
+
+        // 拖拽延续（按下命中在下方处理）
+        if (state.m_drag_kind == 4 && IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            let ki = state.m_drag_curve_ki;
+            if (ki >= 0 && ki < n)
+            {
+                let key = track.m_keys[ki];
+                let v = key.m_value->channel(channel);
+                // 手柄横坐标固定在 ±d/3 处，纵坐标跟随鼠标
+                let v_handle = from_y(mp[1]);
+                if (state.m_drag_curve_handle == 1)
+                {
+                    let d = ki > 0 ? key.m_time - track.m_keys[ki - 1].m_time | 0.4;
+                    let m = d > 0.0001 ? (v - v_handle) * 3. / d | 0.;
+                    do set_vec_at(key.m_free_in, channel, m);
+                }
+                else
+                {
+                    let d = ki + 1 < n ? track.m_keys[ki + 1].m_time - key.m_time | 0.4;
+                    let m = d > 0.0001 ? (v_handle - v) * 3. / d | 0.;
+                    do set_vec_at(key.m_free_out, channel, m);
+                }
+                state.m_drag_moved = true;
+            }
+            return;
+        }
+        if (state.m_drag_kind == 3 && IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            let ki = state.m_drag_curve_ki;
+            if (ki >= 0 && ki < n)
+            {
+                let key = track.m_keys[ki];
+                key.m_time = math::max(0.,
+                    state.m_drag_orig_time + (mp[0] - state.m_drag_start_x) / pps);
+                let nv = from_y(mp[1]);
+                key.m_value = key.m_value->with_channel(channel, nv);
+                if (math::abs(key.m_time - state.m_drag_orig_time) > 0.00001
+                    || math::abs(nv - state.m_drag_orig_value) > 0.00001)
+                    state.m_drag_moved = true;
+            }
+            return;
+        }
+
+        if (!hovered || !IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+            return;
+
+        // 1) 手柄命中（选中关键帧的入/出手柄，优先于关键帧本体）
+        let mut hit_handle = option::none: option<(int, int)>;  // (ki, 1入|2出)
+        for (let (ki, key) : track.m_keys->iter |> iterator::enumerate)
+        {
+            if (!state->is_key_selected(track_idx, ki))
+                continue;
+            let x = draw_x0 + key.m_time * pps;
+            let v = key.m_value->channel(channel);
+            let d_prev = ki > 0 ? key.m_time - track.m_keys[ki - 1].m_time | 0.4;
+            let d_next = ki + 1 < n ? track.m_keys[ki + 1].m_time - key.m_time | 0.4;
+            let (tin, tout) = track->tangents_of(ki, channel);
+            let hin = (x - d_prev / 3. * pps, to_y(v - tin * d_prev / 3.));
+            let hout = (x + d_next / 3. * pps, to_y(v + tout * d_next / 3.));
+            if (math::abs(mp[0] - hin[0]) <= 6. && math::abs(mp[1] - hin[1]) <= 6.)
+                hit_handle = option::value((ki, 1));
+            if (math::abs(mp[0] - hout[0]) <= 6. && math::abs(mp[1] - hout[1]) <= 6.)
+                hit_handle = option::value((ki, 2));
+        }
+        match (hit_handle)
+        {
+            value((ki, which))?
+            {
+                do state->select_key(track_idx, ki, false);
+                // 拖手柄 = 手动切线：转为 free 并以当前计算值初始化全部通道
+                let key = track.m_keys[ki];
+                let mut fin = []mut: vec<real>;
+                let mut fout = []mut: vec<real>;
+                for (let mut c = 0; c < key.m_value->channel_count; c += 1)
+                {
+                    let (mi, mo) = track->tangents_of(ki, c);
+                    fin->add(mi);
+                    fout->add(mo);
+                }
+                key.m_tangent_mode = TangentMode::FREE;
+                key.m_free_in->clear();
+                key.m_free_out->clear();
+                do key.m_free_in->copy_from(fin->to_array);
+                do key.m_free_out->copy_from(fout->to_array);
+
+                state.m_drag_active = true;
+                state.m_drag_moved = true; // 切线模式转换本身已是修改
+                state.m_drag_kind = 4;
+                state.m_drag_curve_ki = ki;
+                state.m_drag_curve_handle = which;
+                state.m_drag_snap = option::value(action->dup());
+                return;
+            }
+            none?;
+        }
+
+        // 2) 关键帧命中：选中并开始拖拽（时间 + 当前通道的值）
+        for (let (ki, key) : track.m_keys->iter |> iterator::enumerate)
+        {
+            let x = draw_x0 + key.m_time * pps;
+            let y = to_y(key.m_value->channel(channel));
+            if (math::abs(mp[0] - x) <= 7. && math::abs(mp[1] - y) <= 7.)
+            {
+                do state->select_key(track_idx, ki, false);
+                state.m_drag_active = true;
+                state.m_drag_moved = false;
+                state.m_drag_kind = 3;
+                state.m_drag_curve_ki = ki;
+                state.m_drag_start_x = mp[0];
+                state.m_drag_orig_time = key.m_time;
+                state.m_drag_orig_value = key.m_value->channel(channel);
+                state.m_drag_snap = option::value(action->dup());
+                return;
+            }
+        }
+    }
+
+    // 时间轴统一输入处理：空白点击 scrub、关键帧命中选择/开始拖拽
+    func handle_timeline_input(
+        state: EditorState, action: ActionData,
+        origin: ImVec2, draw_x0: real, pps: real, hovered: bool) => void
+    {
+        let mp = GetMousePos();
+
+        // 关键帧命中（关键帧视图）：最近的一个
+        if (hovered && state.m_timeline_mode == 0
+            && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            let ctrl = IsKeyDown(ImGuiKey::ImGuiKey_LeftCtrl)
+                || IsKeyDown(ImGuiKey::ImGuiKey_RightCtrl);
+            let mut hit = option::none: option<(int, int)>;
+            for (let (ti, track) : action.m_tracks->iter |> iterator::enumerate)
+            {
+                let row_y = origin[1] + RULER_H + EVENT_ROW_H
+                    + ti as real * TRACK_ROW_H + TRACK_ROW_H / 2.;
+                if (mp[1] < row_y - 7. || mp[1] > row_y + 7.)
+                    continue;
+                for (let (ki, key) : track.m_keys->iter |> iterator::enumerate)
+                {
+                    let x = draw_x0 + key.m_time * pps;
+                    if (math::abs(mp[0] - x) <= 7.)
+                        hit = option::value((ti, ki));
+                }
+            }
+
+            match (hit)
+            {
+                value((ti, ki))?
+                {
+                    let already = state->is_key_selected(ti, ki);
+                    if (!already || ctrl)
+                        do state->select_key(ti, ki, ctrl);
+                    // 开始拖拽（选中的所有关键帧一起移动）
+                    state.m_drag_active = true;
+                    state.m_drag_moved = false;
+                    state.m_drag_kind = 1;
+                    state.m_drag_start_x = mp[0];
+                    state.m_drag_keys->clear();
+                    for (let (sti, ski) : state.m_selected_keys->to_array)
+                        state.m_drag_keys->add((
+                            sti, ski, action.m_tracks[sti].m_keys[ski].m_time));
+                    state.m_drag_snap = option::value(action->dup());
+                }
+                none?
+                {
+                    // 空白点击：scrub
+                    state.m_selected_keys->clear();
+                    state.m_selected_event = -1;
+                    state.m_playing = false;
+                    let t = math::max(0., (mp[0] - draw_x0) / pps);
+                    let duration = action->duration;
+                    state.m_play_time = duration > 0. ? math::min(t, duration) | t;
+                }
+            }
+        }
+
+        // 拖拽释放：按拖拽种类提交一次修改
+        if (state.m_drag_active && IsMouseReleased(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            if (state.m_drag_moved)
+            {
+                if (state.m_drag_kind == 1)
+                {
+                    // 关键帧组拖拽：受影响轨道重排序
+                    for (let (ti, _, _) : state.m_drag_keys->to_array)
+                        match (action.m_tracks->get(ti))
+                        {
+                            value(track)? do track->sort_keys;
+                            none?;
+                        };
+                }
+                else if (state.m_drag_kind == 3)
+                {
+                    // 曲线关键帧拖拽：时间可能变化，重排序
+                    match (selected_track_of(state, action.m_tracks->len))
+                    {
+                        value(ti)? do action.m_tracks[ti]->sort_keys;
+                        none?;
+                    }
+                }
+                match (state.m_drag_snap)
+                {
+                    value(snap)?
+                        do state->record(snap, state.m_drag_kind == 2
+                            ? "移动事件" | "移动关键帧");
+                    none?;
+                }
+            }
+            state.m_drag_active = false;
+            state.m_drag_kind = 0;
+            state.m_drag_keys->clear();
+            state.m_drag_snap = option::none;
+        }
+    }
+
+    // 删除选中的关键帧与事件
+    func delete_selected(state: EditorState, action: ActionData) => void
+    {
+        if (state.m_selected_keys->len == 0 && state.m_selected_event < 0)
+            return;
+        let snap = action->dup();
+
+        // 关键帧按 (轨道, 索引) 降序删除
+        let keys = std::sort(state.m_selected_keys->to_array,
+            \a, b = a[0] != b[0] ? a[0] > b[0] | a[1] > b[1];);
+        let mut last_track = -1;
+        for (let (ti, _) : keys)
+        {
+            match (action.m_tracks->get(ti))
+            {
+                value(track)?
+                {
+                    // 同一轨道只收集一次降序索引集合
+                    if (last_track != ti)
+                    {
+                        last_track = ti;
+                        // 收集该轨道全部选中索引并降序删除
+                        let mut idxs = []mut: vec<int>;
+                        for (let (sti, ski) : keys)
+                            if (sti == ti)
+                                idxs->add(ski);
+                        let sorted = std::sort(idxs->to_array, \a, b = a > b;);
+                        for (let idx : sorted)
+                            do track.m_keys->remove(idx);
+                    }
+                }
+                none?;
+            }
+        }
+        if (state.m_selected_event >= 0 && state.m_selected_event < action.m_events->len)
+            do action.m_events->remove(state.m_selected_event);
+
+        state.m_selected_keys->clear();
+        state.m_selected_event = -1;
+        do state->record(snap, "删除关键帧");
+    }
+
+    // 标签栏右键：轨道操作
+    func gutter_context_menu(state: EditorState, action: ActionData) => void
+    {
+        if (BeginPopupContextItem())
+        {
+            if (MenuItem("+ 添加关键帧（播放头处）"))
+            {
+                let snap = action->dup();
+                do add_key_to_all_tracks(action, state.m_play_time);
+                do state->record(snap, "添加关键帧");
+            }
+            Separator();
+            if (MenuItem("+ 添加事件"))
+            {
+                state.m_adde_time = state.m_play_time;
+                do OpenPopup("##add_event_popup");
+            }
+            EndPopup();
+        }
+    }
+
+    // 画布空白右键
+    func canvas_context_menu(state: EditorState, action: ActionData) => void
+    {
+        if (BeginPopupContextItem())
+        {
+            if (MenuItemEnabled("删除选中（Del）",
+                    state.m_selected_keys->len > 0 || state.m_selected_event >= 0))
+                do delete_selected(state, action);
+            EndPopup();
+        }
+    }
+
+    // 在每条轨道的播放头时刻补一个关键帧（值为该时刻采样值）
+    func add_key_to_all_tracks(action: ActionData, t: real) => void
+    {
+        for (let track : action.m_tracks)
+        {
+            match (track->sample_track(t))
+            {
+                value(v)?
+                    do add_key(track, t, v);
+                none?;
+            }
+        }
+    }
+
+    // 向轨道添加关键帧并保持时间有序；返回新关键帧索引
+    func add_key(track: Track, t: real, v: DataValue)=> int
+    {
+        let key = Keyframe{
+            m_time = mut math::max(0., t),
+            m_value = mut v,
+            m_interp = mut InterpMode::LINEAR,
+            m_tangent_mode = mut TangentMode::AUTO,
+            m_free_in = []mut,
+            m_free_out = []mut,
+        };
+        let mut at = track.m_keys->len;
+        for (let (i, k) : track.m_keys->iter |> iterator::enumerate)
+        {
+            if (k.m_time > key.m_time)
+            {
+                at = i;
+                break;
+            }
+        }
+        do track.m_keys->insert(at, key);
+        return at;
+    }
+
+    // 精灵图切片弹窗：按网格生成 offset/tiling 两条 constant 轨道
+    public func render_spritesheet_popup(state: EditorState, action: ActionData) => void
+    {
+        if (BeginPopup("##spritesheet_popup"))
+        {
+            do InputInt("列##ssc", state.m_ss_cols)->> \v = state.m_ss_cols = (v < 1 ? 1 | v);;
+            do InputInt("行##ssr", state.m_ss_rows)->> \v = state.m_ss_rows = (v < 1 ? 1 | v);;
+            do InputFloat("每帧时间##sst", state.m_ss_ftime)->> \v = state.m_ss_ftime = (v < 0. ? 0. | v);;
+            Separator();
+            Text(F"将生成 {state.m_ss_cols * state.m_ss_rows} 帧（覆盖当前动作的轨道）");
+            if (Button("生成##ssg"))
+            {
+                let snap = action->dup();
+                do action.m_tracks->clear();
+                let cols = state.m_ss_cols;
+                let rows = state.m_ss_rows;
+                let tx = 1. / cols as real;
+                let ty = 1. / rows as real;
+
+                let offset_track = Track{
+                    m_target = TrackTarget::Member((
+                        "Renderer::Textures2D", "offset")),
+                    m_additive = mut false,
+                    m_keys = []mut,
+                };
+                let tiling_track = Track{
+                    m_target = TrackTarget::Member((
+                        "Renderer::Textures2D", "tiling")),
+                    m_additive = mut false,
+                    m_keys = []mut,
+                };
+
+                // 从上到下、左到右（与运行时纹理 V 向上一致：顶行 = y = rows-1）
+                // shader: finalUV = (uv + offset) * tiling，offset 取单元格索引
+                let mut i = 0;
+                for (let mut j = 0; j < rows; j += 1)
+                {
+                    for (let mut k = 0; k < cols; k += 1)
+                    {
+                        let col = k as real;
+                        let row = (rows - 1 - j) as real;
+                        let t = i as real * state.m_ss_ftime;
+                        do add_key(offset_track, t,
+                            DataValue::VEC2((col, row)));
+                        do add_key(tiling_track, t,
+                            DataValue::VEC2((tx, ty)));
+                        i += 1;
+                    }
+                }
+                // 切片帧为阶跃切换，全部关键帧使用 constant 插值
+                for (let key : offset_track.m_keys)
+                    key.m_interp = InterpMode::CONSTANT;
+                for (let key : tiling_track.m_keys)
+                    key.m_interp = InterpMode::CONSTANT;
+
+                do action.m_tracks->add(offset_track);
+                do action.m_tracks->add(tiling_track);
+                do state->record(snap, "切片生成");
+                state.m_play_time = 0.;
+                do CloseCurrentPopup();
+            }
+            SameLine();
+            if (Button("取消"))
+                do CloseCurrentPopup();
+            EndPopup();
+        }
+    }
+
+    // 添加事件弹窗
+    func render_add_event_popup(state: EditorState, action: ActionData) => void
+    {
+        if (BeginPopup("##add_event_popup"))
+        {
+            do InputFloat("时间##aet", state.m_adde_time)->> \v = state.m_adde_time = (v < 0. ? 0. | v);;
+            do InputText("名称##aen", state.m_adde_name)->> \s = state.m_adde_name = s;;
+            if (state.m_adde_name == "")
+                TextDisabled("名称不能为空");
+            else if (Button("添加##aea"))
+            {
+                let snap = action->dup();
+                do action.m_events->add(AnimationEvent{
+                    m_time = mut state.m_adde_time,
+                    m_name = mut state.m_adde_name,
+                });
+                do state->record(snap, "添加事件");
+                state.m_adde_name = "";
+                do CloseCurrentPopup();
+            }
+            EndPopup();
+        }
+    }
+
+    // ---- 右侧：属性面板 ----
+    public func _render_properties(state: EditorState, action: ActionData) => void
+    {
+        do render_action_props(state, action);
+        Separator();
+        do render_track_list(state, action);
+        Separator();
+        do render_selected_key_props(state, action);
+        Separator();
+        do render_event_list(state, action);
+    }
+
+    func render_action_props(state: EditorState, action: ActionData) => void
+    {
+        Text("动作");
+        let col_x = Widgets::editColumnX();
+
+        // 循环方式
+        let loop_names = ["不循环", "循环", "往返"];
+        let loop_idx = action.m_loop_mode == LoopMode::REPEAT ? 1
+            | action.m_loop_mode == LoopMode::PINGPONG ? 2 | 0;
+        Widgets::beginRow("循环", col_x, 56.);
+        match (Combo("##loop_mode", loop_names, option::value(loop_idx)))
+        {
+            value(idx)?
+            {
+                do state->begin_value_edit;
+                action.m_loop_mode = idx == 1 ? LoopMode::REPEAT
+                    | idx == 2 ? LoopMode::PINGPONG | LoopMode::NONE;
+            }
+            none?;
+        }
+
+        // 时长（0 = 自动：取内容最大时间）
+        Widgets::beginRow("时长", col_x, 56.);
+        match (InputFloatFormat("##duration", action.m_duration, "%.3f"))
+        {
+            value(v)?
+            {
+                do state->begin_value_edit;
+                action.m_duration = v < 0. ? 0. | v;
+            }
+            none?;
+        }
+        if (action.m_duration <= 0.)
+        {
+            Widgets::setCursorX(col_x);
+            TextDisabled(F"自动时长：{math::round(action->duration * 1000.) as real / 1000.}s");
+        }
+    }
+
+    func render_track_list(state: EditorState, action: ActionData) => void
+    {
+        Text(F"轨道（{action.m_tracks->len}）");
+        if (BeginTable("##tracktable", 3,
+                TableFlags::ImGuiTableFlags_Resizable + TableFlags::ImGuiTableFlags_RowBg
+                    + TableFlags::ImGuiTableFlags_BordersInnerV))
+        {
+            do TableSetupColumn("目标##t1", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 190.);
+            do TableSetupColumn("模式##t2", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 80.);
+            do TableSetupColumn("操作##t3", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 60.);
+            do TableHeadersRow();
+
+            let mut to_remove = option::none: option<int>;
+            for (let (ti, track) : action.m_tracks->iter |> iterator::enumerate)
+            {
+                do TableNextRow(TableRowFlags::ImGuiTableRowFlags_None, 0.);
+                do TableNextColumn();
+                if (SelectableSelected(
+                        F"{TrackTarget::label(track.m_target)}##trk{ti}", false))
+                {
+                    // 选中该轨道全部关键帧（用于曲线视图）
+                    state.m_selected_keys->clear();
+                    state.m_selected_event = -1;
+                    for (let (ki, _) : track.m_keys->iter |> iterator::enumerate)
+                        state.m_selected_keys->add((ti, ki));
+                }
+                do TableNextColumn();
+                PushIDInt(ti);
+                match (CheckBox(F"叠加##tk{ti}", track.m_additive))
+                {
+                    value(v)?
+                    {
+                        do state->begin_value_edit;
+                        track.m_additive = v;
+                    }
+                    none?;
+                }
+                do TableNextColumn();
+                if (Button("删除##tdel"))
+                    to_remove = option::value(ti);
+                PopID();
+            }
+            EndTable();
+
+            match (to_remove)
+            {
+                value(ti)?
+                {
+                    let snap = action->dup();
+                    do action.m_tracks->remove(ti);
+                    state.m_selected_keys->clear();
+                    do state->record(snap, "删除轨道");
+                }
+                none?;
+            }
+        }
+        if (Button("+ 组件成员轨道##addc"))
+            do OpenPopup("##add_track_popup");
+        SameLine();
+        if (Button("+ Uniform 轨道##addu"))
+            do OpenPopup("##add_uniform_popup");
+        do open_add_track_popup(state, action);
+        do open_add_uniform_popup(state, action);
+    }
+
+    func render_selected_key_props(state: EditorState, action: ActionData) => void
+    {
+        // 单选关键帧时可编辑其完整属性
+        if (state.m_selected_keys->len != 1)
+        {
+            if (state.m_selected_keys->len > 1)
+                TextDisabled(F"已选中 {state.m_selected_keys->len} 个关键帧（可拖动/删除）");
+            else
+                TextDisabled("在时间轴上选择关键帧以编辑");
+            return;
+        }
+
+        let (ti, ki) = state.m_selected_keys[0];
+        match (action.m_tracks->get(ti))
+        {
+            none? TextDisabled("关键帧不存在");
+            value(track)?
+            {
+                match (track.m_keys->get(ki))
+                {
+                    none? TextDisabled("关键帧不存在");
+                    value(key)?
+                        do render_key_fields(state, track, key, ki);
+                }
+            }
+        }
+    }
+
+    func render_key_fields(
+        state: EditorState, track: Track, key: Keyframe, ki: int) => void
+    {
+        Text(F"关键帧（{TrackTarget::label(track.m_target)} #{ki}）");
+        let col_x = Widgets::editColumnX();
+
+        Widgets::beginRow("时间", col_x, 56.);
+        match (InputFloatFormat("##key_time", key.m_time, "%.4f"))
+        {
+            value(v)?
+            {
+                do state->begin_value_edit;
+                key.m_time = v < 0. ? 0. | v;
+                do track->sort_keys;
+            }
+            none?;
+        }
+
+        Widgets::beginRow("值", col_x, 56.);
+        DataValue::input_data_value("##key_value", key.m_value,
+            track->value_is_color,
+            func(v)
+            {
+                do state->begin_value_edit;
+                key.m_value = v;
+            });
+
+        // 插值方式（按值类型过滤不可用项）
+        let interp_names = ["常值", "线性", "曲线"];
+        let interp_idx = key.m_interp == InterpMode::CONSTANT ? 0
+            | key.m_interp == InterpMode::HERMITE ? 2 | 1;
+        Widgets::beginRow("插值", col_x, 56.);
+        match (Combo("##key_interp", interp_names, option::value(interp_idx)))
+        {
+            value(idx)?
+            {
+                let mode = idx == 0 ? InterpMode::CONSTANT
+                    | idx == 2 ? InterpMode::HERMITE | InterpMode::LINEAR;
+                if (track->interp_allowed(mode))
+                {
+                    do state->begin_value_edit;
+                    key.m_interp = mode;
+                }
+            }
+            none?;
+        }
+
+        // 切线模式（仅 hermite 区段有意义，仍允许提前设置）
+        if (key.m_interp == InterpMode::HERMITE)
+        {
+            let tangent_names = ["自动", "线性", "手动"];
+            let tangent_idx = key.m_tangent_mode == TangentMode::LINEAR ? 1
+                | key.m_tangent_mode == TangentMode::FREE ? 2 | 0;
+            Widgets::beginRow("切线", col_x, 56.);
+            match (Combo("##key_tangent", tangent_names, option::value(tangent_idx)))
+            {
+                value(idx)?
+                {
+                    do state->begin_value_edit;
+                    key.m_tangent_mode = idx == 1 ? TangentMode::LINEAR
+                        | idx == 2 ? TangentMode::FREE | TangentMode::AUTO;
+                    if (key.m_tangent_mode == TangentMode::FREE)
+                        do init_free_tangents(track, key, ki);
+                }
+                none?;
+            }
+
+            // 手动切线的数值编辑（每通道 入/出 导数）
+            if (key.m_tangent_mode == TangentMode::FREE)
+            {
+                for (let mut c = 0; c < key.m_value->channel_count; c += 1)
+                {
+                    Widgets::beginRow(F"切线{c}", col_x, 56.);
+                    let vin = key.m_free_in->get_or(c, 0.);
+                    let vout = key.m_free_out->get_or(c, 0.);
+                    match (InputFloat2("##key_tan", vin, vout))
+                    {
+                        value((nin, nout))?
+                        {
+                            do state->begin_value_edit;
+                            do set_vec_at(key.m_free_in, c, nin);
+                            do set_vec_at(key.m_free_out, c, nout);
+                        }
+                        none?;
+                    }
+                }
+            }
+        }
+    }
+
+    // 转为手动切线时以当前计算值初始化全部通道
+    func init_free_tangents(track: Track, key: Keyframe, ki: int) => void
+    {
+        let mut fin = []mut: vec<real>;
+        let mut fout = []mut: vec<real>;
+        for (let mut c = 0; c < key.m_value->channel_count; c += 1)
+        {
+            let (mi, mo) = track->tangents_of(ki, c);
+            fin->add(mi);
+            fout->add(mo);
+        }
+        key.m_free_in->clear();
+        key.m_free_out->clear();
+        do key.m_free_in->copy_from(fin->to_array);
+        do key.m_free_out->copy_from(fout->to_array);
+    }
+
+    // vec 没有原地 set：超长则追加，不足则补 0 后写入
+    func set_vec_at(values: vec<real>, index: int, v: real) => void
+    {
+        while (values->len <= index)
+            values->add(0.);
+        // 重建到 index 的前缀 + 新值 + 后缀
+        let mut rebuilt = []mut: vec<real>;
+        for (let mut i = 0; i < values->len; i += 1)
+            rebuilt->add(i == index ? v | values->get_or(i, 0.));
+        do values->clear();
+        do values->copy_from(rebuilt->to_array);
+    }
+
+    func render_event_list(state: EditorState, action: ActionData) => void
+    {
+        Text(F"事件（{action.m_events->len}）");
+        if (BeginTable("##eventtable", 3,
+                TableFlags::ImGuiTableFlags_Resizable + TableFlags::ImGuiTableFlags_RowBg
+                    + TableFlags::ImGuiTableFlags_BordersInnerV))
+        {
+            do TableSetupColumn("时间##e1", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 80.);
+            do TableSetupColumn("名称##e2", TableColumnFlags::ImGuiTableColumnFlags_WidthStretch, 0.);
+            do TableSetupColumn("操作##e3", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 60.);
+            do TableHeadersRow();
+            let mut to_remove = option::none: option<int>;
+            for (let (ei, e) : action.m_events->iter |> iterator::enumerate)
+            {
+                do TableNextRow(TableRowFlags::ImGuiTableRowFlags_None, 0.);
+                do TableNextColumn();
+                PushIDInt(ei + 500000);
+                match (InputFloatFormat("##etime", e.m_time, "%.3f"))
+                {
+                    value(v)?
+                    {
+                        do state->begin_value_edit;
+                        e.m_time = v < 0. ? 0. | v;
+                    }
+                    none?;
+                }
+                do TableNextColumn();
+                match (InputText("##ename", e.m_name))
+                {
+                    value(s)?
+                    {
+                        do state->begin_value_edit;
+                        e.m_name = s;
+                    }
+                    none?;
+                }
+                do TableNextColumn();
+                if (Button("删除##edel"))
+                    to_remove = option::value(ei);
+                PopID();
+            }
+            EndTable();
+            match (to_remove)
+            {
+                value(ei)?
+                {
+                    let snap = action->dup();
+                    do action.m_events->remove(ei);
+                    if (state.m_selected_event == ei)
+                        state.m_selected_event = -1;
+                    do state->record(snap, "删除事件");
+                }
+                none?;
+            }
+        }
+        if (Button("+ 事件##adde"))
+        {
+            state.m_adde_time = state.m_play_time;
+            do OpenPopup("##add_event_popup");
+        }
+        do render_add_event_popup(state, action);
+    }
+
+    // 添加组件成员轨道弹窗（带搜索过滤）
+    func open_add_track_popup(state: EditorState, action: ActionData) => void
+    {
+        if (BeginPopup("##add_track_popup"))
+        {
+            do _add_track_body(state, action);
+            EndPopup();
+        }
+    }
+
+    func _add_track_body(state: EditorState, action: ActionData) => void
+    {
+        let all_components = je::typeinfo::get_all_components_types()
+            -> forall(\t = ! t->name->begin_with("Editor::");)
+            |> std::sort(\at, bt = at->name < bt->name;)
+            ;
+        let comp_names = all_components->>\t = t->name;;
+
+        // 组件选择（变化时清空成员选择）
+        match (Combo("组件##cc", comp_names, state.m_addc_sel_type))
+        {
+            value(ni)?
+            {
+                state.m_addc_sel_type = option::value(ni);
+                state.m_addc_sel_member = option::none;
+            }
+            none?;
+        }
+        SameLine();
+
+        // 成员列表（选中组件后）
+        let members = func(){
+            let mut m = [] as array<(string, je::typeinfo)>;
+            match (state.m_addc_sel_type)
+            {
+                value(ci)?
+                {
+                    match (all_components->get(ci))
+                    {
+                        value(t)? m = t->get_members_info;
+                        none?;
+                    }
+                }
+                none?;
+            }
+            return m;
+        }();
+        let member_displays = members->>\nametype = nametype[0] + ": " + nametype[1]->name;;
+        do Combo("成员##cm", member_displays, state.m_addc_sel_member)
+            ->> \ni = state.m_addc_sel_member = option::value(ni);;
+
+        Separator();
+
+        // 取选中成员的 (名字, 类型)
+        let sel_member_info = func(){
+            let mut mi = option::none: option<(string, je::typeinfo)>;
+            match (state.m_addc_sel_member)
+            {
+                value(idx)?
+                {
+                    match (members->get(idx))
+                    {
+                        value(info)? mi = option::value(info);
+                        none?;
+                    }
+                }
+                none?;
+            }
+            return mi;
+        }();
+        match (sel_member_info)
+        {
+            value((mname, mtype))?
+            {
+                if (!type_is_animatable(mtype))
+                    TextDisabled(F"不支持该类型：{mtype->name}");
+                else
+                {
+                    // 类型变化时重置初始关键帧值
+                    if (state.m_addc_last_type->is_none || !(state.m_addc_last_type->unwrap == mtype))
+                    {
+                        state.m_addc_last_type = option::value(mtype);
+                        state.m_addc_editing_value = default_data_value_for_type(mtype);
+                    }
+                    Text("初始关键帧（时刻 0）");
+                    DataValue::input_data_value("值##cvv", state.m_addc_editing_value,
+                        type_is_color(mtype),
+                        \v = state.m_addc_editing_value = v;);
+                    if (state.m_addc_sel_type->is_value && Button("添加轨道##cca"))
+                    {
+                        let snap = action->dup();
+                        let comp_name = all_components[state.m_addc_sel_type->unwrap]->name;
+                        let track = Track{
+                            m_target = TrackTarget::Member((comp_name, mname)),
+                            m_additive = mut false,
+                            m_keys = []mut,
+                        };
+                        do add_key(track, 0., state.m_addc_editing_value);
+                        do action.m_tracks->add(track);
+                        do state->record(snap, "添加轨道");
+                        do CloseCurrentPopup();
+                    }
+                }
+            }
+            none?
+                TextDisabled("请选择组件和成员");
+        }
+    }
+
+    func open_add_uniform_popup(state: EditorState, action: ActionData) => void
+    {
+        if (BeginPopup("##add_uniform_popup"))
+        {
+            do _add_uniform_body(state, action);
+            EndPopup();
+        }
+    }
+    func _add_uniform_body(state: EditorState, action: ActionData) => void
+    {
+        let types = state.m_addu_types;
+        do InputText("变量名##un", state.m_addu_name)->> \s = state.m_addu_name = s;;
+        do Combo("类型##ut", types->>\nt = nt[0];, state.m_addu_sel_type)
+            ->> \ni = state.m_addu_sel_type = option::value(ni);;
+
+        match (state.m_addu_sel_type)
+        {
+            value(ti)?
+            {
+                Text("初始关键帧（时刻 0）");
+                DataValue::input_data_value("值##uvv", types[ti][1], false,
+                    \v = types[ti][1] = v;);
+                if (state.m_addu_name == "")
+                    TextDisabled("变量名不能为空");
+                else if (Button("添加轨道##una"))
+                {
+                    let snap = action->dup();
+                    let track = Track{
+                        m_target = TrackTarget::Uniform(state.m_addu_name),
+                        m_additive = mut false,
+                        m_keys = []mut,
+                    };
+                    do add_key(track, 0., types[ti][1]);
+                    do action.m_tracks->add(track);
+                    do state->record(snap, "添加 uniform 轨道");
+                    do CloseCurrentPopup();
+                }
+            }
+            none?
+                TextDisabled("请选择类型");
+        }
+    }
+}

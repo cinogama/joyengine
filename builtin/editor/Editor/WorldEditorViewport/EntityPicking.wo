@@ -19,7 +19,7 @@ import pkg::try;
 import pkg::worst;
 
 import builtin::editor::Editor::Action::DestroyEntity;
-import builtin::editor::Editor::ComponentPresets;
+import builtin::editor::Editor::ComponentPresetMenu;
 import builtin::editor::Editor::EntityClipboard;
 
 import Definition;
@@ -35,7 +35,7 @@ using je::gui;
 using iterator;
 
 using JEEditor::Editor::Action;
-using JEEditor::Editor::ComponentPresets;
+using JEEditor::Editor::ComponentPresetMenu;
 using JEEditor::Editor::EntityClipboard;
 
 namespace JEEditor::Editor::WorldEditorViewport
@@ -405,7 +405,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 常用组件组合子菜单：点击即把该组合内实体缺少的组件整组添加
         if (BeginMenu("添加常用组件"))
         {
-            ComponentPresets::showAddPresetMenu(self, e);
+            ComponentPresetMenu::showAddPresetMenu(self, e);
             defer EndMenu();
         }
 

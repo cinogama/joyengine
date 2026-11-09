@@ -12,7 +12,7 @@ import pkg::fsys;
 import builtin::editor::GUI::FileDrop;
 import builtin::editor::GUI::Widgets;
 import builtin::editor::Editor::ResourcePath;
-import builtin::editor::Editor::Animation2D::DataModel;
+import builtin::editor::Editor::Animation::DataModel;
 
 using std;
 using je;
@@ -613,16 +613,17 @@ namespace Particle::scalar_curve
         }
     }
 }
-// Animation::FrameAnimation::animation_list：帧动画引用表（运行时结构见
-// jeecs.hpp 的 Animation::FrameAnimation）。每个条目引用一个 .je4animation
-// 文件（m_path 为 @/ 运行时相对路径），并可指定载入后自动播放的动作与循环。
-namespace Animation::FrameAnimation::animation_list
+// Animation::Animator::animation_binding：动画播放器绑定的动画集（运行时
+// 结构见 jeecs.hpp 的 Animation::Animator）。引用一个 .je4animation 文件
+// （m_path 为 @/ 运行时相对路径），并可指定载入后自动播放的动作；
+// 循环方式由动作自身决定（在动画编辑器中设置）。
+namespace Animation::Animator::animation_binding
 {
     // 动作名缓存（runtime_path -> 动作名表 / 文件最后写入时间）：
     // .je4animation 可能正在动画编辑器中被修改，以时间戳判断缓存失效。
-    // 检视面板里每个动画条目每帧都会调用本函数，而 lastwrite 是一次
-    // 文件的 stat（@/ 路径还要取 workpath），因此时间戳最多每
-    // ACTION_NAMES_RECHECK_INTERVAL 秒复核一次，其余帧直接命中缓存。
+    // 检视面板每帧都会调用本函数，而 lastwrite 是一次文件的 stat（@/ 路径
+    // 还要取 workpath），因此时间戳最多每 ACTION_NAMES_RECHECK_INTERVAL 秒
+    // 复核一次，其余帧直接命中缓存。
     let ACTION_NAMES_RECHECK_INTERVAL = 0.5;
     let mut s_action_names_cache = {}mut: map<string, array<string>>;
     let mut s_action_names_stamp = {}mut: map<string, int>;
@@ -632,10 +633,7 @@ namespace Animation::FrameAnimation::animation_list
     func read_action_names(runtime_path: string)=> array<string>
     {
         if (runtime_path == "")
-        {
-            let empty = []mut: vec<string>;
-            return empty->to_array;
-        }
+            return []: array<string>;
 
         // 复核间隔内且已有缓存：不做路径展开与 stat
         let now = time();
@@ -677,189 +675,94 @@ namespace Animation::FrameAnimation::animation_list
             none?;
         }
 
-        let mut names = []mut: vec<string>;
-        match (JEEditor::Editor::Animation2D::AnimationContext::open(local_path))
+        let mut names = []: array<string>;
+        match (JEEditor::Editor::Animation::AnimationContext::open(local_path))
         {
-            ok(ctx)? names = ctx->action_names->to_vec;
+            ok(ctx)? names = ctx->action_names;
             err(_)?;
         }
 
-        let arr = names->to_array;
-        s_action_names_cache->set(runtime_path, arr);
+        s_action_names_cache->set(runtime_path, names);
         s_action_names_stamp->set(runtime_path, stamp);
-        return arr;
-    }
-
-    // 以下 entry_* 辅助：struct 成员不可变，修改单个字段需重建整个条目
-    func entry_with_path(entry: Animation::FrameAnimation::animation_state, path: string)=> Animation::FrameAnimation::animation_state
-    {
-        return Animation::FrameAnimation::animation_state{
-            m_path = path,
-            m_action = entry.m_action,
-            m_loop = entry.m_loop,
-        };
-    }
-    func entry_with_action(entry: Animation::FrameAnimation::animation_state, action: option<string>)=> Animation::FrameAnimation::animation_state
-    {
-        return Animation::FrameAnimation::animation_state{
-            m_path = entry.m_path,
-            m_action = action,
-            m_loop = entry.m_loop,
-        };
-    }
-    func entry_with_loop(entry: Animation::FrameAnimation::animation_state, loop_flag: bool)=> Animation::FrameAnimation::animation_state
-    {
-        return Animation::FrameAnimation::animation_state{
-            m_path = entry.m_path,
-            m_action = entry.m_action,
-            m_loop = loop_flag,
-        };
-    }
-    // 替换第 i 项（vec 没有原地 set，remove + insert 换入）
-    func replace_entry(entries: vec<Animation::FrameAnimation::animation_state>, i: int, entry: Animation::FrameAnimation::animation_state)=> void
-    {
-        do entries->remove(i);
-        do entries->insert(i, entry);
+        return names;
     }
 
     using parser = void
     {
-        public extern func edit(val: Animation::FrameAnimation::animation_list, tag: string)=> option<Animation::FrameAnimation::animation_list>
+        public extern func edit(val: Animation::Animator::animation_binding, tag: string)=> option<Animation::Animator::animation_binding>
         {
-            let mut entries = (val as array<Animation::FrameAnimation::animation_state>)->to_vec;
-            let mut need_update = false;
+            let mut result = option::none: option<Animation::Animator::animation_binding>;
             let col_x = Widgets::editColumnX();
 
-            // 动画条目数，首行与成员名同行
-            Widgets::beginStepRow("动画数", col_x, 56.);
-            match (InputInt(F"##{tag}_count", entries->len)->>\n = n < 0 ? 0 | n;)
+            // 1) 动画集文件：从资源浏览器拖入 .je4animation；
+            //    换文件/清除后原自动播放动作不再可靠，一并清空
+            let mut cur_local = option::none: option<fsys::path_t>;
+            if (val.m_path != "")
+                cur_local = option::value(ResourcePath::toLocalResourcePath(val.m_path));
+
+            Widgets::beginRow("动画集", col_x, 56.);
+            match (FileDrop::File(F"##{tag}_file", cur_local))
             {
-                value(count)?
+                none?;
+                value(p)?
                 {
-                    if (count != entries->len)
+                    let mut new_path = "";
+                    match (p)
                     {
-                        entries->resize(count, Animation::FrameAnimation::animation_state{
-                            m_path = "",
-                            m_action = option::none,
-                            m_loop = false,
-                        });
-                        need_update = true;
+                        value(lp)? new_path = ResourcePath::toRuntimeResourcePath(lp);
+                        none?;
                     }
+                    result = option::value(Animation::Animator::animation_binding{
+                        m_path = new_path,
+                        m_action = option::none,
+                    });
+                }
+            }
+
+            // 2) 载入后自动播放的动作：Combo 列出文件中的动作名；
+            //    当前动作不在文件中时附加标注项展示，避免值被静默丢弃
+            let file_names = read_action_names(val.m_path);
+            let mut cur_action = "";
+            match (val.m_action)
+            {
+                value(a)? cur_action = a;
+                none?;
+            }
+
+            let mut raw_names = []mut: vec<string>;
+            let mut disp = []mut: vec<string>;
+            raw_names->add("");
+            disp->add("（不自动播放）");
+            let mut sel = 0;
+            for (let n : file_names)
+            {
+                raw_names->add(n);
+                disp->add(n);
+                if (n == cur_action)
+                    sel = raw_names->len - 1;
+            }
+            if (cur_action != "" && sel == 0)
+            {
+                raw_names->add(cur_action);
+                disp->add(F"{cur_action}（文件中不存在）");
+                sel = raw_names->len - 1;
+            }
+
+            Widgets::beginRow("自动播放", col_x, 56.);
+            match (Combo(F"##{tag}_act", disp->to_array, option::value(sel)))
+            {
+                value(idx)?
+                {
+                    let picked = raw_names->get_or(idx, "");
+                    result = option::value(Animation::Animator::animation_binding{
+                        m_path = val.m_path,
+                        m_action = picked == "" ? option::none | option::value(picked),
+                    });
                 }
                 none?;
             }
 
-            // 每个条目占两行：“文件 + 移除”一行，“动作 + 循环”一行
-            for (let mut i = 0; i < entries->len; i += 1)
-            {
-                // 1) 动画文件：从资源浏览器拖入 .je4animation；字段右缘
-                //    紧邻的 × 只清除引用，行末的 × 移除整个条目
-                let mut cur_local = option::none: option<fsys::path_t>;
-                if (entries[i].m_path != "")
-                    cur_local = option::value(ResourcePath::toLocalResourcePath(entries[i].m_path));
-
-                Widgets::beginRow(F"文件{i}", col_x, 56.);
-                // 行末还要放“移除条目”× 按钮，为它预留右侧空间
-                match (FileDrop::FileTrailing(F"##{tag}_file{i}", cur_local, 32.))
-                {
-                    none?;
-                    value(p)?
-                    {
-                        let mut new_path = "";
-                        match (p)
-                        {
-                            value(lp)? new_path = ResourcePath::toRuntimeResourcePath(lp);
-                            none?;
-                        }
-                        // 换文件/清除后原动作引用不再可靠，一并清空
-                        replace_entry(entries, i,
-                            entry_with_path(entry_with_action(entries[i], option::none: option<string>), new_path));
-                        need_update = true;
-                    }
-                }
-                SameLine();
-                if (ButtonSize(F"×##{tag}_{i}", (22., 0.)))
-                {
-                    do entries->remove(i);
-                    // 回退索引并跳过本条目余下行，让递增后仍指向原第 i+1 项
-                    i -= 1;
-                    need_update = true;
-                    continue;
-                }
-                else
-                {
-                    if (IsItemHovered())
-                        do SetTooltip("移除该动画条目");
-                }
-
-                // 2) 载入后自动播放的动作：Combo 列出文件中的动作名；
-                //    当前动作不在文件中时附加标注项展示，避免值被静默丢弃
-                let file_names = read_action_names(entries[i].m_path);
-                let mut cur_action = "";
-                match (entries[i].m_action)
-                {
-                    value(a)? cur_action = a;
-                    none?;
-                }
-
-                let mut raw_names = []mut: vec<string>;
-                let mut disp = []mut: vec<string>;
-                raw_names->add("");
-                disp->add("（不自动播放）");
-                let mut sel = 0;
-                for (let n : file_names)
-                {
-                    raw_names->add(n);
-                    disp->add(n);
-                    if (n == cur_action)
-                        sel = raw_names->len - 1;
-                }
-                if (cur_action != "" && sel == 0)
-                {
-                    raw_names->add(cur_action);
-                    disp->add(F"{cur_action}（文件中不存在）");
-                    sel = raw_names->len - 1;
-                }
-
-                Widgets::beginRow(F"动作{i}", col_x, 56.);
-                // 同行还要放“循环”开关，为其预留右侧空间
-                SetNextItemWidth(GetContentRegionAvail().0 - 74.);
-                match (Combo(F"##{tag}_act{i}", disp->to_array, option::value(sel)))
-                {
-                    value(idx)?
-                    {
-                        let picked = raw_names->get_or(idx, "");
-                        let mut act = option::none: option<string>;
-                        if (picked != "")
-                            act = option::value(picked);
-                        replace_entry(entries, i, entry_with_action(entries[i], act));
-                        need_update = true;
-                    }
-                    none?;
-                }
-
-                // 3) 循环开关
-                SameLine();
-                match (CheckBox(F"循环##{tag}_loop{i}", entries[i].m_loop))
-                {
-                    value(l)?
-                    {
-                        replace_entry(entries, i, entry_with_loop(entries[i], l));
-                        need_update = true;
-                    }
-                    none?;
-                }
-            }
-
-            if (entries->len == 0)
-            {
-                Widgets::setCursorX(col_x);
-                do TextDisabled("无动画条目，点击上方“动画数”的 + 添加");
-            }
-
-            if (need_update)
-                return option::value(entries->to_array as Animation::FrameAnimation::animation_list);
-            return option::none;
+            return result;
         }
     }
 }

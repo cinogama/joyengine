@@ -28,6 +28,7 @@ import Browser;
 import WorldEditorViewport;
 import EditSession;
 import ComponentPresets;
+import ComponentPresetMenu;
 import ResourcePath;
 import PrefabSync;
 import Action::AddComponent;
@@ -672,7 +673,7 @@ namespace JEEditor::Editor
                 OpenPopup("##add_component_preset_menu");
             if (BeginPopup("##add_component_preset_menu"))
             {
-                ComponentPresets::showAddPresetMenu(wctx, e);
+                ComponentPresetMenu::showAddPresetMenu(wctx, e);
                 defer EndPopup();
             }
             

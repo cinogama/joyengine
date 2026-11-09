@@ -37,7 +37,7 @@ import builtin::editor::Editor::ModulePrepare;
 import builtin::editor::Editor::ModuleTypeCreator;
 import builtin::editor::Editor::Project;
 import builtin::editor::Editor::Template;
-import builtin::editor::Editor::Animation2D;
+import builtin::editor::Editor::Animation;
 import builtin::editor::Editor::Workflow;
 import builtin::editor::Editor::TilemapEditor;
 import ResourcePath;
@@ -792,7 +792,7 @@ namespace JEEditor::Editor
         }
         
         // 新建动画文件（右键菜单“新建→动画”）：.je4animation 是 TOML 文本
-        // （结构见 Animation2D::AnimationContext），空文件即“animations = []”，
+        // （结构见 Animation::AnimationContext），空文件即“version = 2 / actions = []”，
         // 经 AnimationContext 落盘以保证与编辑器/运行时的读写格式一致。
         // 流程同 askToCreateFromTemplate：弹输入框要文件名 → 未带后缀时
         // 自动补全 → 已存在则确认覆盖 → 写盘。回调不捕获 Browser 实例，
@@ -804,7 +804,7 @@ namespace JEEditor::Editor
             
             func writeTo(dst: path_t)=> void
             {
-                if (Animation2D::AnimationContext::create(dst)->save())
+                if (Animation::AnimationContext::create(dst)->save())
                 {
                     dirty->set(true);
                     
@@ -1967,7 +1967,7 @@ namespace JEEditor::Editor
                         p, option::none);
                 },
                 [".je4animation"] = func(p: fsys::path_t) {
-                    Animation2D::openAnimationEditorFromFile(p);
+                    Animation::openAnimationEditorFromFile(p);
                 },
                 [".je4tilemap"] = func(p: fsys::path_t) {
                     TilemapEditor::openTilemapEditorFromFile(p);

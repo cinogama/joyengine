@@ -1,0 +1,1039 @@
+// 动画编辑器 —— 数据模型、采样与文件序列化。
+// .je4animation 以 TOML 文本保存（便于 git 管理），数据模型与运行时
+// je_animation_t 对齐；引擎加载时把 TOML 交给
+// builtin/script/internal/cache/animation.wo 生成二进制 .je4cache，
+// 运行时只读取缓存（见 src/jeecs_graphic_animation_cache.cpp）。
+//
+// TOML 结构（v2，轨道/关键帧模型）：
+//   version = 2
+//   [[actions]]                        动作
+//   name / loop(none|loop|pingpong) / duration(可省略)
+//   [[actions.events]]                 事件点  time / name
+//   [[actions.tracks]]                 轨道：component+member 或 uniform
+//   type = int|float|vec2|vec3|vec4|quat4
+//   mode = absolute|additive
+//   [[actions.tracks.keys]]            关键帧
+//   time / value / interp(constant|linear|hermite)
+//   tangent(auto|linear|free) / tangent_in / tangent_out
+// quat4 的 value 保存欧拉角（度）[ex, ey, ez]，缓存生成时换算为四元数。
+// 编辑器采样（lerp/slerp/hermite）与切线数学复用 je::animation::curve。
+
+import pkg::std;
+import pkg::math;
+import pkg::toml;
+import pkg::worst;
+
+import je;
+import je::animation;
+import je::gui;
+import je::typeinfo;
+import je::towoo;
+import je::towoo::types;
+
+import pkg::fsys;
+
+using std;
+using toml;
+using je::animation;
+using fsys;
+
+namespace JEEditor::Editor::Animation
+{
+    // ======================================================================
+    // 数据值（与运行时 je_animation_value_t 对应；quat4 保存欧拉角）
+    // ======================================================================
+    public enum DataValueType
+    {
+        public INT,
+        public FLOAT,
+        public VEC2,
+        public VEC3,
+        public VEC4,
+        public QUAT4,
+    }
+    public union DataValue
+    {
+        INT(int),
+        FLOAT(real),
+        VEC2((real, real)),
+        VEC3((real, real, real)),
+        VEC4((real, real, real, real)),
+        QUAT4((real, real, real)),
+    }
+    namespace DataValue
+    {
+        using je::gui;
+
+        func to_string(self: DataValue)
+        {
+            match (self)
+            {
+                INT(i)? return i as string;
+                FLOAT(r)? return r as string;
+                VEC2((x, y))? return F"({x}, {y})";
+                VEC3((x, y, z))? return F"({x}, {y}, {z})";
+                VEC4((x, y, z, w))? return F"({x}, {y}, {z}, {w})";
+                QUAT4((x, y, z))? return F"({x}, {y}, {z})";
+            }
+        }
+
+        public func input_data_value(
+            label: string, value: DataValue, is_color: bool,
+            on_change: (DataValue)=>void)
+        {
+            match (value)
+            {
+                INT(n)?
+                    do InputInt(label, n)->> \nv = on_change(DataValue::INT(nv));;
+                FLOAT(x)?
+                    do InputFloat(label, x)->> \nv = on_change(DataValue::FLOAT(nv));;
+                VEC2((x, y))?
+                    do InputFloat2(label, x, y)->> \nv = on_change(DataValue::VEC2(nv));;
+                VEC3((x, y, z))?
+                    do InputFloat3(label, x, y, z)->> \nv = on_change(DataValue::VEC3(nv));;
+                VEC4((x, y, z, w))?
+                {
+                    if (is_color)
+                    {
+                        // 颜色按线性存储，选择器以 sRGB 显示并写回线性值。
+                        let display = ((x, y, z, w) as color)->to_srgb;
+                        match (ColorEdit4(label, display as raw vec4))
+                        {
+                            value(picked)?
+                            {
+                                let linear =
+                                    color::from_srgb(picked as vec4)->to_linear;
+                                do on_change(DataValue::VEC4(
+                                    (linear.0, linear.1, linear.2, linear.3)));
+                            }
+                            none?;
+                        }
+                    }
+                    else
+                        do InputFloat4(label, x, y, z, w)
+                            ->> \nv = on_change(DataValue::VEC4(nv));;
+                }
+                QUAT4((x, y, z))?
+                    do InputFloat3(label, x, y, z)->> \nv = on_change(DataValue::QUAT4(nv));;
+            }
+        }
+
+        // TOML 中的类型名（与缓存生成器 animation.wo 的约定一致）
+        func type_name(self: DataValue)=> string
+        {
+            match (self)
+            {
+                INT(_)? return "int";
+                FLOAT(_)? return "float";
+                VEC2(_)? return "vec2";
+                VEC3(_)? return "vec3";
+                VEC4(_)? return "vec4";
+                QUAT4(_)? return "quat4";
+            }
+        }
+
+        // 把 DataValue 写入 TOML 表的 "value" 键；调用方另行写入 "type"。
+        func write_toml(self: DataValue, tbl: Toml)=> void
+        {
+            match (self)
+            {
+                INT(n)? tbl->set("value", n);
+                FLOAT(x)? tbl->set("value", x);
+                VEC2((x, y))?
+                {
+                    let values = toml::new_array();
+                    values->push(x);
+                    values->push(y);
+                    tbl->set("value", values);
+                }
+                VEC3((x, y, z))?
+                {
+                    let values = toml::new_array();
+                    values->push(x);
+                    values->push(y);
+                    values->push(z);
+                    tbl->set("value", values);
+                }
+                VEC4((x, y, z, w))?
+                {
+                    let values = toml::new_array();
+                    values->push(x);
+                    values->push(y);
+                    values->push(z);
+                    values->push(w);
+                    tbl->set("value", values);
+                }
+                QUAT4((ex, ey, ez))?
+                {
+                    let values = toml::new_array();
+                    values->push(ex);
+                    values->push(ey);
+                    values->push(ez);
+                    tbl->set("value", values);
+                }
+            }
+        }
+
+        // 每通道数值（INT/FLOAT 单通道；用于曲线视图与切线计算）
+        public func channel_count(self: DataValue)=> int
+        {
+            match (self)
+            {
+                INT(_)? return 1;
+                FLOAT(_)? return 1;
+                VEC2(_)? return 2;
+                VEC3(_)? return 3;
+                VEC4(_)? return 4;
+                QUAT4(_)? return 3;
+            }
+        }
+
+        // 取第 c 个通道的数值（QUAT4 为欧拉角通道）
+        public func channel(self: DataValue, c: int)=> real
+        {
+            match (self)
+            {
+                INT(n)? return n as real;
+                FLOAT(x)? return x;
+                VEC2((x, y))? return c == 0 ? x | y;
+                VEC3((x, y, z))? return c == 0 ? x | c == 1 ? y | z;
+                VEC4((x, y, z, w))? return c == 0 ? x | c == 1 ? y | c == 2 ? z | w;
+                QUAT4((x, y, z))? return c == 0 ? x | c == 1 ? y | z;
+            }
+        }
+
+        // 写第 c 个通道（其余通道保持不变），返回新值
+        public func with_channel(self: DataValue, c: int, v: real)=> DataValue
+        {
+            match (self)
+            {
+                INT(_)? return DataValue::INT(math::round(v) as int);
+                FLOAT(_)? return DataValue::FLOAT(v);
+                VEC2((x, y))? return DataValue::VEC2(
+                    c == 0 ? (v, y) | (x, v));
+                VEC3((x, y, z))? return DataValue::VEC3(
+                    c == 0 ? (v, y, z) | c == 1 ? (x, v, z) | (x, y, v));
+                VEC4((x, y, z, w))? return DataValue::VEC4(
+                    c == 0 ? (v, y, z, w) | c == 1 ? (x, v, z, w)
+                    | c == 2 ? (x, y, v, w) | (x, y, z, v));
+                QUAT4((x, y, z))? return DataValue::QUAT4(
+                    c == 0 ? (v, y, z) | c == 1 ? (x, v, z) | (x, y, v));
+            }
+        }
+    }
+
+    func value_type_of(v: DataValue)=> DataValueType
+    {
+        match (v)
+        {
+            INT(_)? return DataValueType::INT;
+            FLOAT(_)? return DataValueType::FLOAT;
+            VEC2(_)? return DataValueType::VEC2;
+            VEC3(_)? return DataValueType::VEC3;
+            VEC4(_)? return DataValueType::VEC4;
+            QUAT4(_)? return DataValueType::QUAT4;
+        }
+    }
+
+    // ======================================================================
+    // 插值 / 采样
+    // ======================================================================
+    // 数值插值（QUAT4 为 slerp，INT 线性后取整）；调用方保证 a、b 同类型
+    public func interp_data_value(a: DataValue, b: DataValue, t: real)=> DataValue
+    {
+        match (a)
+        {
+            INT(va)? return DataValue::INT(
+                math::round(va as real + (b->channel(0) - va as real) * t) as int);
+            FLOAT(_)? return DataValue::FLOAT(a->channel(0) + (b->channel(0) - a->channel(0)) * t);
+            QUAT4((aex, aey, aez))?
+            {
+                let qa = quat::euler(aez, aey, aex);
+                let qb = quat::euler(b->channel(2), b->channel(1), b->channel(0));
+                let qr = quat::slerp(qa, qb, t);
+                let (rz, ry, rx) = qr->euler_angle as (real, real, real);
+                return DataValue::QUAT4((rx, ry, rz));
+            }
+            _?
+            {
+                let mut v = a;
+                for (let mut c = 0; c < a->channel_count; c += 1)
+                    v = v->with_channel(
+                        c, a->channel(c) + (b->channel(c) - a->channel(c)) * t);
+                return v;
+            }
+        }
+    }
+
+    // ======================================================================
+    // 轨道 / 事件 / 动作
+    // ======================================================================
+    public enum InterpMode
+    {
+        public CONSTANT,
+        public LINEAR,
+        public HERMITE,
+    }
+    namespace InterpMode
+    {
+        public func to_string(self: InterpMode)=> string
+        {
+            if (self == InterpMode::CONSTANT) return "constant";
+            if (self == InterpMode::HERMITE) return "hermite";
+            return "linear";
+        }
+        public func from_string(s: string)=> InterpMode
+        {
+            if (s == "constant") return InterpMode::CONSTANT;
+            if (s == "hermite") return InterpMode::HERMITE;
+            return InterpMode::LINEAR;
+        }
+        // 该插值方式是否可用于给定值类型（与运行时加载校验一致）
+        public func allowed_for(self: InterpMode, t: DataValueType)=> bool
+        {
+            if (self == InterpMode::CONSTANT || self == InterpMode::LINEAR)
+                return true;
+            // HERMITE 依赖切线，只对浮点通道开放
+            return t == DataValueType::FLOAT
+                || t == DataValueType::VEC2
+                || t == DataValueType::VEC3
+                || t == DataValueType::VEC4;
+        }
+    }
+
+    public enum TangentMode
+    {
+        public AUTO,
+        public LINEAR,
+        public FREE,
+    }
+    namespace TangentMode
+    {
+        public func to_string(self: TangentMode)=> string
+        {
+            if (self == TangentMode::FREE) return "free";
+            if (self == TangentMode::LINEAR) return "linear";
+            return "auto";
+        }
+        public func from_string(s: string)=> TangentMode
+        {
+            if (s == "free") return TangentMode::FREE;
+            if (s == "linear") return TangentMode::LINEAR;
+            return TangentMode::AUTO;
+        }
+    }
+
+    public enum LoopMode
+    {
+        public NONE,
+        public REPEAT,
+        public PINGPONG,
+    }
+    namespace LoopMode
+    {
+        public func to_string(self: LoopMode)=> string
+        {
+            if (self == LoopMode::REPEAT) return "loop";
+            if (self == LoopMode::PINGPONG) return "pingpong";
+            return "none";
+        }
+        public func from_string(s: string)=> LoopMode
+        {
+            if (s == "loop") return LoopMode::REPEAT;
+            if (s == "pingpong") return LoopMode::PINGPONG;
+            return LoopMode::NONE;
+        }
+    }
+
+    // 关键帧。切线只对 FREE 模式有意义；AUTO/LINEAR 在采样时即时计算
+    //（与缓存生成器的烘焙规则一致，见 je::animation::curve）。
+    public using Keyframe = struct{
+        protected m_time: mut real,
+        protected m_value: mut DataValue,
+        protected m_interp: mut InterpMode,
+        protected m_tangent_mode: mut TangentMode,
+        protected m_free_in: vec<real>,   // 每通道入导数
+        protected m_free_out: vec<real>,  // 每通道出导数
+    }
+    {
+        public func dup(self: Keyframe)=> Keyframe
+        {
+            return Keyframe{
+                m_time = mut self.m_time,
+                m_value = mut self.m_value,
+                m_interp = mut self.m_interp,
+                m_tangent_mode = mut self.m_tangent_mode,
+                m_free_in = self.m_free_in->dup,
+                m_free_out = self.m_free_out->dup,
+            };
+        }
+    }
+
+    public union TrackTarget
+    {
+        Member((string, string)),  // (组件类型名, 成员名)
+        Uniform(string),
+    }
+    namespace TrackTarget
+    {
+        public func label(t: TrackTarget)=> string
+        {
+            match (t)
+            {
+                Member((c, m))? return c + "." + m;
+                Uniform(u)? return "uniform " + u;
+            }
+        }
+    }
+
+    public using Track = struct{
+        protected m_target: TrackTarget,
+        protected m_additive: mut bool,
+        protected m_keys: vec<Keyframe>,
+    }
+    {
+        public func dup(self: Track)=> Track
+        {
+            return Track{
+                m_target = self.m_target,
+                m_additive = mut self.m_additive,
+                m_keys = self.m_keys->dup()->>\k = k->dup();,
+            };
+        }
+
+        public func value_type(self: Track)=> option<DataValueType>
+        {
+            return self.m_keys->front->map(\k = value_type_of(k.m_value););
+        }
+        public func value_is_color(self: Track)=> bool
+        {
+            match (self.m_target)
+            {
+                Member((cname, mname))? return component_member_is_color(cname, mname);
+                Uniform(_)? return false;
+            }
+        }
+        public func interp_allowed(self: Track, mode: InterpMode)=> bool
+        {
+            return self->value_type
+                ->map(\t = mode->allowed_for(t);)
+                ->or(true);
+        }
+
+        // 按时间排序（保持同刻关键帧的相对次序）
+        public func sort_keys(self: Track)=> void
+        {
+            let sorted = std::sort(self.m_keys->to_array,
+                \a, b = a.m_time < b.m_time;);
+            do self.m_keys->clear();
+            do self.m_keys->copy_from(sorted);
+        }
+
+        // 关键帧 index 在通道 channel 上的 (入导数, 出导数)
+        public func tangents_of(
+            self: Track, index: int, channel: int)=> (real, real)
+        {
+            let key = self.m_keys[index];
+            if (key.m_tangent_mode == TangentMode::FREE)
+                return (key.m_free_in->get_or(channel, 0.),
+                    key.m_free_out->get_or(channel, 0.));
+
+            let times = self.m_keys->to_array->map(\k = k.m_time;);
+            let values = self.m_keys->to_array->map(\k = k.m_value->channel(channel););
+
+            if (key.m_tangent_mode == TangentMode::LINEAR)
+                return curve::linear_tangents(times, values, index);
+
+            let m = curve::auto_tangent(times, values, index);
+            return (m, m);
+        }
+
+        // 采样通道 channel 在时刻 t 的数值（QUAT4 通道为欧拉角线性近似，
+        // 预览用途；整体采样用 sample_track 保证 slerp）
+        public func sample_channel(self: Track, channel: int, t: real)=> real
+        {
+            return self->sample_channel_impl(channel, t);
+        }
+        func sample_channel_impl(self: Track, channel: int, t: real)=> real
+        {
+            let keys = self.m_keys;
+            let n = keys->len;
+            if (n == 0)
+                return 0.;
+            if (t <= keys[0].m_time)
+                return keys[0].m_value->channel(channel);
+            if (t >= keys[n - 1].m_time)
+                return keys[n - 1].m_value->channel(channel);
+
+            let mut i = 0;
+            while (i + 2 < n && keys[i + 1].m_time <= t)
+                i += 1;
+
+            let k0 = keys[i];
+            let k1 = keys[i + 1];
+            let dt = k1.m_time - k0.m_time;
+            let u = dt > 0. ? (t - k0.m_time) / dt | 0.;
+
+            if (k0.m_interp == InterpMode::CONSTANT)
+                return k0.m_value->channel(channel);
+            if (k0.m_interp == InterpMode::LINEAR)
+            {
+                let p0 = k0.m_value->channel(channel);
+                let p1 = k1.m_value->channel(channel);
+                return p0 + (p1 - p0) * u;
+            }
+            // HERMITE
+            let (_, m0) = self->tangents_of(i, channel);
+            let (m1, _) = self->tangents_of(i + 1, channel);
+            return curve::hermite(
+                k0.m_value->channel(channel),
+                k1.m_value->channel(channel),
+                m0, m1, dt, u);
+        }
+
+        // 整条轨道在时刻 t 的值（QUAT4 走 slerp）
+        public func sample_track(self: Track, t: real)=> option<DataValue>
+        {
+            let keys = self.m_keys;
+            let n = keys->len;
+            if (n == 0)
+                return option::none;
+
+            if (t <= keys[0].m_time)
+                return option::value(keys[0].m_value);
+            if (t >= keys[n - 1].m_time)
+                return option::value(keys[n - 1].m_value);
+
+            let mut i = 0;
+            while (i + 2 < n && keys[i + 1].m_time <= t)
+                i += 1;
+
+            let k0 = keys[i];
+            let k1 = keys[i + 1];
+            let dt = k1.m_time - k0.m_time;
+            let u = dt > 0. ? (t - k0.m_time) / dt | 0.;
+
+            if (k0.m_interp == InterpMode::CONSTANT)
+                return option::value(k0.m_value);
+            if (k0.m_interp == InterpMode::LINEAR)
+                return option::value(
+                    interp_data_value(k0.m_value, k1.m_value, u));
+
+            // HERMITE
+            let mut v = k0.m_value;
+            for (let mut c = 0; c < v->channel_count; c += 1)
+            {
+                let (_, m0) = self->tangents_of(i, c);
+                let (m1, _) = self->tangents_of(i + 1, c);
+                v = v->with_channel(c, curve::hermite(
+                    k0.m_value->channel(c), k1.m_value->channel(c),
+                    m0, m1, dt, u));
+            }
+            return option::value(v);
+        }
+    }
+
+    public using AnimationEvent = struct{
+        protected m_time: mut real,
+        protected m_name: mut string,
+    }
+    {
+        public func dup(self: AnimationEvent)=> AnimationEvent
+        {
+            return AnimationEvent{
+                m_time = mut self.m_time,
+                m_name = mut self.m_name,
+            };
+        }
+    }
+
+    public using ActionData = struct{
+        protected m_loop_mode: mut LoopMode,
+        protected m_duration: mut real,   // <=0 表示取内容最大时间
+        protected m_tracks: vec<Track>,
+        protected m_events: vec<AnimationEvent>,
+    }
+    {
+        public func dup(self: ActionData)=> ActionData
+        {
+            return ActionData{
+                m_loop_mode = mut self.m_loop_mode,
+                m_duration = mut self.m_duration,
+                m_tracks = self.m_tracks->dup()->>\t = t->dup();,
+                m_events = self.m_events->dup()->>\e = e->dup();,
+            };
+        }
+
+        public func duration(self: ActionData)=> real
+        {
+            if (self.m_duration > 0.)
+                return self.m_duration;
+            let mut d = 0.;
+            for (let track : self.m_tracks)
+                match (track.m_keys->back)
+                {
+                    value(k)? d = math::max(d, k.m_time);
+                    none?;
+                }
+            for (let e : self.m_events)
+                d = math::max(d, e.m_time);
+            return d;
+        }
+    }
+
+    // ======================================================================
+    // 类型辅助（与旧编辑器一致）
+    // ======================================================================
+    // 把 je::typeinfo 映射为对应的默认 DataValue（添加轨道时使用）
+    public func default_data_value_for_type(t: je::typeinfo)=> DataValue
+    {
+        if (t == je::typeinfo::int)
+            return DataValue::INT(0);
+        else if (t == je::typeinfo::float)
+            return DataValue::FLOAT(0.);
+        else if (t == je::typeinfo::float2)
+            return DataValue::VEC2((0., 0.));
+        else if (t == je::typeinfo::float3)
+            return DataValue::VEC3((0., 0., 0.));
+        else if (t == je::typeinfo::float4 || t == color::type::typeinfo)
+            return DataValue::VEC4((0., 0., 0., 0.));
+        else if (t == je::typeinfo::quat)
+            return DataValue::QUAT4((0., 0., 0.));
+        return DataValue::INT(0);
+    }
+    public func type_is_animatable(t: je::typeinfo)=> bool
+    {
+        return t == je::typeinfo::int
+            || t == je::typeinfo::float
+            || t == je::typeinfo::float2
+            || t == je::typeinfo::float3
+            || t == je::typeinfo::float4
+            || t == color::type::typeinfo
+            || t == je::typeinfo::quat;
+    }
+    public func type_is_color(t: je::typeinfo)=> bool
+    {
+        return t == color::type::typeinfo;
+    }
+
+    // 组件成员是否为 color 类型。动画文件只存 VEC4 数值，编辑器据此决定
+    // 用颜色选择器还是原始数值编辑；类型系统在会话内不变，结果做缓存。
+    let mut s_component_member_is_color = {}mut: map<string, bool>;
+    public func component_member_is_color(
+        comp_name: string, member_name: string)=> bool
+    {
+        let key = comp_name + "." + member_name;
+        match (s_component_member_is_color->get(key))
+        {
+            value(cached)? return cached;
+            none?;
+        }
+
+        let mut is_color = false;
+        match (je::typeinfo::load(comp_name))
+        {
+            value(t)?
+            {
+                for (let (name, mtype) : t->get_members_info)
+                {
+                    if (name == member_name)
+                    {
+                        is_color = mtype == color::type::typeinfo;
+                        break;
+                    }
+                }
+            }
+            none?;
+        }
+        s_component_member_is_color->set(key, is_color);
+        return is_color;
+    }
+
+    // ======================================================================
+    // TOML 读写
+    // ======================================================================
+    // TOML 读取辅助：缺失/类型不符的字段按空值处理，让手写文件也能打开。
+    func array_of_toml(value: Toml)=> array<Toml>
+    {
+        let mut result = []mut: vec<Toml>;
+        match (value->as_array)
+        {
+            value(items)?
+            {
+                for (let item : items)
+                    result->add(item);
+            }
+            none?;
+        }
+        return result->to_array;
+    }
+    func string_of_toml(value: Toml, default_value: string)=> string
+    {
+        match (value->as_string)
+        {
+            value(str)? return str;
+            none?;
+        }
+        return default_value;
+    }
+    func bool_of_toml(value: Toml)=> bool
+    {
+        match (value->as_bool)
+        {
+            value(flag)? return flag;
+            none?;
+        }
+        return false;
+    }
+    func real_of_toml(value: Toml)=> real
+    {
+        match (value->as_float)
+        {
+            value(number)? return number;
+            none?;
+        }
+        match (value->as_int)
+        {
+            value(number)? return number as real;
+            none?;
+        }
+        return 0.;
+    }
+    func int_of_toml(value: Toml)=> int
+    {
+        match (value->as_int)
+        {
+            value(number)? return number;
+            none?;
+        }
+        return 0;
+    }
+    func real_at_toml(values: array<Toml>, index: int)=> real
+    {
+        if (index < 0 || index >= values->len)
+            return 0.;
+        return real_of_toml(values[index]);
+    }
+
+    // 按 TOML 的 type 名解析 value；类型未知或数值数组过短时返回 none。
+    // quat4 的 value 是欧拉角三元组，与 DataValue::QUAT4 的语义一致。
+    func read_data_value(type_name: string, value: Toml)=> option<DataValue>
+    {
+        let kind = type_name->lower;
+        if (kind == "int")
+            return option::value(DataValue::INT(int_of_toml(value)));
+        if (kind == "float")
+            return option::value(DataValue::FLOAT(real_of_toml(value)));
+
+        let values = array_of_toml(value);
+        if (kind == "vec2")
+        {
+            if (values->len < 2)
+                return option::none;
+            return option::value(DataValue::VEC2(
+                (real_at_toml(values, 0), real_at_toml(values, 1))));
+        }
+        if (kind == "vec3")
+        {
+            if (values->len < 3)
+                return option::none;
+            return option::value(DataValue::VEC3(
+                (real_at_toml(values, 0), real_at_toml(values, 1),
+                    real_at_toml(values, 2))));
+        }
+        if (kind == "vec4")
+        {
+            if (values->len < 4)
+                return option::none;
+            return option::value(DataValue::VEC4(
+                (real_at_toml(values, 0), real_at_toml(values, 1),
+                    real_at_toml(values, 2), real_at_toml(values, 3))));
+        }
+        if (kind == "quat4")
+        {
+            if (values->len < 3)
+                return option::none;
+            return option::value(DataValue::QUAT4(
+                (real_at_toml(values, 0), real_at_toml(values, 1),
+                    real_at_toml(values, 2))));
+        }
+        return option::none;
+    }
+
+    func reals_of_toml(value: Toml)=> vec<real>
+    {
+        let mut result = []mut: vec<real>;
+        for (let item : array_of_toml(value))
+            result->add(real_of_toml(item));
+        return result;
+    }
+
+    // 读取一条轨道；无效关键帧（值类型不符）跳过
+    func read_track(track: Toml)=> Track
+    {
+        let target = func(){
+            match (track["uniform"]->as_string)
+            {
+                value(uname)? return TrackTarget::Uniform(uname);
+                none?;
+            }
+            return TrackTarget::Member((
+                string_of_toml(track["component"], ""),
+                string_of_toml(track["member"], "")));
+        }();
+
+        let keys = []mut: vec<Keyframe>;
+        for (let key : array_of_toml(track["keys"]))
+        {
+            match (read_data_value(
+                string_of_toml(track["type"], ""), key["value"]))
+            {
+                value(v)?
+                    do keys->add(Keyframe{
+                        m_time = mut real_of_toml(key["time"]),
+                        m_value = mut v,
+                        m_interp = mut InterpMode::from_string(
+                            string_of_toml(key["interp"], "linear")),
+                        m_tangent_mode = mut TangentMode::from_string(
+                            string_of_toml(key["tangent"], "auto")),
+                        m_free_in = reals_of_toml(key["tangent_in"]),
+                        m_free_out = reals_of_toml(key["tangent_out"]),
+                    });
+                none?; // 值类型未知或缺失，跳过该关键帧
+            }
+        }
+
+        return Track{
+            m_target = target,
+            m_additive = mut string_of_toml(track["mode"], "absolute") == "additive",
+            m_keys = keys,
+        };
+    }
+
+    func write_track(track: Track, out: Toml)=> void
+    {
+        match (track.m_target)
+        {
+            Member((cname, mname))?
+            {
+                out->set("component", cname);
+                out->set("member", mname);
+            }
+            Uniform(uname)? out->set("uniform", uname);
+        }
+        out->set("type", track->value_type
+            ->map(\t = (t == DataValueType::INT ? "int"
+                | t == DataValueType::FLOAT ? "float"
+                | t == DataValueType::VEC2 ? "vec2"
+                | t == DataValueType::VEC3 ? "vec3"
+                | t == DataValueType::VEC4 ? "vec4" | "quat4");)
+            ->or("float"));
+        out->set("mode", track.m_additive ? "additive" | "absolute");
+
+        let keys = toml::new_array();
+        for (let key : track.m_keys)
+        {
+            let kt = toml::new_table();
+            kt->set("time", key.m_time);
+            key.m_value->write_toml(kt);
+            kt->set("interp", key.m_interp->to_string);
+            kt->set("tangent", key.m_tangent_mode->to_string);
+            if (key.m_tangent_mode == TangentMode::FREE)
+            {
+                let tin = toml::new_array();
+                let tout = toml::new_array();
+                for (let v : key.m_free_in->to_array)
+                    do tin->push(v);
+                for (let v : key.m_free_out->to_array)
+                    do tout->push(v);
+                kt->set("tangent_in", tin);
+                kt->set("tangent_out", tout);
+            }
+            do keys->push(kt);
+        }
+        out->set("keys", keys);
+    }
+
+    // ======================================================================
+    // AnimationContext
+    // ======================================================================
+    public using AnimationContext = struct{
+        protected m_actions: map<string, ActionData>,
+        protected m_path: fsys::path_t,
+        // 当前编辑的动作名（编辑期选择状态）
+        protected m_selected_action: mut string,
+    }
+    {
+        public func create(path: fsys::path_t)
+        {
+            return AnimationContext{
+                m_actions = {}mut,
+                m_path = path,
+                m_selected_action = mut "",
+            };
+        }
+        // 从 TOML 读取动画集；无法解析或版本不支持时返回错误。
+        // 结构上缺失的字段按空值处理（手写 TOML 也能打开），
+        // 未知类型的关键帧跳过。
+        public func open(path: fsys::path_t)=> result<AnimationContext, string>
+        {
+            let mut loaded = option::none: option<Toml>;
+            match (toml::load(path))
+            {
+                ok(root)? loaded = option::value(root);
+                err(msg)? return result::err(msg);
+            }
+            let root = loaded->unwrap;
+
+            let version = int_of_toml(root["version"]);
+            if (version != 2)
+                return result::err(F"不支持的格式版本 {version}（仅支持 v2 轨道/关键帧格式）");
+
+            let self = AnimationContext{
+                m_actions = {}mut,
+                m_path = path,
+                m_selected_action = mut "",
+            };
+
+            for (let action : array_of_toml(root["actions"]))
+            {
+                let data = ActionData{
+                    m_loop_mode = mut LoopMode::from_string(
+                        string_of_toml(action["loop"], "none")),
+                    m_duration = mut real_of_toml(action["duration"]),
+                    m_tracks = []mut,
+                    m_events = []mut,
+                };
+
+                for (let track : array_of_toml(action["tracks"]))
+                {
+                    let t = read_track(track);
+                    do t->sort_keys;
+                    do data.m_tracks->add(t);
+                }
+
+                for (let event : array_of_toml(action["events"]))
+                    do data.m_events->add(AnimationEvent{
+                        m_time = mut real_of_toml(event["time"]),
+                        m_name = mut string_of_toml(event["name"], ""),
+                    });
+
+                self.m_actions->set(
+                    string_of_toml(action["name"], ""), data);
+            }
+            return result::ok(self);
+        }
+        public func save(self: AnimationContext)=> bool
+        {
+            let root = toml::new_table();
+
+            let actions = toml::new_array();
+            for (let (action_name, action_data) : self.m_actions)
+            {
+                let action = toml::new_table();
+                action->set("name", action_name);
+                action->set("loop", action_data.m_loop_mode->to_string);
+                if (action_data.m_duration > 0.)
+                    action->set("duration", action_data.m_duration);
+
+                let tracks = toml::new_array();
+                for (let track : action_data.m_tracks)
+                {
+                    let track_toml = toml::new_table();
+                    write_track(track, track_toml);
+                    do tracks->push(track_toml);
+                }
+                action->set("tracks", tracks);
+
+                let events_arr = toml::new_array();
+                for (let e : action_data.m_events)
+                {
+                    let et = toml::new_table();
+                    et->set("time", e.m_time);
+                    et->set("name", e.m_name);
+                    do events_arr->push(et);
+                }
+                action->set("events", events_arr);
+
+                do actions->push(action);
+            }
+            // 即使没有动作也写出 version/actions 键，保证源文件非空
+            //（je_cache_file_create 拒绝为 0 字节文件生成缓存）。
+            root->set("version", 2);
+            root->set("actions", actions);
+
+            match (toml::save(root, self.m_path))
+            {
+                ok(_)? return true;
+                err(msg)?
+                {
+                    je::logerr(F"保存动画 {self.m_path->to_string()} 失败：{msg}");
+                    return false;
+                }
+            }
+        }
+
+        // 取当前编辑的动作（map 值为引用语义，外部修改会写回）
+        public func current_action(self: AnimationContext)=> option<ActionData>
+        {
+            return self.m_actions->get(self.m_selected_action);
+        }
+
+        // 取文件中的全部动作名（供 Inspector 的自动播放下拉列举可选动作）
+        public func action_names(self: AnimationContext)=> array<string>
+        {
+            return self.m_actions->keys;
+        }
+    }
+
+    // ======================================================================
+    // 精灵图：UV 解析
+    // ======================================================================
+    // 解析时刻 t 的 Renderer::Textures2D::offset/tiling 轨道采样，
+    // 得到引擎 UV 空间的 uv0/uv1；找不到轨道时返回 none。
+    public func frame_uv_at(action: ActionData, t: real)=> option<((real, real), (real, real))>
+    {
+        let mut offset = (0., 0.);
+        let mut tiling = (1., 1.);
+        let mut found = false;
+        for (let track : action.m_tracks)
+        {
+            match (track.m_target)
+            {
+                Member((cname, mname))?
+                {
+                    if (cname != "Renderer::Textures2D")
+                        continue;
+                    if (mname != "offset" && mname != "tiling")
+                        continue;
+                    match (track->sample_track(t))
+                    {
+                        value(v)?
+                        {
+                            match (v)
+                            {
+                                VEC2((x, y))?
+                                {
+                                    if (mname == "offset")
+                                        offset = (x, y);
+                                    else
+                                        tiling = (x, y);
+                                    found = true;
+                                }
+                                _?;
+                            }
+                        }
+                        none?;
+                    }
+                }
+                _?;
+            }
+        }
+        if (!found)
+            return option::none;
+        // 对应 woshader: finalUV = (uv + offset) * tiling
+        let uv0 = (offset[0] * tiling[0], offset[1] * tiling[1]);
+        let uv1 = ((offset[0] + 1.) * tiling[0], (offset[1] + 1.) * tiling[1]);
+        return option::value((uv0, uv1));
+    }
+}

@@ -357,49 +357,32 @@ namespace Light2D::Range::light_shape
         }
     }
 }
-// Animation::FrameAnimation::animation_list：帧动画引用表（运行时结构见
-// jeecs.hpp 的 Animation::FrameAnimation）。每个条目引用一个 .je4animation
-// 文件（m_path 为 @/ 运行时相对路径），并可指定载入后自动播放的动作与循环。
-// 序列化为字符串三元组的扁平数组 [path, action, loop, ...]，action 用空串
-// 表示 option::none，避开嵌套 struct 数组的 dynamic 语义。
-namespace Animation::FrameAnimation::animation_list
+// Animation::Animator::animation_binding：动画播放器绑定的动画集（运行时
+// 结构见 jeecs.hpp 的 Animation::Animator）。m_path 为 .je4animation 的 @/
+// 运行时相对路径，m_action 为载入后自动播放的动作。
+// 序列化为字符串二元组 [path, action]，action 用空串表示 option::none。
+namespace Animation::Animator::animation_binding
 {
     using parser = void
     {
-        public extern func saving(val: Animation::FrameAnimation::animation_list)=> string
+        public extern func saving(val: Animation::Animator::animation_binding)=> string
         {
-            let dat = []mut: vec<string>;
-            for (let st : val as array<Animation::FrameAnimation::animation_state>)
+            let mut action = "";
+            match (val.m_action)
             {
-                dat->add(st.m_path);
-                let mut action = "";
-                match (st.m_action)
-                {
-                    value(a)? action = a;
-                    none?;
-                }
-                dat->add(action);
-                dat->add(st.m_loop ? "1" | "0");
+                value(a)? action = a;
+                none?;
             }
-            return dat->serialize->or("[]");
+            return [val.m_path, action]->serialize->or("[]");
         }
-        public extern func restoring(dat: string)=> Animation::FrameAnimation::animation_list
+        public extern func restoring(dat: string)=> Animation::Animator::animation_binding
         {
-            let data = dat->array::deserialize->or(["" as dynamic, "" as dynamic, "" as dynamic])->> \x = x as string;;
-            let result = []mut: vec<Animation::FrameAnimation::animation_state>;
-            for (let mut i = 0; i + 2 < data->len; i += 3)
-            {
-                let action = data->get_or(i + 1, "");
-                let mut act = option::none: option<string>;
-                if (action != "")
-                    act = option::value(action);
-                result->add(Animation::FrameAnimation::animation_state{
-                    m_path = data->get_or(i, ""),
-                    m_action = act,
-                    m_loop = data->get_or(i + 2, "0") == "1",
-                });
-            }
-            return result->to_array as Animation::FrameAnimation::animation_list;
+            let data = dat->array::deserialize->or([])->> \x = x as string;;
+            let action = data->get_or(1, "");
+            return Animation::Animator::animation_binding{
+                m_path = data->get_or(0, ""),
+                m_action = action == "" ? option::none | option::value(action),
+            };
         }
     }
 }

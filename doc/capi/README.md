@@ -48,12 +48,18 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 - `je_fimg_*` - 资源镜像（打开、查询、打包与逐文件压缩）
 - `je_cache_file_*` / `je_cache_binary_*` - 缓存文件与二进制缓存文档
 
-### [animation/](animation/) - 帧动画
-帧动画资源、动作查询与缓存。
+### [animation/](animation/) - 动画（轨道/关键帧）
+动画集资源（v2 轨道/关键帧模型）、采样与实体播放控制。
 
-- `je_animation_open` / `je_animation_close` - 打开与关闭帧动画
+- `je_animation_open` / `je_animation_close` - 打开与关闭动画集
 - `je_animation_action_find` - 按名称查找动作
-- `je_animation_cache_open_or_create` - 打开或生成帧动画缓存
+- `je_animation_cache_open_or_create` - 打开或生成动画集缓存
+- `je_animation_sample_buffer_create` / `_destroy` / `_clear` - 采样累加缓冲管理
+- `je_animation_action_sample` - 按权重采样动作（支持多动作混合）
+- `je_animation_sample_buffer_apply` - 把采样结果写入实体
+- `je_animation_entity_play` / `_crossfade` / `_stop` / `_pause` / `_resume` - 实体播放控制（crossfade 淡入淡出）
+- `je_animation_entity_is_playing` / `_action_get` / `_duration_get` / `_progress_get` - 播放状态查询
+- `je_animation_entity_events_get` - 获取本帧触发的动画事件
 
 ### [graphic/](graphic/) - 图形接口
 图形渲染相关的底层接口。
