@@ -22,10 +22,7 @@ namespace jeecs::graphic
     }
 
     UserInterfaceGraphicPipelineSystem::UserInterfaceGraphicPipelineSystem(game_world w)
-        : BaseImpledGraphicPipeline(w)
-        // 内嵌源码与 builtin/shader/UIText.shader 保持同源；两处以相同
-        // 路径加载，命中同一共享缓存实例（引擎核心自足性约定：核心
-        // 管线着色器不依赖内容文件，见 DefaultResources 与 DeferLight2D）。
+        : GraphicPipelineBase(w)
     {
     }
 
@@ -35,45 +32,14 @@ namespace jeecs::graphic
 
     void UserInterfaceGraphicPipelineSystem::GraphicUpdate()
     {
-        auto WINDOWS_SIZE = jeecs::input::windowsize();
-        WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
-        WINDOWS_HEIGHT = (size_t)WINDOWS_SIZE.y;
-
-        m_camera_list.clear();
-        m_renderer_list.clear();
+        begin_frame();
 
         // MouseOn 是逐帧派生态：帧首统一清零，随后各摄像机的 UI 阶段
         // 命中时置位（只累加不清理，见 UpdateMouseOn）。
         for (auto&& [mouse_on] : query<view typesof(MouseOn&)>())
             mouse_on.is_mouse_on = false;
 
-        this->branch_allocate_begin();
-
-        UserInterfaceGraphicPipelineSystem::PrepareCameras();
-
-        for (auto&& [
-            projection,
-            rendqueue,
-            cameraviewport,
-            rendbuf,
-            clear
-        ] :
-        query<
-            view typesof(
-                Projection&,
-                Rendqueue*,
-                Viewport*,
-                RendToFramebuffer*,
-                Clear*
-            )
-        >())
-        {
-            auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
-            m_camera_list.emplace(
-                camera_arch{
-                    branch, rendqueue, &projection, cameraviewport, rendbuf, nullptr, clear
-                });
-        }
+        collect_cameras(m_cameras);
 
         // 帧首推进字形图集 LRU，并按窗口分辨率重建全部文本的逐字布局
         //（布局与相机无关，相机目标分辨率差异由发射端统一缩放）。
@@ -85,6 +51,7 @@ namespace jeecs::graphic
         // Text（逐字文本）。父子层级已由布局阶段复合进 WorldLayout 的
         // 仿射系数通道，此处不再构建节点树、不读 Anchor/LocalToParent。
         // 2D 光源由专用查询收集，此处不再单独排除。
+        m_renderers.clear();
         for (auto&& [
             elem, layout, rotation, text, texs,
             shads, shape, rendqueue, color] : query<
@@ -101,13 +68,14 @@ namespace jeecs::graphic
             anyof typesof(Shape, Text)
             >())
         {
-            m_renderer_list.emplace(
-                renderer_arch{
-                    color, rendqueue, nullptr, shape, &shads, texs,
+            m_renderers.push_back(
+                ui_renderer_arch{
+                    color, rendqueue, shape, &shads, texs,
                     &elem, &layout, rotation, text });
         }
+        sort_by_rend_queue(m_renderers);
 
-        this->branch_allocate_end();
+        end_frame();
         DrawFrame();
     }
 
@@ -118,7 +86,7 @@ namespace jeecs::graphic
         {
             m_text_renderer.layout_text(
                 text, elem, layout,
-                (float)WINDOWS_WIDTH, (float)WINDOWS_HEIGHT);
+                (float)m_window_width, (float)m_window_height);
         }
     }
 
@@ -128,7 +96,7 @@ namespace jeecs::graphic
         size_t buffer_w, size_t buffer_h)
     {
         if (!render_to_window
-            || WINDOWS_WIDTH == 0 || WINDOWS_HEIGHT == 0
+            || m_window_width == 0 || m_window_height == 0
             || buffer_w == 0 || buffer_h == 0)
             return;
 
@@ -137,8 +105,8 @@ namespace jeecs::graphic
         // 窗口鼠标 -> 渲染目标空间 NDC（-1..1，y 向上），与
         // resolved_rect::hit_test 的 mouse_view_pos 约定一致。
         const math::vec2 mouse_view(
-            ((float)mouse.x / (float)WINDOWS_WIDTH - 0.5f) * 2.0f,
-            ((float)mouse.y / (float)WINDOWS_HEIGHT - 0.5f) * -2.0f);
+            ((float)mouse.x / (float)m_window_width - 0.5f) * 2.0f,
+            ((float)mouse.y / (float)m_window_height - 0.5f) * -2.0f);
 
         if (camera.viewport != nullptr)
         {
@@ -148,8 +116,8 @@ namespace jeecs::graphic
 
             // 视口以渲染目标左下角为原点；鼠标也折算到左下原点后
             // 做包含判定。
-            const float x = (float)mouse.x / (float)WINDOWS_WIDTH;
-            const float y = 1.0f - (float)mouse.y / (float)WINDOWS_HEIGHT;
+            const float x = (float)mouse.x / (float)m_window_width;
+            const float y = 1.0f - (float)mouse.y / (float)m_window_height;
             if (x < vp.x || x > vp.x + vp.z
                 || y < vp.y || y > vp.y + vp.w)
                 return;
@@ -172,14 +140,7 @@ namespace jeecs::graphic
 
     void UserInterfaceGraphicPipelineSystem::DrawFrame()
     {
-        const double current_time = je_clock_time();
-
-        math::vec4 shader_time =
-        {
-            (float)current_time,
-            (float)abs(2.0 * (current_time * 2.0 - double(int(current_time * 2.0)) - 0.5)),
-            (float)abs(2.0 * (current_time - double(int(current_time)) - 0.5)),
-            (float)abs(2.0 * (current_time / 2.0 - double(int(current_time / 2.0)) - 0.5)) };
+        const math::vec4 shader_time = current_shader_time();
 
         // UI uses an identity projection; the view matrix maps pixels to NDC (-1..1).
         const float MAT4_UI_UNIT[4][4] = {
@@ -191,21 +152,17 @@ namespace jeecs::graphic
         float MAT4_UI_MODEL[4][4];
         float MAT4_UI_MV[4][4];
 
-        for (auto& current_camera : m_camera_list)
+        for (auto& current_camera : m_cameras)
         {
-            graphic::framebuffer* rend_aim_buffer = nullptr;
-            if (current_camera.rendToFramebuffer != nullptr)
-            {
-                if (current_camera.rendToFramebuffer->framebuffer.has_value())
-                    rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->get();
-                else
-                    continue;
-            }
-            const size_t RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH,
-                RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT;
+            const auto target = resolve_camera_target(current_camera);
+            if (!target.has_value())
+                continue;
+
+            const size_t RENDAIMBUFFER_WIDTH = target->width,
+                RENDAIMBUFFER_HEIGHT = target->height;
 
             // 逐摄像机更新鼠标命中状态；离屏 Framebuffer 不参与。
-            UpdateMouseOn(current_camera, rend_aim_buffer == nullptr,
+            UpdateMouseOn(current_camera, target->framebuffer == nullptr,
                 RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
             const float MAT4_UI_VIEW[4][4] = {
@@ -218,24 +175,19 @@ namespace jeecs::graphic
             update_default_uniform_buffer(
                 *current_camera.projection, MAT4_UI_VIEW, MAT4_UI_UNIT, MAT4_UI_VIEW, shader_time);
 
-            je_gl_command_buffer_t* rend_chain = new_rend_chain_for_camera(
-                current_camera.branchPipeline, current_camera.viewport,
-                rend_aim_buffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
+            je_gl_command_buffer_t* rend_chain = begin_camera_pass(
+                current_camera, current_camera.viewport,
+                target->framebuffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
 
-            clear_color_if_any(rend_chain, current_camera.clear);
-            je_graphic_cmd_clear_depth(rend_chain, 1.0f);
-            je_graphic_cmd_bind_uniform_buffer(rend_chain,
-                current_camera.projection->default_uniform_buffer->resource());
-
-            for (auto& rendentity : m_renderer_list)
+            for (auto& rendentity : m_renderers)
             {
-                assert(rendentity.ui_elem != nullptr
-                    && rendentity.ui_layout != nullptr);
+                assert(rendentity.elem != nullptr
+                    && rendentity.layout != nullptr);
 
                 // 布局阶段已把父子层级与祖先旋转链复合进 WorldLayout 的
                 // 仿射系数，此处只按本相机目标尺寸像素化。
-                const auto rect = rendentity.ui_elem->resolve_display_rect(
-                    *rendentity.ui_layout,
+                const auto rect = rendentity.elem->resolve_display_rect(
+                    *rendentity.layout,
                     (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT);
 
                 // 总旋转角 = 布局阶段缓存的 WorldLayout::rotation（祖先累计
@@ -248,10 +200,10 @@ namespace jeecs::graphic
                 // 该矩阵把“单位矩形坐标”（±0.5 张成元素矩形）映射到相机
                 // 像素空间，常规四边形路径（着色器侧 MVP）与逐字文本路径
                 //（CPU 侧烘焙进顶点）共用同一映射。
-                const float total_angle = rendentity.ui_layout->rotation;
+                const float total_angle = rendentity.layout->rotation;
                 const float angle_acc = total_angle
-                    - (rendentity.ui_rotation != nullptr
-                        ? rendentity.ui_rotation->angle : 0.f);
+                    - (rendentity.rotation != nullptr
+                        ? rendentity.rotation->angle : 0.f);
 
                 const math::vec2 uioffset = rect.center
                     + (rect.pivot_offset
@@ -309,16 +261,7 @@ namespace jeecs::graphic
                 // 同时挂有两者则先画背景板，文字叠于其上）。
                 if (rendentity.shape != nullptr)
                 {
-                    auto& drawing_shape =
-                        rendentity.shape->vertex.has_value()
-                        ? rendentity.shape->vertex.value()
-                        : m_default_resources.default_shape_quad;
-                    auto& drawing_shaders =
-                        rendentity.shaders->shaders.empty() == false
-                        ? rendentity.shaders->shaders
-                        : m_default_resources.default_shaders_list;
-
-                    auto bound = bind_entity_textures(rend_chain, rendentity.textures, rendentity.textures_array);
+                    auto bound = bind_entity_textures(rend_chain, rendentity.textures, nullptr);
 
                     pass_uniforms_t u;
                     u.m = MAT4_UI_MODEL;
@@ -330,7 +273,10 @@ namespace jeecs::graphic
                     if (rendentity.color != nullptr)
                         u.color = rendentity.color->color.to_linear();
 
-                    draw_shader_passes(rend_chain, drawing_shape, drawing_shaders, u);
+                    draw_shader_passes(rend_chain,
+                        m_defaults.shape_of(rendentity.shape->vertex),
+                        m_defaults.shaders_of(*rendentity.shaders),
+                        u);
                 }
 
                 // 逐字文本路径：字形四边形按（图集页, 着色器）合并成连续
@@ -339,7 +285,7 @@ namespace jeecs::graphic
                 {
                     EmitTextGlyphs(
                         rend_chain, MAT4_UI_VIEW, MAT4_UI_MODEL,
-                        *rendentity.text, *rendentity.ui_elem, rect, rendentity);
+                        *rendentity.text, *rendentity.elem, rect, rendentity);
                 }
             }
 
@@ -359,7 +305,7 @@ namespace jeecs::graphic
         const UserInterface::Text& text,
         const UserInterface::Element& elem,
         const UserInterface::Element::resolved_rect& rect,
-        const renderer_arch& rendentity)
+        const ui_renderer_arch& rendentity)
     {
         const auto& layout = text.runtime_layout;
         if (!layout.valid || layout.glyphs.size() == 0)
@@ -380,15 +326,12 @@ namespace jeecs::graphic
             return;
         auto& font_res = font_holder.value();
 
-        // 着色器：实体 Shaders 的第一个 woshader pass（自定义文本特效），
-        // 否则内置文本着色器。
-        graphic::shader* shader_res = m_default_resources.default_shader.get();
-        if (!rendentity.shaders->shaders.empty())
-        {
-            auto& user_shader = rendentity.shaders->shaders.front();
-            if (user_shader->m_builtin != nullptr)
-                shader_res = user_shader.get();
-        }
+        // 着色器：实体 Shaders 的第一个 pass（文本着色器，通常是编辑器指派的
+        // builtin/shader/UIText.shader，也可以是自定义文本特效）；未配置或
+        // 该 pass 未就绪时回退默认着色器。
+        graphic::shader* shader_res = rendentity.shaders->shaders.empty()
+            ? m_defaults.default_shader.get()
+            : m_defaults.pass_shader_of(rendentity.shaders->shaders.front());
 
         // 节点色调烘焙进顶点色（批内共享一次绘制，无法逐节点传 uniform）。
         math::vec4 tint(1.f, 1.f, 1.f, 1.f);

@@ -11,7 +11,7 @@ namespace jeecs::graphic
 
     namespace
     {
-        inline const float _screen_vertex_data[] = {
+        inline const float screen_quad_data[] = {
             -1.f,
             1.f,
             0.f,
@@ -39,7 +39,7 @@ namespace jeecs::graphic
         // （零面积，无片元）。顶点格式 pos.xyz / uv.xy / factor /
         // edge_normal.xy，uv 沿边方向 0→1、沿挤出方向从本边值跨到
         // 对边值（整图压扁观感）。
-        inline const float _wall_shadow_vertex_data[] = {
+        inline const float wall_shadow_strip_data[] = {
             /* bottom edge, normal (0,-1) */
             -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f,
             0.5f,  -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, -1.0f,
@@ -62,7 +62,7 @@ namespace jeecs::graphic
             0.5f,  0.5f,  0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f,
         };
         // SpriteShadow 单位四边形 [-1,1]²，仅位置属性
-        inline const float _sprite_shadow_quad_data[] = {
+        inline const float sprite_shadow_quad_data[] = {
             -1.f, -1.f, 0.f,
             1.f, -1.f, 0.f,
             -1.f, 1.f, 0.f,
@@ -73,17 +73,30 @@ namespace jeecs::graphic
         // 写实体/图层 key，自阴影写在它之前半层，于是按 painter key 的
         // “最靠前胜出”规则清除本层遮挡落在本层表面上的自遮挡。
         constexpr float SELF_SHADOW_SURFACE_BIAS = 0.005f;
+
+        // 引擎内置着色器：加载失败即显式失败（核心管线资源约定）。
+        basic::resource<graphic::shader> load_builtin_shader(const char* path)
+        {
+            return graphic::shader::load(nullptr, path).value();
+        }
+
+        // 按比例缩放的缓冲尺寸：比例钳制到 [0, 1]，结果至少为 1。
+        size_t scaled_buffer_size(size_t base, float ratio)
+        {
+            return std::max((size_t)1, (size_t)llround(
+                base * std::max(0.f, std::min(ratio, 1.0f))));
+        }
     }
 
-    DeferLight2DGraphicPipelineSystem::DeferLight2DResource::DeferLight2DResource()
-        : _no_shadow{
-            jeecs::graphic::texture2d::create(1, 1, JE_GL_TEXTURE_FORMAT_RGBA)
+    DeferLight2DGraphicPipelineSystem::DeferLight2DResources::DeferLight2DResources()
+        : no_shadow{
+            graphic::texture2d::create(1, 1, JE_GL_TEXTURE_FORMAT_RGBA)
         }
-        , _screen_vertex{
-            jeecs::graphic::vertex::create(
+        , screen_quad{
+            graphic::vertex::create(
                 JE_GL_VERTEX_TYPE_TRIANGLESTRIP,
-                _screen_vertex_data,
-                sizeof(_screen_vertex_data),
+                screen_quad_data,
+                sizeof(screen_quad_data),
                 {0, 1, 2, 3},
                 {
                     {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3},
@@ -91,11 +104,11 @@ namespace jeecs::graphic
                 })
                 .value()
         }
-        , _wall_shadow_vertex{
-            jeecs::graphic::vertex::create(
+        , wall_shadow_strips{
+            graphic::vertex::create(
                 JE_GL_VERTEX_TYPE_TRIANGLES,
-                _wall_shadow_vertex_data,
-                sizeof(_wall_shadow_vertex_data),
+                wall_shadow_strip_data,
+                sizeof(wall_shadow_strip_data),
                 {0, 1, 2, 1, 3, 2,
                 4, 5, 6, 5, 7, 6,
                 8, 9, 10, 9, 11, 10,
@@ -108,65 +121,48 @@ namespace jeecs::graphic
                 })
                 .value()
         }
-        , _sprite_shadow_quad{
-            jeecs::graphic::vertex::create(
+        , sprite_shadow_quad{
+            graphic::vertex::create(
                 JE_GL_VERTEX_TYPE_TRIANGLESTRIP,
-                _sprite_shadow_quad_data,
-                sizeof(_sprite_shadow_quad_data),
+                sprite_shadow_quad_data,
+                sizeof(sprite_shadow_quad_data),
                 {0, 1, 2, 3},
                 {
                     {JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3},
                 })
                 .value()
         }
-        , _defer_light2d_shadow_point_pass{
-            jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_point.shader").value()
+        , point_shadow{
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_point.shader"),
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_reverse_point.shader"),
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_point_shape.shader"),
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_point_sprite.shader"),
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_point_wall.shader"),
         }
-        , _defer_light2d_shadow_parallel_pass{
-            jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_parallel.shader").value()
+        , parallel_shadow{
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_parallel.shader"),
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_reverse_parallel.shader"),
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_parallel_shape.shader"),
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_parallel_sprite.shader"),
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_parallel_wall.shader"),
         }
-        , _defer_light2d_shadow_point_reverse_pass{
-        jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_reverse_point.shader").value()
+        , self_shadow{
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_sub.shader")
         }
-        , _defer_light2d_shadow_parallel_reverse_pass{
-            jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_reverse_parallel.shader").value()
+        , self_shadow_array{
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_sub_array.shader")
         }
-        , _defer_light2d_shadow_shape_point_pass{
-            jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_point_shape.shader").value()
+        , self_shadow_topdown{
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_sub_topdown.shader")
         }
-        , _defer_light2d_shadow_shape_parallel_pass{
-            jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_parallel_shape.shader").value()
-        }
-        , _defer_light2d_shadow_sprite_point_pass{
-            jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_point_sprite.shader").value()
-        }
-        , _defer_light2d_shadow_sprite_parallel_pass{
-        jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_parallel_sprite.shader").value()
-        }
-        , _defer_light2d_shadow_wall_point_pass{
-            jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_point_wall.shader").value()
-        }
-        , _defer_light2d_shadow_wall_parallel_pass{
-        jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_parallel_wall.shader").value()
-        }
-        , _defer_light2d_shadow_sub_pass{
-            jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub.shader").value()
-        }
-        , _defer_light2d_shadow_sub_array_pass{
-            jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_array.shader").value()
-        }
-        , _defer_light2d_shadow_sub_topdown_pass{
-            jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_topdown.shader").value()
-        }
-        , _defer_light2d_shadow_sub_topdown_array_pass{
-            jeecs::graphic::shader::load(nullptr, "!/builtin/shader/internal/defer_light2d_shadow_sub_topdown_array.shader").value()
+        , self_shadow_topdown_array{
+            load_builtin_shader("!/builtin/shader/internal/defer_light2d_shadow_sub_topdown_array.shader")
         }
     {
-        // Donothing...
     }
 
     DeferLight2DGraphicPipelineSystem::DeferLight2DGraphicPipelineSystem(game_world w)
-        : BaseImpledGraphicPipeline(w)
+        : GraphicPipelineBase(w)
     {
     }
 
@@ -176,18 +172,12 @@ namespace jeecs::graphic
 
     void DeferLight2DGraphicPipelineSystem::GraphicUpdate()
     {
-        auto WINDOWS_SIZE = jeecs::input::windowsize();
-        WINDOWS_WIDTH = (size_t)WINDOWS_SIZE.x;
-        WINDOWS_HEIGHT = (size_t)WINDOWS_SIZE.y;
+        begin_frame();
 
-        m_2dlight_list.clear();
-        m_2dblock_list.clear();
-        m_2dcamera_list.clear();
-        m_renderer_list.clear();
-
-        this->branch_allocate_begin();
-
-        DeferLight2DGraphicPipelineSystem::PrepareCameras();
+        m_lights.clear();
+        m_blocks.clear();
+        m_cameras.clear();
+        m_renderers.clear();
 
         for (auto&& [
             tarns,
@@ -218,19 +208,21 @@ namespace jeecs::graphic
         >())
         {
             auto* branch = this->allocate_branch(rendqueue == nullptr ? 0 : rendqueue->rend_queue);
-            m_2dcamera_list.emplace(
+            m_cameras.push_back(
                 l2dcamera_arch{
-                    branch,
-                    rendqueue,
+                    camera_arch{
+                        branch,
+                        rendqueue,
+                        &projection,
+                        cameraviewport,
+                        rendbuf,
+                        frustumCulling,
+                        clear
+                    },
                     &tarns,
-                    &projection,
-                    cameraviewport,
-                    rendbuf,
                     light2dpostpass,
                     shaders,
                     textures,
-                    frustumCulling,
-                    clear,
                     color
                 });
 
@@ -243,19 +235,16 @@ namespace jeecs::graphic
                 const size_t RENDAIMBUFFER_WIDTH =
                     std::max((size_t)1, (size_t)llround(
                         (cameraviewport ? cameraviewport->viewport.z : 1.0f) *
-                        (rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH)));
+                        (rend_aim_buffer ? rend_aim_buffer->width() : m_window_width)));
                 const size_t RENDAIMBUFFER_HEIGHT =
                     std::max((size_t)1, (size_t)llround(
                         (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
-                        (rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT)));
+                        (rend_aim_buffer ? rend_aim_buffer->height() : m_window_height)));
 
                 const size_t LIGHT_BUFFER_WIDTH =
-                    std::max((size_t)1, (size_t)llround(
-                        RENDAIMBUFFER_WIDTH * std::max(0.f, std::min(light2dpostpass->light_rend_ratio, 1.0f))));
-
+                    scaled_buffer_size(RENDAIMBUFFER_WIDTH, light2dpostpass->light_rend_ratio);
                 const size_t LIGHT_BUFFER_HEIGHT =
-                    std::max((size_t)1, (size_t)llround(
-                        RENDAIMBUFFER_HEIGHT * std::max(0.f, std::min(light2dpostpass->light_rend_ratio, 1.0f))));
+                    scaled_buffer_size(RENDAIMBUFFER_HEIGHT, light2dpostpass->light_rend_ratio);
 
                 bool need_update = !light2dpostpass->post_rend_target.has_value();
 
@@ -300,6 +289,8 @@ namespace jeecs::graphic
             }
         }
 
+        sort_by_rend_queue(m_cameras);
+
         for (auto&& [trans, shads, texs, texarr, shape, rendqueue, color] : query<
             view typesof(
                 Translation&,
@@ -318,13 +309,12 @@ namespace jeecs::graphic
             )
         >())
         {
-            // RendOb will be input to a chain and used for swap
-            m_renderer_list.emplace(
-                renderer_arch{
-                    color, rendqueue, &trans, &shape, &shads, texs,
-                    nullptr, nullptr, nullptr, nullptr, texarr
+            m_renderers.push_back(
+                world_renderer_arch{
+                    color, rendqueue, &trans, &shape, &shads, texs, texarr
                 });
         }
+        sort_by_rend_queue(m_renderers);
 
         for (auto&& [
             trans,
@@ -362,20 +352,17 @@ namespace jeecs::graphic
             )
         >())
         {
-            m_2dlight_list.emplace_back(
+            m_lights.emplace_back(
                 light2d_arch{
                     &trans, topdown, point, parallel, range, shadowoffset, gain, shadowbuffer,
                     color, &shape, &shads, texs,
                 });
             if (shadowbuffer != nullptr)
             {
-                size_t SHADOW_BUFFER_WIDTH =
-                    std::max((size_t)1, (size_t)llround(
-                        WINDOWS_WIDTH * std::max(0.f, std::min(shadowbuffer->resolution_ratio, 1.0f))));
-
-                size_t SHADOW_BUFFER_HEIGHT =
-                    std::max((size_t)1, (size_t)llround(
-                        WINDOWS_HEIGHT * std::max(0.f, std::min(shadowbuffer->resolution_ratio, 1.0f))));
+                const size_t SHADOW_BUFFER_WIDTH =
+                    scaled_buffer_size(m_window_width, shadowbuffer->resolution_ratio);
+                const size_t SHADOW_BUFFER_HEIGHT =
+                    scaled_buffer_size(m_window_height, shadowbuffer->resolution_ratio);
 
                 bool generate_new_framebuffer = !shadowbuffer->buffer.has_value();
                 if (!generate_new_framebuffer)
@@ -389,8 +376,8 @@ namespace jeecs::graphic
                 if (generate_new_framebuffer)
                 {
                     shadowbuffer->buffer = graphic::framebuffer::create(
-                        std::max((size_t)1, SHADOW_BUFFER_WIDTH),
-                        std::max((size_t)1, SHADOW_BUFFER_HEIGHT),
+                        SHADOW_BUFFER_WIDTH,
+                        SHADOW_BUFFER_HEIGHT,
                         {
                             JE_GL_TEXTURE_FORMAT_RGBA,
                             // R = 世界/遮挡阴影强度（MAX 合并）
@@ -561,7 +548,7 @@ namespace jeecs::graphic
                 }
             }
             math::vec3 top_world_center;
-            m_2dblock_list.push_back(
+            m_blocks.push_back(
                 block2d_arch{
                     &trans,
                     get_block_bottom_world_center(trans, shape, &top_world_center),
@@ -579,31 +566,13 @@ namespace jeecs::graphic
             );
         }
 
-        this->branch_allocate_end();
+        end_frame();
         DrawFrame();
     }
 
-    DeferLight2DGraphicPipelineSystem::defer_light2d_shadow_passes_t DeferLight2DGraphicPipelineSystem::select_shadow_passes(bool is_parallel) const
+    const DeferLight2DGraphicPipelineSystem::shadow_pass_set& DeferLight2DGraphicPipelineSystem::shadow_passes_for(bool is_parallel) const
     {
-        return is_parallel
-            ? defer_light2d_shadow_passes_t{
-                m_defer_light2d_host._defer_light2d_shadow_parallel_pass,
-                m_defer_light2d_host._defer_light2d_shadow_parallel_reverse_pass,
-                m_defer_light2d_host._defer_light2d_shadow_shape_parallel_pass,
-                m_defer_light2d_host._defer_light2d_shadow_sprite_parallel_pass,
-                m_defer_light2d_host._defer_light2d_shadow_wall_parallel_pass,
-                m_defer_light2d_host._defer_light2d_shadow_sub_pass,
-                m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
-        }
-        : defer_light2d_shadow_passes_t{
-            m_defer_light2d_host._defer_light2d_shadow_point_pass,
-            m_defer_light2d_host._defer_light2d_shadow_point_reverse_pass,
-            m_defer_light2d_host._defer_light2d_shadow_shape_point_pass,
-            m_defer_light2d_host._defer_light2d_shadow_sprite_point_pass,
-            m_defer_light2d_host._defer_light2d_shadow_wall_point_pass,
-            m_defer_light2d_host._defer_light2d_shadow_sub_pass,
-            m_defer_light2d_host._defer_light2d_shadow_sub_array_pass,
-        };
+        return is_parallel ? m_resources.parallel_shadow : m_resources.point_shadow;
     }
 
     void DeferLight2DGraphicPipelineSystem::bind_shadow_texture(
@@ -616,17 +585,14 @@ namespace jeecs::graphic
             chain, 0,
             main_texture.has_value()
             ? main_texture.value()->resource()
-            : m_default_resources.default_texture->resource());
+            : m_defaults.default_texture->resource());
     }
 
     math::vec3 DeferLight2DGraphicPipelineSystem::get_block_bottom_world_center(
         const Translation& translation, const Shape& shape,
         /* OPTIONAL */ math::vec3* top_out) const
     {
-        const auto& using_shape = shape.vertex.has_value()
-            ? shape.vertex.value()
-            : m_default_resources.default_shape_quad;
-        const auto* vertex_data = using_shape->resource();
+        const auto* vertex_data = m_defaults.shape_of(shape.vertex)->resource();
         const float(&MAT4_MODEL)[4][4] = translation.object2world;
 
         math::vec3 min_point;
@@ -791,7 +757,6 @@ namespace jeecs::graphic
 
     void DeferLight2DGraphicPipelineSystem::draw_self_shadow(
         je_gl_command_buffer_t* shadow_chain,
-        const defer_light2d_shadow_passes_t& passes,
         const block2d_arch& block,
         bool topdown_light,
         const shadow_depth_mapping& depth_mapping,
@@ -817,18 +782,14 @@ namespace jeecs::graphic
         const bool per_block = topdown_light && block.perblock != nullptr;
         auto& sub_pass_shader = per_block
             ? (array_atlas.has_value()
-                ? m_defer_light2d_host._defer_light2d_shadow_sub_topdown_array_pass
-                : m_defer_light2d_host._defer_light2d_shadow_sub_topdown_pass)
+                ? m_resources.self_shadow_topdown_array
+                : m_resources.self_shadow_topdown)
             : (array_atlas.has_value()
-                ? passes.sub_texarray
-                : passes.sub);
+                ? m_resources.self_shadow_array
+                : m_resources.self_shadow);
 
         assert(block.shape != nullptr);
-        const auto& using_shape = block.shape->vertex.has_value()
-            ? block.shape->vertex.value()
-            : m_default_resources.default_shape_quad;
-
-        auto* vertex_resource = using_shape->resource();
+        auto* vertex_resource = m_defaults.shape_of(block.shape->vertex)->resource();
         auto* pipeline = pipeline_for(
             sub_pass_shader.get(), vertex_resource);
 
@@ -906,7 +867,7 @@ namespace jeecs::graphic
 
     void DeferLight2DGraphicPipelineSystem::draw_sprite_shadow(
         je_gl_command_buffer_t* shadow_chain,
-        const defer_light2d_shadow_passes_t& passes,
+        const shadow_pass_set& passes,
         const block2d_arch& block,
         const light2d_arch& light,
         const math::vec3& shadow_cast_pos,
@@ -968,7 +929,7 @@ namespace jeecs::graphic
         draw_shadow_occluder(
             shadow_chain,
             passes.sprite,
-            m_defer_light2d_host._sprite_shadow_quad,
+            m_resources.sprite_shadow_quad,
             block.translation,
             light,
             shadow_cast_pos,
@@ -987,36 +948,25 @@ namespace jeecs::graphic
 
     void DeferLight2DGraphicPipelineSystem::DrawFrame()
     {
-        const double current_time = je_clock_time();
-
-        math::vec4 shader_time =
-        {
-            (float)current_time,
-            (float)abs(2.0 * (current_time * 2.0 - double(int(current_time * 2.0)) - 0.5)),
-            (float)abs(2.0 * (current_time - double(int(current_time)) - 0.5)),
-            (float)abs(2.0 * (current_time / 2.0 - double(int(current_time / 2.0)) - 0.5)) };
+        const math::vec4 shader_time = current_shader_time();
 
         // 阴影逐像素仲裁：每帧按当前 block 列表计算一次 key→深度映射。
         // TopDown 用世界 Y，普通 2D 用世界 Z；两种模式各一份。
         const shadow_depth_mapping shadow_depth_z =
-            make_shadow_depth_mapping(m_2dblock_list, false);
+            make_shadow_depth_mapping(m_blocks, false);
         const shadow_depth_mapping shadow_depth_y =
-            make_shadow_depth_mapping(m_2dblock_list, true);
+            make_shadow_depth_mapping(m_blocks, true);
 
-        for (auto& current_camera : m_2dcamera_list)
+        for (auto& current_camera : m_cameras)
         {
-            graphic::framebuffer* rend_aim_buffer = nullptr;
-            if (current_camera.rendToFramebuffer)
-            {
-                if (current_camera.rendToFramebuffer->framebuffer.has_value())
-                    rend_aim_buffer = current_camera.rendToFramebuffer->framebuffer->get();
-                else
-                    continue;
-            }
+            const auto target = resolve_camera_target(current_camera);
+            if (!target.has_value())
+                continue;
 
+            graphic::framebuffer* rend_aim_buffer = target->framebuffer;
             const size_t
-                RENDAIMBUFFER_WIDTH = rend_aim_buffer ? rend_aim_buffer->width() : WINDOWS_WIDTH,
-                RENDAIMBUFFER_HEIGHT = rend_aim_buffer ? rend_aim_buffer->height() : WINDOWS_HEIGHT;
+                RENDAIMBUFFER_WIDTH = target->width,
+                RENDAIMBUFFER_HEIGHT = target->height;
 
             const float(&MAT4_VIEW)[4][4] = current_camera.projection->view;
             const float(&MAT4_PROJECTION)[4][4] = current_camera.projection->projection;
@@ -1028,7 +978,7 @@ namespace jeecs::graphic
             je_gl_command_buffer_t* rend_chain = nullptr;
 
             std::vector<light2d_arch*> _2dlight_after_culling;
-            _2dlight_after_culling.reserve(m_2dlight_list.size());
+            _2dlight_after_culling.reserve(m_lights.size());
 
             // If current camera contain light2d-pass, prepare light shadow here.
             if (current_camera.light2DPostPass != nullptr)
@@ -1039,7 +989,7 @@ namespace jeecs::graphic
                     continue;
 
                 // Walk throw all light, rend shadows to light's ShadowBuffer.
-                for (auto& lightarch : m_2dlight_list)
+                for (auto& lightarch : m_lights)
                 {
                     const float light_range = 0.5f *
                         (lightarch.range == nullptr
@@ -1090,7 +1040,8 @@ namespace jeecs::graphic
                         je_graphic_cmd_bind_uniform_buffer(light2d_shadow_rend_chain,
                             current_camera.projection->default_uniform_buffer->resource());
 
-                        const auto shadow_passes = select_shadow_passes(lightarch.parallel != nullptr);
+                        const shadow_pass_set& shadow_passes =
+                            shadow_passes_for(lightarch.parallel != nullptr);
 
                         const bool topdown_light = lightarch.topdown != nullptr;
                         const shadow_depth_mapping& shadow_depth =
@@ -1104,7 +1055,7 @@ namespace jeecs::graphic
                         // 后方的接触阴影
                         std::vector<const block2d_arch*> pending_sprite_shadows;
 
-                        for (auto& blockarch : m_2dblock_list)
+                        for (auto& blockarch : m_blocks)
                         {
                             const float block_range = 0.5f *
                                 get_entity_size(*blockarch.translation, blockarch.shape->vertex).length();
@@ -1177,9 +1128,6 @@ namespace jeecs::graphic
                                     && (light_is_above_block || !blockarch.shapeshadow->auto_disable))
                                 {
                                     assert(blockarch.shape != nullptr);
-                                    const auto& using_shape = blockarch.shape->vertex.has_value()
-                                        ? blockarch.shape->vertex.value()
-                                        : m_default_resources.default_shape_quad;
                                     bind_shadow_texture(
                                         light2d_shadow_rend_chain, blockarch.textures);
 
@@ -1188,7 +1136,7 @@ namespace jeecs::graphic
                                     draw_shadow_occluder(
                                         light2d_shadow_rend_chain,
                                         shadow_passes.shape,
-                                        using_shape,
+                                        m_defaults.shape_of(blockarch.shape->vertex),
                                         blockarch.translation,
                                         lightarch,
                                         shadow_cast_pos,
@@ -1212,7 +1160,7 @@ namespace jeecs::graphic
                                     draw_shadow_occluder(
                                         light2d_shadow_rend_chain,
                                         shadow_passes.wall,
-                                        m_defer_light2d_host._wall_shadow_vertex,
+                                        m_resources.wall_shadow_strips,
                                         blockarch.translation,
                                         lightarch,
                                         shadow_cast_pos,
@@ -1235,7 +1183,6 @@ namespace jeecs::graphic
                                 if (blockarch.selfshadow != nullptr)
                                     draw_self_shadow(
                                         light2d_shadow_rend_chain,
-                                        shadow_passes,
                                         blockarch,
                                         topdown_light,
                                         shadow_depth,
@@ -1275,12 +1222,10 @@ namespace jeecs::graphic
 
                 graphic::framebuffer* post_rend_target_fb =
                     current_camera.light2DPostPass->post_rend_target.value().get();
-                rend_chain = new_rend_chain_for_camera(
-                    current_camera.branchPipeline, /*viewport=*/nullptr,
+                rend_chain = begin_camera_pass(
+                    current_camera, /*viewport=*/nullptr,
                     post_rend_target_fb,
                     post_rend_target_fb->width(), post_rend_target_fb->height());
-
-                clear_color_if_any(rend_chain, current_camera.clear);
 
                 const float clear_zero[4] = { 0.f, 0.f, 0.f, 0.f };
                 const float clear_infi[4] = { 0.f, 0.f, current_camera.projection->zfar, 0.f };
@@ -1295,19 +1240,14 @@ namespace jeecs::graphic
             }
             else
             {
-                rend_chain = new_rend_chain_for_camera(
-                    current_camera.branchPipeline, current_camera.viewport,
+                rend_chain = begin_camera_pass(
+                    current_camera, current_camera.viewport,
                     rend_aim_buffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
-                clear_color_if_any(rend_chain, current_camera.clear);
             }
-            // Clear depth buffer to overwrite pixels.
-            je_graphic_cmd_clear_depth(rend_chain, 1.0);
-
-            je_graphic_cmd_bind_uniform_buffer(rend_chain,
-                current_camera.projection->default_uniform_buffer->resource());
 
             // Walk through all entities, rend them to target buffer(include L2DCamera/R2Buf/Screen).
-            draw_world_renderers(rend_chain, current_camera.frustumCulling, MAT4_VIEW, MAT4_VP);
+            draw_world_renderers(
+                rend_chain, m_renderers, current_camera.frustumCulling, MAT4_VIEW, MAT4_VP);
 
             if (current_camera.light2DPostPass != nullptr && current_camera.shaders != nullptr)
             {
@@ -1355,7 +1295,7 @@ namespace jeecs::graphic
                         light2d_light_effect_rend_chain, JE_LIGHT2D_DEFER_0 + 4,
                         light2d.shadowbuffer != nullptr
                         ? light2d.shadowbuffer->buffer.value()->get_attachment(0).value()->resource()
-                        : m_defer_light2d_host._no_shadow->resource());
+                        : m_resources.no_shadow->resource());
 
                     // 开始渲染光照！光照本身从光源实体原始 Translation
                     // 位置渲染；Light2D::ShadowOffset 只影响阴影计算点
@@ -1368,14 +1308,6 @@ namespace jeecs::graphic
                     const auto& drawing_mesh = light2d.range != nullptr
                         ? light2d.range->shape.m_light_mesh
                         : light2d.shape->vertex;
-                    auto& drawing_shape =
-                        drawing_mesh.has_value()
-                        ? drawing_mesh.value()
-                        : m_default_resources.default_shape_quad;
-                    auto& drawing_shaders =
-                        light2d.shaders->shaders.empty() == false
-                        ? light2d.shaders->shaders
-                        : m_default_resources.default_shaders_list;
 
                     // 传入 Light2D 所需的颜色、衰减信息
                     math::vec4 light_color =
@@ -1389,10 +1321,10 @@ namespace jeecs::graphic
                     math::vec2 light2d_resolution(1.f, 1.f);
                     if (light2d.shadowbuffer != nullptr)
                     {
-                        light2d_resolution.x = (float)std::max((size_t)1, (size_t)llround(
-                            WINDOWS_WIDTH * std::max(0.f, std::min(light2d.shadowbuffer->resolution_ratio, 1.0f))));
-                        light2d_resolution.y = (float)std::max((size_t)1, (size_t)llround(
-                            WINDOWS_HEIGHT * std::max(0.f, std::min(light2d.shadowbuffer->resolution_ratio, 1.0f))));
+                        light2d_resolution.x = (float)scaled_buffer_size(
+                            m_window_width, light2d.shadowbuffer->resolution_ratio);
+                        light2d_resolution.y = (float)scaled_buffer_size(
+                            m_window_height, light2d.shadowbuffer->resolution_ratio);
                     }
 
                     // 衰减系数仅对 Point / Range 光源存在
@@ -1421,18 +1353,16 @@ namespace jeecs::graphic
                     u.light2d_decay = light2d_decay_ptr;
 
                     draw_shader_passes(
-                        light2d_light_effect_rend_chain, drawing_shape, drawing_shaders, u);
+                        light2d_light_effect_rend_chain,
+                        m_defaults.shape_of(drawing_mesh),
+                        m_defaults.shaders_of(*light2d.shaders),
+                        u);
                 }
 
                 // Rend final result color to screen.
-                je_gl_command_buffer_t* final_target_rend_chain = new_rend_chain_for_camera(
-                    current_camera.branchPipeline, current_camera.viewport,
+                je_gl_command_buffer_t* final_target_rend_chain = begin_camera_pass(
+                    current_camera, current_camera.viewport,
                     rend_aim_buffer, RENDAIMBUFFER_WIDTH, RENDAIMBUFFER_HEIGHT);
-
-                clear_color_if_any(final_target_rend_chain, current_camera.clear);
-                je_graphic_cmd_clear_depth(final_target_rend_chain, 1.0);
-                je_graphic_cmd_bind_uniform_buffer(final_target_rend_chain,
-                    current_camera.projection->default_uniform_buffer->resource());
 
                 // 槽 0：光照合成结果；槽 4..7：G-buffer 通道
                 je_graphic_cmd_bind_texture_2d(final_target_rend_chain, 0,
@@ -1456,11 +1386,6 @@ namespace jeecs::graphic
                         je_graphic_cmd_bind_texture_2d(final_target_rend_chain, texture.m_pass_id, texture.m_texture->resource());
                 }
 
-                auto& drawing_shaders =
-                    current_camera.shaders->shaders.empty() == false
-                    ? current_camera.shaders->shaders
-                    : m_default_resources.default_shaders_list;
-
                 math::vec2 post_light_resolution(
                     (float)post_light_target_fb->width(),
                     (float)post_light_target_fb->height());
@@ -1470,16 +1395,11 @@ namespace jeecs::graphic
 
                 // 注意：合成 pass 不设置 m/mv/mvp/local_scale（这些 shader 不使用它们），
                 // 仅设置 light2d_resolution / tiling / offset / color。
-                for (auto& shader_pass : drawing_shaders)
+                auto* vertex_resource = m_resources.screen_quad->resource();
+                for (auto& shader_pass : m_defaults.shaders_of(*current_camera.shaders))
                 {
-                    auto* using_shader = &shader_pass;
-                    if (!shader_pass->m_builtin)
-                        using_shader = &m_default_resources.default_shader;
-
-                    auto* vertex_resource =
-                        m_defer_light2d_host._screen_vertex->resource();
                     auto* pipeline = pipeline_for(
-                        (*using_shader).get(), vertex_resource);
+                        m_defaults.pass_shader_of(shader_pass), vertex_resource);
                     je_graphic_cmd_bind_pipeline(final_target_rend_chain, pipeline);
                     je_graphic_cmd_bind_vertex(final_target_rend_chain, vertex_resource);
                     render_builtin_uniforms uniforms(final_target_rend_chain, pipeline);

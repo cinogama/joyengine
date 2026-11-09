@@ -8,6 +8,9 @@
 
 #include <map>
 #include <utility>
+#include <vector>
+#include <optional>
+#include <algorithm>
 
 namespace jeecs::graphic
 {
@@ -17,6 +20,8 @@ namespace jeecs::graphic
     using namespace UserInterface;
     using namespace Light2D;
 
+    // 引擎兜底资源：实体未指定形状/着色器/纹理，或着色器 pass 不可用时，
+    // 各管线统一回退到这里。
     struct DefaultResources
     {
         basic::resource<graphic::vertex> default_shape_quad;
@@ -27,12 +32,24 @@ namespace jeecs::graphic
         JECS_DISABLE_MOVE_AND_COPY(DefaultResources);
 
         DefaultResources();
+
+        // 实体形状：未指定顶点时回退默认四边形。
+        const basic::resource<graphic::vertex>& shape_of(
+            const basic::optional<basic::resource<graphic::vertex>>& vertex) const;
+        // 实体着色器列表：为空时回退默认着色器列表。
+        const basic::vector<basic::resource<graphic::shader>>& shaders_of(
+            const Shaders& shaders) const;
+        // 单个着色器 pass：非内置（未就绪）时回退默认着色器。
+        graphic::shader* pass_shader_of(
+            const basic::resource<graphic::shader>& pass) const;
     };
 
-    struct BaseImpledGraphicPipeline : public graphic::BasePipelineInterface
+    // 三条渲染管线（UI / Unlit / DeferLight2D）共用的基础设施：兜底资源、
+    // pipeline 缓存、帧生命周期，以及相机与绘制辅助。相机、渲染体等帧数据
+    // 由各管线系统自行持有。
+    struct GraphicPipelineBase : public graphic::BasePipelineInterface
     {
-        BaseImpledGraphicPipeline(game_world w);
-
+        // 相机：UI / Unlit 直接使用，DeferLight2D 在此基础上扩展。
         struct camera_arch
         {
             je_render_branch_t* branchPipeline;
@@ -43,15 +60,10 @@ namespace jeecs::graphic
             const RendToFramebuffer* rendToFramebuffer;
             const FrustumCulling* frustumCulling;
             const Camera::Clear* clear;
-
-            bool operator<(const camera_arch& another) const noexcept
-            {
-                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
-                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
-                return a_queue < b_queue;
-            }
         };
-        struct renderer_arch
+
+        // 世界空间渲染体（Unlit / DeferLight2D 主 pass）。
+        struct world_renderer_arch
         {
             const Renderer::Color* color;
             const Rendqueue* rendqueue;
@@ -59,76 +71,17 @@ namespace jeecs::graphic
             const Shape* shape;
             const Shaders* shaders;
             const Textures2D* textures;
-
-            // UI 布局量：父子层级（含祖先旋转链）已由布局阶段复合进
-            // WorldLayout 的仿射系数通道，绘制端只按相机目标尺寸像素化。
-            const UserInterface::Element* ui_elem = nullptr;
-            const UserInterface::WorldLayout* ui_layout = nullptr;
-            const UserInterface::Rotation* ui_rotation = nullptr; // 可空
-
-            // UI 文本（逐字渲染路径）；仅 UI 渲染路径使用，为空时该实体走
-            // 常规四边形路径（两者可并存：先四边形后文本，文字在背景板之上）。
-            const UserInterface::Text* text = nullptr;
-
             // 纹理数组通道绑定（瓦片地图分片等使用）；可空
-            const Textures2DArray* textures_array = nullptr;
-
-            bool operator<(const renderer_arch& another) const noexcept
-            {
-                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
-                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
-                return a_queue < b_queue;
-            }
+            const Textures2DArray* textures_array;
         };
 
-        DefaultResources m_default_resources;
-
-        std::multiset<camera_arch> m_camera_list;
-        std::multiset<renderer_arch> m_renderer_list;
-
-        size_t WINDOWS_WIDTH = 0;
-        size_t WINDOWS_HEIGHT = 0;
-
-        void PrepareCameras();
-
-        math::vec3 get_entity_size(
-            const Transform::Translation& trans,
-            const basic::optional<basic::resource<graphic::vertex>>& mesh);
-
-        /* ---------------- Shared render-pipeline helpers ---------------- */
-
-        // Write the per-camera view/projection/VP/time quartet into the default uniform buffer.
-        void update_default_uniform_buffer(
-            const Projection& projection,
-            const float(&view)[4][4],
-            const float(&proj)[4][4],
-            const float(&vp)[4][4],
-            const math::vec4& shader_time);
-
-        // Pipeline cache keyed by (shader, topology). The engine shaders carry
-        // their fixed state; topology comes from the vertex resource.
-        std::map<std::pair<je_gl_shader_t*, uint8_t>, je_gl_pipeline_t*> m_pipeline_cache;
-
-        ~BaseImpledGraphicPipeline();
-
-        je_gl_context_t* graphic_context() const;
-
-        static je_gl_topology_t topology_of(const je_gl_vertex_t* vertex);
-
-        je_gl_pipeline_t* pipeline_for(
-            graphic::shader* shader, je_gl_vertex_t* vertex);
-
-        // Allocate a command buffer/pass for a camera; honors optional
-        // sub-viewport (normalized rect).
-        je_gl_command_buffer_t* new_rend_chain_for_camera(
-            je_render_branch_t* branch,
-            const Viewport* viewport,
-            graphic::framebuffer* rend_aim_buffer,
-            size_t buffer_w, size_t buffer_h);
-
-        // Clear attachment 0 if the camera requested a clear color.
-        void clear_color_if_any(
-            je_gl_command_buffer_t* cmd, const Camera::Clear* clear);
+        // 相机的渲染目标：RendToFramebuffer 指定的帧缓冲，或窗口。
+        struct camera_target
+        {
+            graphic::framebuffer* framebuffer; // 可空：为空时渲染到窗口
+            size_t width;
+            size_t height;
+        };
 
         // Bind default texture at slot 0, then any user-supplied textures.
         // Returns the resolved tiling/offset.
@@ -137,8 +90,6 @@ namespace jeecs::graphic
             math::vec2 tiling;
             math::vec2 offset;
         };
-        bound_textures_t bind_entity_textures(je_gl_command_buffer_t* cmd, const Textures2D* textures,
-            const Textures2DArray* textures_array);
 
         // Optional uniforms grouped together; nullptr / unset fields are skipped.
         // Used by both world-space (Unlit / DeferLight2D main) and screen-space (UI) passes.
@@ -156,6 +107,89 @@ namespace jeecs::graphic
             const float* light2d_decay = nullptr;
         };
 
+        DefaultResources m_defaults;
+
+        // Pipeline cache keyed by (shader, topology). The engine shaders carry
+        // their fixed state; topology comes from the vertex resource.
+        std::map<std::pair<je_gl_shader_t*, uint8_t>, je_gl_pipeline_t*> m_pipeline_cache;
+
+        // 窗口尺寸，帧首（begin_frame）读取。
+        size_t m_window_width = 0;
+        size_t m_window_height = 0;
+
+        GraphicPipelineBase(game_world w);
+        ~GraphicPipelineBase();
+
+        /* ---------------- 帧生命周期 ---------------- */
+
+        // 帧首：读取窗口尺寸、开始分配渲染分支，并更新全部相机的
+        // 视图/投影矩阵与视锥平面。
+        void begin_frame();
+        // 帧尾：回收本帧未用到的渲染分支。
+        void end_frame();
+        // 着色器时间 uniform：当前时间与三档周期的三角波。
+        static math::vec4 current_shader_time();
+
+        /* ---------------- 相机 ---------------- */
+
+        // 按 rend_queue 升序稳定排序：同队列保持收集顺序。
+        template<typename ArchT>
+        static void sort_by_rend_queue(std::vector<ArchT>& archs)
+        {
+            std::stable_sort(archs.begin(), archs.end(),
+                [](const ArchT& a, const ArchT& b)
+                {
+                    const int a_queue = a.rendqueue ? a.rendqueue->rend_queue : 0;
+                    const int b_queue = b.rendqueue ? b.rendqueue->rend_queue : 0;
+                    return a_queue < b_queue;
+                });
+        }
+
+        // 收集通用相机（UI / Unlit）：每个相机分配一个渲染分支，并按
+        // rend_queue 排序。
+        void collect_cameras(std::vector<camera_arch>& cameras);
+
+        // 解析相机的渲染目标；RendToFramebuffer 的帧缓冲尚未就绪时返回
+        // nullopt，本帧跳过该相机。
+        std::optional<camera_target> resolve_camera_target(
+            const camera_arch& camera) const;
+
+        // 开启相机的绘制 pass：分配命令缓冲（视口按目标尺寸换算），按相机
+        // Clear 清颜色、清深度，并绑定相机的默认 uniform 缓冲。
+        je_gl_command_buffer_t* begin_camera_pass(
+            const camera_arch& camera,
+            /* OPTIONAL */ const Viewport* viewport,
+            /* OPTIONAL */ graphic::framebuffer* framebuffer,
+            size_t width, size_t height);
+
+        // Allocate a command buffer/pass for a camera; honors optional
+        // sub-viewport (normalized rect).
+        je_gl_command_buffer_t* new_rend_chain_for_camera(
+            je_render_branch_t* branch,
+            const Viewport* viewport,
+            graphic::framebuffer* rend_aim_buffer,
+            size_t buffer_w, size_t buffer_h);
+
+        // Write the per-camera view/projection/VP/time quartet into the default uniform buffer.
+        void update_default_uniform_buffer(
+            const Projection& projection,
+            const float(&view)[4][4],
+            const float(&proj)[4][4],
+            const float(&vp)[4][4],
+            const math::vec4& shader_time);
+
+        /* ---------------- 绘制 ---------------- */
+
+        math::vec3 get_entity_size(
+            const Transform::Translation& trans,
+            const basic::optional<basic::resource<graphic::vertex>>& mesh);
+
+        je_gl_pipeline_t* pipeline_for(
+            graphic::shader* shader, je_gl_vertex_t* vertex);
+
+        bound_textures_t bind_entity_textures(je_gl_command_buffer_t* cmd, const Textures2D* textures,
+            const Textures2DArray* textures_array);
+
         // Iterate shader passes of `shaders`, falling back to default shader if a pass is not builtin,
         // and upload the standard set of builtin uniforms.
         void draw_shader_passes(
@@ -164,20 +198,46 @@ namespace jeecs::graphic
             const basic::vector<basic::resource<graphic::shader>>& shaders,
             const pass_uniforms_t& u);
 
-        // Draw every entity in m_renderer_list using the standard world-space pipeline
+        // Draw `renderers` with the standard world-space pipeline
         // (frustum culling -> MV/MVP -> bind_entity_textures -> draw_shader_passes).
         // Shared between UnlitGraphicPipelineSystem and DeferLight2DGraphicPipelineSystem.
-        // Takes the frustum-culling handle directly so it works with any camera archetype
-        // (camera_arch / l2dcamera_arch / ...) that exposes a `frustumCulling` field.
         void draw_world_renderers(
             je_gl_command_buffer_t* cmd,
+            const std::vector<world_renderer_arch>& renderers,
             const FrustumCulling* frustum_culling,
             const float(&view)[4][4],
             const float(&vp)[4][4]);
+
+        /* ---------------- 内部步骤 ---------------- */
+
+        // begin_frame 的相机矩阵更新：视图、投影（按目标尺寸）与视锥平面。
+        void update_camera_matrices();
+        je_gl_context_t* graphic_context() const;
     };
 
-    struct UserInterfaceGraphicPipelineSystem : public BaseImpledGraphicPipeline
+    struct UserInterfaceGraphicPipelineSystem : public GraphicPipelineBase
     {
+        // UI 渲染体：常规四边形（Shape）与逐字文本（Text）可并存，先画
+        // 四边形后画文本，文字在背景板之上。
+        struct ui_renderer_arch
+        {
+            const Renderer::Color* color;
+            const Rendqueue* rendqueue;
+            const Shape* shape;     // 可空：为空时只走文本路径
+            const Shaders* shaders;
+            const Textures2D* textures;
+
+            // UI 布局量：父子层级（含祖先旋转链）已由布局阶段复合进
+            // WorldLayout 的仿射系数通道，绘制端只按相机目标尺寸像素化。
+            const UserInterface::Element* elem;
+            const UserInterface::WorldLayout* layout;
+            const UserInterface::Rotation* rotation; // 可空
+            const UserInterface::Text* text;         // 可空：逐字文本路径
+        };
+
+        std::vector<camera_arch> m_cameras;
+        std::vector<ui_renderer_arch> m_renderers;
+
         UserInterfaceGraphicPipelineSystem(game_world w);
         ~UserInterfaceGraphicPipelineSystem();
 
@@ -240,7 +300,7 @@ namespace jeecs::graphic
             const UserInterface::Text& text,
             const UserInterface::Element& elem,
             const UserInterface::Element::resolved_rect& rect,
-            const renderer_arch& rendentity);
+            const ui_renderer_arch& rendentity);
 
         // 批维护：键（图集页, 着色器）变化或当前缓冲写满时冲刷旧批、
         // 从池中取下一块顶点缓冲。
@@ -260,8 +320,11 @@ namespace jeecs::graphic
         basic::resource<graphic::vertex> CreateTextVertexBuffer();
     };
 
-    struct UnlitGraphicPipelineSystem : public BaseImpledGraphicPipeline
+    struct UnlitGraphicPipelineSystem : public GraphicPipelineBase
     {
+        std::vector<camera_arch> m_cameras;
+        std::vector<world_renderer_arch> m_renderers;
+
         UnlitGraphicPipelineSystem(game_world w);
         ~UnlitGraphicPipelineSystem();
 
@@ -269,32 +332,31 @@ namespace jeecs::graphic
         void DrawFrame();
     };
 
-    struct DeferLight2DGraphicPipelineSystem : public BaseImpledGraphicPipeline
+    struct DeferLight2DGraphicPipelineSystem : public GraphicPipelineBase
     {
-        struct DeferLight2DResource
+        // 一种光源类型（点光 / 平行光）的遮挡阴影 pass 组。
+        struct shadow_pass_set
         {
-            JECS_DISABLE_MOVE_AND_COPY(DeferLight2DResource);
+            basic::resource<graphic::shader> normal;         // BlockShadow
+            basic::resource<graphic::shader> reverse_normal; // BlockShadow（reverse）
+            basic::resource<graphic::shader> shape;          // ShapeShadow
+            basic::resource<graphic::shader> sprite;         // SpriteShadow
+            basic::resource<graphic::shader> wall;           // WallShadow
+        };
 
-            // Used for move rend result to camera's render aim buffer.
-            jeecs::basic::resource<jeecs::graphic::texture2d> _no_shadow;
-            jeecs::basic::resource<jeecs::graphic::vertex> _screen_vertex;
+        struct DeferLight2DResources
+        {
+            JECS_DISABLE_MOVE_AND_COPY(DeferLight2DResources);
 
-            jeecs::basic::resource<jeecs::graphic::vertex> _wall_shadow_vertex;
-
+            // 无阴影光源绑定的占位阴影纹理（1×1）。
+            basic::resource<graphic::texture2d> no_shadow;
+            // 合成 pass 的全屏四边形：把光照合成结果搬到相机渲染目标。
+            basic::resource<graphic::vertex> screen_quad;
+            // WallShadow（墙状遮挡）全向阴影条带，顶点格式见 cpp 中的数据。
+            basic::resource<graphic::vertex> wall_shadow_strips;
             // SpriteShadow（角色接触阴影）用单位四边形：顶点 ±1，
             // 顶点着色器把它映射到脚底椭圆 + 背光尾迹的包围框
-            jeecs::basic::resource<jeecs::graphic::vertex> _sprite_shadow_quad;
-
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_point_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_parallel_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_point_reverse_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_parallel_reverse_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_point_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_shape_parallel_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sprite_point_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sprite_parallel_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_wall_point_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_wall_parallel_pass;
+            basic::resource<graphic::vertex> sprite_shadow_quad;
 
             // 遮挡/自阴影 pass 写逐像素 painter key 深度，并以
             // ZTEST(LESS_EQUAL) / ZWRITE(ENABLE) 让更靠前的贡献胜出；
@@ -304,16 +366,18 @@ namespace jeecs::graphic
             // 强度，避免包围框内无阴影的空洞以脚底 key 擦除其它阴影。
             // 它在同一光源的其余贡献之后统一绘制，否则自阴影接收面的
             // 覆盖写入会把位于其后方（key 更大）的接触阴影一并擦掉。
+            shadow_pass_set point_shadow;
+            shadow_pass_set parallel_shadow;
 
-            // 自阴影接收面 pass ×2（普通精灵与非 TopDown 瓦片分片共用）：
-            // 以半层偏移的 surface key + 覆盖写入参与 painter key 仲裁，
-            // 覆盖位于其后方（key 更大）的阴影、保留前方阴影；同一图层的
-            // BlockShadow 也因 key 稍后而被本 pass 清掉（自遮挡消除）。
-            // 数组纹理采样版：瓦片地图分片把图集绑在 Textures2DArray
-            // 槽 0（顶点 uv 为 (u, v, 数组层号) float3），按层采样图集
-            // alpha 做自阴影覆盖
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_array_pass;
+            // 自阴影接收面 pass ×2（普通精灵与非 TopDown 瓦片分片共用，
+            // 与光源类型无关）：以半层偏移的 surface key + 覆盖写入参与
+            // painter key 仲裁，覆盖位于其后方（key 更大）的阴影、保留前方
+            // 阴影；同一图层的 BlockShadow 也因 key 稍后而被本 pass 清掉
+            //（自遮挡消除）。数组纹理采样版：瓦片地图分片把图集绑在
+            // Textures2DArray 槽 0（顶点 uv 为 (u, v, 数组层号) float3），
+            // 按层采样图集 alpha 做自阴影覆盖
+            basic::resource<graphic::shader> self_shadow;
+            basic::resource<graphic::shader> self_shadow_array;
 
             // 逐块判定版 sub pass ×2（TopDown 光源 + Light2D::PerBlockSelfShadow
             // 遮挡物专用）：AUTO 高度判定不在 CPU 按实体原点一刀切，而是用
@@ -322,36 +386,22 @@ namespace jeecs::graphic
             // y=高度线（AUTO 为光源世界 Y；ON 恒暗时为 +1e30），z/w 备用。
             // 仅分块大网格使用，按 MAX 合并（逐块 key 与墙段 key 不可直接
             // 比较，只加深、不清除遮挡阴影）
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_topdown_pass;
-            jeecs::basic::resource<jeecs::graphic::shader> _defer_light2d_shadow_sub_topdown_array_pass;
+            basic::resource<graphic::shader> self_shadow_topdown;
+            basic::resource<graphic::shader> self_shadow_topdown_array;
 
-            DeferLight2DResource();
+            DeferLight2DResources();
         };
 
-        DeferLight2DResource m_defer_light2d_host;
+        DeferLight2DResources m_resources;
 
-        struct l2dcamera_arch
+        // 相机：在通用相机之上追加 Light2D 后处理所需的数据。
+        struct l2dcamera_arch : camera_arch
         {
-            je_render_branch_t* branchPipeline;
-
-            const Rendqueue* rendqueue;
             const Translation* translation;
-            const Projection* projection;
-            const Viewport* viewport;
-            const RendToFramebuffer* rendToFramebuffer;
             const Light2D::CameraPostPass* light2DPostPass;
             const Shaders* shaders;
             const Textures2D* textures;
-            const FrustumCulling* frustumCulling;
-            const Camera::Clear* clear;
             const Renderer::Color* color;
-
-            bool operator<(const l2dcamera_arch& another) const noexcept
-            {
-                int a_queue = rendqueue ? rendqueue->rend_queue : 0;
-                int b_queue = another.rendqueue ? another.rendqueue->rend_queue : 0;
-                return a_queue < b_queue;
-            }
         };
 
         struct light2d_arch
@@ -399,12 +449,13 @@ namespace jeecs::graphic
             const Shape* shape;
         };
 
-        std::multiset<l2dcamera_arch> m_2dcamera_list;
-        std::vector<light2d_arch> m_2dlight_list;
+        std::vector<l2dcamera_arch> m_cameras;
+        std::vector<world_renderer_arch> m_renderers;
+        std::vector<light2d_arch> m_lights;
 
         // 阴影遮挡物列表：构建/遍历顺序不再参与遮挡仲裁，逐像素前后
         // 关系由 shadow buffer 的 painter key 深度测试决定。
-        std::vector<block2d_arch> m_2dblock_list;
+        std::vector<block2d_arch> m_blocks;
 
         DeferLight2DGraphicPipelineSystem(game_world w);
         ~DeferLight2DGraphicPipelineSystem();
@@ -413,19 +464,8 @@ namespace jeecs::graphic
 
         /* ------- DeferLight2D-specific helpers (use the base helpers too) ------- */
 
-        // Pick the shadow shader set based on light type (point/parallel).
-        struct defer_light2d_shadow_passes_t
-        {
-            const basic::resource<graphic::shader>& normal;
-            const basic::resource<graphic::shader>& reverse_normal;
-            const basic::resource<graphic::shader>& shape;
-            const basic::resource<graphic::shader>& sprite;
-            const basic::resource<graphic::shader>& wall;
-            // 自阴影接收面 pass：普通精灵与非 TopDown 瓦片分片共用
-            const basic::resource<graphic::shader>& sub;
-            const basic::resource<graphic::shader>& sub_texarray;
-        };
-        defer_light2d_shadow_passes_t select_shadow_passes(bool is_parallel) const;
+        // 按光源类型（点光 / 平行光）选取遮挡阴影 pass 组。
+        const shadow_pass_set& shadow_passes_for(bool is_parallel) const;
 
         void bind_shadow_texture(
             je_gl_command_buffer_t* chain, /* OPTIONAL */ const Textures2D* textures);
@@ -486,7 +526,6 @@ namespace jeecs::graphic
         //    比较，故只加深、不清除。
         void draw_self_shadow(
             je_gl_command_buffer_t* shadow_chain,
-            const defer_light2d_shadow_passes_t& passes,
             const block2d_arch& block,
             bool topdown_light,
             const shadow_depth_mapping& depth_mapping,
@@ -507,7 +546,7 @@ namespace jeecs::graphic
         // 光源自身朝向决定，与实体位置无关。
         void draw_sprite_shadow(
             je_gl_command_buffer_t* shadow_chain,
-            const defer_light2d_shadow_passes_t& passes,
+            const shadow_pass_set& passes,
             const block2d_arch& block,
             const light2d_arch& light,
             const math::vec3& shadow_cast_pos,
