@@ -88,10 +88,15 @@ namespace JEEditor::Editor::Animation
         protected m_px_per_sec: mut real,
         // 0 = 关键帧(dope-sheet)视图；1 = 曲线视图
         protected m_timeline_mode: mut int,
+        // 预览画布与时间轴之间的分隔条高度（时间轴部分，像素）
+        protected m_timeline_h: mut real,
         // 曲线视图当前显示的通道（0..通道数-1）
         protected m_curve_channel: mut int,
         // 曲线视图值轴缩放（1 = 恰好适配数据范围）
         protected m_curve_zoom: mut real,
+        // 拖动关键帧/事件时按步长吸附时间（按住 Alt 临时关闭）
+        protected m_snap: mut bool,
+        protected m_snap_step: mut real,
 
         // 选区：关键帧 (track_idx, key_idx) 列表；事件为单选
         protected m_selected_keys: vec<(int, int)>,
@@ -146,7 +151,7 @@ namespace JEEditor::Editor::Animation
     {
         public func create(context: AnimationContext, universe: option<universe>) => EditorState
         {
-            return EditorState{
+            let state = EditorState{
                 m_context = context,
                 m_universe = universe,
 
@@ -157,8 +162,11 @@ namespace JEEditor::Editor::Animation
 
                 m_px_per_sec = mut 200.,
                 m_timeline_mode = mut 0,
+                m_timeline_h = mut 280.,
                 m_curve_channel = mut 0,
                 m_curve_zoom = mut 1.,
+                m_snap = mut true,
+                m_snap_step = mut 0.1,
 
                 m_selected_keys = []mut,
                 m_selected_event = mut -1,
@@ -207,6 +215,14 @@ namespace JEEditor::Editor::Animation
                 m_drag_orig_time = mut 0.,
                 m_drag_orig_value = mut 0.,
             };
+
+            // 打开文件后默认选中一个动作，避免中央区与属性面板空白；
+            // 新建空文件时没有动作可选，保持未选中。
+            let names = state.m_context.m_actions->keys;
+            if (names->len > 0)
+                state.m_context.m_selected_action = names[0];
+
+            return state;
         }
 
         // 当前编辑的动作数据

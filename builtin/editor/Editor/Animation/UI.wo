@@ -1,5 +1,7 @@
 // 动画编辑器 —— UI 渲染层。
 // 三栏布局：左动作列表 / 中预览画布+时间轴 / 右属性面板。
+// 中央上下分栏：预览画布与时间轴之间是可拖拽分隔条（高度保存在
+// EditorState.m_timeline_h，便于按动画内容调整可用空间）。
 // 时间轴有两种视图：
 //   关键帧视图（dope-sheet）：每条轨道一行，关键帧画为菱形，可拖拽改时间、
 //     多选、右键改插值/切线/删除；顶部为时间标尺与事件行。
@@ -51,6 +53,115 @@ namespace JEEditor::Editor::Animation
     let EVENT_ROW_H = 22.;
     let TRACK_ROW_H = 24.;
 
+    // 强调色：选中行、分隔条悬停等（与帧菱形选中色一致）
+    let ACCENT = (0.42, 0.62, 0.94, 1.);
+    let SELECT_KEY_COLOR = (245, 200, 70, 255);
+
+    // 预览/时间轴分隔条：上一帧鼠标 y（none 表示未在拖拽）
+    let mut s_splitter_last_y = option::none: option<real>;
+    // 上一帧时间轴画布的纵向滚动量：左侧标签栏没有独立滚动条，
+    // 用同样的偏移绘制行标签，保证与右侧画布逐行对齐
+    let mut s_timeline_scroll_y = 0.;
+
+    // 定点小数格式化：直接按整数拼小数位，避免浮点除法产生
+    // 4.5999999999999996 这类显示（引擎未提供格式化 API）。
+    func fmt_dec(v: real, digits: int) => string
+    {
+        let mut scale = 1;
+        for (let mut i = 0; i < digits; i += 1)
+            scale *= 10;
+
+        let mut n = math::round(v * scale as real) as int;
+        let mut sign = "";
+        if (n < 0)
+        {
+            sign = "-";
+            n = -n;
+        }
+        if (digits == 0)
+            return F"{sign}{n}";
+
+        let ip = n / scale;
+        let mut fp = n % scale;
+        let mut frac = "";
+        let mut div = scale / 10;
+        while (div > 0)
+        {
+            frac += (fp / div) as string;
+            fp = fp % div;
+            div /= 10;
+        }
+        return F"{sign}{ip}.{frac}";
+    }
+
+    func fmt_seconds(t: real) => string
+    {
+        return fmt_dec(t, 3);
+    }
+    func fmt_axis(v: real) => string
+    {
+        return fmt_dec(v, 2);
+    }
+
+    // 拖拽吸附：吸附开启且未按住 Alt 时把时刻对齐到步长
+    func snapping_enabled(state: EditorState) => bool
+    {
+        return state.m_snap
+            && !IsKeyDown(ImGuiKey::ImGuiKey_LeftAlt)
+            && !IsKeyDown(ImGuiKey::ImGuiKey_RightAlt);
+    }
+    func snap_time(state: EditorState, t: real) => real
+    {
+        if (!snapping_enabled(state) || state.m_snap_step <= 0.0001)
+            return math::max(0., t);
+        return math::max(0.,
+            math::round(t / state.m_snap_step) as real * state.m_snap_step);
+    }
+
+    // 选中某条轨道的全部关键帧（曲线视图与属性面板共用）
+    func select_track_keys(state: EditorState, action: ActionData, ti: int) => void
+    {
+        state.m_selected_keys->clear();
+        state.m_selected_event = -1;
+        match (action.m_tracks->get(ti))
+        {
+            value(track)?
+                for (let (ki, _) : track.m_keys->iter |> iterator::enumerate)
+                    state.m_selected_keys->add((ti, ki));
+            none?;
+        }
+    }
+
+    // 预览/时间轴之间的水平分隔条：6px 命中区，拖拽改变时间轴高度。
+    // 时间轴在下方，鼠标向下拖分隔条时时间轴变矮。
+    func draw_center_splitter(id: string, timeline_h: real) => real
+    {
+        let mut new_h = timeline_h;
+        do InvisibleButton(id, (GetContentRegionAvail()[0], 6.));
+        if (IsItemActive())
+        {
+            let my = GetMousePos()[1];
+            match (s_splitter_last_y)
+            {
+                value(last_y)? new_h = timeline_h + last_y - my;
+                none?;
+            }
+            s_splitter_last_y = option::value(my);
+        }
+        else
+            s_splitter_last_y = option::none;
+
+        let (rmin, rmax) = GetItemRect();
+        let mid_y = (rmin[1] + rmax[1]) * 0.5;
+        let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+        let line_c = IsItemHovered() || IsItemActive()
+            ? Widgets::mixStyleColor(text_c, ACCENT, 0.7, 220)
+            | Widgets::mixStyleColor(text_c, text_c, 0., 70);
+        do GetWindowDrawList()->AddRectFilled(
+            (rmin[0], mid_y - 1.), (rmax[0], mid_y + 1.), line_c);
+        return new_h;
+    }
+
     func action_names_of(ctx: AnimationContext) => array<string>
     {
         return ctx.m_actions->keys;
@@ -60,68 +171,96 @@ namespace JEEditor::Editor::Animation
     {
         let ctx = state.m_context;
         let names = action_names_of(ctx);
+        let action = state->cur_action;
 
-        // 动作选择
-        let cur_idx = func(){
-            let mut found = option::none: option<int>;
-            for (let (i, n) : names->iter |> iterator::enumerate)
-            {
-                if (n == ctx.m_selected_action)
-                    found = option::value(i);
-            }
-            return found;
-        };
-        match (Combo("##action_combo", names, cur_idx()))
+        // 动作选择（固定宽度，避免 Combo 默认占满 2/3 行宽）
+        TextDisabled("动作");
+        SameLine();
+        if (names->len == 0)
+            TextDisabled("（没有动作）");
+        else
         {
-            value(idx)?
+            let cur_idx = func(){
+                let mut found = option::none: option<int>;
+                for (let (i, n) : names->iter |> iterator::enumerate)
+                {
+                    if (n == ctx.m_selected_action)
+                        found = option::value(i);
+                }
+                return found;
+            };
+            SetNextItemWidth(220.);
+            match (Combo("##action_combo", names, cur_idx()))
             {
-                let nm = names->get_or(idx, "");
-                if (nm != ctx.m_selected_action)
-                    do state->select_action(nm);
+                value(idx)?
+                {
+                    let nm = names->get_or(idx, "");
+                    if (nm != ctx.m_selected_action)
+                        do state->select_action(nm);
+                }
+                none?;
             }
-            none?;
         }
         SameLine();
 
         // 播放控制
-        let has_action = state->cur_action
-            ->map(\a = a->duration > 0.;)
-            ->or(false);
-        if (Button(state.m_playing ? "暂停##play" | "播放##play") && has_action)
+        let has_action = action->map(\a = a->duration > 0.;)->or(false);
+        do BeginDisabled(!has_action);
+        if (Button(state.m_playing ? "暂停##play" | "播放##play"))
         {
             state.m_playing = !state.m_playing;
             state.m_last_tick = 0.;
         }
+        if (IsItemHovered())
+            do SetTooltip(state.m_playing ? "暂停预览" | "从头播放预览");
         SameLine();
-        if (Button("停止##stop") && has_action)
+        if (Button("停止##stop"))
         {
             state.m_playing = false;
             state.m_play_time = 0.;
         }
+        if (IsItemHovered())
+            do SetTooltip("停止并回到时刻 0");
+        do EndDisabled();
         SameLine();
+
         // 速度
-        SetNextItemWidth(80.);
+        TextDisabled("速度");
+        SameLine();
+        SetNextItemWidth(64.);
         do DragFloat("##speed", state.m_preview_speed, 0.05, 0.05, 8.)
             ->> \v = state.m_preview_speed = (v > 0.01 ? v | 0.01);;
         SameLine();
-        match (state->cur_action)
+
+        // 时间读数（始终绘制，保证工具栏最后一项在同一行）
+        TextDisabled("时间");
+        SameLine();
+        match (action)
         {
-            value(action)?
+            value(a)?
             {
-                let duration = action->duration;
-                if (duration > 0.)
-                {
-                    SameLine();
-                    TextDisabled(F"{math::round(state.m_play_time * 1000.) as real / 1000.}"
-                        + F" / {math::round(duration * 1000.) as real / 1000.}s");
-                }
+                let duration = a->duration;
+                Text(F"{fmt_seconds(state.m_play_time)} / {fmt_seconds(duration)}s");
             }
-            none?;
+            none? TextDisabled("0.000 / 0.000s");
         }
+
         if (state.m_dirty)
         {
-            SameLine();
-            TextColored((240, 200, 80, 255), "● 未保存");
+            // 右对齐的未保存提示
+            let (cx, cy) = GetCursorPos();
+            let w = CalcTextSize("未保存")[0];
+            let pad = GetContentRegionAvail()[0] - w;
+            if (pad > 8.)
+            {
+                SetCursorPos((cx + pad - 4., cy));
+                TextColored((240, 200, 80, 255), "未保存");
+            }
+            else
+            {
+                SameLine();
+                TextColored((240, 200, 80, 255), "未保存");
+            }
         }
     }
 
@@ -176,10 +315,16 @@ namespace JEEditor::Editor::Animation
     public func _render_action_panel(state: EditorState) => void
     {
         let ctx = state.m_context;
-        if (Button("+ 新建动作"))
+        SeparatorText(F"动作（{ctx.m_actions->len}）");
+
+        let full_w = GetContentRegionAvail()[0];
+        if (ButtonSize("+ 新建动作", (full_w, 0.)))
             do ask_new_action(state);
-        Separator();
-        if (BeginListBox("##action_list", 0., GetContentRegionAvail()[1]))
+
+        Spacing();
+        // BeginListBox 的宽度 0 表示默认窄宽度，这里显式铺满左栏
+        if (BeginListBox("##action_list", GetContentRegionAvail()[0],
+                GetContentRegionAvail()[1]))
         {
             // 复制一份键名，避免迭代中修改
             let mut keys = []mut as vec<string>;
@@ -192,6 +337,18 @@ namespace JEEditor::Editor::Animation
                 {
                     if (!selected)
                         do state->select_action(name);
+                }
+                // 悬停提示动作的规模，便于在多个动作间快速辨认
+                if (IsItemHovered())
+                {
+                    match (ctx.m_actions->get(name))
+                    {
+                        value(act)?
+                            do SetTooltip(F"{fmt_seconds(act->duration)} 秒，"
+                                + F"{act.m_tracks->len} 条轨道，"
+                                + F"{act.m_events->len} 个事件");
+                        none?;
+                    }
                 }
                 if (BeginPopupContextItem())
                 {
@@ -298,13 +455,11 @@ namespace JEEditor::Editor::Animation
     public func _render_center(state: EditorState, action: ActionData) => void
     {
         let avail = GetContentRegionAvail();
-        let tl_h = 220.;
-        let mut preview_h = avail[1] - tl_h - GetFrameHeightWithSpacing() * 2. - 8.;
-        if (preview_h < 80.)
-            preview_h = 80.;
 
-        // 源贴图选择行：从资源管理器拖入贴图文件
-        match (FileDrop::File("源贴图", state.m_source_path))
+        // 源贴图行：拖放字段（为右侧的棋盘/缩放控件预留宽度）
+        TextDisabled("源贴图");
+        SameLine();
+        match (FileDrop::FileTrailing("源贴图", state.m_source_path, 208.))
         {
             none?;
             value(new_path)?
@@ -329,20 +484,71 @@ namespace JEEditor::Editor::Animation
             none?;
         }
         SameLine();
-        do DragFloat("缩放##zoom", state.m_preview_zoom, 0.1, 0.1, 8.)->> \v = state.m_preview_zoom = v;;
+        TextDisabled("缩放");
+        SameLine();
+        SetNextItemWidth(72.);
+        do DragFloat("##zoom", state.m_preview_zoom, 0.1, 0.1, 8.)
+            ->> \v = state.m_preview_zoom = v;;
+        if (IsItemHovered())
+            do SetTooltip("预览缩放（在预览画布上滚动滚轮也可缩放）");
+
+        // 预览与时间轴的高度分配：时间轴高度可拖拽，预览至少保留 120px
+        // 三段之间的 ItemSpacing 也计入，保证拖拽高度与时间轴实际高度一致
+        let spacing_y = GetFrameHeightWithSpacing() - GetFrameHeight();
+        let row_h = GetFrameHeight();
+        let chrome_h = row_h + spacing_y * 3. + 6.;
+        let mut timeline_h = state.m_timeline_h;
+        let mut max_timeline = avail[1] - chrome_h - 120.;
+        if (max_timeline < 140.)
+            max_timeline = 140.;
+        if (timeline_h > max_timeline)
+            timeline_h = max_timeline;
+        if (timeline_h < 140.)
+            timeline_h = 140.;
+        state.m_timeline_h = timeline_h;
+
+        let mut preview_h = avail[1] - chrome_h - timeline_h;
+        if (preview_h < 80.)
+            preview_h = 80.;
 
         // 预览画布
-        if (BeginChildSize("##preview", avail[0], preview_h))
+        if (BeginChildSizeFlags("##preview", avail[0], preview_h,
+                WindowsAttribute::ImGuiWindowFlags_AlwaysUseWindowPadding))
         {
             let t = state->advance_playback(action);
             do _render_preview_canvas(state, action, t);
         }
         EndChild();
 
-        // 时间轴
-        if (BeginChildSize("##timeline", avail[0], tl_h))
+        // 可拖拽分隔条：拖拽结果记回状态，下一帧按新高度布局
+        let mut new_timeline_h = draw_center_splitter("##center_split", timeline_h);
+        if (new_timeline_h < 140.)
+            new_timeline_h = 140.;
+        let max_tl = avail[1] - chrome_h - 100.;
+        if (new_timeline_h > max_tl)
+            new_timeline_h = max_tl;
+        state.m_timeline_h = new_timeline_h;
+
+        // 时间轴占满剩余高度，避免固定高度与窗口尺寸产生缝隙
+        if (BeginChildSizeFlags("##timeline", avail[0], 0.,
+                WindowsAttribute::ImGuiWindowFlags_AlwaysUseWindowPadding))
             do _render_timeline(state, action);
         EndChild();
+    }
+
+    // 没有动作时的中央区占位
+    public func _render_center_empty(state: EditorState) => void
+    {
+        let avail = GetContentRegionAvail();
+        let hint = "请先新建或选择一个动作";
+        let hint_w = CalcTextSize(hint)[0];
+        let y = avail[1] * 0.32;
+        SetCursorPos((math::max(8., (avail[0] - hint_w) * 0.5), y));
+        TextDisabled(hint);
+        SetCursorPos((math::max(8., (avail[0] - 120.) * 0.5),
+            y + GetFrameHeightWithSpacing() * 1.5));
+        if (ButtonSize("+ 新建动作##empty", (120., 0.)))
+            do ask_new_action(state);
     }
 
     func reload_source_texture(state: EditorState) => void
@@ -430,24 +636,45 @@ namespace JEEditor::Editor::Animation
         let cy = (pmin[1] + pmax[1]) / 2.;
 
         let dl = GetWindowDrawList();
-        do dl->AddRectFilled(pmin, pmax, (30, 30, 30, 255));
+        do dl->AddRectFilled(pmin, pmax, (28, 28, 30, 255));
         if (state.m_show_checker)
-            do _draw_checkerboard(dl, pmin, pmax, 16., 120);
+            do _draw_checkerboard(dl, pmin, pmax, 16., 110);
+        // 画布边框与中心参考线
+        do dl->AddRect(pmin, pmax, (52, 52, 58, 255), 0.);
+        do dl->AddLine((cx, pmin[1]), (cx, pmax[1]), (44, 44, 48, 255), 1.);
+        do dl->AddLine((pmin[0], cy), (pmax[0], cy), (44, 44, 48, 255), 1.);
 
-        // 占位以便获取可点击区域
+        // 占位以便获取可点击/悬停区域
         do Dummy(avail);
+        let hovered = IsItemHovered();
+
+        // 悬停时滚轮缩放预览
+        if (hovered)
+        {
+            let wheel = GetMouseWheel()[1];
+            if (wheel != 0.)
+                state.m_preview_zoom = math::max(0.1,
+                    math::min(8., state.m_preview_zoom
+                        * (wheel > 0. ? 1.15 | 0.87)));
+        }
 
         match (state.m_source_texture)
         {
             none?
             {
-                do dl->AddText((pmin[0] + 8., pmin[1] + 8.), (180, 180, 180, 255),
-                    "拖拽贴图到上方路径框，或点击选择源贴图");
+                do dl->AddText((pmin[0] + 10., pmin[1] + 10.), (170, 170, 175, 255),
+                    "将贴图拖到上方路径框，或点击路径框从资源管理器选择");
             }
             value(tex)?
                 do _draw_sprite_at(tex, action, t, cx, cy, avail[0], avail[1],
                     state.m_preview_zoom, (255, 255, 255, 255));
         }
+
+        // 左下角状态条：当前时刻 / 总时长 / 缩放
+        let status = F"{fmt_seconds(t)} / {fmt_seconds(action->duration)}s"
+            + F"    缩放 {math::round(state.m_preview_zoom * 100.) as int}%";
+        do dl->AddText((pmin[0] + 8., pmax[1] - GetTextLineHeight() - 6.),
+            (145, 145, 150, 255), status);
     }
 
     // ======================================================================
@@ -484,6 +711,10 @@ namespace JEEditor::Editor::Animation
 
     func _render_timeline(state: EditorState, action: ActionData) => void
     {
+        let total_w = GetContentRegionAvail()[0];
+        // 同行子窗口之间会插入 ItemSpacing，宽度计算需要扣掉
+        let gap = GetFrameHeightWithSpacing() - GetFrameHeight();
+
         // 顶部控制行
         if (RadioButton("关键帧##mode_dope", state.m_timeline_mode == 0))
             state.m_timeline_mode = 0;
@@ -491,11 +722,58 @@ namespace JEEditor::Editor::Animation
         if (RadioButton("曲线##mode_curve", state.m_timeline_mode == 1))
             state.m_timeline_mode = 1;
         SameLine();
-        do DragFloat("缩放##pps", state.m_px_per_sec, 8., 16., 2000.)
-            ->> \v = state.m_px_per_sec = v;;
+        TextDisabled("缩放");
         SameLine();
-        if (Button("⚙用精灵图切片生成"))
+        SetNextItemWidth(72.);
+        do DragFloat("##pps", state.m_px_per_sec, 8., 16., 2000.)
+            ->> \v = state.m_px_per_sec = v;;
+        if (IsItemHovered())
+            do SetTooltip("时间轴缩放：每秒占用的像素宽度");
+        SameLine();
+        if (Button("适应##fit"))
+        {
+            let duration = action->duration;
+            if (duration > 0.)
+                state.m_px_per_sec = math::max(16.,
+                    math::max(total_w - GUTTER_W - gap - 32., 64.) / duration);
+        }
+        if (IsItemHovered())
+            do SetTooltip("缩放到完整显示当前动作时长");
+        SameLine();
+        if (Button("+ 关键帧##addk"))
+        {
+            let snap = action->dup();
+            do add_key_to_all_tracks(action, state.m_play_time);
+            do state->record(snap, "添加关键帧");
+        }
+        if (IsItemHovered())
+            do SetTooltip("在播放头处为所有轨道添加关键帧");
+        SameLine();
+        if (Button("+ 事件##adde"))
+        {
+            state.m_adde_time = state.m_play_time;
+            do OpenPopup("##add_event_popup");
+        }
+        SameLine();
+        if (Button("精灵图切片##ss"))
             do OpenPopup("##spritesheet_popup");
+        if (IsItemHovered())
+            do SetTooltip("按行列网格生成 offset/tiling 轨道");
+
+        // 吸附控制
+        SameLine();
+        match (CheckBox("吸附##snap", state.m_snap))
+        {
+            value(v)? state.m_snap = v;
+            none?;
+        }
+        SameLine();
+        SetNextItemWidth(64.);
+        do DragFloat("##snapstep", state.m_snap_step, 0.01, 0.01, 1.)
+            ->> \v = state.m_snap_step = (v > 0.001 ? v | 0.001);;
+        SameLine();
+        TextDisabled("秒（拖动时按住 Alt 可临时关闭）");
+
         do render_spritesheet_popup(state, action);
         do render_add_event_popup(state, action);
 
@@ -509,7 +787,9 @@ namespace JEEditor::Editor::Animation
             return;
 
         let track_count = action.m_tracks->len;
-        let dope_rows_h = EVENT_ROW_H + track_count as real * TRACK_ROW_H;
+        let sel_ti = selected_track_of(state, track_count)->or(-1);
+        let rows_top_off = RULER_H + EVENT_ROW_H;
+        let content_bottom_off = rows_top_off + track_count as real * TRACK_ROW_H;
 
         if (BeginChildSizeFlags("##tl_gutter", GUTTER_W, canvas_h,
                 WindowsAttribute::ImGuiWindowFlags_NoScrollbar
@@ -517,55 +797,117 @@ namespace JEEditor::Editor::Animation
         {
             let origin = GetCursorScreenPos();
             let dl = GetWindowDrawList();
-            do Dummy((0., canvas_h - 4.));
+            do InvisibleButton("##tl_gutter_hit", (GUTTER_W, canvas_h));
+            let hovered = IsItemHovered();
+            let mp = GetMousePos();
+            let view_y0 = origin[1];
+            let scroll_y = s_timeline_scroll_y;
+            let top_y = view_y0 - scroll_y;
 
-            // 标尺行
-            do dl->AddText((origin[0], origin[1] + 3.), (160, 160, 160, 255), "时间");
-            // 事件行
-            do dl->AddText((origin[0], origin[1] + RULER_H + 4.), (200, 150, 90, 255),
+            // 背景分区（与画布同步纵向偏移，保证行对齐）
+            do dl->AddRectFilled((origin[0], top_y),
+                (origin[0] + GUTTER_W, top_y + RULER_H), (48, 48, 52, 255));
+            do dl->AddRectFilled((origin[0], top_y + RULER_H),
+                (origin[0] + GUTTER_W, top_y + rows_top_off), (56, 50, 42, 255));
+
+            // 标尺行与事件行
+            do dl->AddText((origin[0] + 8., top_y + 3.),
+                (160, 160, 165, 255), "时间");
+            do dl->AddText((origin[0] + 8., top_y + RULER_H + 4.),
+                (205, 155, 95, 255),
                 state.m_selected_event >= 0
                 && state.m_selected_event < action.m_events->len
                 ? F"事件 {state.m_selected_event}" | "事件");
-            // 轨道行
+
+            // 轨道行：整行可点击（选中该轨道全部关键帧）
+            do PushClipRect((origin[0], view_y0),
+                (origin[0] + GUTTER_W, view_y0 + canvas_h));
+            let mut clicked_track = -1;
             for (let (ti, track) : action.m_tracks->iter |> iterator::enumerate)
             {
-                let y = origin[1] + RULER_H + EVENT_ROW_H
-                    + ti as real * TRACK_ROW_H + 3.;
-                let label = TrackTarget::label(track.m_target);
-                do dl->AddText((origin[0], y), (200, 200, 200, 255),
-                    label->sub_len(0, 24));
-                do dl->AddText((origin[0] + GUTTER_W - 120., y), (140, 140, 140, 255),
-                    track.m_additive ? "叠加" | "绝对");
-                if (state.m_timeline_mode == 1 && ti == selected_track_of(state, track_count)->or(-1))
-                    do dl->AddRect((origin[0] - 3., y - 3.),
-                        (origin[0] + GUTTER_W - 2., y + TRACK_ROW_H - 5.), (90, 160, 240, 255), 0.);
+                let y = top_y + rows_top_off + ti as real * TRACK_ROW_H;
+                if (y + TRACK_ROW_H < view_y0 || y > view_y0 + canvas_h)
+                    continue;
+
+                let row_hovered = hovered && mp[1] >= y && mp[1] < y + TRACK_ROW_H;
+                if (ti == sel_ti)
+                    do dl->AddRectFilled((origin[0], y),
+                        (origin[0] + GUTTER_W, y + TRACK_ROW_H), (52, 66, 88, 255));
+                else if (row_hovered)
+                    do dl->AddRectFilled((origin[0], y),
+                        (origin[0] + GUTTER_W, y + TRACK_ROW_H), (48, 48, 54, 255));
+                else if (ti % 2 == 1)
+                    do dl->AddRectFilled((origin[0], y),
+                        (origin[0] + GUTTER_W, y + TRACK_ROW_H), (42, 42, 46, 255));
+
+                // 目标名限制在标签列内（悬停显示完整名称）
+                do PushClipRect((origin[0] + 6., y),
+                    (origin[0] + GUTTER_W - 80., y + TRACK_ROW_H));
+                do dl->AddText((origin[0] + 8., y + 4.),
+                    ti == sel_ti ? (225, 232, 245, 255) | (200, 200, 205, 255),
+                    TrackTarget::label(track.m_target));
+                do PopClipRect();
+                do dl->AddText((origin[0] + GUTTER_W - 76., y + 4.),
+                    (135, 135, 140, 255), F"{track.m_keys->len}");
+                do dl->AddText((origin[0] + GUTTER_W - 50., y + 4.),
+                    (135, 135, 140, 255), track.m_additive ? "叠加" | "绝对");
+
+                if (row_hovered)
+                {
+                    do SetTooltip(F"{TrackTarget::label(track.m_target)}"
+                        + F"\n{track.m_keys->len} 个关键帧，"
+                        + (track.m_additive ? "叠加模式" | "绝对模式")
+                        + "\n左键选中整条轨道");
+                    if (IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+                        clicked_track = ti;
+                }
             }
+            do PopClipRect();
+
+            if (clicked_track >= 0)
+                do select_track_keys(state, action, clicked_track);
 
             do gutter_context_menu(state, action);
         }
         EndChild();
         SameLine();
 
-        if (BeginChildSizeFlags("##tl_canvas", avail[0] - GUTTER_W, canvas_h,
-                WindowsAttribute::ImGuiWindowFlags_HorizontalScrollbar
-                    + WindowsAttribute::ImGuiWindowFlags_NoScrollWithMouse))
+        let mut canvas_flags = WindowsAttribute::ImGuiWindowFlags_HorizontalScrollbar;
+        if (state.m_timeline_mode == 1)
+            // 曲线视图用滚轮缩放值轴，禁用画布滚动
+            canvas_flags = canvas_flags + WindowsAttribute::ImGuiWindowFlags_NoScrollWithMouse;
+
+        // 左栏与画布同一行：画布宽度扣掉 ItemSpacing，避免右缘被父窗口裁切
+        if (BeginChildSizeFlags("##tl_canvas", avail[0] - GUTTER_W - gap, canvas_h,
+                canvas_flags))
         {
             let origin = GetCursorScreenPos();
             let inner = GetContentRegionAvail();
             let dl = GetWindowDrawList();
             let scroll_x = GetScrollX();
-            let draw_x0 = origin[0] - scroll_x;
-            let pps = state.m_px_per_sec;
+            let scroll_y = GetScrollY();
+            let view_x0 = origin[0] + scroll_x;
+            let view_y0 = origin[1] + scroll_y;
             let visible_w = inner[0];
+            let visible_h = inner[1];
+            let pps = state.m_px_per_sec;
+            let draw_x0 = origin[0];
 
             let view_h = state.m_timeline_mode == 0
-                ? dope_rows_h | inner[1];
-            do InvisibleButton("##tl_area", (content_w, view_h < inner[1] ? inner[1] | view_h));
+                ? math::max(content_bottom_off, visible_h)
+                | visible_h;
+            // 命中区至少铺满可见宽度：动作较短时右侧空白也应能点击/滑动播放头
+            let hit_w = math::max(content_w, visible_w);
+            do InvisibleButton("##tl_area", (hit_w, view_h));
             let hovered = IsItemHovered();
 
-            // 背景
-            do dl->AddRectFilled((origin[0], origin[1]),
-                (origin[0] + visible_w, origin[1] + RULER_H), (52, 52, 56, 255));
+            // 视口背景
+            do dl->AddRectFilled((view_x0, view_y0),
+                (view_x0 + visible_w, view_y0 + visible_h), (34, 34, 37, 255));
+
+            // 标尺背景
+            do dl->AddRectFilled((view_x0, origin[1]),
+                (view_x0 + visible_w, origin[1] + RULER_H), (52, 52, 56, 255));
 
             // 标尺刻度：步长取“50~120px 之间”的 1/2/5 次幂
             let mut step = 0.01;
@@ -577,48 +919,77 @@ namespace JEEditor::Editor::Animation
             while (tick * pps < scroll_x + visible_w)
             {
                 let x = draw_x0 + tick * pps;
-                do dl->AddLine((x, origin[1]), (x, origin[1] + RULER_H), (90, 90, 90, 255), 1.);
-                do dl->AddText((x + 2., origin[1] + 3.), (150, 150, 150, 255),
-                    F"{math::round(tick * 1000.) as real / 1000.}");
+                do dl->AddLine((x, origin[1]), (x, origin[1] + RULER_H),
+                    (90, 90, 94, 255), 1.);
+                do dl->AddText((x + 2., origin[1] + 3.), (150, 150, 155, 255),
+                    fmt_seconds(tick));
                 tick += step;
             }
 
-            // 垂直网格线（贯穿事件行与轨道行）
-            let content_bottom = origin[1] + RULER_H + EVENT_ROW_H
-                + track_count as real * TRACK_ROW_H;
-            do dl->AddRectFilled((origin[0], origin[1] + RULER_H),
-                (origin[0] + visible_w,
-                    content_bottom < origin[1] + inner[1]
-                    ? content_bottom | origin[1] + inner[1]),
+            // 行区域背景
+            let rows_top = origin[1] + RULER_H;
+            let content_bottom = origin[1] + content_bottom_off;
+            do dl->AddRectFilled((view_x0, rows_top),
+                (view_x0 + visible_w,
+                    content_bottom < view_y0 + visible_h
+                    ? view_y0 + visible_h | content_bottom),
                 (45, 45, 48, 255));
+
+            // 垂直网格线（贯穿事件行与轨道行；曲线视图铺满整个画布）
+            let grid_bottom = state.m_timeline_mode == 0
+                ? content_bottom | view_y0 + visible_h;
             tick = math::ceilf(scroll_x / pps / step) * step;
             while (tick * pps < scroll_x + visible_w)
             {
                 let x = draw_x0 + tick * pps;
-                do dl->AddLine((x, origin[1] + RULER_H), (x, content_bottom),
+                do dl->AddLine((x, rows_top), (x, grid_bottom),
                     (58, 58, 62, 255), 1.);
                 tick += step;
             }
 
-            // 事件行背景
-            do dl->AddRectFilled((origin[0], origin[1] + RULER_H),
-                (origin[0] + visible_w, origin[1] + RULER_H + EVENT_ROW_H),
-                (52, 48, 42, 255));
+            // 事件行背景（仅关键帧视图有事件行）
+            if (state.m_timeline_mode == 0)
+                do dl->AddRectFilled((view_x0, rows_top),
+                    (view_x0 + visible_w, rows_top + EVENT_ROW_H), (56, 50, 42, 255));
 
             // 各视图内容
             if (state.m_timeline_mode == 0)
             {
                 do draw_events_row(state, action, origin, draw_x0, pps, hovered);
-                do draw_dope_rows(state, action, origin, draw_x0, pps);
+                do draw_dope_rows(state, action, origin, draw_x0, pps, hovered);
             }
             else
-                do draw_curve_view(state, action, origin, draw_x0, pps,
-                    (visible_w, inner[1]), hovered);
+                do draw_curve_view(state, action, origin, draw_x0, view_x0, pps,
+                    (visible_w, visible_h), hovered);
+
+            if (track_count == 0 && state.m_timeline_mode == 0)
+            {
+                do dl->AddText((view_x0 + 12., rows_top + EVENT_ROW_H + 12.),
+                    (160, 160, 165, 255),
+                    "还没有轨道：请在右侧属性面板添加组件成员轨道，或用工具栏的精灵图切片生成");
+            }
+
+            // 动作结束标记：时长之后的区域压暗，明确可编辑范围
+            if (duration > 0.)
+            {
+                let end_x = draw_x0 + duration * pps;
+                if (end_x >= view_x0 && end_x <= view_x0 + visible_w)
+                    do dl->AddLine((end_x, origin[1]),
+                        (end_x, view_y0 + visible_h), (200, 160, 90, 180), 1.);
+                if (end_x < view_x0 + visible_w)
+                {
+                    let shade_x = math::max(end_x, view_x0);
+                    do dl->AddRectFilled((shade_x, origin[1]),
+                        (view_x0 + visible_w, view_y0 + visible_h),
+                        (10, 10, 12, 110));
+                }
+            }
 
             // 播放头
             let ph_x = draw_x0 + state.m_play_time * pps;
             let ph_bottom = state.m_timeline_mode == 0
-                ? content_bottom | origin[1] + inner[1];
+                ? math::max(content_bottom, view_y0 + visible_h)
+                | view_y0 + visible_h;
             do dl->AddLine((ph_x, origin[1]), (ph_x, ph_bottom), (240, 60, 60, 255), 2.);
             do dl->AddTriangleFilled((ph_x, origin[1] + 8.), (ph_x - 5., origin[1]),
                 (ph_x + 5., origin[1]), (240, 60, 60, 255));
@@ -631,8 +1002,10 @@ namespace JEEditor::Editor::Animation
             {
                 let ph_local = state.m_play_time * pps;
                 if (ph_local < scroll_x || ph_local > scroll_x + visible_w)
-                    do SetScrollFromPosX(ph_local, 0.5);
+                    do SetScrollX(math::max(0., ph_local - visible_w * 0.5));
             }
+
+            s_timeline_scroll_y = GetScrollY();
         }
         EndChild();
 
@@ -669,7 +1042,7 @@ namespace JEEditor::Editor::Animation
             do dl->AddLine((x, row_y), (x, row_y + EVENT_ROW_H),
                 (170, 120, 60, 255), 1.);
             do _draw_diamond(dl, x, row_y + EVENT_ROW_H / 2., 5.,
-                selected ? (245, 200, 70, 255) | (200, 150, 90, 255));
+                selected ? SELECT_KEY_COLOR | (200, 150, 90, 255));
             do dl->AddText((x + 8., row_y + 4.), (170, 140, 100, 255),
                 e.m_name->sub_len(0, 16));
 
@@ -698,9 +1071,10 @@ namespace JEEditor::Editor::Animation
                 none? state.m_selected_event = -1;
             }
         }
-        if (state.m_drag_active && state.m_selected_event >= 0 && IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+        if (state.m_drag_active && state.m_selected_event >= 0
+            && IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
         {
-            let nt = math::max(0., (mp[0] - draw_x0) / pps);
+            let nt = snap_time(state, (mp[0] - draw_x0) / pps);
             if (math::abs(nt - state.m_drag_event_orig) > 0.0001)
             {
                 action.m_events[state.m_selected_event].m_time = nt;
@@ -712,18 +1086,31 @@ namespace JEEditor::Editor::Animation
     // 关键帧视图：轨道行绘制
     func draw_dope_rows(
         state: EditorState, action: ActionData,
-        origin: ImVec2, draw_x0: real, pps: real) => void
+        origin: ImVec2, draw_x0: real, pps: real, hovered: bool) => void
     {
         let dl = GetWindowDrawList();
         let mp = GetMousePos();
+        let sel_ti = selected_track_of(state, action.m_tracks->len)->or(-1);
+        // 行底纹只铺满可见视口，避免横向滚动时随内容漂移
+        let win_x0 = GetWindowPos()[0];
+        let win_x1 = win_x0 + GetWindowSize()[0];
 
         for (let (ti, track) : action.m_tracks->iter |> iterator::enumerate)
         {
             let row_y = origin[1] + RULER_H + EVENT_ROW_H
                 + ti as real * TRACK_ROW_H;
-            if (ti % 2 == 1)
-                do dl->AddRectFilled((origin[0], row_y),
-                    (origin[0] + 4096., row_y + TRACK_ROW_H), (50, 50, 52, 255));
+            let row_hovered = hovered
+                && mp[1] >= row_y && mp[1] < row_y + TRACK_ROW_H;
+
+            if (ti == sel_ti)
+                do dl->AddRectFilled((win_x0, row_y),
+                    (win_x1, row_y + TRACK_ROW_H), (50, 62, 78, 255));
+            else if (row_hovered)
+                do dl->AddRectFilled((win_x0, row_y),
+                    (win_x1, row_y + TRACK_ROW_H), (56, 56, 61, 255));
+            else if (ti % 2 == 1)
+                do dl->AddRectFilled((win_x0, row_y),
+                    (win_x1, row_y + TRACK_ROW_H), (48, 48, 51, 255));
 
             for (let (ki, key) : track.m_keys->iter |> iterator::enumerate)
             {
@@ -748,7 +1135,8 @@ namespace JEEditor::Editor::Animation
                         {
                             match (track.m_keys->get(ki))
                             {
-                                value(key)? key.m_time = math::max(0., orig + dt);
+                                value(key)?
+                                    key.m_time = snap_time(state, orig + dt);
                                 none?;
                             }
                         }
@@ -781,7 +1169,7 @@ namespace JEEditor::Editor::Animation
     // 曲线视图：绘制选中轨道的当前通道
     func draw_curve_view(
         state: EditorState, action: ActionData,
-        origin: ImVec2, draw_x0: real, pps: real,
+        origin: ImVec2, draw_x0: real, view_x0: real, pps: real,
         view_size: (real, real), hovered: bool) => void
     {
         let dl = GetWindowDrawList();
@@ -790,8 +1178,8 @@ namespace JEEditor::Editor::Animation
         let ti_opt = selected_track_of(state, action.m_tracks->len);
         if (ti_opt->is_none)
         {
-            do dl->AddText((origin[0] + 12., area_top + 12.),
-                (170, 170, 170, 255), "在关键帧视图或轨道表中选择一条轨道以显示曲线");
+            do dl->AddText((view_x0 + 12., area_top + 12.),
+                (170, 170, 175, 255), "在关键帧视图或轨道表中选择一条轨道以显示曲线");
             return;
         }
         let ti = ti_opt->unwrap;
@@ -833,7 +1221,7 @@ namespace JEEditor::Editor::Animation
 
         // 零线
         if (0. >= vmin && 0. <= vmax)
-            do dl->AddLine((origin[0], to_y(0.)), (origin[0] + view_size[0], to_y(0.)),
+            do dl->AddLine((view_x0, to_y(0.)), (view_x0 + view_size[0], to_y(0.)),
                 (60, 70, 60, 255), 1.);
 
         // 曲线段
@@ -890,13 +1278,18 @@ namespace JEEditor::Editor::Animation
         }
 
         // 通道切换标签
-        let mut chip_x = origin[0] + 8.;
+        let mut chip_x = view_x0 + 8.;
         for (let (ci, label) : channel_labels->iter |> iterator::enumerate)
         {
             let active = ci == channel;
+            let w = CalcTextSize(label)[0];
+            if (active)
+                do dl->AddRectFilled((chip_x - 4., area_top + 3.),
+                    (chip_x + w + 4., area_top + TRACK_ROW_H - 3.),
+                    (50, 62, 78, 255));
             do dl->AddText((chip_x, area_top + 6.),
-                active ? (240, 200, 80, 255) | (150, 150, 150, 255), label);
-            chip_x += CalcTextSize(label)[0] + 10.;
+                active ? SELECT_KEY_COLOR | (150, 150, 155, 255), label);
+            chip_x += w + 10.;
         }
 
         // 值轴刻度（左侧 3 档）
@@ -904,9 +1297,10 @@ namespace JEEditor::Editor::Animation
         {
             let v = vmin + (vmax - vmin) * r as real / 2.;
             let y = to_y(v);
-            do dl->AddLine((origin[0], y), (origin[0] + view_size[0], y), (58, 58, 62, 255), 1.);
-            do dl->AddText((origin[0] + 4., y + 2.), (140, 140, 140, 255),
-                F"{math::round(v * 100.) as real / 100.}");
+            do dl->AddLine((view_x0, y), (view_x0 + view_size[0], y),
+                (58, 58, 62, 255), 1.);
+            do dl->AddText((view_x0 + 4., y + 2.), (140, 140, 145, 255),
+                fmt_axis(v));
         }
 
         // 交互
@@ -914,7 +1308,7 @@ namespace JEEditor::Editor::Animation
         if (hovered)
         {
             // 通道切换点击
-            let mut chip_x2 = origin[0] + 8.;
+            let mut chip_x2 = view_x0 + 8.;
             for (let (ci, label) : channel_labels->iter |> iterator::enumerate)
             {
                 let w = CalcTextSize(label)[0];
@@ -978,7 +1372,7 @@ namespace JEEditor::Editor::Animation
             if (ki >= 0 && ki < n)
             {
                 let key = track.m_keys[ki];
-                key.m_time = math::max(0.,
+                key.m_time = snap_time(state,
                     state.m_drag_orig_time + (mp[0] - state.m_drag_start_x) / pps);
                 let nv = from_y(mp[1]);
                 key.m_value = key.m_value->with_channel(channel, nv);
@@ -1070,6 +1464,17 @@ namespace JEEditor::Editor::Animation
     {
         let mp = GetMousePos();
 
+        // 播放头拖拽（空白处按下后继续移动）
+        if (state.m_drag_active && state.m_drag_kind == 5
+            && IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            let duration = action->duration;
+            let t = snap_time(state, (mp[0] - draw_x0) / pps);
+            state.m_play_time = duration > 0. ? math::min(t, duration) | t;
+            state.m_playing = false;
+            return;
+        }
+
         // 关键帧命中（关键帧视图）：最近的一个
         if (hovered && state.m_timeline_mode == 0
             && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
@@ -1111,13 +1516,20 @@ namespace JEEditor::Editor::Animation
                 }
                 none?
                 {
-                    // 空白点击：scrub
-                    state.m_selected_keys->clear();
-                    state.m_selected_event = -1;
-                    state.m_playing = false;
-                    let t = math::max(0., (mp[0] - draw_x0) / pps);
-                    let duration = action->duration;
-                    state.m_play_time = duration > 0. ? math::min(t, duration) | t;
+                    // 事件行可能已在本帧开始时选中事件并开始拖拽，勿覆盖
+                    if (!state.m_drag_active)
+                    {
+                        // 空白点击：scrub，并允许继续拖动播放头
+                        state.m_selected_keys->clear();
+                        state.m_selected_event = -1;
+                        state.m_playing = false;
+                        let t = snap_time(state, (mp[0] - draw_x0) / pps);
+                        let duration = action->duration;
+                        state.m_play_time = duration > 0. ? math::min(t, duration) | t;
+                        state.m_drag_active = true;
+                        state.m_drag_kind = 5;
+                        state.m_drag_moved = false;
+                    }
                 }
             }
         }
@@ -1370,17 +1782,24 @@ namespace JEEditor::Editor::Animation
     public func _render_properties(state: EditorState, action: ActionData) => void
     {
         do render_action_props(state, action);
-        Separator();
         do render_track_list(state, action);
-        Separator();
         do render_selected_key_props(state, action);
-        Separator();
         do render_event_list(state, action);
+    }
+
+    public func _render_properties_empty(state: EditorState) => void
+    {
+        SeparatorText("属性");
+        TextDisabled("未选择动作");
+        Spacing();
+        if (Button("+ 新建动作##props_empty"))
+            do ask_new_action(state);
     }
 
     func render_action_props(state: EditorState, action: ActionData) => void
     {
-        Text("动作");
+        let ctx = state.m_context;
+        SeparatorText(F"动作：{ctx.m_selected_action}");
         let col_x = Widgets::editColumnX();
 
         // 循环方式
@@ -1413,20 +1832,24 @@ namespace JEEditor::Editor::Animation
         if (action.m_duration <= 0.)
         {
             Widgets::setCursorX(col_x);
-            TextDisabled(F"自动时长：{math::round(action->duration * 1000.) as real / 1000.}s");
+            TextDisabled(F"自动时长：{fmt_seconds(action->duration)}s");
         }
     }
 
     func render_track_list(state: EditorState, action: ActionData) => void
     {
-        Text(F"轨道（{action.m_tracks->len}）");
-        if (BeginTable("##tracktable", 3,
+        let sel_ti = selected_track_of(state, action.m_tracks->len)->or(-1);
+        SeparatorText(F"轨道（{action.m_tracks->len}）");
+        if (action.m_tracks->len == 0)
+            TextDisabled("添加轨道后，关键帧会显示在时间轴上。");
+        else if (BeginTable("##tracktable", 4,
                 TableFlags::ImGuiTableFlags_Resizable + TableFlags::ImGuiTableFlags_RowBg
                     + TableFlags::ImGuiTableFlags_BordersInnerV))
         {
-            do TableSetupColumn("目标##t1", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 190.);
-            do TableSetupColumn("模式##t2", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 80.);
-            do TableSetupColumn("操作##t3", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 60.);
+            do TableSetupColumn("目标##t1", TableColumnFlags::ImGuiTableColumnFlags_WidthStretch, 0.);
+            do TableSetupColumn("关键帧##t2", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 58.);
+            do TableSetupColumn("叠加##t3", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 48.);
+            do TableSetupColumn("##t4", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 56.);
             do TableHeadersRow();
 
             let mut to_remove = option::none: option<int>;
@@ -1434,18 +1857,16 @@ namespace JEEditor::Editor::Animation
             {
                 do TableNextRow(TableRowFlags::ImGuiTableRowFlags_None, 0.);
                 do TableNextColumn();
-                if (SelectableSelected(
-                        F"{TrackTarget::label(track.m_target)}##trk{ti}", false))
-                {
-                    // 选中该轨道全部关键帧（用于曲线视图）
-                    state.m_selected_keys->clear();
-                    state.m_selected_event = -1;
-                    for (let (ki, _) : track.m_keys->iter |> iterator::enumerate)
-                        state.m_selected_keys->add((ti, ki));
-                }
-                do TableNextColumn();
                 PushIDInt(ti);
-                match (CheckBox(F"叠加##tk{ti}", track.m_additive))
+                if (SelectableSelected(
+                        F"{TrackTarget::label(track.m_target)}##trk", ti == sel_ti))
+                    do select_track_keys(state, action, ti);
+                if (IsItemHovered())
+                    do SetTooltip(F"选中该轨道（{track.m_keys->len} 个关键帧）");
+                do TableNextColumn();
+                Text(F"{track.m_keys->len}");
+                do TableNextColumn();
+                match (CheckBox("##tk", track.m_additive))
                 {
                     value(v)?
                     {
@@ -1454,6 +1875,8 @@ namespace JEEditor::Editor::Animation
                     }
                     none?;
                 }
+                if (IsItemHovered())
+                    do SetTooltip("叠加模式（additive）");
                 do TableNextColumn();
                 if (Button("删除##tdel"))
                     to_remove = option::value(ti);
@@ -1484,6 +1907,7 @@ namespace JEEditor::Editor::Animation
 
     func render_selected_key_props(state: EditorState, action: ActionData) => void
     {
+        SeparatorText("关键帧");
         // 单选关键帧时可编辑其完整属性
         if (state.m_selected_keys->len != 1)
         {
@@ -1632,14 +2056,16 @@ namespace JEEditor::Editor::Animation
 
     func render_event_list(state: EditorState, action: ActionData) => void
     {
-        Text(F"事件（{action.m_events->len}）");
-        if (BeginTable("##eventtable", 3,
+        SeparatorText(F"事件（{action.m_events->len}）");
+        if (action.m_events->len == 0)
+            TextDisabled("事件在时间轴上以菱形标记，可用于触发音效等逻辑。");
+        else if (BeginTable("##eventtable", 3,
                 TableFlags::ImGuiTableFlags_Resizable + TableFlags::ImGuiTableFlags_RowBg
                     + TableFlags::ImGuiTableFlags_BordersInnerV))
         {
             do TableSetupColumn("时间##e1", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 80.);
             do TableSetupColumn("名称##e2", TableColumnFlags::ImGuiTableColumnFlags_WidthStretch, 0.);
-            do TableSetupColumn("操作##e3", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 60.);
+            do TableSetupColumn("##e3", TableColumnFlags::ImGuiTableColumnFlags_WidthFixed, 56.);
             do TableHeadersRow();
             let mut to_remove = option::none: option<int>;
             for (let (ei, e) : action.m_events->iter |> iterator::enumerate)
@@ -1712,6 +2138,7 @@ namespace JEEditor::Editor::Animation
         let comp_names = all_components->>\t = t->name;;
 
         // 组件选择（变化时清空成员选择）
+        SetNextItemWidth(190.);
         match (Combo("组件##cc", comp_names, state.m_addc_sel_type))
         {
             value(ni)?
@@ -1741,6 +2168,7 @@ namespace JEEditor::Editor::Animation
             return m;
         }();
         let member_displays = members->>\nametype = nametype[0] + ": " + nametype[1]->name;;
+        SetNextItemWidth(190.);
         do Combo("成员##cm", member_displays, state.m_addc_sel_member)
             ->> \ni = state.m_addc_sel_member = option::value(ni);;
 
@@ -1814,6 +2242,7 @@ namespace JEEditor::Editor::Animation
     {
         let types = state.m_addu_types;
         do InputText("变量名##un", state.m_addu_name)->> \s = state.m_addu_name = s;;
+        SetNextItemWidth(180.);
         do Combo("类型##ut", types->>\nt = nt[0];, state.m_addu_sel_type)
             ->> \ni = state.m_addu_sel_type = option::value(ni);;
 

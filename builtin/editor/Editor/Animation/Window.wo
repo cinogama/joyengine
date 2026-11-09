@@ -127,7 +127,7 @@ namespace JEEditor::Editor::Animation
         }
         public func getSizeConstraints(_: AnimationEditor)=> SizeConstraints
         {
-            return SizeConstraints::Limited(((960., 520.), (4096., 4096.)));
+            return SizeConstraints::Limited(((1000., 560.), (4096., 4096.)));
         }
         public func getMenu(self: AnimationEditor)=> option<Menu>
         {
@@ -209,63 +209,59 @@ namespace JEEditor::Editor::Animation
         {
             let state = self.m_state;
             let ctx = state.m_context;
+
+            // 工具栏（整宽）。工具栏以分隔线收尾，确保三栏从新行开始
+            //（否则最后一项的 SameLine 会把左栏推到工具栏行尾）。
+            do _render_toolbar(state);
+            Separator();
+
             let avail = GetContentRegionAvail();
 
             // 三栏布局：左动作 / 中预览+时间轴 / 右属性
-            let left_w = 180.;
+            let left_w = 200.;
             let right_w = 460.;
-            let mut center_w = avail[0] - left_w - right_w - 8.;
-            if (center_w < 200.) center_w = 200.;
-
-            // 工具栏（整宽）
-            do _render_toolbar(state);
+            let gap = GetFrameHeightWithSpacing() - GetFrameHeight();
+            let mut center_w = avail[0] - left_w - right_w - gap * 2. - 4.;
+            if (center_w < 240.) center_w = 240.;
+            let body_h = avail[1];
 
             // 左：动作
-            if (BeginChildSize("##left", left_w, avail[1] - GetFrameHeightWithSpacing()))
+            do PushStyleColor(ImGuiCol::ImGuiCol_ChildBg, (30, 30, 34, 255));
+            if (BeginChildSizeFlags("##left", left_w, body_h,
+                    WindowsAttribute::ImGuiWindowFlags_AlwaysUseWindowPadding))
                 do _render_action_panel(state);
             EndChild();
+            do PopStyleColor(1);
             SameLine();
 
             // 中：预览 + 时间轴
-            if (BeginChildSize("##center", center_w, avail[1] - GetFrameHeightWithSpacing()))
+            do PushStyleColor(ImGuiCol::ImGuiCol_ChildBg, (30, 30, 34, 255));
+            if (BeginChildSizeFlags("##center", center_w, body_h,
+                    WindowsAttribute::ImGuiWindowFlags_AlwaysUseWindowPadding))
             {
                 match (ctx->current_action)
                 {
-                    value(action)?
-                    {
-                        if (action.m_tracks->len == 0)
-                        {
-                            TextDisabled("当前动作没有轨道");
-                            if (Button("+ 添加轨道（右侧属性面板）"))
-                                TextDisabled("请在右侧属性面板添加");
-                            if (Button("⚙ 用精灵图切片生成"))
-                                do OpenPopup("##spritesheet_popup");
-                            do render_spritesheet_popup(state, action);
-                        }
-                        else
-                            do _render_center(state, action);
-                    }
-                    none?
-                    {
-                        TextDisabled("请先新建或选择一个动作");
-                        if (Button("+ 新建动作"))
-                            do ask_new_action(state);
-                    }
+                    value(action)? do _render_center(state, action);
+                    none? do _render_center_empty(state);
                 }
             }
             EndChild();
+            do PopStyleColor(1);
             SameLine();
 
             // 右：属性
-            if (BeginChildSize("##right", right_w, avail[1] - GetFrameHeightWithSpacing()))
+            do PushStyleColor(ImGuiCol::ImGuiCol_ChildBg, (30, 30, 34, 255));
+            if (BeginChildSizeFlags("##right", right_w, body_h,
+                    WindowsAttribute::ImGuiWindowFlags_AlwaysUseWindowPadding))
             {
                 match (ctx->current_action)
                 {
                     value(action)? do _render_properties(state, action);
-                    none? TextDisabled("无选中动作");
+                    none? do _render_properties_empty(state);
                 }
             }
             EndChild();
+            do PopStyleColor(1);
 
             return !self.m_close;
         }
