@@ -1,7 +1,7 @@
 #define JE_IMPL
 #include "jeecs.hpp"
 #include "jeecs_core_tilemap_system.hpp"
-#include "jeecs_core_editor_component.hpp"
+#include "jeecs_core_editor_components.hpp"
 
 #include <vector>
 #include <map>

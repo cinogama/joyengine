@@ -7,7 +7,7 @@
 #include "jeecs_core_graphic_system.hpp"
 #include "jeecs_core_frame_animation_system.hpp"
 #include "jeecs_core_particle_system.hpp"
-#include "jeecs_core_editor_component.hpp"
+#include "jeecs_core_editor_components.hpp"
 #include "jeecs_core_physics_system.hpp"
 #include "jeecs_core_script_system.hpp"
 #include "jeecs_core_audio_system.hpp"
