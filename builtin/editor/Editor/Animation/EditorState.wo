@@ -103,6 +103,11 @@ namespace JEEditor::Editor::Animation
         protected m_selected_event: mut int,
         // 关键帧剪贴板：(轨道标签, 相对复制组最早时刻的偏移, 关键帧副本)
         protected m_key_clipboard: vec<(string, real, Keyframe)>,
+        // 属性面板中的时间/数值输入框是否处于编辑状态。点击其他关键帧时
+        // 先延迟选区切换，让输入框把内容提交给原来编辑的关键帧。
+        protected m_value_edit_active: mut bool,
+        // 延迟到下一帧应用的关键帧选择：(轨道, 关键帧, 是否切换多选)
+        protected m_pending_key_select: mut option<(int, int, bool)>,
 
         // 预览（源贴图路径为本地路径，载入时经 ResourcePath 转运行时路径）
         protected m_source_texture: mut option<texture2d>,
@@ -173,6 +178,8 @@ namespace JEEditor::Editor::Animation
                 m_selected_keys = []mut,
                 m_selected_event = mut -1,
                 m_key_clipboard = []mut,
+                m_value_edit_active = mut false,
+                m_pending_key_select = mut option::none,
 
                 m_source_texture = mut option::none,
                 m_source_path = mut option::none,

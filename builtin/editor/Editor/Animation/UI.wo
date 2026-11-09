@@ -139,6 +139,27 @@ namespace JEEditor::Editor::Animation
         }
     }
 
+    // 属性面板的数值输入框提交后再切换关键帧选区，避免输入框内容
+    // 写到新选中的关键帧上（点击帧的那一帧先保持原关键帧的控件）
+    func apply_pending_key_select(state: EditorState, action: ActionData) => void
+    {
+        match (state.m_pending_key_select)
+        {
+            value((ti, ki, toggle))?
+            {
+                state.m_pending_key_select = option::none;
+                match (action.m_tracks->get(ti))
+                {
+                    value(track)?
+                        if (ki >= 0 && ki < track.m_keys->len)
+                            do state->select_key(ti, ki, toggle);
+                    none?;
+                }
+            }
+            none?;
+        }
+    }
+
     // 同一轨道内，比 ki 更早且时刻相同的关键帧数量：用于把同刻关键帧
     // 横向错开绘制，并在命中检测中使用同一位置
     func key_stack_index(track: Track, ki: int) => int
@@ -299,20 +320,15 @@ namespace JEEditor::Editor::Animation
 
         if (state.m_dirty)
         {
-            // 右对齐的未保存提示
+            // 右对齐的未保存提示：必须先 SameLine 回到工具栏行，否则
+            // GetCursorPos 已落在下一行，提示会另起一行把工具栏撑高
+            SameLine();
             let (cx, cy) = GetCursorPos();
             let w = CalcTextSize("未保存")[0];
             let pad = GetContentRegionAvail()[0] - w;
             if (pad > 8.)
-            {
                 SetCursorPos((cx + pad - 4., cy));
-                TextColored((240, 200, 80, 255), "未保存");
-            }
-            else
-            {
-                SameLine();
-                TextColored((240, 200, 80, 255), "未保存");
-            }
+            TextColored((240, 200, 80, 255), "未保存");
         }
     }
 
@@ -779,6 +795,9 @@ namespace JEEditor::Editor::Animation
 
     func _render_timeline(state: EditorState, action: ActionData) => void
     {
+        // 上一帧被延迟的关键帧选择：此时属性面板的输入框已提交完毕
+        do apply_pending_key_select(state, action);
+
         let total_w = GetContentRegionAvail()[0];
         // 同行子窗口之间会插入 ItemSpacing，宽度计算需要扣掉
         let gap = GetFrameHeightWithSpacing() - GetFrameHeight();
@@ -1087,7 +1106,13 @@ namespace JEEditor::Editor::Animation
                         // 右键已选中的关键帧时保留多选，便于复制整组
                         value((ti, ki))?
                             if (!state->is_key_selected(ti, ki))
-                                do state->select_key(ti, ki, false);
+                            {
+                                if (state.m_value_edit_active)
+                                    state.m_pending_key_select =
+                                        option::value((ti, ki, false));
+                                else
+                                    do state->select_key(ti, ki, false);
+                            }
                         none?;
                     }
                 }
@@ -1570,6 +1595,19 @@ namespace JEEditor::Editor::Animation
         {
             value(ki)?
             {
+                // 属性面板输入框仍在编辑时，先提交到原关键帧再切换
+                let mut same_single = false;
+                if (state.m_selected_keys->len == 1)
+                {
+                    let (sti, ski) = state.m_selected_keys[0];
+                    same_single = sti == track_idx && ski == ki;
+                }
+                if (state.m_value_edit_active && !same_single)
+                {
+                    state.m_pending_key_select = option::value((track_idx, ki, false));
+                    return;
+                }
+
                 let key = track.m_keys[ki];
                 do state->select_key(track_idx, ki, false);
                 state.m_drag_active = true;
@@ -1616,6 +1654,20 @@ namespace JEEditor::Editor::Animation
                 value((ti, ki))?
                 {
                     let already = state->is_key_selected(ti, ki);
+                    // 点击当前唯一选中的关键帧不会改变选区，可以直接处理
+                    let mut same_single = false;
+                    if (!ctrl && state.m_selected_keys->len == 1)
+                    {
+                        let (sti, ski) = state.m_selected_keys[0];
+                        same_single = sti == ti && ski == ki;
+                    }
+                    // 属性面板输入框仍在编辑：本帧保留原关键帧的控件，
+                    // 让输入框把内容提交给原关键帧，下一帧再切换选区
+                    if (state.m_value_edit_active && !same_single)
+                    {
+                        state.m_pending_key_select = option::value((ti, ki, ctrl));
+                        return;
+                    }
                     if (!already || ctrl)
                         do state->select_key(ti, ki, ctrl);
                     // 开始拖拽（选中的所有关键帧一起移动）
@@ -2063,6 +2115,8 @@ namespace JEEditor::Editor::Animation
     // ---- 右侧：属性面板 ----
     public func _render_properties(state: EditorState, action: ActionData) => void
     {
+        // 每帧重新统计：只有当前仍激活的输入框才阻止选区切换
+        state.m_value_edit_active = false;
         do render_action_props(state, action);
         do render_track_list(state, action);
         do render_selected_key_props(state, action);
@@ -2071,6 +2125,7 @@ namespace JEEditor::Editor::Animation
 
     public func _render_properties_empty(state: EditorState) => void
     {
+        state.m_value_edit_active = false;
         SeparatorText("属性");
         TextDisabled("未选择动作");
         Spacing();
@@ -2219,6 +2274,13 @@ namespace JEEditor::Editor::Animation
     func render_key_fields(
         state: EditorState, track: Track, key: Keyframe, ki: int) => void
     {
+        // 控件 ID 按“轨道 + 关键帧下标”隔离：切换选区时新关键帧的
+        // 输入框不会沿用旧关键帧尚未提交的文本
+        PushIDStr(TrackTarget::label(track.m_target));
+        PushIDInt(ki);
+        defer { PopID(); PopID(); }
+
+        let mut editing = false;
         Text(F"关键帧（{TrackTarget::label(track.m_target)} #{ki}）");
         let col_x = Widgets::editColumnX();
 
@@ -2233,6 +2295,8 @@ namespace JEEditor::Editor::Animation
             }
             none?;
         }
+        if (IsItemActive())
+            editing = true;
 
         Widgets::beginRow("值", col_x, 56.);
         DataValue::input_data_value("##key_value", key.m_value,
@@ -2242,6 +2306,8 @@ namespace JEEditor::Editor::Animation
                 do state->begin_value_edit;
                 key.m_value = v;
             });
+        if (IsItemActive())
+            editing = true;
 
         // 插值方式（按值类型过滤不可用项）
         let interp_names = ["常值", "线性", "曲线"];
@@ -2291,7 +2357,7 @@ namespace JEEditor::Editor::Animation
                     Widgets::beginRow(F"切线{c}", col_x, 56.);
                     let vin = key.m_free_in->get_or(c, 0.);
                     let vout = key.m_free_out->get_or(c, 0.);
-                    match (InputFloat2("##key_tan", vin, vout))
+                    match (InputFloat2(F"##key_tan{c}", vin, vout))
                     {
                         value((nin, nout))?
                         {
@@ -2301,9 +2367,13 @@ namespace JEEditor::Editor::Animation
                         }
                         none?;
                     }
+                    if (IsItemActive())
+                        editing = true;
                 }
             }
         }
+
+        state.m_value_edit_active = editing;
     }
 
     // 转为手动切线时以当前计算值初始化全部通道
