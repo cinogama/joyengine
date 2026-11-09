@@ -1,5 +1,5 @@
 #ifndef JE_IMPL
-#error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
+#   define JE_IMPL
 #endif
 #include "jeecs.hpp"
 
@@ -25,7 +25,7 @@ namespace jeecs::graphic
         };
 
         virtual void create_interface(
-            const jegl_interface_config *config) = 0;
+            const je_gl_interface_config_t *config) = 0;
 
         virtual update_result update() = 0;
         virtual void shutdown(bool reboot) = 0;

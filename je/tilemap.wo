@@ -781,7 +781,7 @@ namespace je
         };
 
         // ==================== 瓦片自动拼接类型 ====================
-        // 与引擎侧 je_TileKind 一一对应。自动拼接是瓦片自身的属性：
+        // 与引擎侧 je_tile_kind_t 一一对应。自动拼接是瓦片自身的属性：
         // "地形"不是独立实体，而是 kind 非 PLAIN 的瓦片。
         public enum tile_kind
         {
@@ -793,7 +793,7 @@ namespace je
         }
 
         // ==================== 图层自阴影行为 ====================
-        // 与引擎侧 je_LayerSelfShadow 一一对应（Light2D 延迟光照管线）：
+        // 与引擎侧 je_layer_self_shadow_t 一一对应（Light2D 延迟光照管线）：
         // 分片同挂 PerBlockSelfShadow。非 TopDown 光源下自阴影与普通精灵
         // 同款为“接收面”语义：key 取图层 key 减半层偏移，覆盖写入——
         // 本层 BlockShadow 落在本层图块上的自遮挡被清除，位于该层之后
@@ -816,7 +816,7 @@ namespace je
         }
 
         // ==================== 图层遮挡阴影行为 ====================
-        // 与引擎侧 je_LayerBlockShadow 一一对应（Light2D 延迟光照管线）。
+        // 与引擎侧 je_layer_block_shadow_t 一一对应（Light2D 延迟光照管线）。
         // 轮廓阴影段的逐像素排序 key 取该段自身的最低边，并合并与本段
         // 格子严格相邻（8 邻域）的其它开启 BlockShadow 图层墙段。贴合的
         // 跨层上下墙段因此共享较低基座，不会在上段 Y 更高时被实体
@@ -832,7 +832,7 @@ namespace je
         }
 
         // ==================== 属性值类型 ====================
-        // 与引擎侧 je_PropertyType 一一对应；Woolang 侧的取值形态：
+        // 与引擎侧 je_property_type_t 一一对应；Woolang 侧的取值形态：
         //   BOOL→bool  STRING→string  INT→int  FLOAT→real
         //   VEC2→(real, real)  VEC3→(real, real, real)  VEC4→(real, real, real, real)
         // 属性接口按类型拆为对应后缀的函数（如 get_property_int）。

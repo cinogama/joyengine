@@ -41,7 +41,7 @@ JE_API void je_typing_reset(
 
 ```cpp
 // 获取已注册的类型信息
-const jeecs::typing::type_info* type_info = je_typing_get_info_by_name("ScriptComponent");
+const jeecs::typing::type_info* type_info = je_typing_info_get_by_name("ScriptComponent");
 
 // 重置类型属性（例如在脚本热更新后）
 je_typing_reset(
@@ -57,11 +57,11 @@ je_typing_reset(
 
 ## 注意事项
 
-- 调用此函数后，类型的成员字段信息将被重置，请重新使用 `je_register_member` 注册成员
+- 调用此函数后，类型的成员字段信息将被重置，请重新使用 `je_typing_member_register` 注册成员
 - 此操作可能影响已存在的该类型实例的行为
 - 应当在安全的时机调用此函数（如没有该类型的实例存在时）
 
 ## 相关接口
 
 - [je_typing_register](je_typing_register.md) - 注册类型
-- [je_register_member](je_register_member.md) - 注册类型成员
+- [je_typing_member_register](je_typing_member_register.md) - 注册类型成员

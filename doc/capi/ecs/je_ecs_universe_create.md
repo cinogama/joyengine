@@ -39,14 +39,14 @@ Universe 是引擎中所有世界、实体和组件的顶层容器。创建 Univ
 
 ```cpp
 int main() {
-    je_init(0, nullptr);
+    je_core_init(0, nullptr);
     
     // 创建 Universe
     void* universe = je_ecs_universe_create();
     
     // 创建世界
     void* world = je_ecs_world_create(universe);
-    je_ecs_world_set_enable(world, true);
+    je_ecs_world_enable_set(world, true);
     
     // 等待 Universe 退出
     je_ecs_universe_loop(universe);
@@ -54,7 +54,7 @@ int main() {
     // 销毁 Universe
     je_ecs_universe_destroy(universe);
     
-    je_finish();
+    je_core_finish();
     return 0;
 }
 ```
@@ -62,7 +62,7 @@ int main() {
 ## 注意事项
 
 - Universe 创建时自带一次引用计数
-- 使用 `je_ecs_universe_trim_lifetime` 减少引用计数
+- 使用 `je_ecs_universe_lifetime_trim` 减少引用计数
 - 引用计数归零时，Universe 会请求终止运行
 
 ## 相关接口

@@ -1,0 +1,91 @@
+#pragma once
+
+#ifndef JE_IMPL
+#define JE_IMPL
+#endif
+#include "jeecs.hpp"
+
+// 当默认帧缓冲不支持硬件 sRGB 写入控制时，由后端在 ImGui 绘制结束后调用：
+// 使用 srgb_encode.shader 把 source_texture（本帧的线性离屏画面）编码后
+// 绘制到真正的默认帧缓冲。纵向方向由后端通过内建 JE_NDC_SCALE 处理。
+void jegui_commit_srgb_encode_pass(je_gl_texture_2d_t* source_texture);
+
+#ifdef JE_ENABLE_DX11_GAPI
+#include <Windows.h>
+
+void jegui_init_dx11(
+    je_gl_context_t *ctx,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler,
+    void *window_handle,
+    void *d11device,
+    void *d11context,
+    bool reboot);
+void jegui_update_dx11();
+void jegui_shutdown_dx11(bool reboot);
+#endif
+
+#if defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
+
+#if defined(JE_ENABLE_GLES300_GAPI) && JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
+#define JE_GL_USE_EGL_INSTEAD_GLFW
+#endif
+
+void jegui_init_gl330(
+    je_gl_context_t *ctx,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler,
+    void *window_handle,
+    bool reboot);
+void jegui_update_gl330();
+void jegui_shutdown_gl330(bool reboot);
+#endif
+
+#ifdef JE_ENABLE_VK120_GAPI
+#include <imgui_impl_vulkan.h>
+
+typedef PFN_vkVoidFunction(*jegui_vkapi_loader_func_t)(const char*, void*);
+void jegui_init_vk120(
+    je_gl_context_t *ctx,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler,
+    void *window_handle,
+    ImGui_ImplVulkan_InitInfo *vkinfo,
+    VkRenderPass pass,
+    VkCommandBuffer cmdbuf,
+    jegui_vkapi_loader_func_t loader_func_maynull,
+    void *user_data);
+void jegui_update_vk120(VkCommandBuffer cmdbuf);
+void jegui_shutdown_vk120(bool reboot);
+
+#endif
+
+#ifdef JE_ENABLE_METAL_GAPI
+namespace MTL
+{
+    class Device;
+    class RenderPassDescriptor;
+    class CommandBuffer;
+    class RenderCommandEncoder;
+}
+
+void jegui_init_metal(
+    je_gl_context_t* ctx,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler,
+    void* window_handle,
+    MTL::Device* device);
+void jegui_update_metal(
+    MTL::RenderPassDescriptor* rend_pass_desc,
+    MTL::CommandBuffer* command_buffer,
+    MTL::RenderCommandEncoder* command_encoder);
+void jegui_shutdown_metal(bool reboot);
+
+#endif
+
+void jegui_init_none(
+    je_gl_context_t *ctx,
+    je_gui_user_image_loader_t get_img_res,
+    je_gui_user_sampler_loader_t apply_shader_sampler);
+void jegui_update_none();
+void jegui_shutdown_none(bool reboot);

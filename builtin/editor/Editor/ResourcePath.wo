@@ -4,7 +4,7 @@ import pkg::fsys;
 
 using std;
 
-// 引擎按 @/ 前缀相对运行时路径（workpath）解析资源（见 jeecs_file_open），
+// 引擎按 @/ 前缀相对运行时路径（workpath）解析资源（见 je_file_open），
 // 存档中记录 @/ 相对形式可以不依赖具体的机器目录。@ 路径的正向/反向
 // 转换是编辑器的常用需求，统一在此提供，不要在调用点拼接字符串。
 namespace JEEditor::Editor::ResourcePath

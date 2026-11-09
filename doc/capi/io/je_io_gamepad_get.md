@@ -49,5 +49,5 @@ delete[] gamepads;
 
 ## 相关接口
 
-- [je_io_create_gamepad](je_io_create_gamepad.md) - 创建虚拟手柄实例
-- [je_io_close_gamepad](je_io_close_gamepad.md) - 关闭虚拟手柄实例
+- [je_io_gamepad_create](je_io_gamepad_create.md) - 创建虚拟手柄实例
+- [je_io_gamepad_close](je_io_gamepad_close.md) - 关闭虚拟手柄实例

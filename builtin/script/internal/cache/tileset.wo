@@ -1,5 +1,5 @@
 // 瓦片图集缓存生成器：把 .je4tileset TOML 源转换为引擎可读的
-// 二进制缓存文档（jeecs_cache_binary_* 格式）。
+// 二进制缓存文档（je_cache_binary_* 格式）。
 //
 // 由引擎在 .je4cache 缺失或失效时加载，调用 generate：
 //   cache  —— C 侧创建好的缓存写入器（文件头已写入）
@@ -214,7 +214,7 @@ func int_array_of(value: Toml)=> array<int>
     return flat->to_array;
 }
 
-// 按值形态推断 je_PropertyType；无法识别返回 -1
+// 按值形态推断 je_property_type_t；无法识别返回 -1
 func infer_property_type(value: Toml)=> int
 {
     match (value->as_bool)

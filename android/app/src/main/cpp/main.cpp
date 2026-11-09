@@ -51,7 +51,7 @@ class je_game_engine_context_for_android : jeecs::game_engine_context
     std::optional<application_request> m_request;
 
     je_log_regid_t m_registered_log_callback_id;
-    static void _je_log_to_android(int level, const char* msg, void*)
+    static void _je_log_to_android(je_log_level_t level, const char* msg, void*)
     {
         switch (level)
         {
@@ -77,7 +77,7 @@ public:
         , m_request(std::nullopt)
     {
         m_registered_log_callback_id =
-            je_log_register_callback(
+            je_log_callback_register(
                 &je_game_engine_context_for_android::_je_log_to_android,
                 nullptr);
 
@@ -112,7 +112,7 @@ public:
     }
     ~je_game_engine_context_for_android()
     {
-        je_log_unregister_callback(m_registered_log_callback_id);
+        je_log_callback_unregister(m_registered_log_callback_id);
     }
 
     enum class app_request_result
@@ -176,7 +176,7 @@ public:
                             graphic_syncer->get_graphic_context_after_context_ready();
                         graphic_context->m_config.m_userdata = &app_context.m_app_context;
 
-                        jegl_sync_init(graphic_context, false);
+                        je_graphic_sync_init(graphic_context, false);
 
                         mark_graphic_context_ready_manually();
                     }
@@ -193,7 +193,7 @@ public:
                             app_context.m_graphic_syncer->get_graphic_context_after_context_ready();
                         graphic_context->m_config.m_userdata = &app_context.m_app_context;
 
-                        jegl_reboot_graphic_thread(graphic_context, nullptr);
+                        je_graphic_thread_reboot(graphic_context, nullptr);
                     }
 
                     m_frame_update_paused = false;
@@ -280,7 +280,7 @@ public:
     }
 
 public:
-    static jeecs_raw_file _je_android_file_open(const char* path, size_t* out_len)
+    static je_raw_file_t _je_android_file_open(const char* path, size_t* out_len)
     {
         if (_asset_manager != nullptr && path[0] == '#')
         {
@@ -310,7 +310,7 @@ public:
         }
         return nullptr;
     }
-    static size_t _je_android_file_read(void* buffer, size_t elemsz, size_t elemcount, jeecs_raw_file file)
+    static size_t _je_android_file_read(void* buffer, size_t elemsz, size_t elemcount, je_raw_file_t file)
     {
         auto* finstance = (_je_file_instance*)file;
         if (finstance->m_asset_file != nullptr)
@@ -324,7 +324,7 @@ public:
             return fread(buffer, elemsz, elemcount, finstance->m_raw_file);
         }
     }
-    static size_t _je_android_file_tell(jeecs_raw_file file)
+    static size_t _je_android_file_tell(je_raw_file_t file)
     {
         auto* finstance = (_je_file_instance*)file;
         if (finstance->m_asset_file != nullptr)
@@ -338,7 +338,7 @@ public:
             return ftell(finstance->m_raw_file);
         }
     }
-    static int _je_android_file_seek(jeecs_raw_file file, int64_t offset, je_read_file_seek_mode mode)
+    static int _je_android_file_seek(je_raw_file_t file, int64_t offset, je_file_seek_mode_t mode)
     {
         auto* finstance = (_je_file_instance*)file;
         if (finstance->m_asset_file != nullptr)
@@ -353,7 +353,7 @@ public:
             return fseek(finstance->m_raw_file, offset, mode);
         }
     }
-    static int _je_android_file_close(jeecs_raw_file file)
+    static int _je_android_file_close(je_raw_file_t file)
     {
         auto* finstance = (_je_file_instance*)file;
 
@@ -428,7 +428,7 @@ extern "C" {
     {
         _asset_manager = AAssetManager_fromJava(env, asset_manager);
 
-        jeecs_register_native_file_operator(
+        je_file_native_operator_register(
             &_je_file_instance::_je_android_file_open,
             &_je_file_instance::_je_android_file_read,
             &_je_file_instance::_je_android_file_tell,
@@ -436,10 +436,10 @@ extern "C" {
             &_je_file_instance::_je_android_file_close);
 
         (void)woort_set_exe_path(jni_cstring(env, library_path).c_str());
-        jeecs_file_set_host_path(jni_cstring(env, cache_path).c_str());
-        jeecs_file_set_runtime_path(jni_cstring(env, asset_path).c_str());
+        je_file_host_path_set(jni_cstring(env, cache_path).c_str());
+        je_file_runtime_path_set(jni_cstring(env, asset_path).c_str());
 
-        jeecs_fimg_set_default_archive("#");
+        je_fimg_default_archive_set("#");
     }
 
     void _je_handle_inputs(struct android_app* app_) {
@@ -468,9 +468,9 @@ extern "C" {
             switch (action & AMOTION_EVENT_ACTION_MASK) {
             case AMOTION_EVENT_ACTION_DOWN:
             case AMOTION_EVENT_ACTION_POINTER_DOWN:
-                je_io_update_mouse_state(
+                je_io_mouse_state_update(
                     pointer.id, jeecs::input::mousecode::LEFT, true);
-                je_io_update_mouse_pos(pointer.id, x, y);
+                je_io_mouse_pos_update(pointer.id, x, y);
                 break;
 
             case AMOTION_EVENT_ACTION_CANCEL:
@@ -479,9 +479,9 @@ extern "C" {
                 // code pass through on purpose.
             case AMOTION_EVENT_ACTION_UP:
             case AMOTION_EVENT_ACTION_POINTER_UP:
-                je_io_update_mouse_state(
+                je_io_mouse_state_update(
                     pointer.id, jeecs::input::mousecode::LEFT, false);
-                je_io_update_mouse_pos(pointer.id, x, y);
+                je_io_mouse_pos_update(pointer.id, x, y);
                 break;
 
             case AMOTION_EVENT_ACTION_MOVE:
@@ -492,7 +492,7 @@ extern "C" {
                     pointer = motionEvent.pointers[index];
                     x = GameActivityPointerAxes_getX(&pointer);
                     y = GameActivityPointerAxes_getY(&pointer);
-                    je_io_update_mouse_pos(pointer.id, x, y);
+                    je_io_mouse_pos_update(pointer.id, x, y);
                 }
                 break;
             default:

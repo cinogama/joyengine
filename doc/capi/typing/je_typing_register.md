@@ -8,7 +8,7 @@ JE_API const jeecs::typing::type_info* je_typing_register(
     jeecs::typing::typehash_t _hash,
     size_t _size,
     size_t _align,
-    je_typing_class _typecls,
+    je_typing_class_t _typecls,
     jeecs::typing::construct_func_t _constructor,
     jeecs::typing::destruct_func_t _destructor,
     jeecs::typing::copy_construct_func_t _copy_constructor,
@@ -27,13 +27,13 @@ JE_API const jeecs::typing::type_info* je_typing_register(
 | `_hash` | `jeecs::typing::typehash_t` | 类型的哈希值，通常使用 `typeid(T).hash_code()` |
 | `_size` | `size_t` | 类型的大小（字节） |
 | `_align` | `size_t` | 类型的对齐要求（字节） |
-| `_typecls` | `je_typing_class` | 类型的分类 |
+| `_typecls` | `je_typing_class_t` | 类型的分类 |
 | `_constructor` | `construct_func_t` | 构造函数指针 |
 | `_destructor` | `destruct_func_t` | 析构函数指针 |
 | `_copy_constructor` | `copy_construct_func_t` | 拷贝构造函数指针 |
 | `_move_constructor` | `move_construct_func_t` | 移动构造函数指针 |
 
-### 类型分类 (je_typing_class)
+### 类型分类 (je_typing_class_t)
 
 | 枚举值 | 描述 |
 |--------|------|
@@ -114,6 +114,6 @@ const jeecs::typing::type_info* my_type = je_typing_register(
 ## 相关接口
 
 - [je_typing_unregister](je_typing_unregister.md) - 取消注册类型
-- [je_typing_get_info_by_id](je_typing_get_info_by_id.md) - 通过 ID 获取类型信息
-- [je_typing_get_info_by_hash](je_typing_get_info_by_hash.md) - 通过哈希获取类型信息
-- [je_typing_get_info_by_name](je_typing_get_info_by_name.md) - 通过名称获取类型信息
+- [je_typing_info_get_by_id](je_typing_info_get_by_id.md) - 通过 ID 获取类型信息
+- [je_typing_info_get_by_hash](je_typing_info_get_by_hash.md) - 通过哈希获取类型信息
+- [je_typing_info_get_by_name](je_typing_info_get_by_name.md) - 通过名称获取类型信息

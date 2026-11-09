@@ -3,6 +3,7 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
+#include "jeecs_basic_bootup.hpp"
 
 #ifdef JE_HAVE_EXTERN_LIB_3RD_PKG
 #   error Cannot define JE_HAVE_EXTERN_LIB_3RD_PKG manually.
@@ -13,19 +14,36 @@
 #   define JE_HAVE_EXTERN_LIB_3RD_PKG
 #endif
 
-std::vector<woort_Dylib*> _je_3rd_pkg_lib_handle;
-void je_extern_lib_3rd_pkgs_init()
-{
-    assert(_je_3rd_pkg_lib_handle.empty()); 
-#ifdef JE_HAVE_EXTERN_LIB_3RD_PKG
-    je_extern_lib_3rd_pkgs_init_impl(&_je_3rd_pkg_lib_handle);
-#endif
-}
+#include <vector>
 
-void je_extern_lib_3rd_pkgs_finish()
+namespace jeecs::external_woolang_packages {}
+
+using namespace std;
+using namespace jeecs;
+using namespace jeecs::external_woolang_packages;
+
+namespace jeecs::external_woolang_packages
 {
+    namespace
+    {
+        vector<woort_Dylib*> static_woolang_packages_libraries_handles;
+    }
+
+    void bootup(int, char**)
+    {
+        assert(static_woolang_packages_libraries_handles.empty());
 #ifdef JE_HAVE_EXTERN_LIB_3RD_PKG
-    je_extern_lib_3rd_pkgs_finish_impl(&_je_3rd_pkg_lib_handle);
+        je_extern_lib_3rd_pkgs_init_impl(
+            &static_woolang_packages_libraries_handles);
 #endif
-    assert(_je_3rd_pkg_lib_handle.empty());
+    }
+
+    void shutdown()
+    {
+#ifdef JE_HAVE_EXTERN_LIB_3RD_PKG
+        je_extern_lib_3rd_pkgs_finish_impl(
+            &static_woolang_packages_libraries_handles);
+#endif
+        assert(static_woolang_packages_libraries_handles.empty());
+    }
 }

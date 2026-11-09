@@ -608,7 +608,7 @@ namespace JEEditor::Editor
         
         func isModelFile(path: path_t)=> bool
         {
-            // 引擎经 Assimp 解析模型文件（jegl_load_vertex），
+            // 引擎经 Assimp 解析模型文件（je_graphic_vertex_load），
             // 此处列出常见可拖入的模型扩展名
             static let model_exts = {
                 [".obj"] = true,

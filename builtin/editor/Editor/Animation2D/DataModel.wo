@@ -837,7 +837,7 @@ namespace JEEditor::Editor::Animation2D
                 actions->push(action);
             }
             // 即使没有动作也写出 animations 键，保证源文件非空
-            //（jeecs_create_cache_file 拒绝为 0 字节文件生成缓存）。
+            //（je_cache_file_create 拒绝为 0 字节文件生成缓存）。
             root->set("animations", actions);
 
             match (toml::save(root, self.m_path))

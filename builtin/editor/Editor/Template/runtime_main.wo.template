@@ -2,7 +2,7 @@
 //
 // 项目导出向导会填充下面这些占位符，然后用 dumpling 把它预编译为 WORT
 // 二进制，以 @/builtin/main.wo 为键打包进资源镜像。引擎启动时
-// je_main_script_entry 会优先加载该入口（见 src/jeecs_startup.cpp）。
+// je_core_main_script_entry 会优先加载该入口（见 src/jeecs_startup.cpp）。
 //
 // 占位符（每个在正文中只出现一次，由导出向导整体替换）：
 //   LOAD_DYLIB_MODULES   装载导出的原生模块
@@ -60,7 +60,7 @@ $$APPLY_TITLE$$
     let u = universe::create();
     defer u->close();
 
-    // 引擎的图形宿主默认跳过所有绘制（je_GraphicUhost::m_skip_all_draw），
+    // 引擎的图形宿主默认跳过所有绘制（je_graphic_uhost_t::m_skip_all_draw），
     // 这里开启该宇宙的图形管线。函数名中的 editor 是历史遗留，导出游戏同样需要调用。
     je::internal::init_graphic_pipeline_for_editor(u);
 

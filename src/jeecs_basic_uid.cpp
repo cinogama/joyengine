@@ -6,18 +6,25 @@
 
 #include <cstdint>
 
+namespace jeecs::uid {}
+
+using namespace std;
+using namespace jeecs;
+using namespace jeecs::uid;
+
 namespace jeecs
 {
-    struct uuid_generate_context
+    namespace
     {
-        inline static std::atomic_uint32_t _uid_counter = 1;
-        inline static thread_local std::mt19937 mt = std::mt19937(std::random_device()());
-    };
+        atomic_uint32_t uid_counter = 1;
+        thread_local mt19937 mt = mt19937(random_device()());
+    }
 }
-void je_uid_generate(je_Uuid *uid)
+
+void je_uid_generate(je_uuid_t *uid)
 {
-    std::uniform_int_distribution<uint16_t> dist_ushort(0, UINT16_MAX);
-    std::uniform_int_distribution<uint32_t> dist_uint(0, UINT32_MAX);
+    uniform_int_distribution<uint16_t> dist_ushort(0, UINT16_MAX);
+    uniform_int_distribution<uint32_t> dist_uint(0, UINT32_MAX);
 
     // JUID
     // 4-2-2-2-4
@@ -27,12 +34,13 @@ void je_uid_generate(je_Uuid *uid)
     // 2 -> INC HIGH 16
     // 6 -> RANDOM
 
-    uint32_t count = jeecs::uuid_generate_context::_uid_counter++;
-    auto tm_st = je_clock_time_stamp();
-    uid->x = (decltype(uid->x))(tm_st >> 16);
-    uid->y = (decltype(uid->y))tm_st;
-    uid->z = dist_ushort(jeecs::uuid_generate_context::mt);
-    uid->w = (decltype(uid->w))(count);
-    uid->u = (decltype(uid->u))(count >> 16);
-    uid->v = dist_uint(jeecs::uuid_generate_context::mt);
+    const uint32_t count = uid_counter.fetch_add(1, memory_order::relaxed);
+    const auto tm_st = je_clock_time_stamp();
+
+    uid->x = static_cast<decltype(uid->x)>(tm_st >> 16);
+    uid->y = static_cast<decltype(uid->y)>(tm_st);
+    uid->z = dist_ushort(mt);
+    uid->w = static_cast<decltype(uid->w)>(count);
+    uid->u = static_cast<decltype(uid->u)>(count >> 16);
+    uid->v = dist_uint(mt);
 }

@@ -3,7 +3,7 @@
 ## 函数签名
 
 ```cpp
-JE_API je_font* je_font_load(
+JE_API je_font_t* je_font_load(
     const char* font_path,
     size_t board_blank_size_x,
     size_t board_blank_size_y,
@@ -14,7 +14,7 @@ JE_API je_font* je_font_load(
 
 加载一个字体文件。
 
-字体对象与字号解耦：加载时不需要指定字号，字号在调用 [je_font_get_char](je_font_get_char.md) 时给出，同一字体对象可以按任意字号渲染字符。
+字体对象与字号解耦：加载时不需要指定字号，字号在调用 [je_font_char_get](je_font_char_get.md) 时给出，同一字体对象可以按任意字号渲染字符。
 
 ## 参数
 
@@ -29,9 +29,9 @@ JE_API je_font* je_font_load(
 
 | 类型 | 描述 |
 |------|------|
-| je_font* | 字体对象指针，失败返回 nullptr |
+| je_font_t* | 字体对象指针，失败返回 nullptr |
 
 ## 相关接口
 
 - [je_font_free](je_font_free.md) - 释放字体
-- [je_font_get_char](je_font_get_char.md) - 获取字符信息
+- [je_font_char_get](je_font_char_get.md) - 获取字符信息

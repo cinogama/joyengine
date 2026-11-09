@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef JE_IMPL
-#error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
+#   define JE_IMPL
 #endif
 #include "jeecs.hpp"
 
@@ -66,7 +66,7 @@ namespace jeecs::graphic
             const char* name = glfwGetGamepadName(jid);
             const char* guid = glfwGetJoystickGUID(jid);
 
-            slot.handle = je_io_create_gamepad(
+            slot.handle = je_io_gamepad_create(
                 name != nullptr ? name : "Physical gamepad",
                 guid != nullptr ? guid : nullptr);
         }
@@ -79,7 +79,7 @@ namespace jeecs::graphic
             auto& slot = self->_m_gamepads[jid];
             if (slot.handle != nullptr)
             {
-                je_io_close_gamepad(slot.handle);
+                je_io_gamepad_close(slot.handle);
                 slot.handle = nullptr;
             }
         }
@@ -105,30 +105,30 @@ namespace jeecs::graphic
 
                 using namespace jeecs::input;
 
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_A,     state.buttons[GLFW_GAMEPAD_BUTTON_A] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_B,     state.buttons[GLFW_GAMEPAD_BUTTON_B] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_X,     state.buttons[GLFW_GAMEPAD_BUTTON_X] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_Y,     state.buttons[GLFW_GAMEPAD_BUTTON_Y] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_LB,    state.buttons[GLFW_GAMEPAD_BUTTON_LEFT_BUMPER] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_RB,    state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_LS,    state.buttons[GLFW_GAMEPAD_BUTTON_LEFT_THUMB] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_RS,    state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_THUMB] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_SELECT, state.buttons[GLFW_GAMEPAD_BUTTON_BACK] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_START, state.buttons[GLFW_GAMEPAD_BUTTON_START] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_GUIDE, state.buttons[GLFW_GAMEPAD_BUTTON_GUIDE] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_UP,    state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_UP] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_DOWN,  state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_DOWN] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_LEFT,  state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_LEFT] != 0);
-                je_io_gamepad_update_button_state(handle, JE_GAMEPAD_RIGHT, state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_A,     state.buttons[GLFW_GAMEPAD_BUTTON_A] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_B,     state.buttons[GLFW_GAMEPAD_BUTTON_B] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_X,     state.buttons[GLFW_GAMEPAD_BUTTON_X] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_Y,     state.buttons[GLFW_GAMEPAD_BUTTON_Y] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_LB,    state.buttons[GLFW_GAMEPAD_BUTTON_LEFT_BUMPER] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_RB,    state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_LS,    state.buttons[GLFW_GAMEPAD_BUTTON_LEFT_THUMB] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_RS,    state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_THUMB] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_SELECT, state.buttons[GLFW_GAMEPAD_BUTTON_BACK] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_START, state.buttons[GLFW_GAMEPAD_BUTTON_START] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_GUIDE, state.buttons[GLFW_GAMEPAD_BUTTON_GUIDE] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_UP,    state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_UP] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_DOWN,  state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_DOWN] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_LEFT,  state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_LEFT] != 0);
+                je_io_gamepad_button_state_update(handle, JE_GAMEPAD_RIGHT, state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT] != 0);
 
-                je_io_gamepad_update_stick(handle, JE_JOY_L,
+                je_io_gamepad_stick_update(handle, JE_JOY_L,
                     state.axes[GLFW_GAMEPAD_AXIS_LEFT_X], state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]);
-                je_io_gamepad_update_stick(handle, JE_JOY_R,
+                je_io_gamepad_stick_update(handle, JE_JOY_R,
                     state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X], state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y]);
-                // Triggers are reported by GLFW in [0,1]; store as x-only per je_Joystickcode semantics.
-                je_io_gamepad_update_stick(handle, JE_JOY_LT,
+                // Triggers are reported by GLFW in [0,1]; store as x-only per je_joystickcode_t semantics.
+                je_io_gamepad_stick_update(handle, JE_JOY_LT,
                     state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER], 0.f);
-                je_io_gamepad_update_stick(handle, JE_JOY_RT,
+                je_io_gamepad_stick_update(handle, JE_JOY_RT,
                     state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER], 0.f);
             }
         }
@@ -149,7 +149,7 @@ namespace jeecs::graphic
         {
             glfw* context = static_cast<glfw*>(glfwGetWindowUserPointer(fw));
 
-            je_io_update_window_size(x, y);
+            je_io_window_size_update(x, y);
 
             if (x == 0 || y == 0)
                 context->_m_window_state_paused = true;
@@ -161,15 +161,15 @@ namespace jeecs::graphic
         {
             // glfw* context = reinterpret_cast<glfw*>(glfwGetWindowUserPointer(fw));
 
-            je_io_update_window_pos(x, y);
+            je_io_window_pos_update(x, y);
         }
         static void glfw_callback_mouse_pos_changed(GLFWwindow* fw, double x, double y)
         {
-            je_io_update_mouse_pos(0, (int)x, (int)y);
+            je_io_mouse_pos_update(0, (int)x, (int)y);
         }
         static void glfw_callback_mouse_key_clicked(GLFWwindow* fw, int key, int state, int mod)
         {
-            je_Mousecode code;
+            je_mousecode_t code;
             switch (key)
             {
             case GLFW_MOUSE_BUTTON_LEFT:
@@ -185,20 +185,20 @@ namespace jeecs::graphic
                 // do nothing.
                 return;
             }
-            je_io_update_mouse_state(0, code, state != 0);
+            je_io_mouse_state_update(0, code, state != 0);
         }
         static void glfw_callback_mouse_scroll_changed(GLFWwindow* fw, double xoffset, double yoffset)
         {
             float ox, oy;
-            je_io_get_wheel(0, &ox, &oy);
-            je_io_update_wheel(0, ox + (float)xoffset, oy + (float)yoffset);
+            je_io_wheel_get(0, &ox, &oy);
+            je_io_wheel_update(0, ox + (float)xoffset, oy + (float)yoffset);
         }
         static void glfw_callback_keyboard_stage_changed(GLFWwindow* fw, int key, int w, int stage, int v)
         {
             static_assert(GLFW_KEY_A == 'A');
             static_assert(GLFW_KEY_0 == '0');
 
-            je_Keycode code;
+            je_keycode_t code;
 
             switch (key)
             {
@@ -242,7 +242,7 @@ namespace jeecs::graphic
             case GLFW_KEY_KP_7:
             case GLFW_KEY_KP_8:
             case GLFW_KEY_KP_9:
-                code = (je_Keycode)(
+                code = (je_keycode_t)(
                     (uint16_t)JE_KEY_NP_0 + (key - GLFW_KEY_KP_0));
                 break;
             case GLFW_KEY_KP_ADD:
@@ -291,18 +291,18 @@ namespace jeecs::graphic
             case GLFW_KEY_F14:
             case GLFW_KEY_F15:
             case GLFW_KEY_F16:
-                code = (je_Keycode)(
+                code = (je_keycode_t)(
                     (uint16_t)JE_KEY_F1 + (key - GLFW_KEY_F1));
                 break;
             default:
                 if (key >= 0 && key <= 127)
-                    code = (je_Keycode)key;
+                    code = (je_keycode_t)key;
                 else
                     return;
                 break;
             }
 
-            je_io_update_key_state(code, stage != 0);
+            je_io_key_state_update(code, stage != 0);
         }
     public:
         glfw(interface_type type)
@@ -376,7 +376,7 @@ namespace jeecs::graphic
 #endif
         }
 
-        virtual void create_interface(const jegl_interface_config* config) override
+        virtual void create_interface(const je_gl_interface_config_t* config) override
         {
             _m_mouse_locked = mouse_lock_state_t::NO_SPECIFY;
 
@@ -389,7 +389,7 @@ namespace jeecs::graphic
             interface_width = config->m_width;
             interface_height = config->m_height;
 
-            display_mode = jegl_interface_config::display_mode::WINDOWED;
+            display_mode = JE_GL_DISPLAY_MODE_WINDOWED;
 
             assert(config->m_width != 0 && config->m_height != 0);
 #else
@@ -413,19 +413,19 @@ namespace jeecs::graphic
 
             switch (display_mode)
             {
-            case jegl_interface_config::display_mode::BOARDLESS:
+            case JE_GL_DISPLAY_MODE_BOARDLESS:
                 glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
                 /*fallthrough*/
                 [[fallthrough]];
-            case jegl_interface_config::display_mode::WINDOWED:
+            case JE_GL_DISPLAY_MODE_WINDOWED:
                 _m_windows = glfwCreateWindow(
                     (int)interface_width,
                     (int)interface_height,
                     config->m_title,
                     NULL, NULL);
                 break;
-            case jegl_interface_config::display_mode::FULLSCREEN:
+            case JE_GL_DISPLAY_MODE_FULLSCREEN:
                 _m_windows = glfwCreateWindow(
                     (int)interface_width,
                     (int)interface_height,
@@ -537,7 +537,7 @@ namespace jeecs::graphic
         }
         virtual update_result update() override
         {
-            if (je_io_get_lock_mouse())
+            if (je_io_mouse_lock_get())
             {
                 if (_m_mouse_locked != mouse_lock_state_t::LOCKED)
                 {
@@ -555,11 +555,11 @@ namespace jeecs::graphic
             }
 
             int window_width, window_height;
-            if (je_io_fetch_update_window_size(&window_width, &window_height))
+            if (je_io_window_size_fetch_update(&window_width, &window_height))
                 glfwSetWindowSize(_m_windows, window_width, window_height);
 
             const char* title;
-            if (je_io_fetch_update_window_title(&title))
+            if (je_io_window_title_fetch_update(&title))
                 glfwSetWindowTitle(_m_windows, title);
 
             glfwPollEvents();

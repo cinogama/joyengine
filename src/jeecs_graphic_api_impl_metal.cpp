@@ -5,7 +5,7 @@
 
 #ifdef JE_ENABLE_METAL_GAPI
 
-#include "jeecs_imgui_backend_api.hpp"
+#include "jeecs_graphic_imgui_backend_api.hpp"
 
 #define NS_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
@@ -86,7 +86,7 @@ namespace jeecs::graphic::api::metal
             create_main_depth_texture(w, h);
         }
 
-        jegl_metal_context(const jegl_interface_config* cfg, bool reboot)
+        jegl_metal_context(const je_gl_interface_config_t* cfg, bool reboot)
         {
             m_metal_device =
                 MTL::CreateSystemDefaultDevice();
@@ -315,7 +315,7 @@ namespace jeecs::graphic::api::metal
         MTL::Buffer* m_uniform_buffer;
         uint32_t m_binding_place;
 
-        metal_uniform_buffer(jegl_metal_context* ctx, jegl_uniform_buffer* res)
+        metal_uniform_buffer(jegl_metal_context* ctx, je_gl_uniform_buffer_t* res)
         {
             m_uniform_buffer =
                 ctx->m_metal_device->newBuffer(
@@ -434,8 +434,8 @@ namespace jeecs::graphic::api::metal
         m_depth_stencil_state->release();
     }
 
-    je_GraphicImplContext
-        startup(jegl_context* glthread, const jegl_interface_config* cfg, bool reboot)
+    je_graphic_impl_context_t
+        startup(je_gl_context_t* glthread, const je_gl_interface_config_t* cfg, bool reboot)
     {
         if (!reboot)
             jeecs::debug::log("Graphic thread (Metal) start!");
@@ -458,14 +458,14 @@ namespace jeecs::graphic::api::metal
 
         jegui_init_metal(
             glthread,
-            [](jegl_context*, jegl_texture_2d* res)
+            [](je_gl_context_t*, je_gl_texture_2d_t* res)
             {
                 metal_texture* tex =
                     static_cast<metal_texture*>(res->m_handle.m_ptr);
 
                 return (uint64_t)tex->m_texture;
             },
-            [](jegl_context* /*ctx*/, jegl_shader* /*res*/)
+            [](je_gl_context_t* /*ctx*/, je_gl_shader_t* /*res*/)
             {
                 // TODO: Metal + IMGUI 暂不支持运行时切换采样方式。
                 // 原因：imgui_impl_metal.mm 的片元着色器使用了 `constexpr sampler`
@@ -492,10 +492,10 @@ namespace jeecs::graphic::api::metal
 
         return context;
     }
-    void pre_shutdown(jegl_context*, je_GraphicImplContext, bool)
+    void pre_shutdown(je_gl_context_t*, je_graphic_impl_context_t, bool)
     {
     }
-    void shutdown(jegl_context*, je_GraphicImplContext ctx, bool reboot)
+    void shutdown(je_gl_context_t*, je_graphic_impl_context_t ctx, bool reboot)
     {
         jegl_metal_context* metal_context = static_cast<jegl_metal_context*>(ctx);
 
@@ -510,7 +510,7 @@ namespace jeecs::graphic::api::metal
         delete metal_context;
     }
 
-    jegl_update_action pre_update(je_GraphicImplContext ctx)
+    je_gl_update_action_t pre_update(je_graphic_impl_context_t ctx)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
@@ -547,13 +547,13 @@ namespace jeecs::graphic::api::metal
         switch (metal_context->m_interface->update())
         {
         case basic_interface::update_result::CLOSE:
-            if (jegui_shutdown_callback())
-                return jegl_update_action::JEGL_UPDATE_STOP;
+            if (je_gui_backend_shutdown_callback())
+                return je_gl_update_action_t::JE_GL_UPDATE_STOP;
             goto _label_jegl_metal_normal_job;
         case basic_interface::update_result::PAUSE:
-            return jegl_update_action::JEGL_UPDATE_SKIP;
+            return je_gl_update_action_t::JE_GL_UPDATE_SKIP;
         case basic_interface::update_result::RESIZE:
-            je_io_get_window_size(
+            je_io_window_size_get(
                 &metal_context->m_render_states.m_screen_width,
                 &metal_context->m_render_states.m_screen_height);
             metal_context->m_metal_layer->setDrawableSize(
@@ -566,18 +566,18 @@ namespace jeecs::graphic::api::metal
             [[fallthrough]];
         case basic_interface::update_result::NORMAL:
         _label_jegl_metal_normal_job:
-            return jegl_update_action::JEGL_UPDATE_CONTINUE;
+            return je_gl_update_action_t::JE_GL_UPDATE_CONTINUE;
         }
     }
 
     void bind_framebuffer(
-        je_GraphicImplContext ctx,
-        jegl_frame_buffer* fb,
+        je_graphic_impl_context_t ctx,
+        je_gl_frame_buffer_t* fb,
         const int32_t(*viewport_xywh)[4],
-        const jegl_frame_buffer_clear_operation* clear_operations);
+        const je_gl_frame_buffer_clear_operation_t* clear_operations);
 
-    jegl_update_action commit_update(
-        je_GraphicImplContext ctx, jegl_update_action)
+    je_gl_update_action_t commit_update(
+        je_graphic_impl_context_t ctx, je_gl_update_action_t)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
@@ -598,11 +598,11 @@ namespace jeecs::graphic::api::metal
         // 帧结束后释放自动释放池
         metal_context->m_frame_auto_release->release();
 
-        return jegl_update_action::JEGL_UPDATE_CONTINUE;
+        return je_gl_update_action_t::JE_GL_UPDATE_CONTINUE;
     }
 
 
-    jegl_resource_blob create_shader_blob(je_GraphicImplContext ctx, jegl_shader* shader)
+    je_gl_resource_blob_t create_shader_blob(je_graphic_impl_context_t ctx, je_gl_shader_t* shader)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
@@ -698,35 +698,35 @@ namespace jeecs::graphic::api::metal
 
                 switch (shader->m_vertex_in[i])
                 {
-                case jegl_shader::uniform_type::INT:
+                case JE_GL_SHADER_UNIFORM_TYPE_INT:
                     attribute->setFormat(MTL::VertexFormatInt);
                     attribute_size = sizeof(int);
                     break;
-                case jegl_shader::uniform_type::INT2:
+                case JE_GL_SHADER_UNIFORM_TYPE_INT2:
                     attribute->setFormat(MTL::VertexFormatInt2);
                     attribute_size = 2 * sizeof(int);
                     break;
-                case jegl_shader::uniform_type::INT3:
+                case JE_GL_SHADER_UNIFORM_TYPE_INT3:
                     attribute->setFormat(MTL::VertexFormatInt3);
                     attribute_size = 3 * sizeof(int);
                     break;
-                case jegl_shader::uniform_type::INT4:
+                case JE_GL_SHADER_UNIFORM_TYPE_INT4:
                     attribute->setFormat(MTL::VertexFormatInt4);
                     attribute_size = 4 * sizeof(int);
                     break;
-                case jegl_shader::uniform_type::FLOAT:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT:
                     attribute->setFormat(MTL::VertexFormatFloat);
                     attribute_size = sizeof(float);
                     break;
-                case jegl_shader::uniform_type::FLOAT2:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2:
                     attribute->setFormat(MTL::VertexFormatFloat2);
                     attribute_size = 2 * sizeof(float);
                     break;
-                case jegl_shader::uniform_type::FLOAT3:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3:
                     attribute->setFormat(MTL::VertexFormatFloat3);
                     attribute_size = 3 * sizeof(float);
                     break;
-                case jegl_shader::uniform_type::FLOAT4:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4:
                     attribute->setFormat(MTL::VertexFormatFloat4);
                     attribute_size = 4 * sizeof(float);
                     break;
@@ -750,10 +750,10 @@ namespace jeecs::graphic::api::metal
 
             switch (shader->m_depth_mask)
             {
-            case jegl_shader::depth_mask_method::DISABLE:
+            case je_gl_shader_depth_mask_method_t::DISABLE:
                 depth_stencil_descriptor->setDepthWriteEnabled(false);
                 break;
-            case jegl_shader::depth_mask_method::ENABLE:
+            case je_gl_shader_depth_mask_method_t::ENABLE:
                 depth_stencil_descriptor->setDepthWriteEnabled(true);
                 break;
             default:
@@ -764,28 +764,28 @@ namespace jeecs::graphic::api::metal
 
             switch (shader->m_depth_test)
             {
-            case jegl_shader::depth_test_method::NEVER:
+            case je_gl_shader_depth_test_method_t::NEVER:
                 depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionNever);
                 break;
-            case jegl_shader::depth_test_method::LESS:
+            case je_gl_shader_depth_test_method_t::LESS:
                 depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionLess);
                 break;
-            case jegl_shader::depth_test_method::EQUAL:
+            case je_gl_shader_depth_test_method_t::EQUAL:
                 depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionEqual);
                 break;
-            case jegl_shader::depth_test_method::LESS_EQUAL:
+            case je_gl_shader_depth_test_method_t::LESS_EQUAL:
                 depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionLessEqual);
                 break;
-            case jegl_shader::depth_test_method::GREATER:
+            case je_gl_shader_depth_test_method_t::GREATER:
                 depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionGreater);
                 break;
-            case jegl_shader::depth_test_method::NOT_EQUAL:
+            case je_gl_shader_depth_test_method_t::NOT_EQUAL:
                 depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionNotEqual);
                 break;
-            case jegl_shader::depth_test_method::GREATER_EQUAL:
+            case je_gl_shader_depth_test_method_t::GREATER_EQUAL:
                 depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionGreaterEqual);
                 break;
-            case jegl_shader::depth_test_method::ALWAYS:
+            case je_gl_shader_depth_test_method_t::ALWAYS:
                 depth_stencil_descriptor->setDepthCompareFunction(MTL::CompareFunctionAlways);
                 break;
             default:
@@ -798,21 +798,21 @@ namespace jeecs::graphic::api::metal
                 metal_context->m_metal_device->newDepthStencilState(depth_stencil_descriptor);
             depth_stencil_descriptor->release();
 
-            auto blend_equation_cvt = [](jegl_shader::blend_equation eq)
+            auto blend_equation_cvt = [](je_gl_shader_blend_equation_t eq)
                 {
                     switch (eq)
                     {
-                    case jegl_shader::blend_equation::DISABLED:
+                    case je_gl_shader_blend_equation_t::DISABLED:
                         return MTL::BlendOperationAdd; // Not used.
-                    case jegl_shader::blend_equation::ADD:
+                    case je_gl_shader_blend_equation_t::ADD:
                         return MTL::BlendOperationAdd;
-                    case jegl_shader::blend_equation::SUBTRACT:
+                    case je_gl_shader_blend_equation_t::SUBTRACT:
                         return MTL::BlendOperationSubtract;
-                    case jegl_shader::blend_equation::REVERSE_SUBTRACT:
+                    case je_gl_shader_blend_equation_t::REVERSE_SUBTRACT:
                         return MTL::BlendOperationReverseSubtract;
-                    case jegl_shader::blend_equation::MIN:
+                    case je_gl_shader_blend_equation_t::MIN:
                         return MTL::BlendOperationMin;
-                    case jegl_shader::blend_equation::MAX:
+                    case je_gl_shader_blend_equation_t::MAX:
                         return MTL::BlendOperationMax;
                     default:
                         jeecs::debug::logfatal("Unsupported blend equation.");
@@ -820,29 +820,29 @@ namespace jeecs::graphic::api::metal
                     }
                 };
 
-            auto blend_method_cvt = [](jegl_shader::blend_method method)
+            auto blend_method_cvt = [](je_gl_shader_blend_method_t method)
                 {
                     switch (method)
                     {
-                    case jegl_shader::blend_method::ZERO:
+                    case je_gl_shader_blend_method_t::ZERO:
                         return MTL::BlendFactorZero;
-                    case jegl_shader::blend_method::ONE:
+                    case je_gl_shader_blend_method_t::ONE:
                         return MTL::BlendFactorOne;
-                    case jegl_shader::blend_method::SRC_COLOR:
+                    case je_gl_shader_blend_method_t::SRC_COLOR:
                         return MTL::BlendFactorSourceColor;
-                    case jegl_shader::blend_method::SRC_ALPHA:
+                    case je_gl_shader_blend_method_t::SRC_ALPHA:
                         return MTL::BlendFactorSourceAlpha;
-                    case jegl_shader::blend_method::ONE_MINUS_SRC_ALPHA:
+                    case je_gl_shader_blend_method_t::ONE_MINUS_SRC_ALPHA:
                         return MTL::BlendFactorOneMinusSourceAlpha;
-                    case jegl_shader::blend_method::ONE_MINUS_SRC_COLOR:
+                    case je_gl_shader_blend_method_t::ONE_MINUS_SRC_COLOR:
                         return MTL::BlendFactorOneMinusSourceColor;
-                    case jegl_shader::blend_method::DST_COLOR:
+                    case je_gl_shader_blend_method_t::DST_COLOR:
                         return MTL::BlendFactorDestinationColor;
-                    case jegl_shader::blend_method::DST_ALPHA:
+                    case je_gl_shader_blend_method_t::DST_ALPHA:
                         return MTL::BlendFactorDestinationAlpha;
-                    case jegl_shader::blend_method::ONE_MINUS_DST_ALPHA:
+                    case je_gl_shader_blend_method_t::ONE_MINUS_DST_ALPHA:
                         return MTL::BlendFactorOneMinusDestinationAlpha;
-                    case jegl_shader::blend_method::ONE_MINUS_DST_COLOR:
+                    case je_gl_shader_blend_method_t::ONE_MINUS_DST_COLOR:
                         return MTL::BlendFactorOneMinusDestinationColor;
                     default:
                         jeecs::debug::logfatal("Unsupported blend method.");
@@ -854,13 +854,13 @@ namespace jeecs::graphic::api::metal
 
             switch (shader->m_cull_mode)
             {
-            case jegl_shader::cull_mode::NONE:
+            case je_gl_shader_cull_mode_t::NONE:
                 cull_mode = MTL::CullModeNone;
                 break;
-            case jegl_shader::cull_mode::FRONT:
+            case je_gl_shader_cull_mode_t::FRONT:
                 cull_mode = MTL::CullModeFront;
                 break;
-            case jegl_shader::cull_mode::BACK:
+            case je_gl_shader_cull_mode_t::BACK:
                 cull_mode = MTL::CullModeBack;
                 break;
             default:
@@ -871,7 +871,7 @@ namespace jeecs::graphic::api::metal
 
             bool blend_enabled = true;
 
-            if (shader->m_blend_equation == jegl_shader::blend_equation::DISABLED)
+            if (shader->m_blend_equation == je_gl_shader_blend_equation_t::DISABLED)
                 blend_enabled = false;
 
             metal_resource_shader_blob* shader_blob =
@@ -897,39 +897,39 @@ namespace jeecs::graphic::api::metal
                 size_t allign_base = 0;
                 switch (uniforms->m_uniform_type)
                 {
-                case jegl_shader::uniform_type::INT:
-                case jegl_shader::uniform_type::FLOAT:
+                case JE_GL_SHADER_UNIFORM_TYPE_INT:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT:
                     unit_size = 4;
                     allign_base = 4;
                     break;
-                case jegl_shader::uniform_type::INT2:
-                case jegl_shader::uniform_type::FLOAT2:
+                case JE_GL_SHADER_UNIFORM_TYPE_INT2:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2:
                     unit_size = 8;
                     allign_base = 8;
                     break;
-                case jegl_shader::uniform_type::INT3:
-                case jegl_shader::uniform_type::FLOAT3:
+                case JE_GL_SHADER_UNIFORM_TYPE_INT3:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3:
                     unit_size = 12;
                     allign_base = 16;
                     break;
-                case jegl_shader::uniform_type::INT4:
-                case jegl_shader::uniform_type::FLOAT4:
+                case JE_GL_SHADER_UNIFORM_TYPE_INT4:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4:
                     unit_size = 16;
                     allign_base = 16;
                     break;
-                case jegl_shader::uniform_type::FLOAT2X2:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT2X2:
                     unit_size = 16;
                     allign_base = 8;
                     break;
-                case jegl_shader::uniform_type::FLOAT3X3:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT3X3:
                     unit_size = 48;
                     allign_base = 16;
                     break;
-                case jegl_shader::uniform_type::FLOAT4X4:
+                case JE_GL_SHADER_UNIFORM_TYPE_FLOAT4X4:
                     unit_size = 64;
                     allign_base = 16;
                     break;
-                case jegl_shader::uniform_type::TEXTURE:
+                case JE_GL_SHADER_UNIFORM_TYPE_TEXTURE:
                     break;
                 }
 
@@ -952,26 +952,26 @@ namespace jeecs::graphic::api::metal
             {
                 const auto& sampler_method = shader->m_sampler_methods[i];
 
-                auto filter_mode_cvt = [](jegl_shader::fliter_mode fmode)
+                auto filter_mode_cvt = [](je_gl_shader_filter_mode_t fmode)
                     {
                         switch (fmode)
                         {
-                        case jegl_shader::fliter_mode::NEAREST:
+                        case JE_GL_SHADER_FILTER_MODE_NEAREST:
                             return MTL::SamplerMinMagFilterNearest;
-                        case jegl_shader::fliter_mode::LINEAR:
+                        case JE_GL_SHADER_FILTER_MODE_LINEAR:
                             return MTL::SamplerMinMagFilterLinear;
                         default:
                             jeecs::debug::logfatal("Unsupported filter mode.");
                             return MTL::SamplerMinMagFilterNearest;
                         }
                     };
-                auto wrap_mode_cvt = [](jegl_shader::wrap_mode wmode)
+                auto wrap_mode_cvt = [](je_gl_shader_wrap_mode_t wmode)
                     {
                         switch (wmode)
                         {
-                        case jegl_shader::wrap_mode::REPEAT:
+                        case JE_GL_SHADER_WRAP_MODE_REPEAT:
                             return MTL::SamplerAddressModeRepeat;
-                        case jegl_shader::wrap_mode::CLAMP:
+                        case JE_GL_SHADER_WRAP_MODE_CLAMP:
                             return MTL::SamplerAddressModeClampToEdge;
                         default:
                             jeecs::debug::logfatal("Unsupported wrap mode.");
@@ -1001,27 +1001,27 @@ namespace jeecs::graphic::api::metal
             return shader_blob;
         }
     }
-    void close_shader_blob(je_GraphicImplContext, jegl_resource_blob blob)
+    void close_shader_blob(je_graphic_impl_context_t, je_gl_resource_blob_t blob)
     {
         delete static_cast<metal_resource_shader_blob*>(blob);
     }
     template<typename TexT>
-    jegl_resource_blob create_texture_blob(je_GraphicImplContext, TexT*)
+    je_gl_resource_blob_t create_texture_blob(je_graphic_impl_context_t, TexT*)
     {
         return nullptr;
     }
-    void close_texture_blob(je_GraphicImplContext, jegl_resource_blob)
+    void close_texture_blob(je_graphic_impl_context_t, je_gl_resource_blob_t)
     {
     }
-    jegl_resource_blob create_vertex_blob(je_GraphicImplContext, jegl_vertex*)
+    je_gl_resource_blob_t create_vertex_blob(je_graphic_impl_context_t, je_gl_vertex_t*)
     {
         return nullptr;
     }
-    void close_vertex_blob(je_GraphicImplContext, jegl_resource_blob)
+    void close_vertex_blob(je_graphic_impl_context_t, je_gl_resource_blob_t)
     {
     }
 
-    void init_shader(je_GraphicImplContext, jegl_resource_blob blob, jegl_shader* shader)
+    void init_shader(je_graphic_impl_context_t, je_gl_resource_blob_t blob, je_gl_shader_t* shader)
     {
         if (blob != nullptr)
         {
@@ -1064,21 +1064,21 @@ namespace jeecs::graphic::api::metal
             shader->m_handle.m_ptr = nullptr;
     }
     template<typename TexT>
-    void init_texture(je_GraphicImplContext ctx, jegl_resource_blob, TexT* texture)
+    void init_texture(je_graphic_impl_context_t ctx, je_gl_resource_blob_t, TexT* texture)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
 
-        constexpr bool is_3d = std::is_same_v<TexT, jegl_texture_3d>;
-        constexpr bool is_array = std::is_same_v<TexT, jegl_texture_array>;
-        constexpr bool is_cube = std::is_same_v<TexT, jegl_texture_cube>;
-        constexpr bool is_msaa = std::is_same_v<TexT, jegl_texture_msaa>;
+        constexpr bool is_3d = std::is_same_v<TexT, je_gl_texture_3d_t>;
+        constexpr bool is_array = std::is_same_v<TexT, je_gl_texture_array_t>;
+        constexpr bool is_cube = std::is_same_v<TexT, je_gl_texture_cube_t>;
+        constexpr bool is_msaa = std::is_same_v<TexT, je_gl_texture_msaa_t>;
 
         MTL::TextureDescriptor* texture_desc = MTL::TextureDescriptor::alloc()->init();
 
-        bool float16 = 0 != (texture->m_format & jegl_texture_common::format::FLOAT16);
-        bool is_framebuf = 0 != (texture->m_format & jegl_texture_common::format::FRAMEBUF);
-        bool is_depth = 0 != (texture->m_format & jegl_texture_common::format::DEPTH);
+        bool float16 = 0 != (texture->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
+        bool is_framebuf = 0 != (texture->m_format & JE_GL_TEXTURE_FORMAT_FRAMEBUF);
+        bool is_depth = 0 != (texture->m_format & JE_GL_TEXTURE_FORMAT_DEPTH);
 
         texture_desc->setWidth((uint32_t)texture->m_width);
         texture_desc->setHeight((uint32_t)texture->m_height);
@@ -1134,14 +1134,14 @@ namespace jeecs::graphic::api::metal
         else
         {
             const bool srgb =
-                0 != (texture->m_format & jegl_texture_common::format::SRGB);
-            switch (texture->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK)
+                0 != (texture->m_format & JE_GL_TEXTURE_FORMAT_SRGB);
+            switch (texture->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK)
             {
-            case jegl_texture_common::format::MONO:
+            case JE_GL_TEXTURE_FORMAT_MONO:
                 texture_format =
                     float16 ? MTL::PixelFormatR16Float : MTL::PixelFormatR8Unorm;
                 break;
-            case jegl_texture_common::format::RGBA:
+            case JE_GL_TEXTURE_FORMAT_RGBA:
                 texture_format = float16
                     ? MTL::PixelFormatRGBA16Float
                     : (srgb
@@ -1160,7 +1160,7 @@ namespace jeecs::graphic::api::metal
         MTL::Texture* texture_instance =
             metal_context->m_metal_device->newTexture(texture_desc);
 
-        if (texture->m_format & jegl_texture_common::format::FRAMEBUF)
+        if (texture->m_format & JE_GL_TEXTURE_FORMAT_FRAMEBUF)
         {
             // No need to upload data.
         }
@@ -1169,7 +1169,7 @@ namespace jeecs::graphic::api::metal
             const uint32_t bytes_per_row =
                 (uint32_t)texture->m_width
                 * (float16 ? 2 : 1)
-                * (texture->m_format & jegl_texture_common::format::COLOR_DEPTH_MASK);
+                * (texture->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
             const uint32_t bytes_per_slice = bytes_per_row * (uint32_t)texture->m_height;
 
             if constexpr (is_3d)
@@ -1209,7 +1209,7 @@ namespace jeecs::graphic::api::metal
         texture->m_handle.m_ptr = new metal_texture(texture_instance, texture_format);
         texture_desc->release();
     }
-    void init_vertex(je_GraphicImplContext ctx, jegl_resource_blob, jegl_vertex* vertex)
+    void init_vertex(je_graphic_impl_context_t ctx, je_gl_resource_blob_t, je_gl_vertex_t* vertex)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
@@ -1222,7 +1222,7 @@ namespace jeecs::graphic::api::metal
 
         // Create index buffer: sized by allocation capacity (m_index_count
         // may have been shrunk to the active count by
-        // jegl_update_vertex_buffer; the draw count is kept separately in
+        // je_graphic_vertex_buffer_update; the draw count is kept separately in
         // metal_vertex::m_index_count)
         MTL::Buffer* index_buffer = metal_context->m_metal_device->newBuffer(
             vertex->m_indices,
@@ -1233,13 +1233,13 @@ namespace jeecs::graphic::api::metal
         MTL::PrimitiveType primitive_type;
         switch (vertex->m_type)
         {
-        case jegl_vertex::type::LINESTRIP:
+        case JE_GL_VERTEX_TYPE_LINESTRIP:
             primitive_type = MTL::PrimitiveTypeLineStrip;
             break;
-        case jegl_vertex::type::TRIANGLES:
+        case JE_GL_VERTEX_TYPE_TRIANGLES:
             primitive_type = MTL::PrimitiveTypeTriangle;
             break;
-        case jegl_vertex::type::TRIANGLESTRIP:
+        case JE_GL_VERTEX_TYPE_TRIANGLESTRIP:
             primitive_type = MTL::PrimitiveTypeTriangleStrip;
             break;
         default:
@@ -1255,7 +1255,7 @@ namespace jeecs::graphic::api::metal
             vertex->m_index_count,
             vertex->m_data_size_per_point);
     }
-    void init_framebuffer(je_GraphicImplContext, jegl_frame_buffer* fbuffer)
+    void init_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t* fbuffer)
     {
         metal_framebuffer* framebuf = new metal_framebuffer(
             fbuffer->m_width,
@@ -1270,9 +1270,9 @@ namespace jeecs::graphic::api::metal
         for (size_t i = 0; i < fbuffer->m_attachment_count; ++i)
         {
             auto* attachment_resource = attachments[i]->resource();
-            (void)_jegl_prepare_texture_2d_resource(attachment_resource);
+            (void)prepare_texture_2d_resource(attachment_resource);
 
-            if (attachment_resource->m_format & jegl_texture_common::format::DEPTH)
+            if (attachment_resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH)
             {
                 // Is depth attachment.
                 framebuf->m_has_depth_attachment = true;
@@ -1314,7 +1314,7 @@ namespace jeecs::graphic::api::metal
         }
         fbuffer->m_handle.m_ptr = framebuf;
     }
-    void init_ubuffer(je_GraphicImplContext ctx, jegl_uniform_buffer* ubuffer)
+    void init_ubuffer(je_graphic_impl_context_t ctx, je_gl_uniform_buffer_t* ubuffer)
     {
         jegl_metal_context* metal_context =
             static_cast<jegl_metal_context*>(ctx);
@@ -1322,15 +1322,15 @@ namespace jeecs::graphic::api::metal
         ubuffer->m_handle.m_ptr = new metal_uniform_buffer(metal_context, ubuffer);
     }
 
-    void update_shader(je_GraphicImplContext, jegl_shader*)
+    void update_shader(je_graphic_impl_context_t, je_gl_shader_t*)
     {
     }
     template<typename TexT>
-    void update_texture(je_GraphicImplContext, TexT*)
+    void update_texture(je_graphic_impl_context_t, TexT*)
     {
         // TODO;
     }
-    void update_vertex(je_GraphicImplContext, jegl_vertex* resource)
+    void update_vertex(je_graphic_impl_context_t, je_gl_vertex_t* resource)
     {
         metal_vertex* vertex =
             static_cast<metal_vertex*>(resource->m_handle.m_ptr);
@@ -1344,10 +1344,10 @@ namespace jeecs::graphic::api::metal
 
         vertex->m_index_count = resource->m_index_count;
     }
-    void update_framebuffer(je_GraphicImplContext, jegl_frame_buffer*)
+    void update_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t*)
     {
     }
-    void update_ubuffer(je_GraphicImplContext, jegl_uniform_buffer* ubuffer)
+    void update_ubuffer(je_graphic_impl_context_t, je_gl_uniform_buffer_t* ubuffer)
     {
         metal_uniform_buffer* ubuf =
             static_cast<metal_uniform_buffer*>(ubuffer->m_handle.m_ptr);
@@ -1365,29 +1365,29 @@ namespace jeecs::graphic::api::metal
             ubuffer->m_update_length);
     }
 
-    void close_shader(je_GraphicImplContext, jegl_shader* shader)
+    void close_shader(je_graphic_impl_context_t, je_gl_shader_t* shader)
     {
         delete static_cast<metal_shader*>(shader->m_handle.m_ptr);
     }
     template<typename TexT>
-    void close_texture(je_GraphicImplContext, TexT* texture)
+    void close_texture(je_graphic_impl_context_t, TexT* texture)
     {
         delete static_cast<metal_texture*>(texture->m_handle.m_ptr);
     }
-    void close_vertex(je_GraphicImplContext, jegl_vertex* vertex)
+    void close_vertex(je_graphic_impl_context_t, je_gl_vertex_t* vertex)
     {
         delete static_cast<metal_vertex*>(vertex->m_handle.m_ptr);
     }
-    void close_framebuffer(je_GraphicImplContext, jegl_frame_buffer* fbuffer)
+    void close_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t* fbuffer)
     {
         delete static_cast<metal_framebuffer*>(fbuffer->m_handle.m_ptr);
     }
-    void close_ubuffer(je_GraphicImplContext, jegl_uniform_buffer* ubuffer)
+    void close_ubuffer(je_graphic_impl_context_t, je_gl_uniform_buffer_t* ubuffer)
     {
         delete static_cast<metal_uniform_buffer*>(ubuffer->m_handle.m_ptr);
     }
 
-    void bind_uniform_buffer(je_GraphicImplContext ctx, jegl_uniform_buffer* res)
+    void bind_uniform_buffer(je_graphic_impl_context_t ctx, je_gl_uniform_buffer_t* res)
     {
         metal_uniform_buffer* ubuf =
             static_cast<metal_uniform_buffer*>(res->m_handle.m_ptr);
@@ -1399,7 +1399,7 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_current_command_encoder->setFragmentBuffer(
             ubuf->m_uniform_buffer, 0, ubuf->m_binding_place);
     }
-    bool bind_shader(je_GraphicImplContext ctx, jegl_shader* res)
+    bool bind_shader(je_graphic_impl_context_t ctx, je_gl_shader_t* res)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         auto* shader_instance = static_cast<metal_shader*>(res->m_handle.m_ptr);
@@ -1538,7 +1538,7 @@ namespace jeecs::graphic::api::metal
         return true;
     }
     template<typename TexT>
-    void bind_texture(je_GraphicImplContext ctx, TexT* res, size_t pass)
+    void bind_texture(je_graphic_impl_context_t ctx, TexT* res, size_t pass)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         auto* texture_instance = static_cast<metal_texture*>(res->m_handle.m_ptr);
@@ -1550,7 +1550,7 @@ namespace jeecs::graphic::api::metal
             void set_framebuffer_clear(
         jegl_metal_context* metal_context,
         metal_framebuffer* fb_maynull,
-        const jegl_frame_buffer_clear_operation* clear_operations)
+        const je_gl_frame_buffer_clear_operation_t* clear_operations)
     {
         uint64_t color_attachment_cleared_mask = 0;
         bool depth_cleared = false;
@@ -1561,7 +1561,7 @@ namespace jeecs::graphic::api::metal
         {
             switch (clear_operations->m_type)
             {
-            case jegl_frame_buffer_clear_operation::clear_type::COLOR:
+            case je_gl_frame_buffer_clear_type_t::COLOR:
             {
                 color_attachment_cleared_mask
                     |= (1ull << clear_operations->m_color.m_color_attachment_idx);
@@ -1601,7 +1601,7 @@ namespace jeecs::graphic::api::metal
                 }
                 break;
             }
-            case jegl_frame_buffer_clear_operation::clear_type::DEPTH:
+            case je_gl_frame_buffer_clear_type_t::DEPTH:
             {
                 MTL::RenderPassDepthAttachmentDescriptor* depth_attachment_desc = nullptr;
                 depth_cleared = true;
@@ -1688,10 +1688,10 @@ namespace jeecs::graphic::api::metal
     }
 
     void bind_framebuffer(
-        je_GraphicImplContext ctx,
-        jegl_frame_buffer* fb,
+        je_graphic_impl_context_t ctx,
+        je_gl_frame_buffer_t* fb,
         const int32_t(*viewport_xywh)[4],
-        const jegl_frame_buffer_clear_operation* clear_operations)
+        const je_gl_frame_buffer_clear_operation_t* clear_operations)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
 
@@ -1796,8 +1796,8 @@ namespace jeecs::graphic::api::metal
         if (!states.m_pending_pass)
             return;
 
-        jegl_frame_buffer_clear_operation clear_ops[9];
-        jegl_frame_buffer_clear_operation* first_clear = nullptr;
+        je_gl_frame_buffer_clear_operation_t clear_ops[9];
+        je_gl_frame_buffer_clear_operation_t* first_clear = nullptr;
         size_t clear_count = 0;
 
         for (size_t i = 0; i < 8; ++i)
@@ -1806,8 +1806,8 @@ namespace jeecs::graphic::api::metal
                 continue;
 
             auto& op = clear_ops[clear_count++];
-            op.m_type = jegl_frame_buffer_clear_operation::clear_type::COLOR;
-            op.m_color = jegl_frame_buffer_clear_operation::clear_color_attachment{
+            op.m_type = je_gl_frame_buffer_clear_type_t::COLOR;
+            op.m_color = je_gl_frame_buffer_clear_color_attachment_t{
                 i,
                 {
                     states.m_pending_color_clears[i][0],
@@ -1822,8 +1822,8 @@ namespace jeecs::graphic::api::metal
         if (states.m_pending_depth_clear)
         {
             auto& op = clear_ops[clear_count++];
-            op.m_type = jegl_frame_buffer_clear_operation::clear_type::DEPTH;
-            op.m_depth = jegl_frame_buffer_clear_operation::clear_depth_attachment{
+            op.m_type = je_gl_frame_buffer_clear_type_t::DEPTH;
+            op.m_depth = je_gl_frame_buffer_clear_depth_attachment_t{
                 states.m_pending_depth_clear_value };
             op.m_next = first_clear;
             first_clear = &op;
@@ -1861,14 +1861,14 @@ namespace jeecs::graphic::api::metal
         states.m_pending_pass = false;
     }
 
-    void render_pipeline_init(je_GraphicImplContext, jegl_pipeline*)
+    void render_pipeline_init(je_graphic_impl_context_t, je_gl_pipeline_t*)
     {}
 
-    void render_pipeline_close(je_GraphicImplContext, jegl_pipeline*)
+    void render_pipeline_close(je_graphic_impl_context_t, je_gl_pipeline_t*)
     {}
 
     void render_pipeline_bind(
-        je_GraphicImplContext ctx, jegl_pipeline* pipeline)
+        je_graphic_impl_context_t ctx, je_gl_pipeline_t* pipeline)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         ensure_render_encoder(metal_context);
@@ -1876,26 +1876,26 @@ namespace jeecs::graphic::api::metal
         bind_shader(ctx, pipeline->m_shader);
     }
 
-    void render_sampler_init(je_GraphicImplContext ctx, jegl_sampler* sampler)
+    void render_sampler_init(je_graphic_impl_context_t ctx, je_gl_sampler_t* sampler)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         auto* native = new jegl_metal_render_sampler{ nullptr };
 
-        auto cvt_filter = [](jegl_filter filter) -> MTL::SamplerMinMagFilter
+        auto cvt_filter = [](je_gl_filter_t filter) -> MTL::SamplerMinMagFilter
         {
-            return filter == jegl_filter::LINEAR
+            return filter == je_gl_filter_t::LINEAR
                 ? MTL::SamplerMinMagFilterLinear
                 : MTL::SamplerMinMagFilterNearest;
         };
-        auto cvt_wrap = [](jegl_wrap_mode wrap) -> MTL::SamplerAddressMode
+        auto cvt_wrap = [](je_gl_wrap_mode_t wrap) -> MTL::SamplerAddressMode
         {
             switch (wrap)
             {
-            case jegl_wrap_mode::CLAMP_TO_EDGE:
+            case je_gl_wrap_mode_t::CLAMP_TO_EDGE:
                 return MTL::SamplerAddressModeClampToEdge;
-            case jegl_wrap_mode::REPEAT:
+            case je_gl_wrap_mode_t::REPEAT:
                 return MTL::SamplerAddressModeRepeat;
-            case jegl_wrap_mode::MIRRORED_REPEAT:
+            case je_gl_wrap_mode_t::MIRRORED_REPEAT:
                 return MTL::SamplerAddressModeMirrorRepeat;
             default:
                 assert(false);
@@ -1918,7 +1918,7 @@ namespace jeecs::graphic::api::metal
         sampler->m_backend_ptr = native;
     }
 
-    void render_sampler_close(je_GraphicImplContext, jegl_sampler* sampler)
+    void render_sampler_close(je_graphic_impl_context_t, je_gl_sampler_t* sampler)
     {
         auto* native = static_cast<jegl_metal_render_sampler*>(
             sampler->m_backend_ptr);
@@ -1933,7 +1933,7 @@ namespace jeecs::graphic::api::metal
     }
 
     void render_sampler_bind(
-        je_GraphicImplContext ctx, uint32_t sampler_id, jegl_sampler* sampler)
+        je_graphic_impl_context_t ctx, uint32_t sampler_id, je_gl_sampler_t* sampler)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         auto* native = static_cast<jegl_metal_render_sampler*>(
@@ -1947,9 +1947,9 @@ namespace jeecs::graphic::api::metal
     }
 
     void render_begin_pass(
-        je_GraphicImplContext ctx,
-        /* OPTIONAL */ jegl_frame_buffer* target,
-        const jegl_viewport* viewport)
+        je_graphic_impl_context_t ctx,
+        /* OPTIONAL */ je_gl_frame_buffer_t* target,
+        const je_gl_viewport_t* viewport)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         auto& states = metal_context->m_render_states;
@@ -1973,7 +1973,7 @@ namespace jeecs::graphic::api::metal
     }
 
     void render_clear_color(
-        je_GraphicImplContext ctx, uint32_t attachment, const float rgba[4])
+        je_graphic_impl_context_t ctx, uint32_t attachment, const float rgba[4])
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         auto& states = metal_context->m_render_states;
@@ -1990,7 +1990,7 @@ namespace jeecs::graphic::api::metal
             states.m_pending_color_clears[attachment][i] = rgba[i];
     }
 
-    void render_clear_depth(je_GraphicImplContext ctx, float depth)
+    void render_clear_depth(je_graphic_impl_context_t ctx, float depth)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         auto& states = metal_context->m_render_states;
@@ -1999,13 +1999,13 @@ namespace jeecs::graphic::api::metal
         states.m_pending_depth_clear_value = depth;
     }
 
-    void render_end_pass(je_GraphicImplContext ctx)
+    void render_end_pass(je_graphic_impl_context_t ctx)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         ensure_render_encoder(metal_context);
     }
 
-    void render_bind_vertex(je_GraphicImplContext ctx, jegl_vertex* vertex)
+    void render_bind_vertex(je_graphic_impl_context_t ctx, je_gl_vertex_t* vertex)
     {
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
         ensure_render_encoder(metal_context);
@@ -2015,38 +2015,38 @@ namespace jeecs::graphic::api::metal
     }
 
     void render_bind_uniform_buffer(
-        je_GraphicImplContext ctx, jegl_uniform_buffer* uniform_buffer)
+        je_graphic_impl_context_t ctx, je_gl_uniform_buffer_t* uniform_buffer)
     {
         ensure_render_encoder(static_cast<jegl_metal_context*>(ctx));
         bind_uniform_buffer(ctx, uniform_buffer);
     }
 
     void render_bind_texture_2d(
-        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_2d* texture)
+        je_graphic_impl_context_t ctx, uint32_t pass, je_gl_texture_2d_t* texture)
     {
         ensure_render_encoder(static_cast<jegl_metal_context*>(ctx));
-        bind_texture<jegl_texture_2d>(ctx, texture, pass);
+        bind_texture<je_gl_texture_2d_t>(ctx, texture, pass);
     }
 
     void render_bind_texture_3d(
-        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_3d* texture)
+        je_graphic_impl_context_t ctx, uint32_t pass, je_gl_texture_3d_t* texture)
     {
         ensure_render_encoder(static_cast<jegl_metal_context*>(ctx));
-        bind_texture<jegl_texture_3d>(ctx, texture, pass);
+        bind_texture<je_gl_texture_3d_t>(ctx, texture, pass);
     }
 
     void render_bind_texture_array(
-        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_array* texture)
+        je_graphic_impl_context_t ctx, uint32_t pass, je_gl_texture_array_t* texture)
     {
         ensure_render_encoder(static_cast<jegl_metal_context*>(ctx));
-        bind_texture<jegl_texture_array>(ctx, texture, pass);
+        bind_texture<je_gl_texture_array_t>(ctx, texture, pass);
     }
 
     void render_bind_texture_cube(
-        je_GraphicImplContext ctx, uint32_t pass, jegl_texture_cube* texture)
+        je_graphic_impl_context_t ctx, uint32_t pass, je_gl_texture_cube_t* texture)
     {
         ensure_render_encoder(static_cast<jegl_metal_context*>(ctx));
-        bind_texture<jegl_texture_cube>(ctx, texture, pass);
+        bind_texture<je_gl_texture_cube_t>(ctx, texture, pass);
     }
 
     void render_prepare_uniform_block(
@@ -2068,7 +2068,7 @@ namespace jeecs::graphic::api::metal
 
         memcpy(shader->m_uniform_cpu_buffer, uniform_data, uniform_size);
 
-        _jegl_patch_ndc_scale(
+        patch_ndc_scale(
             shader->m_uniform_cpu_buffer, uniform_size,
             shader->m_ndc_scale_uniform_id,
             metal_context->m_render_states.m_current_target_framebuffer_may_null != nullptr);
@@ -2114,7 +2114,7 @@ namespace jeecs::graphic::api::metal
     }
 
     void render_draw_indexed(
-        je_GraphicImplContext ctx,
+        je_graphic_impl_context_t ctx,
         uint32_t index_count,
         uint32_t first_index,
         uint32_t instance_count,
@@ -2143,7 +2143,7 @@ namespace jeecs::graphic::api::metal
     }
 
     void render_draw(
-        je_GraphicImplContext ctx,
+        je_graphic_impl_context_t ctx,
         uint32_t vertex_count,
         uint32_t first_vertex,
         uint32_t instance_count,
@@ -2169,14 +2169,14 @@ namespace jeecs::graphic::api::metal
                 instance_count);
     }
 
-    void render_commit_begin(je_GraphicImplContext)
+    void render_commit_begin(je_graphic_impl_context_t)
     {}
 
-    void render_commit_end(je_GraphicImplContext)
+    void render_commit_end(je_graphic_impl_context_t)
     {}
 }
 
-void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_metal_apis(je_gl_graphic_api_t* write_to_apis)
 {
     using namespace jeecs::graphic::api::metal;
 
@@ -2188,11 +2188,11 @@ void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->update_draw_commit = commit_update;
 
     write_to_apis->shader_create_blob = create_shader_blob;
-    write_to_apis->texture_2d_create_blob = create_texture_blob<jegl_texture_2d>;
-    write_to_apis->texture_3d_create_blob = create_texture_blob<jegl_texture_3d>;
-    write_to_apis->texture_array_create_blob = create_texture_blob<jegl_texture_array>;
-    write_to_apis->texture_cube_create_blob = create_texture_blob<jegl_texture_cube>;
-    write_to_apis->texture_msaa_create_blob = create_texture_blob<jegl_texture_msaa>;
+    write_to_apis->texture_2d_create_blob = create_texture_blob<je_gl_texture_2d_t>;
+    write_to_apis->texture_3d_create_blob = create_texture_blob<je_gl_texture_3d_t>;
+    write_to_apis->texture_array_create_blob = create_texture_blob<je_gl_texture_array_t>;
+    write_to_apis->texture_cube_create_blob = create_texture_blob<je_gl_texture_cube_t>;
+    write_to_apis->texture_msaa_create_blob = create_texture_blob<je_gl_texture_msaa_t>;
     write_to_apis->vertex_create_blob = create_vertex_blob;
 
     write_to_apis->shader_close_blob = close_shader_blob;
@@ -2200,31 +2200,31 @@ void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
     write_to_apis->vertex_close_blob = close_vertex_blob;
 
     write_to_apis->shader_init = init_shader;
-    write_to_apis->texture_2d_init = init_texture<jegl_texture_2d>;
-    write_to_apis->texture_3d_init = init_texture<jegl_texture_3d>;
-    write_to_apis->texture_array_init = init_texture<jegl_texture_array>;
-    write_to_apis->texture_cube_init = init_texture<jegl_texture_cube>;
-    write_to_apis->texture_msaa_init = init_texture<jegl_texture_msaa>;
+    write_to_apis->texture_2d_init = init_texture<je_gl_texture_2d_t>;
+    write_to_apis->texture_3d_init = init_texture<je_gl_texture_3d_t>;
+    write_to_apis->texture_array_init = init_texture<je_gl_texture_array_t>;
+    write_to_apis->texture_cube_init = init_texture<je_gl_texture_cube_t>;
+    write_to_apis->texture_msaa_init = init_texture<je_gl_texture_msaa_t>;
     write_to_apis->vertex_init = init_vertex;
     write_to_apis->framebuffer_init = init_framebuffer;
     write_to_apis->ubuffer_init = init_ubuffer;
 
     write_to_apis->shader_update = update_shader;
-    write_to_apis->texture_2d_update = update_texture<jegl_texture_2d>;
-    write_to_apis->texture_3d_update = update_texture<jegl_texture_3d>;
-    write_to_apis->texture_array_update = update_texture<jegl_texture_array>;
-    write_to_apis->texture_cube_update = update_texture<jegl_texture_cube>;
-    write_to_apis->texture_msaa_update = update_texture<jegl_texture_msaa>;
+    write_to_apis->texture_2d_update = update_texture<je_gl_texture_2d_t>;
+    write_to_apis->texture_3d_update = update_texture<je_gl_texture_3d_t>;
+    write_to_apis->texture_array_update = update_texture<je_gl_texture_array_t>;
+    write_to_apis->texture_cube_update = update_texture<je_gl_texture_cube_t>;
+    write_to_apis->texture_msaa_update = update_texture<je_gl_texture_msaa_t>;
     write_to_apis->vertex_update = update_vertex;
     write_to_apis->framebuffer_update = update_framebuffer;
     write_to_apis->ubuffer_update = update_ubuffer;
 
     write_to_apis->shader_close = close_shader;
-    write_to_apis->texture_2d_close = close_texture<jegl_texture_2d>;
-    write_to_apis->texture_3d_close = close_texture<jegl_texture_3d>;
-    write_to_apis->texture_array_close = close_texture<jegl_texture_array>;
-    write_to_apis->texture_cube_close = close_texture<jegl_texture_cube>;
-    write_to_apis->texture_msaa_close = close_texture<jegl_texture_msaa>;
+    write_to_apis->texture_2d_close = close_texture<je_gl_texture_2d_t>;
+    write_to_apis->texture_3d_close = close_texture<je_gl_texture_3d_t>;
+    write_to_apis->texture_array_close = close_texture<je_gl_texture_array_t>;
+    write_to_apis->texture_cube_close = close_texture<je_gl_texture_cube_t>;
+    write_to_apis->texture_msaa_close = close_texture<je_gl_texture_msaa_t>;
     write_to_apis->vertex_close = close_vertex;
     write_to_apis->framebuffer_close = close_framebuffer;
     write_to_apis->ubuffer_close = close_ubuffer;
@@ -2257,7 +2257,7 @@ void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
 }
 
 #else
-void jegl_using_metal_apis(jegl_graphic_api* write_to_apis)
+void je_graphic_using_metal_apis(je_gl_graphic_api_t* write_to_apis)
 {
     jeecs::debug::logfatal("METAL not available.");
 }

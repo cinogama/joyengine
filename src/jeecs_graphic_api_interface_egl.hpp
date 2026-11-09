@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef JE_IMPL
-#error JE_IMPL must be defined, please check `jeecs_core_systems_and_components.cpp`
+#   define JE_IMPL
 #endif
 #include "jeecs.hpp"
 
@@ -93,7 +93,7 @@ namespace jeecs::graphic
         }
 
         virtual void create_interface(
-            const jegl_interface_config* config) override
+            const je_gl_interface_config_t* config) override
         {
             auto* data = static_cast<_jegl_window_android_app*>(config->m_userdata);
             assert(data != nullptr);
@@ -286,7 +286,7 @@ namespace jeecs::graphic
                 _m_recorded_width = width;
                 _m_recorded_height = height;
 
-                je_io_update_window_size(static_cast<int>(width), static_cast<int>(height));
+                je_io_window_size_update(static_cast<int>(width), static_cast<int>(height));
 
                 _window_size_resized = true;
             }

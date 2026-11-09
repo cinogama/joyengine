@@ -240,10 +240,7 @@ if (JE4_STATIC_LINK_MODULE_AND_PKGS)
                 endif()
 
                 list(APPEND JE4_STATIC_LINKED_PKG_AND_MODULE_LIST ${pkg_name})
-                
-                if ("${pkg_name}" STREQUAL "image")
-                    target_compile_definitions(joyengine_configs INTERFACE -DJE4_STB_IMAGE_STATIC_IMPLED=1)
-                endif ()
+
             else()
                 message(FATAL_ERROR "Target '${pkg_name}' not exist.")
             endif()

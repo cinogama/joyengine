@@ -1,5 +1,5 @@
 // 帧动画缓存生成器：把 .je4animation TOML 源转换为引擎可读的
-// 二进制缓存文档（jeecs_cache_binary_* 格式）。
+// 二进制缓存文档（je_cache_binary_* 格式）。
 //
 // 由引擎在 .je4cache 缺失或失效时加载，调用 generate：
 //   cache  —— C 侧创建好的缓存写入器（文件头已写入）
@@ -15,7 +15,7 @@
 //               "type" -> INT32, "value" -> 值
 //           "uniforms" -> LIST of DOCUMENT
 //               "name" -> STRING, "type" -> INT32, "value" -> 值
-// 值类型标记与 jeecs.hpp 的 je_animation_value_type 一致：
+// 值类型标记与 jeecs.hpp 的 je_animation_value_type_t 一致：
 //   0 INT / 1 FLOAT / 2 VEC2 / 3 VEC3 / 4 VEC4 / 5 QUAT4
 // QUAT4 在 TOML 中保存欧拉角（度）[ex, ey, ez]，这里换算成四元数
 // (x, y, z, w) 写入缓存。

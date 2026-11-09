@@ -38,11 +38,11 @@ printf("500ms later...\n");
 ## 注意事项
 
 - 实际休眠时间可能略有误差，取决于系统调度
-- 休眠时间会受到 `je_clock_set_sleep_suppression` 设置的影响
+- 休眠时间会受到 `je_clock_sleep_suppression_set` 设置的影响
 - 不要在主逻辑线程中使用长时间休眠
 
 ## 相关接口
 
 - [je_clock_sleep_until](je_clock_sleep_until.md) - 休眠直到指定时间
-- [je_clock_get_sleep_suppression](je_clock_get_sleep_suppression.md) - 获取提前唤醒间隔
-- [je_clock_set_sleep_suppression](je_clock_set_sleep_suppression.md) - 设置提前唤醒间隔
+- [je_clock_sleep_suppression_get](je_clock_sleep_suppression_get.md) - 获取提前唤醒间隔
+- [je_clock_sleep_suppression_set](je_clock_sleep_suppression_set.md) - 设置提前唤醒间隔

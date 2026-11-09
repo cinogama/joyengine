@@ -42,11 +42,11 @@ if (je_io_gamepad_is_active(gamepad, nullptr)) {
 
 ## 注意事项
 
-- 虚拟手柄和输入设备的对应关系通过 `je_io_create_gamepad` 构建
+- 虚拟手柄和输入设备的对应关系通过 `je_io_gamepad_create` 构建
 - 不一定是实际的物理游戏手柄，例如可以将键盘按键映射到虚拟手柄上
-- 当 `je_io_close_gamepad` 调用时，虚拟手柄实例会被销毁，此时此函数返回 false
+- 当 `je_io_gamepad_close` 调用时，虚拟手柄实例会被销毁，此时此函数返回 false
 
 ## 相关接口
 
-- [je_io_create_gamepad](je_io_create_gamepad.md) - 创建虚拟手柄实例
-- [je_io_close_gamepad](je_io_close_gamepad.md) - 关闭虚拟手柄实例
+- [je_io_gamepad_create](je_io_gamepad_create.md) - 创建虚拟手柄实例
+- [je_io_gamepad_close](je_io_gamepad_close.md) - 关闭虚拟手柄实例
