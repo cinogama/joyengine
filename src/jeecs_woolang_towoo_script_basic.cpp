@@ -3,6 +3,7 @@
 #include "jeecs.hpp"
 #include "jeecs_basic_bootup.hpp"
 #include "jeecs_core_script_system.hpp"
+#include "jeecs_woolang_value.hpp"
 
 #include "wo.h"
 
@@ -21,6 +22,11 @@ using namespace jeecs::woolang_runtime::towoo;
 
 namespace jeecs::woolang_runtime::towoo
 {
+    namespace
+    {
+        thread_local game_system* current_script_game_system_instance = nullptr;
+    }
+
     /*
     TooWooo~
     toWoo JoyEngine generated wrap code for woolang.
@@ -345,7 +351,7 @@ namespace jeecs::woolang_runtime::towoo
 
         void update_step_work(vector<towoo_step_work>& works)
         {
-            script::current_script_game_system_instance = this;
+            current_script_game_system_instance = this;
 
             if (m_job_vm == nullptr)
                 return;
@@ -369,7 +375,7 @@ namespace jeecs::woolang_runtime::towoo
             if (aborted)
                 _drop();
 
-            script::current_script_game_system_instance = nullptr;
+            current_script_game_system_instance = nullptr;
         }
 
         woort_callstatus _invoke_lifecycle(
@@ -438,7 +444,7 @@ namespace jeecs::woolang_runtime::towoo
                 if (member->m_woovalue_init_may_null != nullptr)
                 {
                     auto* const val = launder(
-                        static_cast<script::woovalue*>(this_member));
+                        static_cast<PinValue*>(this_member));
 
                     woort_Value tmp;
                     const bool entry_tmp_gc_guard = woort_GC_sync_marking_lock();
@@ -2198,4 +2204,20 @@ WOORT_API woort_api wojeapi_towoo_camera_projection_get_view_proj_mat(void)
     }
 
     return woort_ret();
+}
+
+WOORT_API woort_api wojeapi_deltatime(void)
+{
+    if (current_script_game_system_instance == nullptr)
+        return woort_ret_panic("Cannot get deltatime from the outside of script game system.");
+
+    return woort_ret_real(current_script_game_system_instance->deltatime());
+}
+
+WOORT_API woort_api wojeapi_smooth_deltatime(void)
+{
+    if (current_script_game_system_instance == nullptr)
+        return woort_ret_panic("Cannot get smooth_deltatime from the outside of script game system.");
+
+    return woort_ret_real(current_script_game_system_instance->deltatimed());
 }

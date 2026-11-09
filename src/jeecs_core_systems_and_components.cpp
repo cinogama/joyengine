@@ -2,14 +2,13 @@
 #define JE_ENABLE_DEBUG_API
 #include "jeecs.hpp"
 #include "jeecs_basic_bootup.hpp"
-
+#include "jeecs_woolang_value.hpp"
 #include "jeecs_core_translation_system.hpp"
 #include "jeecs_core_graphic_system.hpp"
 #include "jeecs_core_frame_animation_system.hpp"
 #include "jeecs_core_particle_system.hpp"
 #include "jeecs_core_editor_components.hpp"
 #include "jeecs_core_physics_system.hpp"
-#include "jeecs_core_script_system.hpp"
 #include "jeecs_core_audio_system.hpp"
 #include "jeecs_core_input_system.hpp"
 #include "jeecs_core_tilemap_system.hpp"
@@ -27,9 +26,9 @@ namespace jeecs::core_components_and_systems
     {
         entry::module_entry(&core_type_guard);
 
-        // ===== 组件类型注册 =====
-        typing::register_type<script::woovalue>(&core_type_guard, nullptr);
+        typing::register_type<woolang_runtime::PinValue>(&core_type_guard, nullptr);
 
+        // ===== 组件类型注册 =====
         typing::register_type<Editor::Name>(&core_type_guard, "Editor::Name");
         typing::register_type<Editor::Prefab>(&core_type_guard, "Editor::Prefab");
         typing::register_type<Editor::EditorWalker>(&core_type_guard, "Editor::EditorWalker");
@@ -110,22 +109,6 @@ void je_debug_entity_uid_set(const je_game_entity_t* e, je_debug_eid_t uid)
 }
 
 // ===== Woolang API =====
-
-WOORT_API woort_api wojeapi_deltatime(void)
-{
-    if (script::current_script_game_system_instance == nullptr)
-        return woort_ret_panic("Cannot get deltatime from the outside of script game system.");
-
-    return woort_ret_real(script::current_script_game_system_instance->deltatime());
-}
-
-WOORT_API woort_api wojeapi_smooth_deltatime(void)
-{
-    if (script::current_script_game_system_instance == nullptr)
-        return woort_ret_panic("Cannot get smooth_deltatime from the outside of script game system.");
-
-    return woort_ret_real(script::current_script_game_system_instance->deltatimed());
-}
 
 WOORT_API woort_api wojeapi_entity_get_prefab_path(void)
 {
