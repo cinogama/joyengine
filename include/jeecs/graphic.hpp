@@ -1786,8 +1786,10 @@ je_graphic_vertex_load [基本接口]
         顶点坐标        3 * f32
         UV映射坐标      2 * f32
         法线方向        3 * f32
+        切线方向        3 * f32（由引擎按面累计计算，不使用模型自带切线）
         骨骼索引        4 * i32
         骨骼权重        4 * f32
+        （每顶点共 76 字节）
     * 对于绑定骨骼数量小于4的顶点，保证空余位置的骨骼索引被 0 填充，权重为 0.f
     * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
         用计数，使用 je_graphic_vertex_close 可减少引用计数；当资源的引用计数变为 0 时，
@@ -2782,15 +2784,20 @@ namespace jeecs
                 auto* dst_pixels = new_texture->resource()->m_pixels;
                 auto* src_pixels = src->resource()->m_pixels;
 
-                size_t src_w = std::min(w, src->resource()->m_width);
-                size_t src_h = std::min(h, src->resource()->m_height);
+                const size_t src_tex_w = src->resource()->m_width;
+                const size_t src_tex_h = src->resource()->m_height;
 
-                for (size_t iy = 0; iy < src_h; ++iy)
+                // 与源纹理边界求交后的实际可拷贝范围（裁剪矩形可能越出源纹理）
+                const size_t copy_w = std::min(w, src_tex_w > x ? src_tex_w - x : 0);
+                const size_t copy_h = std::min(h, src_tex_h > y ? src_tex_h - y : 0);
+
+                for (size_t iy = 0; iy < copy_h; ++iy)
                 {
+                    // 源侧行跨度必须按源纹理宽度计算，而不是裁剪宽度
                     memcpy(
                         dst_pixels + iy * w * color_depth,
-                        src_pixels + (x + (y + iy) * src_w) * color_depth,
-                        src_w * color_depth);
+                        src_pixels + (x + (y + iy) * src_tex_w) * color_depth,
+                        copy_w * color_depth);
                 }
 #endif
                 return basic::resource<texture2d>(new_texture);

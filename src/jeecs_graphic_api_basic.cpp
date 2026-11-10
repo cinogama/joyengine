@@ -19,6 +19,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <assimp/matrix3x3.h>
 
 #include <assimp/IOSystem.hpp>
 #include <assimp/IOStream.hpp>
@@ -2608,13 +2609,15 @@ je_gl_vertex_t* _jegl_create_vertex_impl(
     for (size_t i = 0; i < format_count; ++i)
         data_size_per_point += format[i].m_count * 4; /* Both int32 & float32 is 4 byte*/
 
-    auto data_group_count = data_length / data_size_per_point;
-
+    // 先检查每顶点字节数是否为 0，再做除法，避免空 formats 时除零
     if (data_size_per_point == 0)
     {
         debug::logerr("Bad format, point donot contain any data.");
         return nullptr;
     }
+
+    auto data_group_count = data_length / data_size_per_point;
+
     if (data_group_count == 0)
     {
         debug::logerr("Vertex data donot contain any completed point.");
@@ -2719,8 +2722,11 @@ je_gl_vertex_t* _jegl_create_vertex_impl(
         return nullptr;
     }
 
-    stack<aiNode*> m_node_stack;
-    m_node_stack.push(scene->mRootNode);
+    // 节点变换随遍历累计：所有子网格合并进同一个顶点缓冲时，
+    // 必须把各自节点的变换烘焙进顶点数据，否则子网格位置错误。
+    // Assimp 采用行向量约定（v' = v * M），子节点累计矩阵 = 自身变换 * 父累计矩阵。
+    stack<pair<aiNode*, aiMatrix4x4>> m_node_stack;
+    m_node_stack.push({ scene->mRootNode, scene->mRootNode->mTransformation });
 
     struct jegl_standard_model_vertex_t
     {
@@ -2749,11 +2755,16 @@ je_gl_vertex_t* _jegl_create_vertex_impl(
 
     while (!m_node_stack.empty())
     {
-        auto* current_node = m_node_stack.top();
+        auto node_info = m_node_stack.top();
         m_node_stack.pop();
 
+        auto* current_node = node_info.first;
+        const aiMatrix4x4& node_transform = node_info.second;
+
         for (size_t i = 0; i < current_node->mNumChildren; ++i)
-            m_node_stack.push(current_node->mChildren[i]);
+            m_node_stack.push({
+                current_node->mChildren[i],
+                current_node->mChildren[i]->mTransformation * node_transform });
 
         size_t bone_counter = 0;
 
@@ -2765,10 +2776,12 @@ je_gl_vertex_t* _jegl_create_vertex_impl(
             const bool has_texcrood_0 = mesh->HasTextureCoords(0);
             const bool has_normals = mesh->HasNormals();
 
+            // 法线只应用线性部分（不含平移）；随后单位化以应对非等比缩放
+            const aiMatrix3x3 normal_transform(node_transform);
+
             for (size_t index = 0; index < mesh->mNumVertices; ++index)
             {
-                auto& vertex = mesh->mVertices[index];
-                auto& normal = mesh->mNormals[index];
+                const aiVector3D vertex = node_transform * mesh->mVertices[index];
 
                 jegl_standard_model_vertex_t model_vertex = {};
                 model_vertex.m_vertex = math::vec3(
@@ -2784,10 +2797,11 @@ je_gl_vertex_t* _jegl_create_vertex_impl(
                 }
                 if (has_normals)
                 {
+                    const aiVector3D normal = normal_transform * mesh->mNormals[index];
                     model_vertex.m_normal = math::vec3(
                         normal.x,
                         normal.y,
-                        normal.z);
+                        normal.z).unit();
                 }
 
                 model_vertex.m_bone_id[0] = -1;

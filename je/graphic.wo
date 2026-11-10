@@ -208,7 +208,7 @@ namespace je
             {
                 if (val is int)
                     _set_uniform_int(self, name, val);
-                if (val is (int, int))
+                else if (val is (int, int))
                     _set_uniform_int2(self, name, val...);
                 else if (val is (int, int, int))
                     _set_uniform_int3(self, name, val...);
