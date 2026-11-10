@@ -166,20 +166,35 @@ namespace jeecs::woolang_runtime::towoo
 
             if (ctype->m_member_types != nullptr)
             {
-                woort_set_struct(writeval, ctype->m_member_types->m_member_count + 1);
+                // 与 _generate_component_decl 一致：没有脚本解析器的成员不会出现在
+                // 生成的脚本类型里，这里也必须跳过，否则后续成员的槽位下标会与
+                // 脚本侧声明的字段错位（读到错误成员的数据）。
+                uint16_t exposed_member_count = 0;
+                for (auto* counted = ctype->m_member_types->m_members;
+                    counted != nullptr;
+                    counted = counted->m_next_member)
+                {
+                    if (typing::get_script_parser(counted->m_member_type) != nullptr)
+                        ++exposed_member_count;
+                }
+
+                woort_set_struct(writeval, exposed_member_count + 1);
 
                 uint16_t member_idx = 0;
                 auto* member_tinfo = ctype->m_member_types->m_members;
                 while (member_tinfo != nullptr)
                 {
-                    woort_set_pointer(tmpval,
-                        static_cast<void*>(
-                            static_cast<char*>(component)
-                            + member_tinfo->m_member_offset));
+                    if (typing::get_script_parser(member_tinfo->m_member_type) != nullptr)
+                    {
+                        woort_set_pointer(tmpval,
+                            static_cast<void*>(
+                                static_cast<char*>(component)
+                                + member_tinfo->m_member_offset));
 
-                    woort_struct_set(writeval, member_idx + 1, tmpval);
+                        woort_struct_set(writeval, member_idx + 1, tmpval);
 
-                    ++member_idx;
+                        ++member_idx;
+                    }
                     member_tinfo = member_tinfo->m_next_member;
                 }
             }
@@ -2308,7 +2323,7 @@ WOORT_API woort_api wojeapi_smooth_deltatime(void)
     if (current_script_game_system_instance == nullptr)
         return woort_ret_panic("Cannot get smooth_deltatime from the outside of script game system.");
 
-    return woort_ret_real(current_script_game_system_instance->deltatimed());
+    return woort_ret_real(current_script_game_system_instance->smooth_deltatimed());
 }
 
 // ======================================================================

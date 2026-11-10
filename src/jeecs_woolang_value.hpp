@@ -18,8 +18,8 @@ namespace jeecs::woolang_runtime
         PinValue& operator=(const PinValue& val);
         PinValue& operator=(PinValue&& val);
 
-        const char* JEScriptTypeName();
-        const char* JEScriptTypeDeclare();
+        static const char* JEScriptTypeName();
+        static const char* JEScriptTypeDeclare();
         void JEParseFromScriptType(woort_value v);
         void JEParseToScriptType(woort_value v) const;
     };
