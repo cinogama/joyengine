@@ -250,13 +250,15 @@ if (JE4_ENABLE_OPENGL330_GAPI OR
     endif()
 endif()
 
-set (jeecs_core_sources 
+file (GLOB_RECURSE jeecs_public_headers "${CMAKE_CURRENT_SOURCE_DIR}/../include/jeecs/*.hpp")
+
+set (jeecs_core_sources
     ${joyecs_srcs_cpp}
-    ${joyecs_srcs_hpp} 
-    ${imgui_srcs} 
+    ${joyecs_srcs_hpp}
+    ${imgui_srcs}
     ${imgui_node_editor_srcs}
     ${imgui_code_editor_srcs}
-    "../include/jeecs.hpp")
+    ${jeecs_public_headers})
 
 if (MSVC)
     list(APPEND jeecs_core_sources resources.rc)

@@ -1,5 +1,6 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/prefix.hpp"
 
 #include "jeecs_basic_file.hpp"
 #include "jeecs_basic_bootup.hpp"

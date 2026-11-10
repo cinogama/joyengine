@@ -1,5 +1,7 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/graphic.hpp"
 
 #define STB_TRUETYPE_IMPLEMENTATION // force following include to generate implementation
 #include "stb_truetype.h"

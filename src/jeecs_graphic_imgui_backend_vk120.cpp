@@ -1,5 +1,7 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/gui.hpp"
+#include "jeecs/prefix.hpp"
 
 #if defined(JE_ENABLE_VK120_GAPI)
 #include "jeecs_graphic_imgui_backend_api.hpp"

@@ -15,7 +15,14 @@
 #ifndef JE_ENABLE_DEBUG_API
 #   define JE_ENABLE_DEBUG_API
 #endif
-#include "jeecs.hpp"
+#include "jeecs/basic.hpp"
+#include "jeecs/cache.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/math.hpp"
+#include "jeecs/tilemap.hpp"
 
 #include <vector>
 #include <map>

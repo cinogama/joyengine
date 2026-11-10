@@ -1,6 +1,8 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.hpp"
+#include "jeecs/audio.hpp"
+#include "jeecs/basic.hpp"
+#include "jeecs/prefix.hpp"
 
 #include "wo.h"
 

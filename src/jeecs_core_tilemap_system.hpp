@@ -3,7 +3,9 @@
 #ifndef JE_IMPL
 #   define JE_IMPL
 #endif
-#include "jeecs.hpp"
+#include "jeecs/components.hpp"
+#include "jeecs/ecs.hpp"
+#include "jeecs/game.hpp"
 #include "jeecs_core_tilemap_model.hpp"
 
 #include <vector>

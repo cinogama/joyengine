@@ -1,6 +1,14 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.hpp"
+#include "jeecs/cache.hpp"
+#include "jeecs/core.hpp"
+#include "jeecs/entry.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/module.hpp"
+#include "jeecs/prefix.hpp"
+#include "jeecs/typing.hpp"
+#include "jeecs/version.hpp"
 #include "jeecs_basic_bootup.hpp"
 #include "jeecs_basic_cache_version.hpp"
 

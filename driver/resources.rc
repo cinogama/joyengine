@@ -1,8 +1,6 @@
 #pragma code_page(65001)
 
-#define JE_MSVC_RC_INCLUDE
-
-#include "jeecs.hpp"
+#include "jeecs/version.hpp"
 
 IDI_ICON ICON DISCARDABLE "../builtin/icon/icon.ico"
 
@@ -54,4 +52,3 @@ END
 
 #undef JE_VERSION_WRAP
 
-#undef WO_MSVC_RC_INCLUDE

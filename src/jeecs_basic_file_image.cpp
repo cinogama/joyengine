@@ -1,5 +1,6 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/logging.hpp"
 #include "jeecs_basic_file_fimg_archive.hpp"
 #include "jeecs_basic_file.hpp"
 

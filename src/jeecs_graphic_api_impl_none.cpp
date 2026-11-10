@@ -1,5 +1,7 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/logging.hpp"
 
 #include "jeecs_graphic_imgui_backend_api.hpp"
 

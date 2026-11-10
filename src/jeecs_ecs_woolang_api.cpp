@@ -1,6 +1,14 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.hpp"
+#include "jeecs/clock.hpp"
+#include "jeecs/components.hpp"
+#include "jeecs/core.hpp"
+#include "jeecs/debug.hpp"
+#include "jeecs/ecs.hpp"
+#include "jeecs/game.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/prefix.hpp"
+#include "jeecs/typing.hpp"
 
 #include "wo.h"
 

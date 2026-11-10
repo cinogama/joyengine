@@ -1,5 +1,11 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/basic.hpp"
+#include "jeecs/components.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/math.hpp"
+#include "jeecs/prefix.hpp"
+#include "jeecs/tilemap.hpp"
 #include "jeecs_core_tilemap_model.hpp"
 
 #include <vector>

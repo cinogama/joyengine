@@ -1,5 +1,14 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/basic.hpp"
+#include "jeecs/components.hpp"
+#include "jeecs/game.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/input.hpp"
+#include "jeecs/io.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/math.hpp"
+#include "jeecs/prefix.hpp"
 #include "jeecs_core_graphic_system.hpp"
 #include "jeecs_core_render_helpers.hpp"
 

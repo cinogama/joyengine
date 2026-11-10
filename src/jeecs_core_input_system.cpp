@@ -1,5 +1,9 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/components.hpp"
+#include "jeecs/game.hpp"
+#include "jeecs/input.hpp"
+#include "jeecs/io.hpp"
+#include "jeecs/prefix.hpp"
 #include "jeecs_core_input_system.hpp"
 
 namespace jeecs::io

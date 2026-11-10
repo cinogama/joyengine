@@ -3,7 +3,7 @@
 #ifndef JE_IMPL
 #   define JE_IMPL
 #endif
-#include "jeecs.hpp"
+#include "jeecs/game.hpp"
 
 namespace jeecs::audio
 {

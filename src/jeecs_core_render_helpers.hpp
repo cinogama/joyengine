@@ -2,12 +2,12 @@
 
 // Private helper shared by the core system headers
 // (jeecs_core_graphic_system.hpp, jeecs_core_editor_system.hpp, ...).
-// Must be included AFTER "jeecs.hpp" and with JE_IMPL defined.
+// Must be included AFTER the public graphic headers and with JE_IMPL defined.
 
 #ifndef JE_IMPL
 #   define JE_IMPL
 #endif
-#include "jeecs.hpp"
+#include "jeecs/graphic.hpp"
 #include "jeecs_graphic_render_internal.hpp"
 
 namespace jeecs

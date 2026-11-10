@@ -3,12 +3,13 @@
 // Private definitions shared by the render-API recorder
 // (jeecs_graphic_cmd.cpp), the resource lifetime layer
 // (jeecs_graphic_api_basic.cpp) and the backends.
-// Must be included after "jeecs.hpp" with JE_IMPL defined.
+// Must be included after the public graphic headers with JE_IMPL defined.
 
 #ifndef JE_IMPL
 #   define JE_IMPL
 #endif
-#include "jeecs.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/graphic.hpp"
 
 // Refcounted CPU-side pipeline description. The backend owns any native
 // pipeline object and stores it in m_backend_ptr.

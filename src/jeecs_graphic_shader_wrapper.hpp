@@ -3,7 +3,9 @@
 #ifndef JE_IMPL
 #define JE_IMPL
 #endif
-#include "jeecs.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/graphic.hpp"
 
 #include <functional>
 #include <variant>

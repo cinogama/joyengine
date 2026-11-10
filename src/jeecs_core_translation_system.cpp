@@ -1,5 +1,9 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/components.hpp"
+#include "jeecs/game.hpp"
+#include "jeecs/math.hpp"
+#include "jeecs/prefix.hpp"
+#include "jeecs/typing.hpp"
 #include "jeecs_core_translation_system.hpp"
 
 #include <list>

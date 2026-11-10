@@ -3,7 +3,13 @@
 
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.hpp"
+#include "jeecs/ecs.hpp"
+#include "jeecs/game.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/io.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/prefix.hpp"
+#include "jeecs/version.hpp"
 
 // 以下类型原位于 namespace jeecs 内，现作为 C ABI 不透明句柄 je_* 定义于全局作用域。
 

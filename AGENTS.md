@@ -5,7 +5,7 @@ JoyEngineECS (JoyECS) — an ECS-architecture game engine: C++20 core (`joyecs` 
 ## Layout
 
 - `src/` — engine core C++ (`jeecs_*.cpp/.hpp`); graphic API impls `jeecs_graphic_api_impl_{dx11,opengl3,vk120,metal,none}.cpp` with matching imgui backends; core systems in `jeecs_core_*_system.hpp`.
-- `include/jeecs.hpp` — the single large public header (~13.8k lines). All C-API (`JE_API`, `extern "C"`) declarations live here.
+- `include/jeecs/` — per-domain public headers (`version/prefix/core/logging/typing/ecs/clock/file/cache/animation/atomic/module/debug/graphic/gui/io/audio/tilemap` for the C API, `basic/game/math/graphic/components/ray/entry/input/engine` for the C++ layer; `graphic.hpp` holds both the C API and the C++ wrappers of the graphic domain). All C-API (`JE_API`, `extern "C"`) declarations live there; `include/jeecs.hpp` is only an `#error` migration stub. Consumers include the specific headers they need — do not re-unify them into one umbrella header.
 - `driver/` — `jedriver` executable entry (`main.cpp` → `jeecs::game_engine_context::loop()`).
 - `je/` — engine-side Woolang runtime scripts (typeinfo/ECS/gui/towoo bindings; `extern("libjoyecs", "func")` binds C-API into Woolang).
 - `builtin/` — built-in Woolang content shipped with the engine, including the whole editor (`builtin/editor/main.wo`).
@@ -37,7 +37,7 @@ There is no unit-test infrastructure; `script/prebuild/test/test_prebuild.wo` on
 
 ## Architecture rules
 
-- The engine core interacts with the outside only through the C-API to avoid compile firewalls — everything else is a wrapper over it. New engine functionality exposed externally must be a `JE_API` function in `include/jeecs.hpp`, not a C++ class API.
+- The engine core interacts with the outside only through the C-API to avoid compile firewalls — everything else is a wrapper over it. New engine functionality exposed externally must be a `JE_API` function in the matching `include/jeecs/<domain>.hpp`, not a C++ class API.
 - C-API naming: `je_<domain>_<subject...>_<action>` — domain first, subject path broad→small, action last (e.g. `je_cache_file_load`, `je_tilemap_layer_texture_get`). Pure noun accessors keep their noun form (`je_tilemap_layer_z`); `je_gui_*`/`wojeapi_*` are the Woolang binding layer and are not covered by this convention.
 - C-API type naming: canonical declarations are `je_<domain>_<subject...>_t` (e.g. `je_game_entity_t`, `je_gl_shader_t`); every canonical type also has a PascalCase alias `je_<DomainSubject>` (e.g. `je_GameEntity`, `je_GlShader`). Named nested types are declared at global scope, never inside another type; split-out unscoped enums prefix their enumerators with `JE_<DOMAIN>_...` (e.g. `JE_GL_TEXTURE_FORMAT_RGBA`).
 - Graphic work goes through the abstraction in `jeecs_graphic_api_interface.hpp`; a new backend means a new `jeecs_graphic_api_impl_*.cpp` plus an imgui backend file.
@@ -46,7 +46,7 @@ There is no unit-test infrastructure; `script/prebuild/test/test_prebuild.wo` on
 
 ## C/C++ style rules
 
-Hard rules for all C/C++ code (core, `include/jeecs.hpp`, `driver/`, `module/`, graphic API impls):
+Hard rules for all C/C++ code (core, `include/jeecs/`, `driver/`, `module/`, graphic API impls):
 
 1. **No default parameters.** Express optional behavior with overloads or separate functions instead.
 2. **Null-capable interfaces must be marked.** A parameter designed to accept null gets `/* OPTIONAL */` before its type: `void attach(/* OPTIONAL */ je_entity_t* parent);`. A return value that can be null is marked the same way: `/* OPTIONAL */ je_mesh_t* find_mesh(const char* name);`. If null is allowed only under special circumstances, add a comment explaining why.

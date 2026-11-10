@@ -1,6 +1,8 @@
 #define JE_IMPL
 #define WO_NEED_ANSI_CONTROL
-#include "jeecs.hpp"
+#include "jeecs/basic.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/prefix.hpp"
 #include "jeecs_basic_bootup.hpp"
 
 #include <atomic>

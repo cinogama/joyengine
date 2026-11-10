@@ -1,5 +1,11 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/animation.hpp"
+#include "jeecs/cache.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/prefix.hpp"
+#include "jeecs/tilemap.hpp"
 #include "jeecs_basic_bootup.hpp"
 #include "jeecs_basic_cache_version.hpp"
 

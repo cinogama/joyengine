@@ -1,5 +1,8 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/cache.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/prefix.hpp"
 #include "jeecs_basic_cache_version.hpp"
 
 #include "wo.h"

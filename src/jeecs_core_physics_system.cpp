@@ -1,5 +1,13 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/basic.hpp"
+#include "jeecs/components.hpp"
+#include "jeecs/ecs.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/game.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/math.hpp"
+#include "jeecs/prefix.hpp"
+#include "jeecs/typing.hpp"
 #include "jeecs_core_physics_system.hpp"
 
 #include "wo.h"

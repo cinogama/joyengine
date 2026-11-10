@@ -3,7 +3,7 @@
 #ifndef JE_IMPL
 #   define JE_IMPL
 #endif
-#include "jeecs.hpp"
+#include "jeecs/file.hpp"
 
 #include <cstddef>
 #include <cstdint>

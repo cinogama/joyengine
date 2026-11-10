@@ -3,7 +3,9 @@
 #ifndef JE_IMPL
 #define JE_IMPL
 #endif
-#include "jeecs.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/gui.hpp"
+#include "jeecs/prefix.hpp"
 
 // 当默认帧缓冲不支持硬件 sRGB 写入控制时，由后端在 ImGui 绘制结束后调用：
 // 使用 srgb_encode.shader 把 source_texture（本帧的线性离屏画面）编码后

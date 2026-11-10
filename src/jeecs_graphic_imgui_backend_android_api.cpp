@@ -1,5 +1,8 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/input.hpp"
+#include "jeecs/io.hpp"
+#include "jeecs/prefix.hpp"
 
 #if JE4_CURRENT_PLATFORM == JE4_PLATFORM_ANDROID
 #   include <imgui.h>

@@ -261,7 +261,7 @@ func generate_je_api_decls()=> result<void, string>
 
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.hpp"
+#include "jeecs/prefix.hpp"
 
 "@;
         for (let (_, funcs) : libfuncs)
@@ -316,7 +316,7 @@ func generate_je_static_module_decls()=> result<void, string>
 
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.hpp"
+#include "jeecs/prefix.hpp"
 
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
 extern "C"
@@ -391,7 +391,7 @@ func generate_je_3rd_pkg_decls(skip_process_and_socket: bool)=> result<void, str
 
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.hpp"
+#include "jeecs/prefix.hpp"
 
 #if JE4_STATIC_LINK_MODULE_AND_PKGS
 "@;

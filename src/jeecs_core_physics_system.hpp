@@ -3,7 +3,10 @@
 #ifndef JE_IMPL
 #   define JE_IMPL
 #endif
-#include "jeecs.hpp"
+#include "jeecs/basic.hpp"
+#include "jeecs/game.hpp"
+#include "jeecs/math.hpp"
+#include "jeecs/typing.hpp"
 
 #include <box2d/box2d.h>
 #include <array>

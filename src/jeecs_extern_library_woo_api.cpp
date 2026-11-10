@@ -2,7 +2,7 @@
 
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.hpp"
+#include "jeecs/prefix.hpp"
 #include "jeecs_basic_bootup.hpp"
 
 #ifdef JE_HAVE_EXTERN_LIB_WOO_API

@@ -1,5 +1,8 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/game.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/math.hpp"
+#include "jeecs/prefix.hpp"
 #include "jeecs_core_graphic_system.hpp"
 
 namespace jeecs::graphic

@@ -3,12 +3,16 @@
 // ImGui 模块内部共享状态：声明于此处，定义位于
 // jeecs_graphic_imgui_basic_impl.cpp（后端实现），
 // 由后端函数与 Woolang 绑定（jeecs_gui_woolang_api.cpp）共同读写。
-// Must be included after "jeecs.hpp" with JE_IMPL defined.
+// Must be included after the public gui/graphic headers with JE_IMPL defined.
 
 #ifndef JE_IMPL
 #   define JE_IMPL
 #endif
-#include "jeecs.hpp"
+#include "jeecs/basic.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/gui.hpp"
+#include "jeecs/prefix.hpp"
 
 #include <imgui.h>
 

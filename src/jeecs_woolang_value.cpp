@@ -1,5 +1,5 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/prefix.hpp"
 #include "jeecs_woolang_value.hpp"
 
 namespace jeecs::woolang_runtime

@@ -6,7 +6,10 @@
  * JoyECS is a interesting ecs-impl.
  *
  */
-#include "jeecs.hpp"
+#include "jeecs/engine.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/io.hpp"
+#include "jeecs/prefix.hpp"
 
 using namespace jeecs;
 

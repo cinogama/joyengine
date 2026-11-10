@@ -6,7 +6,10 @@
 #ifndef JE_ENABLE_DEBUG_API
 #   define JE_ENABLE_DEBUG_API
 #endif
-#include "jeecs.hpp"
+#include "jeecs/basic.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/prefix.hpp"
+#include "jeecs/typing.hpp"
 #include "jeecs_core_render_helpers.hpp"
 
 #include <optional>

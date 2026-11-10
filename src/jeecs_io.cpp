@@ -1,5 +1,9 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/clock.hpp"
+#include "jeecs/io.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/math.hpp"
+#include "jeecs/typing.hpp"
 
 #include <optional>
 #include <list>

@@ -1,6 +1,8 @@
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.hpp"
+#include "jeecs/cache.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/prefix.hpp"
 
 #include "wo.h"
 
@@ -10,7 +12,6 @@
 #include <vector>
 
 using namespace std;
-using namespace jeecs;
 
 // File reading & cache
 WOORT_API woort_api wojeapi_read_file_all(void)

@@ -1,5 +1,8 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/audio.hpp"
+#include "jeecs/components.hpp"
+#include "jeecs/game.hpp"
+#include "jeecs/prefix.hpp"
 #include "jeecs_core_audio_system.hpp"
 
 namespace jeecs::audio

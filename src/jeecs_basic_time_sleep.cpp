@@ -1,5 +1,6 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/clock.hpp"
+#include "jeecs/prefix.hpp"
 #include "jeecs_basic_bootup.hpp"
 
 #include <chrono>

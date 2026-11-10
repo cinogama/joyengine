@@ -5,7 +5,7 @@
 *
 */
 
-#include "jeecs.hpp"
+#include "jeecs/engine.hpp"
 
 extern "C"
 {

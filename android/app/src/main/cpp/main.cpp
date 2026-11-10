@@ -3,7 +3,14 @@
 #include <game-activity/GameActivity.cpp>
 #include <game-text-input/gametextinput.cpp>
 
-#include "jeecs.hpp"
+#include "jeecs/clock.hpp"
+#include "jeecs/engine.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/io.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/prefix.hpp"
 
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>

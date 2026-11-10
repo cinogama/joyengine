@@ -294,7 +294,8 @@ if (MSVC)
     list(APPEND jedriver_src driver/resources.rc)
 endif()
 
-add_executable(jedriver ${jedriver_src} "include/jeecs.hpp")
+file(GLOB_RECURSE jedriver_public_headers "${CMAKE_CURRENT_SOURCE_DIR}/include/jeecs/*.hpp")
+add_executable(jedriver ${jedriver_src} ${jedriver_public_headers})
 
 # No command line console for jedriver, it is a GUI application.
 if (NOT JE4_ENABLE_WIN32_CONSOLE)

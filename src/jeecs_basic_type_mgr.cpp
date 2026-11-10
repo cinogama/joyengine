@@ -4,7 +4,13 @@
 
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs.hpp"
+#include "jeecs/atomic.hpp"
+#include "jeecs/basic.hpp"
+#include "jeecs/core.hpp"
+#include "jeecs/debug.hpp"
+#include "jeecs/logging.hpp"
+#include "jeecs/prefix.hpp"
+#include "jeecs/typing.hpp"
 
 #include <shared_mutex>
 #include <vector>

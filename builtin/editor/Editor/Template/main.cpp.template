@@ -1,6 +1,7 @@
 #define WOODYN_IMPL
 
-#include "jeecs.hpp"
+#include "jeecs/typing.hpp"
+#include "jeecs/entry.hpp"
 #include "loader.hpp"
 
 static jeecs::typing::type_unregister_guard* _module_guard;

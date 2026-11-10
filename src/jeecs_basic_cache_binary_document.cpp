@@ -1,5 +1,7 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/cache.hpp"
+#include "jeecs/file.hpp"
+#include "jeecs/logging.hpp"
 
 // A value is stored as [1 byte type tag][payload]. Lists and documents are
 // terminated by JE_CACHE_BINARY_VALUE_END; strings and buffers are prefixed by

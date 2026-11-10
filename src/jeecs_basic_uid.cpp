@@ -1,5 +1,6 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/clock.hpp"
+#include "jeecs/typing.hpp"
 
 #include <atomic>
 #include <random>

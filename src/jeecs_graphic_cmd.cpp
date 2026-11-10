@@ -1,5 +1,7 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/prefix.hpp"
 #include "jeecs_graphic_render_internal.hpp"
 
 #include <algorithm>

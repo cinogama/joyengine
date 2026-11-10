@@ -1,5 +1,6 @@
 #define JE_IMPL
-#include "jeecs.hpp"
+#include "jeecs/graphic.hpp"
+#include "jeecs/gui.hpp"
 
 #ifdef JE_ENABLE_DX11_GAPI
 #include "jeecs_graphic_imgui_backend_api.hpp"
