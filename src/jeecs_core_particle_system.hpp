@@ -29,13 +29,21 @@ namespace jeecs::particle
         摄像机自动正确；
       * 模拟空间：世界空间下粒子位置存于世界坐标，构建网格时经发射器
         逆变换转回局部（发射器移动不携带已发射粒子）；局部空间下粒子
-        直接存于发射器局部坐标（整体随发射器刚体运动），此时 direction
-        与 gravity 按发射器局部坐标系解释。
-    运行相位：Update（在物理与渲染之前完成数据构建）。
+        直接存于发射器局部坐标（整体随发射器刚体运动），gravity 按发射
+        器局部坐标系解释；direction 始终先按发射器朝向旋转一次，局部
+        空间下渲染时随实体变换再应用一次（即相对发射器局部坐标被旋转
+        两次，为既有行为）。
+    运行相位：GraphicUpdate。
     */
     struct ParticleSystem : public game_system
     {
         // ===== 每发射器粒子池（SoA，存于模拟坐标系） =====
+
+        // 粒子池键：chunk 指针 + chunk 内槽位号。仅用槽位号会在跨 chunk 时
+        // 冲突（不同 chunk 的同槽位发射器会共用同一个粒子池，数据互相覆盖）。
+        // 两个不同 chunk 对象的地址差 ≥ sizeof(arch_chunk) > 槽位号上限，
+        // 因此二者相加不会产生重叠键。
+        using pool_key_t = uint64_t;
         struct particle_pool
         {
             std::vector<float> pos_x, pos_y, pos_z;
@@ -62,8 +70,8 @@ namespace jeecs::particle
             void resize(size_t new_capacity);
         };
 
-        std::unordered_map<uint32_t, particle_pool> _m_pools;
-        std::vector<uint32_t> _m_alive_emitter_ids;
+        std::unordered_map<pool_key_t, particle_pool> _m_pools;
+        std::vector<pool_key_t> _m_alive_emitter_ids;
 
         ParticleSystem(game_world w);
 

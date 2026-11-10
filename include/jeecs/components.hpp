@@ -97,9 +97,11 @@ namespace jeecs
             }
             void set_global_rotation(const math::quat& _rot, LocalRotation* rot)
             {
-
+                // world = parent * local ⇒ local = parent⁻¹ * world
+                //（须左乘 parent⁻¹，与 set_global_position 同一模式；
+                //  右乘仅在旋转可交换时偶然等价）
                 if (rot)
-                    rot->rot = _rot * get_parent_rotation(rot).inverse();
+                    rot->rot = get_parent_rotation(rot).inverse() * _rot;
                 world_rotation = _rot;
             }
             void set_global_position(const math::vec3& _pos, LocalPosition* pos, const LocalRotation* rot)
@@ -571,12 +573,13 @@ namespace jeecs
             basic::string content;
 
             // 字体文件资源；未指定时不渲染文本。
-            // 文本由渲染管线逐字直接绘制（字形图集 + 批量四边形），无需
-            // Renderer::Shaders/Shape/Textures：
-            //   * 若实体持有 Renderer::Shaders，用其第一个着色器替代内置文本
-            //     着色器绘制该文本的字形（自定义文本特效入口；顶点输入为
-            //     vertex:float3, uv:float2, color:float4，纹理通道0为字形图集，
-            //     坐标已烘焙进顶点，MVP 为 UI 视图矩阵）；
+            // 文本由渲染管线逐字直接绘制（字形图集 + 批量四边形），不需要
+            // Renderer::Shape/Textures，但 UI 渲染查询把 Renderer::Shaders
+            // 列为必需组件——缺 Shaders 的文本实体不会被绘制：
+            //   * 用 Shaders 的第一个着色器绘制该文本的字形（编辑器创建
+            //     文本实体时会指派 UIText.shader；自定义文本特效也走此入口，
+            //     顶点输入为 vertex:float3, uv:float2, color:float4，纹理
+            //     通道0为字形图集，坐标已烘焙进顶点，MVP 为 UI 视图矩阵）；
             //   * 若实体持有 Renderer::Color，作为整段文本的色调（与逐字
             //     颜色标记相乘）。
             basic::file_resource<graphic::font> font;
@@ -887,7 +890,16 @@ namespace jeecs
             float inv_projection[4][4] = {};
 
             Projection() = default;
-            Projection(const Projection&) { /* Do nothing */ }
+            // 拷贝时保留 znear/zfar 等持久配置；视图/投影矩阵每帧重算无需拷贝；
+            // uniform buffer 不能共享（两个摄像机共用会互相覆盖数据），各自新建。
+            Projection(const Projection& another)
+                : znear(another.znear)
+                , zfar(another.zfar)
+                , default_uniform_buffer(
+                    jeecs::graphic::uniformbuffer::create(
+                        0, sizeof(graphic::BasePipelineInterface::default_uniform_buffer_data_t)).value())
+            {
+            }
             Projection(Projection&&) = default;
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -1961,13 +1973,16 @@ namespace jeecs
         Emitter [组件]
         粒子发射器：描述一类粒子的发射与生命周期行为，模拟与网格构建由
         Particle::ParticleSystem 完成（见 jeecs_core_particle_system.hpp）。
-        发射器实体同时需要 Renderer::Shape / Shaders / Textures2D 三件套参与
-        常规渲染管线（系统会在缺失时自动补齐并挂上内置粒子着色器）；
-        粒子纹理绑定在 Renderer::Textures2D 的 pass 0，混合模式由所选着色器决定。
+        发射器实体必须自带 Renderer::Shape（缺少 Shape 的发射器不参与模拟，
+        系统不会自动补齐任何渲染组件），并需要 Shaders / Textures2D 才能
+        被常规渲染管线绘制；粒子纹理绑定在 Renderer::Textures2D 的 pass 0，
+        混合模式由所选着色器决定。
         角度类成员（散布角/初始自转/自转速度）以度为单位。
         m_simulation_space 为 world 时粒子在世界空间模拟（发射器移动不携带
         已发射粒子），为 local 时在发射器局部空间模拟（整体随发射器刚体
-        运动）；局部空间下 m_direction 与 m_gravity 按发射器局部坐标系解释。
+        运动）；局部空间下 m_gravity 按发射器局部坐标系解释，而 m_direction
+        始终先按发射器朝向旋转一次、局部空间下渲染时随实体变换再应用一次
+        （即相对发射器局部坐标被旋转两次，为既有行为）。
         m_clear_particles 置为 true 后系统会清空全部已发射粒子并把该标记复位。
         */
         struct Emitter

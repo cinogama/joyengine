@@ -113,9 +113,13 @@ namespace jeecs::particle
                 break;
             }
 
-            // 初速方向：散布角围绕主方向
+            // 初速方向：散布角围绕主方向。Translation 为 MAYNOT（可选）组件，
+            // 发射器不带朝向时直接按 m_direction 原值解释
+            const math::vec3 direction_base = translation != nullptr
+                ? translation->world_rotation * emitter.m_direction
+                : emitter.m_direction;
             const math::vec3 direction = random_direction_around(
-                translation->world_rotation * emitter.m_direction,
+                direction_base,
                 math::clamp(emitter.m_spread_angle, 0.0f, 180.0f) * math::DEG2RAD);
             const float speed = math::random(
                 std::min(emitter.m_speed_min, emitter.m_speed_max),
@@ -239,14 +243,21 @@ namespace jeecs::particle
             )
         >())
         {
-            _m_alive_emitter_ids.push_back(e._m_raw._m_id);
+            // 粒子池键必须跨 chunk 唯一：chunk 指针 + 槽位号
+            //（仅用槽位号会让不同 chunk 的同槽位发射器共用同一个池）
+            const pool_key_t pool_key =
+                static_cast<pool_key_t>(
+                    reinterpret_cast<uintptr_t>(e._m_raw._m_in_chunk))
+                + e._m_raw._m_id;
+
+            _m_alive_emitter_ids.push_back(pool_key);
 
             bool renderer_ready = true;
 
             if (!renderer_ready)
                 continue;
 
-            auto& pool = _m_pools[e._m_raw._m_id];
+            auto& pool = _m_pools[pool_key];
 
             const size_t desired_capacity = std::min(
                 MAX_PARTICLE_LIMIT,
@@ -513,7 +524,7 @@ namespace jeecs::particle
             for (auto iter = _m_pools.begin(); iter != _m_pools.end();)
             {
                 bool still_alive = false;
-                for (uint32_t id : _m_alive_emitter_ids)
+                for (pool_key_t id : _m_alive_emitter_ids)
                     if (id == iter->first)
                     {
                         still_alive = true;
