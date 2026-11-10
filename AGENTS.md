@@ -12,7 +12,7 @@ JoyEngineECS (JoyECS) — an ECS-architecture game engine: C++20 core (`joyecs` 
 - `pkg/` — woolang packages installed by baozi; dependencies declared in root `baozi.toml` (some sources under `3rd/pkg`).
 - `module/` — optional native engine modules; directory named `<name>.je4module` with a `CMakeLists.txt`, auto-discovered and static-linked.
 - `3rd/` — git submodules (self-hosted at `git.cinogama.net` — run `git submodule update --init --recursive` after clone) plus `3rd/pkg` woolang package sources.
-- `script/prebuild/` — Woolang prebuild script executed automatically during CMake configure (shader-wrap generation etc.).
+- `script/prebuild/` — Woolang prebuild script executed automatically during CMake configure: copies pkg/builtin/license files and generates the extern-binding glue headers `src/jeecs_extern_library_*.hpp` (wo-api / static pkgs / static modules) for static linking. Shader wrap code is generated lazily at first shader load (`_jegl_load_shader_source_impl`), not here.
 - `doc/capi/` — C-API reference; read before changing any core boundary.
 - `build/` — CMake binary/output dir; `out/` is git-ignored scratch. `android/`, `ios/`, `webgl/` hold platform projects.
 

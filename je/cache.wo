@@ -6,7 +6,9 @@ namespace je::cache
 {
     // 二进制缓存文档写入器（C 侧 je_cache_file_*）。
     // 缓存文件头由引擎创建，脚本只负责按 je_cache_binary_* 的格式写
-    // 文档内容；失败时返回 false，调用方会删除半成品缓存。
+    // 文档内容；失败时返回 false。半成品缓存文件不会被删除——文件头的
+    // 主版本号保持无效占位值，使其永远通不过 je_cache_file_load 的校验，
+    // 下次生成时会直接覆盖重写。
     public using binary_writer = handle
     {
         extern("libjoyecs", "wojeapi_cache_binary_append_document")

@@ -1,4 +1,9 @@
 // Joyengine 4.x
+//
+// 状态说明（2026-11 核对）：本文件当前无任何引用——没有模块 import 它，
+// 也没有按文件名的动态加载点；且其自身已无法通过编译检查（缺少
+// import je::graphic）。pixel/entry/main 的 extern 契约看起来是早期
+// "脚本化像素处理"方案的模板遗留。确认无用后可删除。
 import je;
 
 public func tex(t: je::graphic::texture2d, x: int, y: int)

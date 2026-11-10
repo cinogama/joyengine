@@ -193,7 +193,7 @@ JoyEngine 提供 quat 四元数类型。详细说明见 [math.md](math.md)。
 
 * 颜色
 
-颜色（color）以 RGBA 四个分量表示，通常取值 0~1，RGB 分量允许超过 1 以表示 HDR。详细说明见 [math.md](math.md)。
+颜色（color）以 RGBA 四个分量按线性空间存储，通常取值 0~1，RGB 分量允许超过 1 以表示 HDR。详细说明见 [math.md](math.md)。
 
 #### 关键词
 

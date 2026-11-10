@@ -1,4 +1,9 @@
 // Joyengine 4.x
+//
+// 状态说明（2026-11 核对）：本文件当前无任何引用，也没有调用入口；
+// 与 Particle::Emitter 组件无关（那是 jeecs_core_particle_system 的
+// 运行时模拟），这里是旧的"粒子烘焙成序列帧"工具遗留。确认无用后
+// 可删除。
 import pkg::std;
 import pkg::math;
 
