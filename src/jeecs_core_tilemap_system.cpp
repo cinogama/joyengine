@@ -897,26 +897,11 @@ namespace jeecs::tilemap
             }
         }
 
-        // 重建改为替换不可变资源：顶点内容经命令缓冲区更新已废弃，重建
-        // 频率低（编辑器笔刷），新资源创建后 CPU 侧几何（射线拾取）亦保持最新
-        auto created = graphic::vertex::create(
-            JE_GL_VERTEX_TYPE_TRIANGLES,
+        je_gl_vertex_t* raw = shape->vertex->get()->resource();
+        shape->vertex->get()->update_buffer(
             _m_staging.data(),
             _m_staging.size() * sizeof(float),
-            shared_indices(),
-            {
-                { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3 }, // pos
-                { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3 }, // uv (u, v, array layer)
-                { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3 }, // normal
-                { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 1 }, // bottom（块底边局部 Y，PerBlockSelfShadow 用）
-            });
-        if (!created.has_value())
-            return;
-        shape->vertex = created;
-
-        je_gl_vertex_t* raw = shape->vertex->get()->resource();
-        // 本块实际参与的索引数量（通用渲染端按此绘制）
-        raw->m_index_count = used_cells * 4 * 6;
+            used_cells * 4 * 6);
 
         // 分块包围盒（局部空间：1 格 = 1 单位，向 +x 与 -y 展开）
         raw->m_x_min = (float)bx;

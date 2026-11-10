@@ -187,9 +187,7 @@ namespace jeecs::graphic
                 {0.0f, 0.0f, 0.0f, 1.0f},
             };
             // For UI, vp == view (projection is identity), so view-projection == view.
-            // 相机默认 UBO 的内容更新录制在本分支最前（无 pass 命令缓冲）
             update_default_uniform_buffer(
-                je_graphic_branch_new_update_command_buffer(current_camera.branchPipeline),
                 *current_camera.projection, MAT4_UI_VIEW, MAT4_UI_UNIT, MAT4_UI_VIEW, shader_time);
 
             je_gl_command_buffer_t* rend_chain = begin_camera_pass(
@@ -308,8 +306,8 @@ namespace jeecs::graphic
 
             // 冲刷本相机最后一个文本运行段（批状态跨相机持有视图矩阵，
             // 必须在视图离开作用域前落盘），并放弃对当前缓冲的占用——
-            // 已记录的绘制动作仍引用它，下一相机必须取新缓冲（同帧内
-            // 重复更新同一缓冲虽在命令序上合法，但会拆散批处理收益）。
+            // 已记录的绘制动作仍引用它，下一相机必须取新缓冲，否则
+            // 同帧内重复更新同一缓冲会与图形线程的滞后消费竞争。
             FlushTextBatch(rend_chain, MAT4_UI_VIEW);
             m_text_batch_vb = nullptr;
         }
@@ -374,7 +372,7 @@ namespace jeecs::graphic
 
             PrepareTextBatch(
                 chain, view,
-                slot->page->acquire_texture().resource(), shader_res);
+                slot->page->m_texture->resource(), shader_res);
             if (m_text_batch_vb == nullptr)
                 return; // 顶点缓冲池耗尽，丢弃剩余文本（已告警）
 
@@ -472,12 +470,10 @@ namespace jeecs::graphic
         }
 
         auto& vb = *m_text_batch_vb;
-        // 顶点数据经命令缓冲区录制更新，随本命令缓冲区提交生效
-        je_graphic_cmd_update_vertex(
-            chain, vb->resource(),
-            0,
+        vb->update_buffer(
             m_text_quad_data.data(),
-            m_text_batch_quads * 4 * TEXT_VERTEX_FLOATS * sizeof(float));
+            m_text_batch_quads * 4 * TEXT_VERTEX_FLOATS * sizeof(float),
+            m_text_batch_quads * 6);
 
         je_graphic_cmd_bind_texture_2d(chain, 0, m_text_batch_page);
 

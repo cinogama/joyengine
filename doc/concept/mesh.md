@@ -49,13 +49,17 @@
 
 程序化创建的网格没有资源路径，`path()` 返回 `none`；场景保存只记录有路径的网格。
 
-#### 内容不可变与动态网格
+#### 动态更新
 
-顶点数据在创建时确定，创建后不能从外部改写（Woolang 侧没有更新接口）。逐帧变化的动态网格（粒子、UI 文本）由引擎在 C++ 侧以命令的形式录制更新（`je_graphic_cmd_update_vertex`），随命令缓冲区提交生效；偶发变化的网格（瓦片地图分片）在内容变化时直接**重建整个网格资源**替换引用。
+`vertex::update(v, vertices, active_index_count)` 整体改写顶点数据，并只让前 `active_index_count` 个索引参与绘制，适合逐帧变化的网格。约束：
+
+* 新数据**不能超过创建时的大小**，否则记录错误、不更新——请按最大容量创建；
+* 索引缓冲保持创建时的内容不变，`active_index_count` 超过创建时的索引数会被钳制，为 0 时按 1 处理（1 个索引不构成任何三角形，相当于不绘制）；
+* **包围盒不会重新计算**——依赖视锥剔除时，应以覆盖完整范围的初始数据创建。
 
 #### 引擎生成的网格
 
-引擎自身也会程序化生成网格：`Renderer::Shape` 未指定网格时使用的默认四边形（见下文）；粒子系统为每个发射器维护一个按容量创建的动态网格，经命令更新逐帧改写内容并写入其 `Renderer::Shape`；UI 文本同样按容量创建、逐帧经命令更新；瓦片地图分片在内容变化时重建资源。
+引擎自身也会程序化生成网格：`Renderer::Shape` 未指定网格时使用的默认四边形（见下文）；粒子系统为每个发射器维护一个动态网格并写入其 `Renderer::Shape`；UI 文本、瓦片地图分片同样以“按容量创建、逐帧改写”的方式在 C++ 侧构建网格。
 
 ### 顶点属性与着色器
 
@@ -84,6 +88,7 @@
 | --- | --- |
 | `vertex::load(universe, path)` | 从模型文件加载，失败返回 `none` |
 | `vertex::create(type, vertices, indices, formats)` | 程序化创建，失败返回 `none` |
+| `vertex::update(v, vertices, active_index_count)` | 整体改写顶点数据并调整参与绘制的索引数 |
 | `vertex::aabb(v)` / `vertex::path(v)` | 局部包围盒；资源路径（可能为 `none`） |
 | `entity::set_shape(e, v)` / `entity::get_shape(e)` | 实体的网格 |
 
@@ -159,9 +164,9 @@ if (auto* shape = entity.get_component<Renderer::Shape>(); shape && mesh.has_val
 
 ### je_gl_vertex_t 的结构
 
-`je_gl_vertex_t` 以资源句柄 `m_handle` 开头（偏移 0），之后依次是局部包围盒 `m_x/y/z_min/max`、顶点数据 `m_vertexs` / `m_vertex_length`（字节）、索引 `m_indices`（uint32）/ `m_index_count`（参与绘制的数量，逻辑线程侧的绘制元数据）/ `m_index_capacity`（创建时的数量）、属性布局 `m_formats`（`je_gl_vertex_data_layout_t`：`m_type` 为 INT32 或 FLOAT32，`m_count` 为分量数）、每顶点字节数 `m_data_size_per_point`（两种类型都按 4 字节计）、图元类型 `m_type`，以及骨骼表 `m_bones` / `m_bone_count`（`je_gl_vertex_bone_data_t`：名字、索引、模型到骨骼的变换矩阵）。
+`je_gl_vertex_t` 以资源句柄 `m_handle` 开头（偏移 0），之后依次是局部包围盒 `m_x/y/z_min/max`、顶点数据 `m_vertexs` / `m_vertex_length`（字节）、索引 `m_indices`（uint32）/ `m_index_count`（当前参与绘制的数量）/ `m_index_capacity`（创建时的数量，收缩的上限）、属性布局 `m_formats`（`je_gl_vertex_data_layout_t`：`m_type` 为 INT32 或 FLOAT32，`m_count` 为分量数）、每顶点字节数 `m_data_size_per_point`（两种类型都按 4 字节计）、图元类型 `m_type`，以及骨骼表 `m_bones` / `m_bone_count`（`je_gl_vertex_bone_data_t`：名字、索引、模型到骨骼的变换矩阵）。
 
-`_jegl_create_vertex_impl` 拷贝顶点、索引与布局，在第一个属性是 FLOAT32 × 3 时遍历**全部顶点**（而非索引引用到的顶点）计算包围盒；数据长度不是每顶点字节数的整数倍时只记录警告。Woolang 的 `vertex::create` 把 `formats` 中每个整数转为 `{FLOAT32, n}`。`m_vertexs` 在创建后归图形线程所有：只有命令缓冲区提交时（`je_graphic_cmd_update_vertex` 录制的更新）才会改写它，一旦 `m_dynamic` 被置位，逻辑线程（如射线求交）不再读取其内容。
+`_jegl_create_vertex_impl` 拷贝顶点、索引与布局，在第一个属性是 FLOAT32 × 3 时遍历**全部顶点**（而非索引引用到的顶点）计算包围盒；数据长度不是每顶点字节数的整数倍时只记录警告。Woolang 的 `vertex::create` 把 `formats` 中每个整数转为 `{FLOAT32, n}`，`vertex::update` 转发到 `je_graphic_vertex_buffer_update`。
 
 ### 模型文件的解析
 
@@ -172,13 +177,13 @@ if (auto* shape = entity.get_component<Renderer::Shape>(); shape && mesh.has_val
 * 骨骼权重写入每顶点 4 个槽位：优先占用空槽，槽满后新权重大于其中最小者时替换它；骨骼索引不小于 256 的权重被跳过；未用的槽位最终置为索引 0、权重 0；
 * 结果以 `TRIANGLES` 与 76 字节的标准格式创建（位置 3 + UV 2 + 法线 3 + 切线 3 + 骨骼 4 + 权重 4，见 `jegl_standard_model_vertex_format`），带上骨骼表与资源路径，登记进共享缓存。
 
-### 命令化的内容更新
+### 动态更新
 
-`je_graphic_cmd_update_vertex(cmd, vertex, offset, data, size)` 在**录制时**把数据快照进命令缓冲区，在**提交时**（图形线程）按录制顺序写入 `m_vertexs + offset`，并调用后端 `vertex_update` 钩子推送设备；资源尚未在图形层初始化时跳过钩子，首次绑定的 `vertex_init` 会整体上传最新内容。更新只改顶点数据：参与绘制的索引数量由绘制命令给出（`m_index_count` 是逻辑线程侧的绘制元数据，由网格所有者维护，保持至少 1）。粒子系统在录制更新前自行改写 `m_x/y/z_min/max` 修正视锥剔除用的包围盒。不参与绘制的系统（粒子）经 `je_graphic_branch_new_update_command_buffer` 以最小绘制组优先级录制更新；图形实现请求跳过本帧绘制时，已录制的更新经 `je_graphic_cmd_commit_updates` 仍然生效。
+`je_graphic_vertex_buffer_update` 把 `active_index_count` 钳制到 `[1, m_index_capacity]`；有新数据时拷贝覆盖 `m_vertexs` 并置 `m_handle.m_modified`，只改变激活数量时同样置位，让已初始化的后端同步绘制数量。粒子系统在调用前自行改写 `m_x/y/z_min/max`，以修正视锥剔除用的包围盒。按注释约定，本接口必须在逻辑帧窗口内（图形线程静默时）调用。
 
 ### 各后端的顶点缓冲
 
-与纹理相同，网格在首次被图形线程使用时经 `vertex_create_blob` + `vertex_init` 创建后端对象；内容更新经命令提交时的 `vertex_update` 钩子重传（Vulkan 后端按帧龄选择可重命名槽位写入，隔离在飞帧）。以 OpenGL 后端为例：`vertex_init` 创建 VAO / VBO / EBO——顶点缓冲按 `GL_STATIC_DRAW` 上传，索引缓冲按 `m_index_capacity` 上传，每个属性按序号 i 设置 `glVertexAttribPointer`（INT32 用 `glVertexAttribIPointer`），图元类型映射为 `GL_LINE_STRIP` / `GL_TRIANGLES` / `GL_TRIANGLE_STRIP`；`vertex_update` 以 `GL_DYNAMIC_DRAW` 重新指定整个顶点缓冲（同时孤儿化旧存储，避免与 GPU 读取冲突），索引缓冲不重传；更新由命令缓冲区提交时在图形线程按序驱动（不再依赖 `m_modified` 标记）。顶点类资源在 OpenGL 后端没有可跨实例复用的 blob。
+与纹理相同，网格在首次被图形线程使用时经 `vertex_create_blob` + `vertex_init` 创建后端对象，`m_modified` 置位后经 `vertex_update` 重传。以 OpenGL 后端为例：`vertex_init` 创建 VAO / VBO / EBO——顶点缓冲按 `GL_STATIC_DRAW` 上传，索引缓冲按 `m_index_capacity` 上传，每个属性按序号 i 设置 `glVertexAttribPointer`（INT32 用 `glVertexAttribIPointer`），图元类型映射为 `GL_LINE_STRIP` / `GL_TRIANGLES` / `GL_TRIANGLE_STRIP`；`vertex_update` 以 `GL_DYNAMIC_DRAW` 重新指定整个顶点缓冲（同时孤儿化旧存储，避免与 GPU 读取冲突）并同步绘制数量，索引缓冲不重传。顶点类资源在 OpenGL 后端没有可跨实例复用的 blob。
 
 渲染系统按 `topology_of(m_type)` 选择 pipeline 拓扑，以 `je_graphic_cmd_draw_indexed(m_index_count)` 绘制；默认四边形由 `DefaultResources` 以 `{0, 1, 2, 3}` 索引和“位置 3 + UV 2 + 法线 3 + 切线 3”格式创建。视锥剔除的包围球半径取 `get_entity_size` 结果长度的一半：各轴为 `local_scale × 2 × max(|min|, |max|)`。
 
@@ -188,8 +193,7 @@ if (auto* shape = entity.get_component<Renderer::Shape>(); shape && mesh.has_val
 | --- | --- |
 | `je_gl_vertex_t`、布局与骨骼结构、C ABI | `include/jeecs/graphic.hpp` |
 | C++ 包装 `graphic::vertex` | 同上 |
-| 创建、Assimp 加载 | `src/jeecs_graphic_api_basic.cpp`（`_jegl_create_vertex_impl`、`je_graphic_vertex_load`） |
-| 命令化内容更新 | `src/jeecs_graphic_cmd.cpp`（`je_graphic_cmd_update_vertex`） |
+| 创建、Assimp 加载、动态更新 | `src/jeecs_graphic_api_basic.cpp`（`_jegl_create_vertex_impl`、`je_graphic_vertex_load`、`je_graphic_vertex_buffer_update`） |
 | Woolang 绑定 | `je/graphic.wo`、`je/ecs.wo`、`src/jeecs_graphic_woolang_api.cpp` |
 | `Renderer::Shape` 组件 | `include/jeecs/components.hpp` |
 | 默认四边形、拓扑映射、视锥剔除 | `src/jeecs_core_graphic_system.cpp` |

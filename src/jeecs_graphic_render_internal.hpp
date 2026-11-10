@@ -81,15 +81,6 @@ namespace jeecs::graphic
         je_gl_resource_handle_t* resource_handle,
         const char* path_may_null_if_builtin);
 
-    // Whether the resource already owns a backend instance created by the
-    // current graphic thread: its *_init hook has run and the context has not
-    // been rebooted since. Only meaningful on the graphic thread.
-    inline bool is_resource_initialized(const je_gl_resource_handle_t* handle)
-    {
-        return handle->m_graphic_thread == _current_graphic_thread
-            && handle->m_graphic_thread_version == _current_graphic_thread->m_version;
-    }
-
     // Patch the built-in JE_NDC_SCALE uniform inside an already-copied CPU
     // uniform block. DX11/Metal flip y for offscreen targets; Vulkan flips it
     // only for the sRGB encode pass.

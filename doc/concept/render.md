@@ -211,13 +211,13 @@ pipeline 由 `pipeline_for` 按 **(着色器, 拓扑)** 缓存于 `m_pipeline_ca
 ### 录制与提交：图形宿主、渲染分支、命令缓冲
 
 * **图形宿主**（`je_graphic_uhost_t`）：每个宇宙至多一个，在首次经 `je_graphic_uhost_get_or_create_for_universe` 请求时惰性创建（管线系统在 `BasePipelineInterface` 构造时请求）。它启动图形线程（后端的 `interface_startup` 负责创建窗口；未提供配置时为 640×480 窗口、可缩放、垂直同步、MSAA×4），并在宇宙上注册一个提交任务（after call-once job）；宇宙退出时经退出回调释放。
-* **渲染分支**（`je_render_branch_t`）：一组命令缓冲 + 一个优先级。`new_frame(priority)` 清空本帧计数并设置优先级；申请命令缓冲时复用池中实例，`reset` 后立即以目标（空指针 = 屏幕）和视口 `begin_pass`。`BRANCH_CHAIN_POOL_SIZE = 2`，即双缓冲（一链录制、一链提交）：顶点 / UBO 的内容更新与绘制一样以命令的形式录制在链里（数据快照保存在命令缓冲区内），资源对象上没有暴露给逻辑线程的可变数据，两条链不会通过资源内容互相干扰。
+* **渲染分支**（`je_render_branch_t`）：一组命令缓冲 + 一个优先级。`new_frame(priority)` 清空本帧计数并设置优先级；申请命令缓冲时复用池中实例，`reset` 后立即以目标（空指针 = 屏幕）和视口 `begin_pass`。`BRANCH_CHAIN_POOL_SIZE = 1`，即单缓冲——源码注释说明分支内的 uniform 缓冲只有一份，双缓冲没有意义。
 * **命令缓冲**（`je_gl_command_buffer_t`）：录制可在任意线程进行，只写 CPU 内存（命令流 + uniform 区），并**持有所有被引用资源的引用**直到 `reset` / `close`；提交只在图形线程进行，按需初始化 / 更新资源后把命令流分发给后端虚表。
 
 ```
 常规任务（第 2 步）  各管线的 GraphicUpdate：收集、排序、录制命令缓冲
-提交任务（第 3 步）  uhost 的提交任务调用 je_graphic_update(JE_GL_WAIT_LAST_FRAME_END)，
-                     唤醒图形线程，等到上一帧绘制完毕即返回（本帧录制可与上一帧绘制并行）
+提交任务（第 3 步）  uhost 的提交任务调用 je_graphic_update(JE_GL_WAIT_THIS_FRAME_END)，
+                     唤醒图形线程并阻塞到本帧绘制完毕
 图形线程             update_frame_ready（后端交换呈现上一帧并准备本帧，可返回 SKIP / STOP）
                      → 帧任务 _frame_rend_impl → update_draw_commit（提交设备，GUI 按约定也在此绘制）
 ```

@@ -58,35 +58,24 @@ namespace jeecs::graphic::ui
         //（超过上限的字形按上限字号光栅，仅度量受影响）。
         static constexpr int MAX_RASTER_PX = 512;
 
-        // 图集页：CPU 侧像素缓冲 + 行式装箱游标。纹理内容不可变，字形入页
-        // 在 CPU 缓冲上累积，页面有新增后按整页内容重建纹理（acquire_texture
-        // 惰性执行）。存于 std::list——页淘汰只使被删页失效，其余页（及指向
-        // 它们的字形槽）地址稳定。
+        // 图集页：一张 RGBA 纹理 + 行式装箱游标。存于 std::list——页淘汰
+        // 只使被删页失效，其余页（及指向它们的字形槽）地址稳定。
         struct page_t
         {
-            std::vector<uint8_t> m_pixels;
-            // m_pixels 相对当前纹理是否有新增内容（尚无纹理时恒为 true）
-            bool m_dirty;
-            basic::optional<basic::resource<graphic::texture2d>> m_texture;
+            basic::resource<graphic::texture2d> m_texture;
             size_t m_cursor_x;
             size_t m_cursor_y;
             size_t m_row_height;
             uint64_t m_last_used_frame;
 
-            page_t() noexcept
-                : m_pixels(PAGE_SIZE * PAGE_SIZE * 4, 0)
-                , m_dirty(true)
-                , m_texture()
+            explicit page_t(basic::resource<graphic::texture2d>&& tex) noexcept
+                : m_texture(std::move(tex))
                 , m_cursor_x(PAGE_GUTTER)
                 , m_cursor_y(PAGE_GUTTER)
                 , m_row_height(0)
                 , m_last_used_frame(0)
             {
             }
-
-            // 返回持有当前整页内容的纹理；页面有新增字形时按整页内容重建
-            // 纹理，旧纹理由仍引用它的命令缓冲区经引用计数保持存活
-            basic::resource<graphic::texture2d>& acquire_texture();
         };
 
         // 图集中的一个字形：UV（含半像素内缩）+ 布局度量。布局（量宽）与

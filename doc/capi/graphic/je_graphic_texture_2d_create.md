@@ -6,8 +6,7 @@
 JE_API je_gl_texture_2d_t* je_graphic_texture_2d_create(
     size_t width,
     size_t height,
-    je_gl_texture_format_t format,
-    /* OPTIONAL: nullptr 表示分配置 0 的像素缓冲 */ const je_gl_texture_pixel_data_t* initial_pixels);
+    je_gl_texture_format_t format);
 ```
 
 ## 描述
@@ -21,7 +20,6 @@ JE_API je_gl_texture_2d_t* je_graphic_texture_2d_create(
 | `width` | `size_t` | 纹理宽度 |
 | `height` | `size_t` | 纹理高度 |
 | `format` | `je_gl_texture_format_t` | 纹理格式 |
-| `initial_pixels` | `const je_gl_texture_pixel_data_t*` | 可选初始像素数据；nullptr 时分配按字节置 0 的像素缓冲 |
 
 ## 返回值
 
@@ -57,8 +55,7 @@ je_graphic_texture_2d_close(texture);
 ## 注意事项
 
 - 若格式包含 `FLOAT16`、`DEPTH`、`FRAMEBUF` 或有 MSAA 支持，则不创建像素缓冲，像素数据为 `nullptr`
-- 若提供 initial_pixels，则按其内容作为初始像素缓冲（逐字节拷贝）；否则分配按字节置 0 的像素缓冲
-- 纹理内容在创建后不可变：不支持创建后修改或读取像素
+- 若创建像素缓冲，像素缓存按字节置为 0 填充初始化
 - 如果宽度或高度为 0，将被视为 1
 - 使用此接口创建的纹理，其资源路径为 `nullptr`
 

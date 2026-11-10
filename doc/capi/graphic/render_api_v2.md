@@ -22,13 +22,13 @@
 | 对象 | 作用 |
 |---|---|
 | `je_gl_shader_t` | program + 反射（uniform 布局、纹理声明、默认采样器） |
-| `je_gl_vertex_t` | 顶点/索引缓冲与顶点格式；内容经命令更新（`je_graphic_cmd_update_vertex`） |
-| `je_gl_texture_2d_t/3d/array/cube` | 采样纹理；内容创建后不可变 |
+| `je_gl_vertex_t` | 顶点/索引缓冲与顶点格式 |
+| `je_gl_texture_2d_t/3d/array/cube` | 采样纹理 |
 | `je_gl_frame_buffer_t` | 渲染目标与附件 |
-| `je_gl_uniform_buffer_t` | 帧/材质级 UBO，绑定位置由创建时指定；内容经命令更新（`je_graphic_cmd_update_uniform_buffer`） |
+| `je_gl_uniform_buffer_t` | 帧/材质级 UBO，绑定位置由创建时指定 |
 | `je_gl_pipeline_t` | shader + 固定功能状态（拓扑/深度/混合/剔除/绕序/写掩码） |
 | `je_gl_sampler_t` | 独立采样器，可覆盖 shader 默认采样器 |
-| `je_gl_command_buffer_t` | 录制 pass/bind/uniform/draw 与资源更新的命令缓冲区 |
+| `je_gl_command_buffer_t` | 录制 pass/bind/uniform/draw 的命令缓冲区 |
 
 `je_gl_pipeline_t` 持有 shader 的引用；命令缓冲区在录制期持有所有被引用资源的引用，
 `je_graphic_cmd_reset` / `je_graphic_cmd_close` 时统一释放。
@@ -49,15 +49,9 @@
 3. draw 之前必须绑定 pipeline 和 vertex；否则断言失败。
 4. `je_graphic_cmd_set_uniform_*` 只影响当前 pipeline 的 per-draw uniform 块；绑定新
    pipeline 会用 shader 的默认值重新初始化该块。
-5. `je_graphic_cmd_update_vertex` / `je_graphic_cmd_update_uniform_buffer` 把资源内容
-   更新录制为命令（数据调用时即被快照进命令缓冲区），pass 内外均可调用；更新按
-   录制顺序生效，位于其后的绘制读到新内容。不参与绘制的系统可用
-   `je_graphic_branch_new_update_command_buffer` 申请无 pass 的命令缓冲区录制更新，
-   并以更小的绘制组优先级保证更新先于绘制提交。
-6. `je_graphic_cmd_commit` 会自动结束仍然打开的 pass；也可以显式调用
-   `je_graphic_cmd_end_pass`。图形实现请求跳过本帧绘制时，引擎改用
-   `je_graphic_cmd_commit_updates` 只提交已录制的资源更新。
-7. commit 后命令缓冲区保留已录制内容；复用前调用 `je_graphic_cmd_reset`。
+5. `je_graphic_cmd_commit` 会自动结束仍然打开的 pass；也可以显式调用
+   `je_graphic_cmd_end_pass`。
+6. commit 后命令缓冲区保留已录制内容；复用前调用 `je_graphic_cmd_reset`。
 
 ## 空安全约定
 
@@ -144,11 +138,9 @@ persistent mapping、无绑定纹理、顶点阶段纹理采样（v1 与 Metal �
 
 - `jegl_rchain_*`、立即模式绘制 API（`jegl_bind_*` / `jegl_draw_vertex` /
   `jegl_rend_to_framebuffer` / `jegl_set_uniform_value`）及其 Woolang 绑定已删除。
-- 资源加载/关闭接口（`je_graphic_texture_*` / `je_graphic_shader_*` /
+- 资源加载/更新/关闭接口（`je_graphic_texture_*` / `je_graphic_shader_*` /
   `je_graphic_vertex_*` / `je_graphic_framebuf_*` / `je_graphic_uniformbuf_*`）保留，
-  作为新渲染 API 的资源层；顶点 / UBO 的内容更新已并入命令缓冲区
-  （`je_graphic_cmd_update_vertex` / `je_graphic_cmd_update_uniform_buffer`），
-  纹理内容自创建后不可变。
+  作为新渲染 API 的资源层。
 - 分支类型重命名为 `je_render_branch_t`，只承载 command buffer。
 
 ## 当前实现状态
@@ -168,14 +160,9 @@ persistent mapping、无绑定纹理、顶点阶段纹理采样（v1 与 Metal �
   `begin_pass` / `end_pass` 不再触发 queue submit。
 - per-draw uniform：每帧一个持久映射的 HOST_VISIBLE|HOST_COHERENT ring，set 0 使用
   `VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC` 和 dynamic offset；不再按 draw 分配 UBO。
-- 共享 UBO（`je_gl_uniform_buffer_t`）：内容同样驻留在每帧 UBO ring 中——每次更新 /
-  绑定把整块内容复制进当前录制帧的新 ring 块；描述符按帧从 per-frame 池分配，
-  已录制的绘制继续引用旧块，因此“更新 → 后续绘制”的顺序语义天然成立，在飞帧
-  之间也相互隔离。
-- 顶点缓冲更新：可重命名缓冲按帧龄选择安全槽位写入，对齐 DX11 `WRITE_DISCARD` /
-  OpenGL 重指定的孤儿化语义——绘制绑定槽位时记录读取帧号，只覆写自上次写入以来
-  未被读取、或其最后一位读者至少在 `FRAMES_IN_FLIGHT` 个已提交帧之前的槽位；
-  没有安全槽位（同帧多次更新）时追加分配，从不更新的静态网格只占一个槽位。
+- 顶点缓冲整体更新：按帧槽位环形重命名，对齐 DX11 `WRITE_DISCARD` / OpenGL
+  重指定的孤儿化语义——更新写新槽位，在飞旧帧继续读各自绑定的旧槽位；
+  额外槽位在首次整体更新时懒分配，从不更新的静态网格不占额外内存。
 - 固定功能状态：PSO 按 `(pipeline, framebuffer, topology, stride, sample count)` 缓存，
   状态来自 `je_gl_pipeline_t::m_state`（深度/混合/剔除/绕序/颜色写掩码），并受
   `VK_EXT_`/设备 feature 支持情况约束。
@@ -185,9 +172,9 @@ persistent mapping、无绑定纹理、顶点阶段纹理采样（v1 与 Metal �
   render target 附件使用，不能通过普通纹理路径采样。
 - 交换链重建时复用 render pass 缓存；render pass 兼容时保留 ImGui 上下文，只更新
   `MinImageCount`。
-- 已知限制：纹理内容创建后不可变（引擎不再提供纹理更新接口）；ImGui 的
-  `apply_shader_sampler` 回调当前为空（自定义 sampler 合并在纹理描述符中创建）；
-  `shader_update` / `framebuffer_update` 与 DX11 现状一致，热重载依赖资源重新创建。
+- 已知限制：`texture_msaa` 不支持 CPU 像素更新；ImGui 的 `apply_shader_sampler`
+  回调当前为空（自定义 sampler 合并在纹理描述符中创建）；`shader_update` /
+  `framebuffer_update` 与 DX11 现状一致，热重载依赖资源重新创建。
 - 验证层只在 Debug 构建启用；Release/RelWithDebInfo 不加载 `VK_LAYER_KHRONOS_validation`。
 - 设备选择优先独显；示例版本从 loader 报告的版本开始，遇到
   `VK_ERROR_INCOMPATIBLE_DRIVER` 会回退到 Vulkan 1.0。

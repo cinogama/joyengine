@@ -10,7 +10,6 @@
 #include <cmath>
 #include <algorithm>
 #include <bit>
-#include <limits>
 
 namespace jeecs::particle
 {
@@ -204,7 +203,7 @@ namespace jeecs::particle
     }
 
     ParticleSystem::ParticleSystem(game_world w)
-        : BasePipelineInterface(w, nullptr)
+        : game_system(w)
     {
     }
 
@@ -233,16 +232,6 @@ namespace jeecs::particle
     {
         const float dt = deltatime();
         _m_alive_emitter_ids.clear();
-
-        // 顶点更新录制进本系统专用分支的无 pass 命令缓冲：分支取最小优先级，
-        // 保证更新先于使用这些网格的绘制组提交（绘制组按优先级从小到大提交）
-        constexpr int UPDATE_BRANCH_PRIORITY =
-            std::numeric_limits<int>::min();
-
-        branch_allocate_begin();
-        je_gl_command_buffer_t* update_chain =
-            je_graphic_branch_new_update_command_buffer(
-                allocate_branch(UPDATE_BRANCH_PRIORITY));
 
         for (auto&& [
             e, emitter, translation, shape
@@ -521,25 +510,13 @@ namespace jeecs::particle
                 raw_vertex->m_x_max = raw_vertex->m_y_max = raw_vertex->m_z_max = 0.01f;
             }
 
-            // 顶点数据经命令缓冲区录制整体更新，随本分支提交生效（先于绘制）
-            je_graphic_cmd_update_vertex(
-                update_chain,
-                raw_vertex,
-                0,
+            pool.gpu_vertex->get()->update_buffer(
                 pool.staging.data(),
-                pool.staging.size() * sizeof(float));
-
-            // 激活索引数量是逻辑线程侧的绘制元数据（保持至少 1：
-            // 0 长度绘制非法，1 个索引的 TRIANGLES 绘制不产生图元）
-            size_t active_index_count = pool.alive_count * 6;
-            if (active_index_count == 0)
-                active_index_count = 1;
-            raw_vertex->m_index_count = active_index_count;
+                pool.staging.size() * sizeof(float),
+                pool.alive_count * 6);
 
             pool.dirty = false;
         }
-
-        branch_allocate_end();
 
         // 回收不再发射的实体对应的粒子池
         if (_m_pools.size() != _m_alive_emitter_ids.size())

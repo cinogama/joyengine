@@ -189,11 +189,8 @@ namespace jeecs::graphic
             graphic::framebuffer* rend_aim_buffer,
             size_t buffer_w, size_t buffer_h);
 
-        // Record the per-camera view/projection/VP/time quartet into the camera's
-        // default uniform buffer via je_graphic_cmd_update_uniform_buffer; takes
-        // effect when the command buffer commits.
+        // Write the per-camera view/projection/VP/time quartet into the default uniform buffer.
         void update_default_uniform_buffer(
-            je_gl_command_buffer_t* cmd,
             const Projection& projection,
             const float(&view)[4][4],
             const float(&proj)[4][4],
@@ -332,13 +329,13 @@ namespace jeecs::graphic
             je_gl_texture_2d_t* page,
             graphic::shader* shader_res);
 
-        // 冲刷当前批：一次 je_graphic_cmd_update_vertex + 一次 command-buffer draw。
+        // 冲刷当前批：一次 je_graphic_vertex_buffer_update + 一次 command-buffer draw。
         // 顶点已烘焙至相机像素空间，M=I、MVP/MV=UI 视图矩阵。
         void FlushTextBatch(je_gl_command_buffer_t* chain, const float(&view)[4][4]);
 
         // 创建一块文本动态顶点缓冲：静态角点索引一次分配，顶点数据逐帧
-        // 经 je_graphic_cmd_update_vertex 整体重写，激活索引数量由绘制命令给出
-        //（与粒子系统同款机制）。
+        // 整体重写并收缩激活索引数量（与粒子系统同款机制，见
+        // je_graphic_vertex_buffer_update）。
         basic::resource<graphic::vertex> CreateTextVertexBuffer();
     };
 

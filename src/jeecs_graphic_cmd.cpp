@@ -14,11 +14,6 @@
 // the owning graphic thread, prepares resources lazily and dispatches a compact
 // command stream to the backend render vtable. All state validation is done
 // with asserts; invalid usage is a programming error, not a recoverable case.
-//
-// Vertex / uniform-buffer contents are stateless from the recorder's point of
-// view: a content change is a recorded command carrying a snapshot of the new
-// bytes. Nothing but the commit path (graphic thread) ever writes the resource
-// data, so a chain being recorded never disturbs a chain being replayed.
 
 using namespace jeecs::graphic;
 
@@ -40,9 +35,6 @@ namespace
         BIND_TEXTURE_CUBE,
         BIND_SAMPLER,
 
-        UPDATE_VERTEX,
-        UPDATE_UNIFORM_BUFFER,
-
         DRAW_INDEXED,
         DRAW,
     };
@@ -53,11 +45,6 @@ namespace
         uint32_t m_a, m_b, m_c, m_d;
         uint32_t m_uniform_offset;
         uint32_t m_uniform_size;
-        // UPDATE_*: location of the data snapshot inside m_data_arena.
-        uint32_t m_data_offset;
-        uint32_t m_data_size;
-        // UPDATE_*: byte offset inside the target resource.
-        uint64_t m_offset;
         uintptr_t m_ptr0;
         float m_f[4];
     };
@@ -205,8 +192,6 @@ struct je_gl_command_buffer_t
 
     std::vector<jegl_cmd> m_commands;
     std::vector<uint8_t> m_uniform_arena;
-    // Snapshots of the bytes carried by UPDATE_* commands.
-    std::vector<uint8_t> m_data_arena;
 
     // Open-addressing set of resources that must stay alive until reset/close.
     std::vector<jegl_resource_entry> m_resources;
@@ -363,7 +348,6 @@ struct je_gl_command_buffer_t
         release_all_resources();
         m_commands.clear();
         m_uniform_arena.clear();
-        m_data_arena.clear();
 
         m_pass_has_draw = false;
         m_has_pipeline = false;
@@ -501,69 +485,7 @@ struct je_gl_command_buffer_t
 
         m_pass_has_draw = true;
     }
-
-    // Records a content update of `resource`: the bytes are snapshotted into
-    // the data arena so the caller may reuse its buffer right away.
-    void emit_update(
-        jegl_cmd_op op, void* resource, size_t offset, const void* data, size_t size)
-    {
-        const size_t aligned = (m_data_arena.size() + 15) & ~size_t(15);
-        assert(aligned + size <= 0xFFFFFFFFu);
-
-        m_data_arena.resize(aligned + size);
-        memcpy(m_data_arena.data() + aligned, data, size);
-
-        jegl_cmd command{};
-        command.m_op = op;
-        command.m_ptr0 = reinterpret_cast<uintptr_t>(resource);
-        command.m_offset = (uint64_t)offset;
-        command.m_data_offset = (uint32_t)aligned;
-        command.m_data_size = (uint32_t)size;
-        push_command(command);
-    }
 };
-
-// Applies one recorded UPDATE_* command on the graphic thread: the snapshot is
-// copied into the resource data (which only this path ever writes), then handed
-// to the backend. A resource without a backend instance yet is left to its
-// init hook, which uploads the whole, already up-to-date content on first bind.
-static void _jegl_cmd_replay_update(
-    je_gl_command_buffer_t* cmd, const jegl_cmd& command)
-{
-    je_gl_context_t* const graphic_context = cmd->m_context;
-    const auto* render = graphic_context->m_apis;
-    const auto impl_context = graphic_context->m_graphic_impl_context;
-
-    const uint8_t* const data =
-        cmd->m_data_arena.data() + command.m_data_offset;
-    const size_t offset = (size_t)command.m_offset;
-    const size_t size = (size_t)command.m_data_size;
-
-    if (command.m_op == jegl_cmd_op::UPDATE_VERTEX)
-    {
-        auto* vertex = reinterpret_cast<je_gl_vertex_t*>(command.m_ptr0);
-
-        memcpy(
-            static_cast<uint8_t*>(const_cast<void*>(vertex->m_vertexs)) + offset,
-            data,
-            size);
-
-        if (is_resource_initialized(&vertex->m_handle))
-            render->vertex_update(impl_context, vertex, offset, size);
-    }
-    else
-    {
-        assert(command.m_op == jegl_cmd_op::UPDATE_UNIFORM_BUFFER);
-
-        auto* buffer =
-            reinterpret_cast<je_gl_uniform_buffer_t*>(command.m_ptr0);
-
-        memcpy(buffer->m_buffer + offset, data, size);
-
-        if (is_resource_initialized(&buffer->m_handle))
-            render->ubuffer_update(impl_context, buffer, offset, size);
-    }
-}
 
 /////////////////////////////////////////////////////////////////////////////
 // Pipeline / uniform reflection
@@ -802,40 +724,6 @@ void je_graphic_cmd_bind_uniform_buffer(
     command.m_op = jegl_cmd_op::BIND_UNIFORM_BUFFER;
     command.m_ptr0 = reinterpret_cast<uintptr_t>(buffer);
     cmd->push_command(command);
-}
-
-void je_graphic_cmd_update_vertex(
-    je_gl_command_buffer_t* cmd, je_gl_vertex_t* vertex,
-    size_t offset, const void* data, size_t size)
-{
-    assert(cmd != nullptr);
-    assert(vertex != nullptr);
-    assert(data != nullptr);
-    assert(size > 0);
-    assert(offset + size <= vertex->m_vertex_length);
-
-    cmd->retain(vertex);
-
-    // 自此顶点数据由提交路径（图形线程）改写，逻辑线程不再读取其内容
-    vertex->m_dynamic = true;
-
-    cmd->emit_update(jegl_cmd_op::UPDATE_VERTEX, vertex, offset, data, size);
-}
-
-void je_graphic_cmd_update_uniform_buffer(
-    je_gl_command_buffer_t* cmd, je_gl_uniform_buffer_t* buffer,
-    size_t offset, const void* data, size_t size)
-{
-    assert(cmd != nullptr);
-    assert(buffer != nullptr);
-    assert(data != nullptr);
-    assert(size > 0);
-    assert(offset + size <= buffer->m_buffer_size);
-
-    cmd->retain(buffer);
-
-    cmd->emit_update(
-        jegl_cmd_op::UPDATE_UNIFORM_BUFFER, buffer, offset, data, size);
 }
 
 template<typename TexT>
@@ -1327,11 +1215,6 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
             break;
         }
 
-        case jegl_cmd_op::UPDATE_VERTEX:
-        case jegl_cmd_op::UPDATE_UNIFORM_BUFFER:
-            _jegl_cmd_replay_update(cmd, command);
-            break;
-
         case jegl_cmd_op::DRAW_INDEXED:
         {
             const void* uniform_data =
@@ -1371,19 +1254,4 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
     }
 
     render->commit_end(impl_context);
-}
-
-void je_graphic_cmd_commit_updates(je_gl_command_buffer_t* cmd)
-{
-    assert(cmd != nullptr);
-    assert(cmd->m_context != nullptr);
-    assert(jeecs::graphic::_current_graphic_thread == cmd->m_context);
-
-    // 绘制被跳过时 pass / bind / draw 一律丢弃，只让资源内容跟上录制侧
-    for (const auto& command : cmd->m_commands)
-    {
-        if (command.m_op == jegl_cmd_op::UPDATE_VERTEX
-            || command.m_op == jegl_cmd_op::UPDATE_UNIFORM_BUFFER)
-            _jegl_cmd_replay_update(cmd, command);
-    }
 }

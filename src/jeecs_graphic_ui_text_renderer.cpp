@@ -370,34 +370,20 @@ namespace jeecs::graphic::ui
         }
     }
 
-    basic::resource<graphic::texture2d>& TextRenderer::page_t::acquire_texture()
-    {
-        if (!m_texture.has_value() || m_dirty)
-        {
-            // 纹理内容不可变：页面有新增字形时按整页内容重建纹理。
-            // 重建只发生在新字形入页的帧（与旧实现整页重传的频次一致），
-            // 稳定页零成本
-            m_texture = graphic::texture2d::create(
-                PAGE_SIZE, PAGE_SIZE, JE_GL_TEXTURE_FORMAT_RGBA, m_pixels.data());
-            m_dirty = false;
-        }
-        return m_texture.value();
-    }
-
     void TextRenderer::_blit_glyph(
         page_t& page, glyph_slot& slot, graphic::texture2d& src)
     {
         const size_t gw = (size_t)slot.w, gh = (size_t)slot.h;
         const size_t px = page.m_cursor_x, py = page.m_cursor_y;
 
+        auto* dst_res = page.m_texture->resource();
         const auto* src_res = src.resource();
 
         // 源为 je_font_char_get 生成的 RGBA 字形纹理（白色 + 覆盖度
         // alpha，自底向上行序）；图集页同序，逐行拷贝 alpha、RGB 写白。
-        // 写入 CPU 侧页缓冲，页纹理在 acquire_texture 时按整页重建
         for (size_t row = 0; row < gh; ++row)
         {
-            uint8_t* dst = page.m_pixels.data() + ((py + row) * PAGE_SIZE + px) * 4;
+            uint8_t* dst = dst_res->m_pixels + ((py + row) * PAGE_SIZE + px) * 4;
             const uint8_t* s = src_res->m_pixels + row * gw * 4;
             for (size_t col = 0; col < gw; ++col, dst += 4, s += 4)
             {
@@ -405,7 +391,9 @@ namespace jeecs::graphic::ui
                 dst[3] = s[3];
             }
         }
-        page.m_dirty = true;
+        // 后端按整纹理重传（m_modified 范围字段仅为建议），因此新字形
+        // 出现时该页整体上传一次，其余时间零纹理上传。
+        dst_res->m_handle.m_modified = true;
 
         // UV 半像素内缩（逐轴，1px 字形不内缩）：避免相邻字形 / 页边缘
         // 经线性采样渗色。
@@ -430,8 +418,12 @@ namespace jeecs::graphic::ui
                 break;
         }
 
-        // 页缓冲按字节置 0；页纹理在首次 acquire_texture 时创建
-        entry.m_pages.emplace_back();
+        auto texture = graphic::texture2d::create(
+            PAGE_SIZE, PAGE_SIZE, JE_GL_TEXTURE_FORMAT_RGBA);
+        std::memset(
+            texture->resource()->m_pixels, 0, PAGE_SIZE * PAGE_SIZE * 4);
+
+        entry.m_pages.emplace_back(std::move(texture));
         ++m_total_pages;
     }
 

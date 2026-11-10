@@ -7,7 +7,8 @@ using je::graphic;
 
 namespace JEEditor::GUI::Icons
 {
-    public let WHITE = texture2d::create_with_color(1, 1, (1., 1., 1., 1.));
+    public let WHITE = texture2d::create(1, 1);
+    WHITE->pix((0, 0))->set_color((1., 1., 1., 1.));
 
     public let WARNING = texture2d::load(option::none, "!/builtin/icon/Warning.png");
     public let ERROR = texture2d::load(option::none, "!/builtin/icon/Error.png");

@@ -23,5 +23,4 @@ JE_API void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd);
 ## 注意事项
 
 - 若仍有未结束的 pass，commit 会自动结束它
-- 录制的资源更新（`je_graphic_cmd_update_vertex` / `je_graphic_cmd_update_uniform_buffer`）与 pass / 绘制按录制顺序一并执行
 - 提交完成后命令缓冲区保留已录制的命令，需要复用请先调用 je_graphic_cmd_reset

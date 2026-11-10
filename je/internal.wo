@@ -8,6 +8,22 @@ import je::input;
 
 namespace je
 {
+    namespace graphic
+    {
+        namespace texture2d
+        {
+            namespace internal
+            {
+                public using snapshot_t = gchandle;
+
+                extern("libjoyecs", "wojeapi_texture2d_take_snapshot")
+                    public func snapshot(self: texture2d)=> option<snapshot_t>;
+
+                extern("libjoyecs", "wojeapi_texture2d_restore_snapshot")
+                    public func restore_snapshot(self: texture2d, snapshot: snapshot_t)=> bool;
+            }
+        }
+    }
     namespace world::internal
     {
         extern("libjoyecs", "wojeapi_world_get_all_entities")

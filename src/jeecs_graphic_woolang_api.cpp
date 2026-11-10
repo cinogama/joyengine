@@ -102,45 +102,6 @@ WOORT_API woort_api wojeapi_texture2d_create(void)
         nullptr);
 }
 
-// 以纯色创建二维纹理：纹理内容创建后不可变，初始内容在创建时给定。
-// 颜色各分量为 [0, 1]，按线性数值写入 RGBA8
-WOORT_API woort_api wojeapi_texture2d_create_with_color(void)
-{
-    const size_t w = (size_t)woort_int(0);
-    const size_t h = (size_t)woort_int(1);
-
-    const size_t real_w = w == 0 ? 1 : w;
-    const size_t real_h = h == 0 ? 1 : h;
-
-    const auto to_byte = [](float v) -> je_gl_texture_pixel_data_t
-        {
-            return (je_gl_texture_pixel_data_t)round(
-                math::clamp(v, 0.f, 1.f) * 255.0f);
-        };
-    const je_gl_texture_pixel_data_t rgba[4] = {
-        to_byte(woort_struct_get_float(2, 0)),
-        to_byte(woort_struct_get_float(2, 1)),
-        to_byte(woort_struct_get_float(2, 2)),
-        to_byte(woort_struct_get_float(2, 3)),
-    };
-
-    std::vector<je_gl_texture_pixel_data_t> pixels(real_w * real_h * 4);
-    for (size_t i = 0; i < real_w * real_h; ++i)
-        memcpy(pixels.data() + i * 4, rgba, sizeof(rgba));
-
-    auto loaded_texture = graphic::texture2d::create(
-        w, h, JE_GL_TEXTURE_FORMAT_RGBA, pixels.data());
-
-    return woort_ret_gchandle(
-        new basic::resource<graphic::texture2d>(loaded_texture),
-        WOORT_IGNORE,
-        [](void* ptr)
-        {
-            delete (basic::resource<graphic::texture2d> *)ptr;
-        },
-        nullptr);
-}
-
 WOORT_API woort_api wojeapi_texture2d_clip(void)
 {
     auto* loaded_texture =
@@ -173,6 +134,68 @@ WOORT_API woort_api wojeapi_texture2d_bind_path(void)
 
     path = basic::make_new_string(woort_string(1));
     return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_texture2d_pix(void)
+{
+    auto* loaded_texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(0);
+
+    const size_t x = woort_struct_get_int(1, 0);
+    const size_t y = woort_struct_get_int(1, 1);
+
+    auto* pix = new graphic::texture2d::pixel((*loaded_texture)->resource(), x, y);
+
+    return woort_ret_gchandle(
+        pix,
+        0,
+        [](void* ptr)
+        {
+            delete (graphic::texture2d::pixel*)ptr;
+        },
+        nullptr);
+}
+
+WOORT_API woort_api wojeapi_texture2d_take_snapshot(void)
+{
+    auto* loaded_texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(0);
+
+    auto tex_raw = loaded_texture->get()->resource();
+    if (tex_raw->m_pixels)
+    {
+        auto memsz = tex_raw->m_width * tex_raw->m_height *
+            (tex_raw->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
+        if (memsz > 0)
+        {
+            auto* membuf = malloc(memsz);
+            memcpy(membuf, tex_raw->m_pixels, memsz);
+            return woort_ret_result_ok_gchandle(
+                membuf,
+                WOORT_IGNORE,
+                [](void* buf)
+                {
+                    free(buf);
+                },
+                nullptr);
+        }
+    }
+    return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_texture2d_restore_snapshot(void)
+{
+    auto* loaded_texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(0);
+    auto* texture_buf = woort_gcpointer(1);
+
+    auto tex_raw = loaded_texture->get()->resource();
+    if (tex_raw->m_pixels)
+    {
+        auto memsz = tex_raw->m_width * tex_raw->m_height *
+            (tex_raw->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
+        memcpy(tex_raw->m_pixels, texture_buf, memsz);
+
+        return woort_ret_bool(true);
+    }
+    return woort_ret_bool(false);
 }
 
 WOORT_API woort_api wojeapi_texture3d_create(void)
@@ -218,6 +241,14 @@ WOORT_API woort_api wojeapi_texturearray_layers(void)
     auto* texture =
         (basic::resource<graphic::texture_array> *)woort_gcpointer(0);
     return woort_ret_int((woort_Int)(*texture)->layers());
+}
+
+WOORT_API woort_api wojeapi_texturearray_mark_modified(void)
+{
+    auto* texture =
+        (basic::resource<graphic::texture_array> *)woort_gcpointer(0);
+    (*texture)->mark_modified();
+    return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_texturecube_create(void)
@@ -282,6 +313,36 @@ static void woje_bind_texture_to_component(
     textures->bind_texture(
         pass,
         *(basic::resource<graphic::texture2d> *)texture_gchandle_payload);
+}
+
+WOORT_API woort_api wojeapi_texture_pixel_color(void)
+{
+    auto* pix = (graphic::texture2d::pixel*)woort_gcpointer(0);
+    auto color = pix->get();
+
+    woort_set_struct(WOORT_RETURN_SLOT, 4);
+
+    woort_struct_set_float(WOORT_RETURN_SLOT, 0, color.x);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 1, color.y);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 2, color.z);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 3, color.w);
+
+    return woort_ret();
+}
+
+WOORT_API woort_api wojeapi_texture_set_pixel_color(void)
+{
+    auto* pix = (graphic::texture2d::pixel*)woort_gcpointer(0);
+    auto color = math::vec4();
+
+    color.x = woort_struct_get_float(1, 0);
+    color.y = woort_struct_get_float(1, 1);
+    color.z = woort_struct_get_float(1, 2);
+    color.w = woort_struct_get_float(1, 3);
+
+    pix->set(color);
+
+    return woort_ret_void();
 }
 
 /////////////////////////////////////////////////////////////
@@ -651,6 +712,32 @@ WOORT_API woort_api wojeapi_vertex_aabb(void)
     woort_struct_set_float(WOORT_RETURN_SLOT, 5, raw_vertex->m_z_max);
 
     return woort_ret();
+}
+
+// 整体重写已有顶点缓冲的数据并收缩激活索引数量（语义见
+// je_graphic_vertex_buffer_update）。索引缓冲保持创建时的内容不变，因此
+// 调用方应按"最坏容量创建、静态角点索引"的方式使用（文本批处理与
+// 粒子系统在 C++ 侧的同款消费者）。注意包围盒不会被重算：需要视锥
+// 剔除正确时应以覆盖完整范围的初始数据创建缓冲。
+WOORT_API woort_api wojeapi_vertex_update(void)
+{
+    auto* loaded_vertex =
+        (basic::resource<graphic::vertex> *)woort_gcpointer(0);
+    const size_t active_index_count = (size_t)woort_int(2);
+
+    vector<float> vertices(woort_vec_len(1));
+    for (size_t i = 0; i < vertices.size(); ++i)
+    {
+        (void)woort_vec_get(WOORT_RETURN_SLOT, 1, i);
+        vertices[i] = woort_unbox_float(WOORT_RETURN_SLOT);
+    }
+
+    (*loaded_vertex)->update_buffer(
+        vertices.data(),
+        vertices.size() * sizeof(float),
+        active_index_count);
+
+    return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_shaders_of_entity(void)
@@ -1033,6 +1120,20 @@ WOORT_API woort_api wojeapi_uniformbuffer_create(void)
             nullptr);
 
     return woort_ret_option_none();
+}
+
+WOORT_API woort_api wojeapi_uniformbuffer_update(void)
+{
+    auto* ub =
+        (basic::resource<graphic::uniformbuffer> *)woort_gcpointer(0);
+    const size_t offset = (size_t)woort_int(1);
+
+    size_t buflen = 0;
+    const void* buf = woort_buffer(2, &buflen);
+
+    (*ub)->update_buffer(offset, buflen, buf);
+
+    return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_uhost_get_or_create_for_universe(void)

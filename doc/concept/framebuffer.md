@@ -56,7 +56,7 @@
 
 ⚠️ 注意 同一世界中的每个摄像机都会渲染**全部**待渲染实体，引擎没有按摄像机过滤实体的机制。显示帧缓冲画面的实体如果也被“渲染该帧缓冲的摄像机”绘制，就会在同一次绘制中采样正在写入的纹理，结果由图形 API 决定，引擎不做检查。可以把显示用的实体放进另一个[世界](world.md)——摄像机只渲染本世界的实体。
 
-⚠️ 注意 附件纹理没有 CPU 侧的像素数据。
+⚠️ 注意 附件纹理没有 CPU 侧的像素数据，不能用 `pix` 读写像素。
 
 ### 典型场景
 
@@ -145,7 +145,7 @@ je_gl_frame_buffer_t
  └─ m_width / m_height
 ```
 
-`je_graphic_framebuf_create` 先校验尺寸与颜色附件数（任一为 0 即记错误日志并返回空指针），再 `malloc` 结构体与附件数组，用 placement new 逐个构造附件：颜色附件为 `texture2d::create(w, h, 格式 | JE_GL_TEXTURE_FORMAT_FRAMEBUF)`，深度附件为 `JE_GL_TEXTURE_FORMAT_DEPTH | JE_GL_TEXTURE_FORMAT_FRAMEBUF`，排在数组末尾。`FRAMEBUF` 与 `DEPTH`、`FLOAT16` 同属 `JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK`，带这些标志的纹理不分配 CPU 像素缓冲（`m_pixels` 为空），因此附件纹理没有 CPU 侧内容。最后 `init_resource_handle` 把引用计数初始化为 1。
+`je_graphic_framebuf_create` 先校验尺寸与颜色附件数（任一为 0 即记错误日志并返回空指针），再 `malloc` 结构体与附件数组，用 placement new 逐个构造附件：颜色附件为 `texture2d::create(w, h, 格式 | JE_GL_TEXTURE_FORMAT_FRAMEBUF)`，深度附件为 `JE_GL_TEXTURE_FORMAT_DEPTH | JE_GL_TEXTURE_FORMAT_FRAMEBUF`，排在数组末尾。`FRAMEBUF` 与 `DEPTH`、`FLOAT16` 同属 `JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK`，带这些标志的纹理不分配 CPU 像素缓冲（`m_pixels` 为空）——这就是附件不能用 `pix` 访问的原因。最后 `init_resource_handle` 把引用计数初始化为 1。
 
 此时没有任何图形 API 对象被创建：与其他图形资源一样，后端对象在首次使用时由图形线程惰性初始化。
 

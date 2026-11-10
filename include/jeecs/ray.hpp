@@ -382,12 +382,6 @@ namespace jeecs
                     && entity_shape_may_null != nullptr
                     && entity_shape_may_null->vertex.has_value())
                 {
-                    // 经命令更新过的动态网格其顶点数据归图形线程所有，
-                    // CPU 侧没有可靠几何可测：按未命中处理（退化为包围盒
-                    // 之外的精确测试直接失败，与退化三角形网格的行为一致）
-                    if (entity_shape_may_null->vertex.value()->resource()->m_dynamic)
-                        return intersect_result(false);
-
                     return intersect_mesh(
                         entity_shape_may_null->vertex.value(),
                         translation.world_position,

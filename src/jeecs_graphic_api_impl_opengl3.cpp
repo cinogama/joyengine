@@ -59,6 +59,7 @@ namespace jeecs::graphic::api::gl3
         GLuint m_vbo;
         GLuint m_ebo;
         GLenum m_method;
+        GLsizei m_pointcount;
 
         jegl3_vertex_data() = default;
         ~jegl3_vertex_data()
@@ -307,11 +308,9 @@ namespace jeecs::graphic::api::gl3
         {
             glGenBuffers(1, &m_uniform_buffer_object);
             glBindBuffer(GL_UNIFORM_BUFFER, m_uniform_buffer_object);
-            // 初始化即上传当前内容：内容自创建起有效（全 0 或已录制的更新）
             glBufferData(GL_UNIFORM_BUFFER,
                 resource->m_buffer_size,
-                resource->m_buffer,
-                GL_DYNAMIC_DRAW);
+                NULL, GL_DYNAMIC_DRAW); // 预分配空间
 
             m_binding_place =
                 (GLuint)(resource->m_buffer_binding_place + 1);
@@ -1396,6 +1395,157 @@ namespace jeecs::graphic::api::gl3
 #endif
     }
 
+    void texture_2d_update(
+        je_graphic_impl_context_t,
+        je_gl_texture_2d_t* resource)
+    {
+        jegl_gl3_texture* texture_instance =
+            static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
+
+        // Update texture's pixels, only normal pixel data will be updated.
+        // NOTE: 深度纹理不支持更新
+        if (0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH))
+        {
+            jeecs::debug::logerr("Depth texture update is not supported.");
+            return;
+        }
+
+        glBindTexture(GL_TEXTURE_2D, texture_instance->m_texture_id);
+
+        const bool is_16bit = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
+        GLint texture_aim_format = GL_RGBA;
+        GLint texture_src_format = GL_RGBA;
+
+        if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
+            return;
+
+        const bool same_size =
+            texture_instance->m_width == resource->m_width &&
+            texture_instance->m_height == resource->m_height;
+
+        if (same_size)
+        {
+            // 原地更新，避免重新分配纹理存储
+            glTexSubImage2D(
+                GL_TEXTURE_2D,
+                0,
+                0,
+                0,
+                (GLsizei)resource->m_width,
+                (GLsizei)resource->m_height,
+                texture_src_format,
+                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+                resource->m_pixels);
+        }
+        else
+        {
+            // 尺寸发生变化，需要重新分配纹理存储
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                texture_aim_format,
+                (GLsizei)resource->m_width,
+                (GLsizei)resource->m_height,
+                0,
+                texture_src_format,
+                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+                resource->m_pixels);
+
+            texture_instance->m_width = resource->m_width;
+            texture_instance->m_height = resource->m_height;
+        }
+    }
+
+    template<typename TexT>
+    static void _gl3_update_texture_3d_like(
+        TexT* resource, GLint target, GLsizei depth_or_layers)
+    {
+        jegl_gl3_texture* texture_instance =
+            static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
+
+        if (0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH))
+        {
+            jeecs::debug::logerr("Depth texture update is not supported.");
+            return;
+        }
+
+        glBindTexture(target, texture_instance->m_texture_id);
+
+        const bool is_16bit = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
+        GLint texture_aim_format = GL_RGBA;
+        GLint texture_src_format = GL_RGBA;
+
+        if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
+            return;
+
+        const bool same_size =
+            texture_instance->m_width == resource->m_width &&
+            texture_instance->m_height == resource->m_height;
+
+        if (same_size)
+        {
+            glTexSubImage3D(
+                target,
+                0,
+                0, 0, 0,
+                (GLsizei)resource->m_width,
+                (GLsizei)resource->m_height,
+                depth_or_layers,
+                texture_src_format,
+                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+                resource->m_pixels);
+        }
+        else
+        {
+            glTexImage3D(
+                target,
+                0,
+                texture_aim_format,
+                (GLsizei)resource->m_width,
+                (GLsizei)resource->m_height,
+                depth_or_layers,
+                0,
+                texture_src_format,
+                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+                resource->m_pixels);
+
+            texture_instance->m_width = resource->m_width;
+            texture_instance->m_height = resource->m_height;
+        }
+    }
+
+    void texture_3d_update(
+        je_graphic_impl_context_t,
+        je_gl_texture_3d_t* resource)
+    {
+        _gl3_update_texture_3d_like(resource, GL_TEXTURE_3D, (GLsizei)resource->m_depth);
+    }
+
+    void texture_array_update(
+        je_graphic_impl_context_t,
+        je_gl_texture_array_t* resource)
+    {
+        _gl3_update_texture_3d_like(resource, GL_TEXTURE_2D_ARRAY, (GLsizei)resource->m_layers);
+    }
+
+    void texture_cube_update(
+        je_graphic_impl_context_t,
+        je_gl_texture_cube_t* resource)
+    {
+        (void)resource;
+        // NOTE: Cube 纹理不支持更新
+        jeecs::debug::logerr("Cube texture update is not supported.");
+    }
+
+    void texture_msaa_update(
+        je_graphic_impl_context_t,
+        je_gl_texture_msaa_t* resource)
+    {
+        (void)resource;
+        // NOTE: MSAA 纹理只存在于 GPU 侧，不支持 CPU 侧像素更新
+        jeecs::debug::logerr("MSAA texture update is not supported.");
+    }
+
     template<typename TexT>
     void texture_close(
         je_graphic_impl_context_t,
@@ -1422,7 +1572,9 @@ namespace jeecs::graphic::api::gl3
             GL_STATIC_DRAW);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-        // 索引缓冲按分配容量上传（绘制数量由命令缓冲区给出）
+        // 索引缓冲按分配容量上传（m_index_count 可能被
+        // je_graphic_vertex_buffer_update 收缩为激活数量，绘制数量另存于
+        // m_pointcount）
         glBufferData(GL_ELEMENT_ARRAY_BUFFER,
             resource->m_index_capacity * sizeof(uint32_t),
             resource->m_indices,
@@ -1470,31 +1622,29 @@ namespace jeecs::graphic::api::gl3
         vertex_data->m_vbo = vbo;
         vertex_data->m_ebo = ebo;
         vertex_data->m_method = DRAW_METHODS[(size_t)resource->m_type];
+        vertex_data->m_pointcount = (GLsizei)resource->m_index_count;
 
         resource->m_handle.m_ptr = vertex_data;
     }
     void vertex_update(
         je_graphic_impl_context_t,
-        je_gl_vertex_t* resource,
-        size_t offset,
-        size_t size)
+        je_gl_vertex_t* resource)
     {
         jegl3_vertex_data* vertex_data =
             static_cast<jegl3_vertex_data*>(resource->m_handle.m_ptr);
 
-        (void)offset;
-        (void)size;
-
-        // 整体重传顶点数据（索引缓冲内容不变）。每次 glBufferData 重指定：
-        // 首次将 STATIC 升级为 DYNAMIC 用途（对齐 DX11 后端的 IMMUTABLE→DYNAMIC
-        // 懒升级）；之后每次重指定同时孤儿化旧数据存储，等价于
-        // Map(WRITE_DISCARD)，避免 GPU 仍在读取旧数据时 glBufferSubData 阻塞
-        // 图形线程；命令回放在图形线程上按序执行，随后提交的绘制立即看到新内容
+        // 整体重传顶点数据（索引缓冲内容不变），并同步激活索引数量。
+        // 每次 glBufferData 重指定：首次将 STATIC 升级为 DYNAMIC 用途（对齐
+        // DX11 后端的 IMMUTABLE→DYNAMIC 懒升级）；之后每次重指定同时孤儿化
+        // 旧数据存储，等价于 Map(WRITE_DISCARD)，避免 GPU 仍在读取旧数据时
+        // glBufferSubData 阻塞图形线程
         glBindBuffer(GL_ARRAY_BUFFER, vertex_data->m_vbo);
         glBufferData(GL_ARRAY_BUFFER,
             resource->m_vertex_length,
             resource->m_vertexs,
             GL_DYNAMIC_DRAW);
+
+        vertex_data->m_pointcount = (GLsizei)resource->m_index_count;
     }
     void vertex_close(
         je_graphic_impl_context_t,
@@ -1511,22 +1661,20 @@ namespace jeecs::graphic::api::gl3
     }
     void ubuffer_update(
         je_graphic_impl_context_t,
-        je_gl_uniform_buffer_t* resource,
-        size_t offset,
-        size_t size)
+        je_gl_uniform_buffer_t* resource)
     {
         jegl_gl3_uniformbuf* ubuf =
             static_cast<jegl_gl3_uniformbuf*>(resource->m_handle.m_ptr);
 
-        assert(size != 0);
+        assert(resource->m_update_length != 0);
 
         glBindBuffer(GL_UNIFORM_BUFFER, ubuf->m_uniform_buffer_object);
 
-        // 局部更新；调用发生在图形线程命令回放中，与绘制同序执行
+        assert(resource->m_update_length != 0);
         glBufferSubData(GL_UNIFORM_BUFFER,
-            (GLintptr)offset,
-            (GLsizeiptr)size,
-            resource->m_buffer + offset);
+            resource->m_update_begin_offset,
+            resource->m_update_length,
+            resource->m_buffer + resource->m_update_begin_offset);
     }
     void ubuffer_close(
         je_graphic_impl_context_t,
@@ -2269,6 +2417,11 @@ void je_graphic_using_opengl3_apis(je_gl_graphic_api_t* write_to_apis)
     write_to_apis->ubuffer_init = ubuffer_init;
 
     write_to_apis->shader_update = shader_update;
+    write_to_apis->texture_2d_update = texture_2d_update;
+    write_to_apis->texture_3d_update = texture_3d_update;
+    write_to_apis->texture_array_update = texture_array_update;
+    write_to_apis->texture_cube_update = texture_cube_update;
+    write_to_apis->texture_msaa_update = texture_msaa_update;
     write_to_apis->vertex_update = vertex_update;
     write_to_apis->framebuffer_update = framebuffer_update;
     write_to_apis->ubuffer_update = ubuffer_update;
