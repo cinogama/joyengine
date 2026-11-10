@@ -83,7 +83,7 @@
 
 ### DIFF-11 `je/editor/graphic.wo` 与 `je/editor/particalbaker.wo` 无任何引用
 
-* **状态：已处理**（两文件头已注明状态：无引用、无调用入口；`graphic.wo` 自身已无法通过编译检查（缺 `import je::graphic`）。确认无用后可删除——删除属破坏性操作，待确认后再清理。）
+* **状态：已修正**（经确认后删除；删除前已核实无任何 import 或按文件名的动态加载引用，`graphic.wo` 自身已无法通过编译检查（缺 `import je::graphic`），`particalbaker` 与粒子 `Emitter` 无关亦无调用入口）
 * 位置：`je/editor/` 下两个文件
 * 实际实现：编辑器源码中没有任何地方引用它们；`particalbaker` 与粒子 `Emitter` 无关，也没有调用入口
 * 参考：`doc/concept/editor.md`
