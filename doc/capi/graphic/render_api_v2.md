@@ -160,6 +160,9 @@ persistent mapping、无绑定纹理、顶点阶段纹理采样（v1 与 Metal �
   `begin_pass` / `end_pass` 不再触发 queue submit。
 - per-draw uniform：每帧一个持久映射的 HOST_VISIBLE|HOST_COHERENT ring，set 0 使用
   `VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC` 和 dynamic offset；不再按 draw 分配 UBO。
+- 顶点缓冲整体更新：按帧槽位环形重命名，对齐 DX11 `WRITE_DISCARD` / OpenGL
+  重指定的孤儿化语义——更新写新槽位，在飞旧帧继续读各自绑定的旧槽位；
+  额外槽位在首次整体更新时懒分配，从不更新的静态网格不占额外内存。
 - 固定功能状态：PSO 按 `(pipeline, framebuffer, topology, stride, sample count)` 缓存，
   状态来自 `je_gl_pipeline_t::m_state`（深度/混合/剔除/绕序/颜色写掩码），并受
   `VK_EXT_`/设备 feature 支持情况约束。

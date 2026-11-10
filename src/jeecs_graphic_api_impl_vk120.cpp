@@ -428,40 +428,77 @@ namespace jeecs::graphic::api::vk120
         {
         }
     };
+    // 最大在飞帧数：帧槽位的命令缓冲提交后，直到该槽位下一次复用
+    //（pre_update 中的 fence 等待）前都可能仍在 GPU 上执行。
+    static constexpr uint32_t FRAMES_IN_FLIGHT = 2;
+
+    // 可重命名缓冲：按帧槽位环形重命名，在 Vulkan 上复刻 D3D11
+    // Map(WRITE_DISCARD) / OpenGL glBufferData 重指定的丢弃语义。
+    // 整体更新永远写入环形中的下一个槽位，仍在执行的旧帧继续读它们
+    // 录制时所绑定的槽位，写者与读者永不为同一块内存。首个槽位随资源
+    // 创建分配，其余槽位在整体更新时逐个懒分配（对齐 dx11 / opengl3
+    // 后端 IMMUTABLE→DYNAMIC 的懒升级），从不整体更新的静态资源
+    // 不占额外内存。
+    struct jevk12_renamable_buffer
+    {
+        JECS_DISABLE_MOVE_AND_COPY(jevk12_renamable_buffer);
+
+        explicit jevk12_renamable_buffer(VkBufferUsageFlagBits buffer_usage)
+            : m_buffer_usage(buffer_usage)
+            , m_buffer_size(0)
+            , m_allocated_slot_count(0)
+            , m_current_slot(0)
+        {
+            m_vk_buffer.fill(VK_NULL_HANDLE);
+            m_vk_memory.fill(VK_NULL_HANDLE);
+            m_memory_offset.fill(0);
+            m_memory_size.fill(0);
+            m_mapped.fill(nullptr);
+        }
+
+        std::array<VkBuffer, FRAMES_IN_FLIGHT> m_vk_buffer;
+        std::array<VkDeviceMemory, FRAMES_IN_FLIGHT> m_vk_memory;
+        std::array<VkDeviceSize, FRAMES_IN_FLIGHT> m_memory_offset;
+        std::array<VkDeviceSize, FRAMES_IN_FLIGHT> m_memory_size;
+        std::array<void*, FRAMES_IN_FLIGHT> m_mapped;
+
+        VkBufferUsageFlagBits m_buffer_usage;
+        // 各槽位统一的分配字节数（空数据以 1 字节占位：Vulkan 不允许 0 大小缓冲）
+        size_t m_buffer_size;
+        // 已分配槽位数；由槽位分配函数追加，增长到 FRAMES_IN_FLIGHT
+        uint32_t m_allocated_slot_count;
+        // 最新内容所在的槽位；每次整体更新时环形推进
+        uint32_t m_current_slot;
+    };
+
     struct jevk12_vertex
     {
         JECS_DISABLE_MOVE_AND_COPY(jevk12_vertex);
 
         jevk12_vertex()
-            : m_vk_vertex_buffer(VK_NULL_HANDLE)
-            , m_vk_vertex_buffer_memory(VK_NULL_HANDLE)
-            , m_vertex_memory_offset(0)
-            , m_vertex_memory_size(0)
-            , m_mapped(nullptr)
+            : m_vertex_buffer(
+                VkBufferUsageFlagBits::VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
             , m_vk_index_buffer(VK_NULL_HANDLE)
             , m_vk_index_buffer_memory(VK_NULL_HANDLE)
             , m_index_memory_offset(0)
             , m_index_memory_size(0)
             , m_vertex_point_count(0)
-            , m_size(0)
             , m_stride(0)
             , m_topology(JE_GL_VERTEX_TYPE_TRIANGLES)
         {
         }
 
-        VkBuffer m_vk_vertex_buffer;
-        VkDeviceMemory m_vk_vertex_buffer_memory;
-        VkDeviceSize m_vertex_memory_offset;
-        VkDeviceSize m_vertex_memory_size;
-        void* m_mapped;
+        // 顶点数据可经 je_graphic_vertex_buffer_update 整体更新，
+        // 走可重命名缓冲隔离在飞帧
+        jevk12_renamable_buffer m_vertex_buffer;
 
+        // 索引缓冲创建后内容不变，只分配一份
         VkBuffer m_vk_index_buffer;
         VkDeviceMemory m_vk_index_buffer_memory;
         VkDeviceSize m_index_memory_offset;
         VkDeviceSize m_index_memory_size;
 
         uint32_t m_vertex_point_count;
-        VkDeviceSize m_size;
         VkDeviceSize m_stride;
 
         je_gl_vertex_type_t m_topology;
@@ -651,8 +688,6 @@ namespace jeecs::graphic::api::vk120
                     m_main_context->destroy_texture_instance(m_msaa_attachment);
             }
         };
-
-        static constexpr uint32_t FRAMES_IN_FLIGHT = 2;
 
         struct frame_resources
         {
@@ -3196,6 +3231,81 @@ namespace jeecs::graphic::api::vk120
                 allocation.m_memory,
                 allocation.m_offset));
         }
+
+        // 为可重命名缓冲追加分配一个槽位（host-visible 块被分配器整体
+        // 持久映射，槽位的 m_mapped 恒有效）
+        void alloc_renamable_buffer_slot(jevk12_renamable_buffer& target)
+        {
+            const uint32_t slot_index = target.m_allocated_slot_count++;
+            assert(slot_index < FRAMES_IN_FLIGHT);
+
+            alloc_vk_device_buffer_memory(
+                target.m_buffer_size,
+                target.m_buffer_usage,
+                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                &target.m_vk_buffer[slot_index],
+                &target.m_vk_memory[slot_index],
+                &target.m_memory_offset[slot_index],
+                &target.m_memory_size[slot_index],
+                &target.m_mapped[slot_index]);
+        }
+
+        // 创建可重命名缓冲的首个槽位并写入初始数据（initial_datas 为
+        // nullptr 时只分配 1 字节占位缓冲）。
+        void create_renamable_buffer(
+            jevk12_renamable_buffer& target,
+            /* OPTIONAL */ const void* initial_datas,
+            size_t initial_data_length)
+        {
+            target.m_buffer_size = std::max<size_t>(initial_data_length, 1);
+
+            alloc_renamable_buffer_slot(target);
+
+            if (initial_datas != nullptr)
+                memcpy(target.m_mapped[0], initial_datas, initial_data_length);
+        }
+
+        void destroy_renamable_buffer(jevk12_renamable_buffer& target)
+        {
+            // 槽位分配由 m_allocated_slot_count 精确跟踪，
+            // [0, count) 内的缓冲必然有效
+            for (uint32_t slot_index = 0;
+                slot_index < target.m_allocated_slot_count;
+                ++slot_index)
+            {
+                vkDestroyBuffer(
+                    _vk_logic_device, target.m_vk_buffer[slot_index], nullptr);
+                free_vk_memory(
+                    target.m_vk_memory[slot_index],
+                    target.m_memory_offset[slot_index],
+                    target.m_memory_size[slot_index]);
+            }
+        }
+
+        // 整体更新可重命名缓冲：懒分配下一个槽位（若尚未分配），然后
+        // 写入环形推进后的槽位。
+        //
+        // 写入安全性：逻辑帧与图形帧串行（je_graphic_update 的
+        // WAIT_THIS_FRAME_END），m_modified 只在帧间置位，资源每帧至多
+        // 触发一次更新钩子、至多推进一个槽位，因此仍可能在执行的最近
+        // FRAMES_IN_FLIGHT - 1 帧读的只会是其余槽位；本次写入的是环形中
+        // 最久未用的那个，它的最后一位读者至少在 FRAMES_IN_FLIGHT 帧前
+        // 提交，其完成已由本帧录制开始时的槽位 fence 等待
+        // （wait_current_frame_slot）保证。
+        void upload_renamable_buffer_next_slot(
+            jevk12_renamable_buffer& target,
+            const void* datas,
+            size_t data_length)
+        {
+            if (target.m_allocated_slot_count < FRAMES_IN_FLIGHT)
+                alloc_renamable_buffer_slot(target);
+
+            target.m_current_slot =
+                (target.m_current_slot + 1) % FRAMES_IN_FLIGHT;
+
+            memcpy(target.m_mapped[target.m_current_slot], datas, data_length);
+        }
         /////////////////////////////////////////////////////
         VkSampler create_sampler(
             je_gl_shader_filter_mode_t mag,
@@ -3532,39 +3642,17 @@ namespace jeecs::graphic::api::vk120
 
             vertex->m_topology = resource->m_type;
 
-            const size_t vertex_data_size = resource->m_vertex_length;
+            // 顶点缓冲占用可重命名缓冲的首个槽位
+            create_renamable_buffer(
+                vertex->m_vertex_buffer,
+                resource->m_vertexs,
+                resource->m_vertex_length);
+
             const size_t index_data_size =
                 resource->m_index_capacity * sizeof(uint32_t);
 
-            // Vulkan 不允许 size 为 0 的 buffer；空顶点资源使用 1 字节占位。
-            const size_t vertex_buffer_size = std::max<size_t>(vertex_data_size, 1);
+            // Vulkan 不允许 size 为 0 的 buffer；空索引使用 1 字节占位。
             const size_t index_buffer_size = std::max<size_t>(index_data_size, 1);
-
-            // 获取所需分配的内存类型
-            alloc_vk_device_buffer_memory(
-                vertex_buffer_size,
-                VkBufferUsageFlagBits::VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                &vertex->m_vk_vertex_buffer,
-                &vertex->m_vk_vertex_buffer_memory,
-                &vertex->m_vertex_memory_offset,
-                &vertex->m_vertex_memory_size,
-                &vertex->m_mapped);
-
-            if (vertex_data_size != 0 && resource->m_vertexs != nullptr)
-            {
-                if (vertex->m_mapped == nullptr)
-                {
-                    jeecs::debug::logfatal(
-                        "VK120: vertex buffer memory is not host-visible.");
-                }
-
-                memcpy(
-                    vertex->m_mapped,
-                    resource->m_vertexs,
-                    vertex_data_size);
-            }
 
             // 创建索引缓冲区：按分配容量上传（m_index_count 可能已被
             // je_graphic_vertex_buffer_update 收缩为激活数量，绘制数量另存于
@@ -3596,7 +3684,6 @@ namespace jeecs::graphic::api::vk120
             }
 
             vertex->m_vertex_point_count = (uint32_t)resource->m_index_count;
-            vertex->m_size = (VkDeviceSize)vertex_data_size;
             vertex->m_stride = (VkDeviceSize)resource->m_data_size_per_point;
 
             return vertex;
@@ -3606,15 +3693,7 @@ namespace jeecs::graphic::api::vk120
             if (vertex == nullptr)
                 return;
 
-            if (vertex->m_vk_vertex_buffer != VK_NULL_HANDLE)
-                vkDestroyBuffer(_vk_logic_device, vertex->m_vk_vertex_buffer, nullptr);
-            if (vertex->m_vk_vertex_buffer_memory != VK_NULL_HANDLE)
-            {
-                free_vk_memory(
-                    vertex->m_vk_vertex_buffer_memory,
-                    vertex->m_vertex_memory_offset,
-                    vertex->m_vertex_memory_size);
-            }
+            destroy_renamable_buffer(vertex->m_vertex_buffer);
 
             if (vertex->m_vk_index_buffer != VK_NULL_HANDLE)
                 vkDestroyBuffer(_vk_logic_device, vertex->m_vk_index_buffer, nullptr);
@@ -5341,9 +5420,13 @@ namespace jeecs::graphic::api::vk120
             _vk_descriptor_set_allocator->bind_all(
                 _vk_current_command_buffer, uniform_vars, dynamic_uniform_offset);
 
+            // 绑定最新内容所在的槽位；仍在执行的旧帧读各自录制时绑定的槽位
             VkDeviceSize offsets = 0;
             vkCmdBindVertexBuffers(
-                _vk_current_command_buffer, 0, 1, &vertex->m_vk_vertex_buffer, &offsets);
+                _vk_current_command_buffer, 0, 1,
+                &vertex->m_vertex_buffer.m_vk_buffer[
+                    vertex->m_vertex_buffer.m_current_slot],
+                &offsets);
         }
 
         void cmd_draw_indexed_ex(
@@ -5756,27 +5839,25 @@ namespace jeecs::graphic::api::vk120
     }
     void update_vertex(je_graphic_impl_context_t ctx, je_gl_vertex_t* vertex)
     {
-        (void)ctx;
+        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         jevk12_vertex* vertex_instance =
             static_cast<jevk12_vertex*>(vertex->m_handle.m_ptr);
 
         if (vertex->m_vertex_length != 0 && vertex->m_vertexs != nullptr)
         {
-            if (vertex->m_vertex_length > vertex_instance->m_size)
+            if (vertex->m_vertex_length
+                > vertex_instance->m_vertex_buffer.m_buffer_size)
             {
                 jeecs::debug::logerr(
                     "VK120: vertex update exceeds the allocated buffer size.");
                 return;
             }
-            if (vertex_instance->m_mapped == nullptr)
-            {
-                jeecs::debug::logerr(
-                    "VK120: vertex buffer memory is not persistently mapped.");
-                return;
-            }
 
-            memcpy(
-                vertex_instance->m_mapped,
+            // 写入下一个槽位而非原地覆盖：原地覆盖会改到上一帧尚未执行
+            // 完的绘制正在读的数据（世界空间粒子拖动发射器时整体错位
+            // 抖动的根因）
+            context->upload_renamable_buffer_next_slot(
+                vertex_instance->m_vertex_buffer,
                 vertex->m_vertexs,
                 vertex->m_vertex_length);
         }
