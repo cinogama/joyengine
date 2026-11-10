@@ -70,8 +70,6 @@ UPDATE!
 
 切片的结果由引擎缓存并在原型集合变化时自动刷新，使用者无需关心。
 
-⚠️ 注意 当前版本中，`system!` 的 `except` 与 `anyof` 子句存在已知的枚举错位问题，实际效果与上表相反（详见[第二部分·脚本侧需求枚举错位](#脚本侧需求枚举错位)）。在问题修复前，请避免在脚本系统中依赖这两种子句；C++ 系统与下文的 `entity_selector` 不受影响。
-
 ### 在系统之外：entity_selector
 
 不在系统里、但也需要按组件筛选实体时（例如编辑器工具），可以创建一个持久化的选择器（`world::create_selector`）。它支持“必须包含 / 排除 / 多选一”三种条件，每个 `anyof(...)` 各成一组；选择器没有视图，遍历得到的是实体，需要组件时再自行 `get_component`：
@@ -178,14 +176,9 @@ towoo 系统在 `ToWooBaseSystem::_invoke_multi_work` 中做同样的遍历：�
 
 ⚠️ 注意 刷新会向 `m_selected_archs` 追加元素，向量扩容后 `m_cached_archs` 指向的数组可能整体搬迁。C ABI 注释明确“获取到的查询缓存仅在当前帧有效，不应当被持久化保存”——不要跨帧保存切片迭代器或缓存数组的指针。
 
-### 脚本侧需求枚举错位
+### 脚本侧需求枚举的传递
 
-⚠️ 注意 towoo 的需求种类在 `je/towoo/system.wo` 中定义为 `enum require_type { CONTAINS, MAYNOT, ANYOF, EXCEPT }`（即 `ANYOF = 2`、`EXCEPT = 3`），而 C 枚举 `je_component_requirement_kind_t` 的顺序是 `CONTAINS, MAYNOT, EXCEPT, ANYOF_0`（`EXCEPT = 2`、`ANYOF_0 = 3`）。`wojeapi_towoo_register_system_job` 把脚本传入的整数直接转换为 C 枚举，于是：
-
-* `except T;` 被当作只含 `T` 的多选一组——效果等同于**必须包含** `T`；
-* `anyof A, B;` 中的每个类型都被当作**排除**条件——效果是 `A`、`B` 都不能有。
-
-视图参数只用到 `CONTAINS` / `MAYNOT`，两侧取值一致，不受影响；`entity_selector` 在原生侧显式映射每种需求，C++ 的 `slice_requirement` 直接使用 C 枚举，也都不受影响。修复时应让两侧枚举顺序保持一致，或在 `wojeapi_towoo_register_system_job` 中做显式映射。
+towoo 的需求种类在 `je/towoo/system.wo` 中定义为 `enum require_type { CONTAINS, MAYNOT, EXCEPT, ANYOF }`，与 C 枚举 `je_component_requirement_kind_t`（`CONTAINS, MAYNOT, EXCEPT, ANYOF_0`）**顺序保持一致**——`wojeapi_towoo_register_system_job` 把脚本传入的整数直接转换为 C 枚举，两侧枚举值一旦错位，`except` / `anyof` 的实际效果就会与语义相反，修改任一侧的枚举顺序时务必同步另一侧。
 
 ### 关键源码位置
 

@@ -68,14 +68,12 @@ UPDATE!
 | 接口 | 说明 |
 | --- | --- |
 | `je::deltatime()` | 实时差异时间（已乘时间缩放） |
-| `je::smooth_deltatime()` | 平滑差异时间（⚠️ 见下文） |
+| `je::smooth_deltatime()` | 平滑差异时间 |
 | `u->get_timescale()` / `u->set_timescale(s)` | 读写宇宙 `u` 的时间缩放（`import je::ecs;`） |
 | `u->get_max_deltatime()` / `u->set_max_deltatime(dt)` | 读写宇宙 `u` 的最大差异时间 |
 | `je::time()` | 引擎启动以来经过的秒数，不受时间缩放影响 |
 
 ⚠️ 注意：`je::deltatime()` / `je::smooth_deltatime()` 依赖“当前正在执行的脚本系统”，只能在 `system!` / `work!` 的函数体中调用；在其他地方（包括 `create`、`on_enable` 等回调）调用会 panic。
-
-⚠️ 注意：当前版本的 `je::smooth_deltatime()` 实际返回的是**实时**差异时间（与 `je::deltatime()` 数值相同，仅精度不同，原因见第二部分），脚本侧暂时拿不到真正的平滑差异时间。
 
 #### C++
 
@@ -158,9 +156,7 @@ _m_real_current_time = current_time
 
 ### 脚本侧的取值路径
 
-`je::deltatime()` → `wojeapi_deltatime` → `current_script_game_system_instance->deltatime()`（float）。`current_script_game_system_instance` 是 `thread_local` 指针，只在 `ToWooBaseSystem::update_step_work` 执行期间指向当前实例（见 [system.md](system.md#towoo-脚本系统的包装)），为空时以 panic 返回。
-
-⚠️ 注意：`wojeapi_smooth_deltatime` 调用的是 `deltatimed()`——实时值的 double 版本——而不是 `smooth_deltatimed()`，这就是第一部分那条警告的来源。
+`je::deltatime()` → `wojeapi_deltatime` → `current_script_game_system_instance->deltatime()`（float）。`current_script_game_system_instance` 是 `thread_local` 指针，只在 `ToWooBaseSystem::update_step_work` 执行期间指向当前实例（见 [system.md](system.md#towoo-脚本系统的包装)），为空时以 panic 返回。`je::smooth_deltatime()` 走同一包装，最终调用 `smooth_deltatimed()`。
 
 宇宙级的 `get_frame_deltatime` / `get_max_deltatime` / `get_timescale` 等 Woolang 绑定直接转发到对应的 C ABI，不依赖脚本系统上下文，可以在任何地方调用。
 

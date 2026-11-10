@@ -63,7 +63,7 @@ UI 元素复用[变换](transform.md)的父子关系（`Transform::Anchor` + `Tr
 
 **基准字号取自元素尺寸**：默认取元素解析后的高度（`width_unit` 时取宽度），缩放元素即缩放文字。颜色、缩放、偏移标记是逐字的实时属性，修改它们不会触发重新光栅化。`Renderer::Color` 作为整段色调；`Renderer::Shaders` 的第一个着色器作为文本着色器（通常是 `UIText.shader`，也可换成自定义文本特效）。
 
-⚠️ 注意 UI 渲染查询把 `Renderer::Shaders` 列为**必需**组件。组件注释与编辑器“UI文本”组合预设都写着文本“无需任何 Renderer 组件”，但缺少 Shaders 的元素实际不会被绘制；编辑器“创建 → 基本UI文本”预设会挂好 Shaders 并指定 `UIText.shader`，照此配置即可。
+⚠️ 注意 UI 渲染查询把 `Renderer::Shaders` 列为**必需**组件——缺少 `Shaders` 的元素（包括文本实体）不会被绘制。编辑器“创建 → 基本UI文本”与组件组合中的“UI文本”预设都会挂好 Shaders（前者还指定 `UIText.shader`），照此配置即可。
 
 ### 鼠标交互
 

@@ -204,8 +204,6 @@ if (auto* shaders = entity.get_component<Renderer::Shaders>(); shaders && shad.h
 
 `graphic::shader::set_uniform` 沿 `m_custom_uniforms` 链表按名字查找，类型匹配时写入 `m_value` 并置 `m_updated` 与 `m_handle.m_modified`。绘制时 `je_graphic_cmd_bind_pipeline` 调用 `reset_uniform_staging`，把着色器全部自定义 uniform 的当前值拷入本次绘制的暂存块（float3x3 每行按 16 字节填充），随后写入内建 uniform——这就是“资源上的值是每次绘制的初始值”的实现，也是共享实例上的修改全局可见的原因。`bound_shader` 的各 setter 则只改写本次绘制的暂存块。
 
-⚠️ 注意 当前 `je/graphic.wo` 中 `shader::set_uniform` 的分支链在 `if (val is int)` 之后缺少 `else`，int 标量写入成功后会继续落入末尾的 `std::panic("Here should not been exec.")`；`bound_shader::set_uniform` 的分支链是完整的。
-
 ### 关键源码位置
 
 | 内容 | 位置 |

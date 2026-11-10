@@ -47,7 +47,7 @@ do w->add_entity([
 w->set_enable(true);
 ```
 
-⚠️ 注意 投影组件应**恰好挂一个**。一个都没有时，摄像机仍会被收集、仍会按 `Clear` 清屏，但它的矩阵永远不会被计算；两个都挂时，渲染按正交处理，而编辑器的约定是“没有透视投影组件才视为正交”（射线拾取、世界网格都沿用这一约定），两边会不一致。
+⚠️ 注意 投影组件应**恰好挂一个**。一个都没有时，摄像机仍会被收集、仍会按 `Clear` 清屏，但它的矩阵永远不会被计算；两个都挂时，渲染与编辑器（射线拾取、世界网格、调试摄像机控制）统一按**正交**处理。
 
 ### 两种投影
 
@@ -159,7 +159,7 @@ struct SplitScreenSystem : public game_system
 
 ### Projection 的结构与拷贝语义
 
-`Projection` 除 `znear` / `zfar`（反射注册的仅此二者）外，还持有矩阵缓存 `view` / `projection` / `view_projection` / `inv_projection`（每帧由渲染系统整体覆写，是输出而非输入），以及构造时创建、绑定位置 0 的 `default_uniform_buffer`——布局为 `BasePipelineInterface::default_uniform_buffer_data_t`（V、P、VP 与时间向量），着色器中对应 `JE_V` / `JE_P` / `JE_VP` / `JE_TIME`。它的拷贝构造是**空函数**：拷贝出的实例全部成员按默认成员初始化器构造，因此会获得一份新的 uniform 缓冲，而不是与源摄像机共享——`basic::resource` 是共享指针，若逐成员拷贝，两个摄像机将共用同一份缓冲并互相覆盖矩阵。⚠️ 注意 代价是拷贝**不保留 `znear` / `zfar`**：依照[预制体](prefab.md)实例化（组件经拷贝构造复制）出的摄像机，裁剪距离会回到 0.3 / 1000。
+`Projection` 除 `znear` / `zfar`（反射注册的仅此二者）外，还持有矩阵缓存 `view` / `projection` / `view_projection` / `inv_projection`（每帧由渲染系统整体覆写，是输出而非输入），以及构造时创建、绑定位置 0 的 `default_uniform_buffer`——布局为 `BasePipelineInterface::default_uniform_buffer_data_t`（V、P、VP 与时间向量），着色器中对应 `JE_V` / `JE_P` / `JE_VP` / `JE_TIME`。它的拷贝构造拷贝 `znear` / `zfar`，矩阵缓存按默认初始化（每帧重算，无需拷贝）；uniform 缓冲则各自新建而不是与源摄像机共享——`basic::resource` 是共享指针，若逐成员拷贝，两个摄像机将共用同一份缓冲并互相覆盖矩阵。
 
 ### 矩阵结算
 

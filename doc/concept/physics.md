@@ -144,7 +144,7 @@ UPDATE!
 }
 ```
 
-⚠️ 注意 `collide_result` 声明为 `struct{position: vec2, normalize: vec2}`，但两个字段在当前版本中没有标记 `public`，脚本中访问会编译失败——目前只能用于判断是否接触。冲量等字段只在 C++ 侧可见。
+`collide_result` 的 `position` / `normalize` 均为 `public`，脚本侧可直接读取（冲量等其余字段只在 C++ 侧可见）。
 
 #### C++（`jeecs/components.hpp`）
 

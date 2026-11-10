@@ -197,9 +197,7 @@ LocalScale    ─┘                   └─否─→ LocalToWorld ────
 * `get_parent_rotation(lrot)` = `world_rotation × lrot⁻¹`（无 `LocalRotation` 时直接返回 `world_rotation`）；
 * `get_parent_position(lpos, lrot)` = `world_position − 父级旋转 × lpos`（无 `LocalPosition` 时直接返回 `world_position`）；
 * `set_global_position(p, lpos, lrot)`：令 `lpos = 父级旋转⁻¹ × (p − 父级位置)`，再令 `world_position = p`；
-* `set_global_rotation(r, lrot)`：令 `lrot = r × 父级旋转⁻¹`，再令 `world_rotation = r`。
-
-⚠️ 注意：结算公式是“世界 = 父 × 局部”，其逆应为 `lrot = 父级旋转⁻¹ × r`；`set_global_rotation` 的写法只在两者可交换时等价（例如所有旋转都绕同一轴，即 2D 场景）。在 3D 中父级带旋转时，回写的局部旋转与期望不符，修改这一函数时需要注意。
+* `set_global_rotation(r, lrot)`：令 `lrot = 父级旋转⁻¹ × r`（结算公式“世界 = 父 × 局部”的逆，与 `set_global_position` 同一左乘模式），再令 `world_rotation = r`。
 
 `Anchor` 的 `uid` 由默认成员初始化器 `uid_t::generate()` 生成；它的拷贝构造函数体为空、不复制 uid，移动构造则为默认实现。因此：实体因增删组件在原型间迁移（移动）时 uid 不变，父子关系保持；**依照预制体实例化（拷贝）出的实体会得到新的 uid**，引用预制体 uid 的 `LocalToParent` 不会自动指向实例。世界文件中的 uid 作为注册成员被序列化，载入时恢复。
 

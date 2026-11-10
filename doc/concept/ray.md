@@ -155,10 +155,8 @@ if (hit.intersected)
 
 * `intersect_triangle` 采用 Möller–Trumbore：`E1 = v1 − v0`、`E2 = v2 − v0`、`P = d × E2`、`det = E1 · P`，按 det 的符号统一朝向（因此双面），`det < 0.0001` 视为平行；重心坐标 u、v 越界即未命中；命中点用 `(1 − u − v)·v0 + u·v1 + v·v2` 重算，`(命中点 − 起点) · d < 0` 时视为在起点背后。det 阈值是未归一化的绝对值，随方向长度与三角形边长缩放，非常小的三角形可能被误判为不相交；
 * `intersect_box` 由 `±size / 2` 生成 8 个角点，经 `rotation` 旋转再加上 `offset`，对 6 个面调用 `intersect_rectangle` 取最近者；
-* `intersect_mesh` 取每个顶点的前 3 个 float 作为位置（假定第一个属性是位置），变换为 `offset + (rotation × p) × scale`——缩放在旋转之后按世界轴分量相乘，只有等比缩放时才等价于常规的“先缩放后旋转”；
+* `intersect_mesh` 取每个顶点的前 3 个 float 作为位置（假定第一个属性是位置），变换为 `offset + (rotation × p) × scale`——缩放在旋转之后按世界轴分量相乘，只有等比缩放时才等价于常规的“先缩放后旋转”。带索引的网格按 `m_indices` 逐三角形取顶点（`TRIANGLESTRIP` 按索引序列滑动），无索引时按顶点数组顺序遍历、上界为顶点数；
 * `intersect_entity`：包围盒中心 = 网格包围盒中心 + `world_position`（中心偏移不随旋转和缩放）、尺寸 = `local_scale × 包围盒尺寸`、旋转 = `world_rotation`；`consider_mesh` 时以 `(world_position, world_rotation, local_scale)` 调用 `intersect_mesh` 并直接返回其结果。
-
-⚠️ 注意 `intersect_mesh` 没有查询索引缓冲：`TRIANGLES` 分支在第 i 个索引位置直接读取第 i 个顶点，`TRIANGLESTRIP` 分支按顶点存储顺序滑动，而循环上界是 `m_index_count`。只有索引恰为 0、1、2… 且索引数不超过顶点数时结果才正确（如默认四边形）；对模型文件加载的网格，网格级测试并不可靠，还可能越界读取顶点数据。
 
 ### Woolang 绑定
 

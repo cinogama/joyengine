@@ -210,8 +210,6 @@ woolang_runtime → time → file → log → audio → engine_woolang_api
 
 找到代码后，新建 VM 并以 `woort_bootup(WOORT_IGNORE, cenv, true)` 执行（请求 JIT），结束后关闭 VM、释放代码环境。返回值只表示"是否找到并编译出入口"，不反映脚本是否正常运行完毕。
 
-⚠️ 注意：`include/jeecs/core.hpp` 中 `je_core_main_script_entry` 的注释以及 [doc/capi/core/je_core_main_script_entry.md](../capi/core/je_core_main_script_entry.md) 写的是"先尝试编辑器、再尝试 `@/builtin/main.wo`"，与实现顺序相反——以 `src/jeecs_startup.cpp` 为准。
-
 ### 编辑器脚本的二进制缓存
 
 编辑器由大量脚本组成，每次启动都重新编译代价很高，因此首次编译后把整个代码环境序列化为二进制，存成一个[缓存](cache.md)文档（键 `content`，值为二进制 buffer）。读取与写入都以 `EDITOR_SCRIPT_CACHE_VERSION` 同时作为格式版本和"虚拟 CRC"传给缓存管理器——**缓存的有效性与编辑器源码内容无关**，只受缓存管理器主版本与 `EDITOR_SCRIPT_CACHE_VERSION` 控制。

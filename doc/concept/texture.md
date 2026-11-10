@@ -192,9 +192,9 @@ Woolang 的 `texture2d` 是包装 `basic::resource<graphic::texture2d>` 的 gcha
 
 `Renderer::Textures2D::textures` 是 `texture_with_passid` 的列表，每项持有一份纹理引用；`bind_texture` 替换同通道的项或追加新项。组件只反射了 `tiling` / `offset`，纹理列表不走通用的成员编辑，编辑器材质面板因此经实体接口就地修改。渲染时 `GraphicPipelineBase::bind_entity_textures` 依次绑定默认纹理（通道 0）、`Textures2D` 各项、`Textures2DArray` 各项，并返回 tiling / offset 供 `JE_UV_TILING` / `JE_UV_OFFSET` 使用。默认纹理由 `DefaultResources` 创建：(0,0)、(1,1) 为 (1, 0.25, 1)，(0,1)、(1,0) 为 (0.25, 0.25, 0.25)。
 
-### 裁剪的实现限制
+### 裁剪的实现
 
-⚠️ 注意 `texture2d::clip` 计算源地址时使用 `src_w = min(w, 源宽度)` 作为**源纹理的行跨度**（`src_pixels + (x + (y + iy) * src_w) * color_depth`），而真实行跨度是源宽度；因此只有 `w` 不小于源宽度（整行裁剪）时结果才正确。实现也没有检查 `x + w`、`y + h` 是否越出源纹理。被 `#if 0` 关闭的逐像素分支保留了正确的寻址方式。
+`texture2d::clip` 按源纹理宽度计算行跨度（`src_pixels + (x + (y + iy) * 源宽度) * color_depth`），逐行 `memcpy` 到新纹理；裁剪矩形先与源纹理边界求交（`copy_w = min(w, 源宽 − x)`、`copy_h = min(h, 源高 − y)`），越出源纹理的区域不拷贝、目标保持新纹理的初始内容。
 
 ### 关键源码位置
 

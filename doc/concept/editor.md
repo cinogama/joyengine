@@ -121,7 +121,7 @@ builtin/editor/
 
 引擎核心另外注册了几个编辑器专用组件（`src/jeecs_core_editor_components.hpp`）：`Editor::Name`、`Editor::Invisible`（不在编辑器中显示、不被存档，如调试摄像机）、`Editor::EditorWalker`、`Editor::Prefab`（记录预制体路径）与 `Editor::EntityId`（调试用的实体编号）。
 
-这种结构带来的结果是：修改编辑器只需修改 `.wo` 文件、无需重新编译引擎（但要留意编辑器的二进制缓存，见[入口](entry.md#编辑器脚本的二进制缓存)）；项目也能通过自己的类型扩展脚本定制序列化与检视控件。`je/editor/` 下另有 `graphic.wo`、`particalbaker.wo` 两个辅助脚本，目前编辑器源码中没有引用它们。
+这种结构带来的结果是：修改编辑器只需修改 `.wo` 文件、无需重新编译引擎（但要留意编辑器的二进制缓存，见[入口](entry.md#编辑器脚本的二进制缓存)）；项目也能通过自己的类型扩展脚本定制序列化与检视控件。（`je/editor/` 下曾有两个无引用的遗留脚本 `graphic.wo`、`particalbaker.wo`，已于 2026-11 删除。）
 
 ### 动作与编辑历史
 

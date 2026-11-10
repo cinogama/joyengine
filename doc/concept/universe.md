@@ -61,7 +61,7 @@ u->wait();                           // 阻塞，直到宇宙退出
 
 #### 等待与销毁
 
-* `wait()` 阻塞调用线程，直到宇宙退出；入口脚本通常在最后调用它，避免脚本过早结束。⚠️ 注意：**不要对已经停止的宇宙调用 `wait()`**，它将永远等不到退出通知（死锁）。
+* `wait()` 阻塞调用线程，直到宇宙退出；入口脚本通常在最后调用它，避免脚本过早结束。对已经停止的宇宙调用它也无害——退出回调的注册在更新线程退出后会失败，`wait()` 此时直接返回。
 * `close()`（C++：`game_universe::destroy_universe`）**无视生命计数**，立即要求宇宙退出，并阻塞到宇宙完全销毁。通常的写法是先 `wait()` 再 `close()`，如上文示例中 `defer` 的用法。
 
 ### 宇宙级的时间设置
@@ -161,8 +161,6 @@ game_universe::destroy_universe(universe);    // 释放宇宙
 
 ⚠️ 注意：`atomic_list::pick_all` 取出的是栈，遍历顺序为**后提交者先处理**。同一帧内先注册、后注销同一个工作，会先处理注销（找不到而报错）、再处理注册，结果工作依然存在；同一帧创建的多个世界，入列顺序也与创建顺序相反。
 
-⚠️ 注意：`REMOVE_PRE_JOB_FOR_WORLDS` 分支在删除 `Job` 之前，还会调用注销动作自身的 `m_free_function`；而注销接口用 `new universe_action` 创建动作时只设置了类型与函数指针，该字段未被初始化。其余五个注销分支没有这一步，修改这段代码时需要留意。
-
 ### 更新线程与退出流程
 
 更新线程的主体如下（`update()` 即一帧，展开见 [frame.md](frame.md#宇宙线程上的一帧)）：
@@ -182,7 +180,7 @@ delete 全部工作
 
 停止标记的来源有三个：`trim_lifetime` 使计数归零；`~Universe`（即 `je_ecs_universe_destroy`，因此无视计数）；引擎关闭时 `je_core_finish` 以模块逆序关闭，ECS 模块最先关闭，`Universe::_shutdown_all_universe` 逐个停止并 `join` 仍存活的宇宙。`grow_lifetime` / `trim_lifetime` 用 CAS 循环修改计数，遇到 0 时 `logfatal`。
 
-`je_ecs_universe_loop`（即 `wait`）的实现是注册一个退出回调去唤醒条件变量，然后阻塞等待——这就是宇宙停止后再调用会死锁的原因：退出回调此时已经执行过，不会再被调用。Woolang 侧的 `wait` / `close` 在阻塞期间通过 `woort_vm_swap(nullptr)` 把当前线程与脚本虚拟机解绑，返回后再换回。
+`je_ecs_universe_loop`（即 `wait`）的实现是注册一个退出回调去唤醒条件变量，然后阻塞等待。退出回调的注册与更新线程退出时的排水由同一把锁保护：线程退出时先置 `_m_universe_exited` 再消费回调表，此后到达的注册会失败，`wait()` 对已停止的宇宙直接返回而不是永远等待。Woolang 侧的 `wait` / `close` 在阻塞期间通过 `woort_vm_swap(nullptr)` 把当前线程与脚本虚拟机解绑，返回后再换回。
 
 ### 宇宙与引擎上下文、线程
 

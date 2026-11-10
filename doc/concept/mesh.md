@@ -170,14 +170,12 @@ if (auto* shape = entity.get_component<Renderer::Shape>(); shape && mesh.has_val
 
 ### 模型文件的解析
 
-`je_graphic_vertex_load` 先查共享资源缓存，未命中时用 `Assimp::Importer`（IO 经 `je_file_io_system` 走引擎文件系统，因此支持 `@/`、`!/` 路径与资源镜像）以 `aiProcess_Triangulate | aiProcess_GenNormals` 读取场景，然后用栈遍历节点树：
+`je_graphic_vertex_load` 先查共享资源缓存，未命中时用 `Assimp::Importer`（IO 经 `je_file_io_system` 走引擎文件系统，因此支持 `@/`、`!/` 路径与资源镜像）以 `aiProcess_Triangulate | aiProcess_GenNormals` 读取场景，然后用栈遍历节点树（每节点携带从根累计下来的变换矩阵）：
 
-* 每个子网格的顶点追加到同一数组，索引加上该子网格的顶点偏移；
+* 顶点先经节点累计变换烘焙到世界（节点局部）坐标后再追加到同一数组，索引加上该子网格的顶点偏移；法线取变换的线性部分后归一化；
 * 读取第 0 套 UV 与法线；切线按每个三角形的边与 UV 差计算，累加到三个顶点上，最后归一化（不使用模型自带的切线）；
 * 骨骼权重写入每顶点 4 个槽位：优先占用空槽，槽满后新权重大于其中最小者时替换它；骨骼索引不小于 256 的权重被跳过；未用的槽位最终置为索引 0、权重 0；
-* 结果以 `TRIANGLES` 与 76 字节的标准格式创建，带上骨骼表与资源路径，登记进共享缓存。
-
-⚠️ 注意 遍历节点时没有应用节点自身的变换矩阵（`mTransformation`），各子网格的顶点按其网格局部坐标直接合并；依赖节点层级摆放的模型需要在导出时把变换烘焙进顶点。另外 `include/jeecs/graphic.hpp` 中 `je_graphic_vertex_load` 的注释列出的顶点格式缺少“切线”一项，以实现中的 `jegl_standard_model_vertex_format` 为准。
+* 结果以 `TRIANGLES` 与 76 字节的标准格式创建（位置 3 + UV 2 + 法线 3 + 切线 3 + 骨骼 4 + 权重 4，见 `jegl_standard_model_vertex_format`），带上骨骼表与资源路径，登记进共享缓存。
 
 ### 动态更新
 

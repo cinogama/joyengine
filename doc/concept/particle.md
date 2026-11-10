@@ -37,9 +37,9 @@
 | `Forward2DParticle.shader` | 2D 延迟光照管线，接受光照与阴影（见[光照](light.md)） |
 | `Forward2DParticleSelfGlowing.shader` | 2D 延迟光照管线，写入自发光通道，不受光照衰减影响 |
 
-编辑器“创建 → 粒子发射器”预设会一次挂齐上述组件并指定 `ParticleBlend.shader`，推荐从它开始。
+编辑器“创建 → 粒子发射器”预设会一次挂齐上述组件并指定 `ParticleBlend.shader`，组件组合中的“粒子发射器”预设同样包含三件套，推荐从它们开始。
 
-⚠️ 注意 `Emitter` 的头文件注释称“系统会在缺失时自动补齐并挂上内置粒子着色器”，但当前实现**没有**这项逻辑：系统不会添加任何组件。编辑器常用组件组合中的“粒子发射器”只包含 `Emitter` 一个组件，单独使用时什么也看不到——请改用“创建 → 粒子发射器”实体预设，或自行挂齐。
+⚠️ 注意 系统不会在缺失时自动补齐任何渲染组件：缺少 `Renderer::Shape` 的发射器不参与模拟（模拟查询把 `Shape` 列为必需），缺少 `Shaders` / `Textures2D` 则不会被绘制。
 
 ### Emitter 参数
 
@@ -161,12 +161,12 @@ void FxSystem::Update()
 
 着色器先用实体的模型矩阵把中心变换到世界空间，再沿视图矩阵行向量（世界空间的摄像机 right / up）展开角点——CPU 只做模拟，同一份网格对任意数量的摄像机都正确朝向；角点在模型矩阵之后叠加，所以粒子尺寸不受发射器缩放影响。
 
-⚠️ 注意 以下几点以代码为准，与注释或直觉存在出入：
+实现要点（以代码为准）：
 
-* 头文件注释写“运行相位：Update（在物理与渲染之前完成数据构建）”，实际声明与注册的是 `GraphicUpdate`；
-* 查询中 `Translation` 为可选，但 `emit_one` 无条件读取其世界旋转——发射器必须带变换组件；
-* `emit_one` 在两种模拟空间下都先用发射器的世界旋转变换 `direction`，而局部空间的粒子随后还会经模型矩阵绘制，发射器带旋转时发射方向会被旋转两次，与“局部空间下 direction 按局部坐标系解释”的说法不符；
-* 粒子池以 `e._m_raw._m_id`（实体在所属 chunk 内的槽位号）为键、不含 chunk 信息：位于不同 chunk（如组件构成不同）而槽位号相同的发射器会共用一个池，碎片整理搬动实体后池也可能与实体错配。
+* 系统声明与注册的运行相位是 `GraphicUpdate`；
+* 查询中 `Translation` 为可选：发射器不带变换组件时 `emit_one` 按 `m_direction` 原值解释方向（世界空间模拟还按世界原点发射）；
+* `emit_one` 在两种模拟空间下都先用发射器的世界旋转变换 `direction`，而局部空间的粒子随后还会经模型矩阵绘制，发射器带旋转时发射方向相对发射器局部坐标被旋转**两次**（既有行为，头文件注释已按此描述）；
+* 粒子池以「chunk 指针 + chunk 内槽位号」为键（不同 chunk 对象地址差 ≥ `sizeof(arch_chunk)` > 槽位上限，相加不会重叠），跨 chunk 的发射器不会共用粒子池。
 
 ### 关键源码位置
 
@@ -176,5 +176,4 @@ void FxSystem::Update()
 | 粒子系统（池、发射、积分、网格构建） | `src/jeecs_core_particle_system.hpp/.cpp` |
 | 内置粒子着色器 | `builtin/shader/{ParticleBlend,ParticleAdd,Forward2DParticle,Forward2DParticleSelfGlowing}.shader` |
 | towoo 组件声明 | `je/towoo/components.wo`（`Particle::Emitter`） |
-| 粒子烘焙器 | `je/editor/particalbaker.wo` |
 | 编辑器预设与默认系统 | `builtin/editor/Editor/EntityClipboard.wo`、`ComponentPresets.wo`、`WorldEditorViewport/WorldOpen.wo` |

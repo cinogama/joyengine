@@ -170,7 +170,7 @@ C++ 侧的类型哈希是 `typeid(T).hash_code()`（`basic::type_hash<T>()`）�
 
 `default_functions<T>` 生成四个生命周期函数：构造函数依次尝试 `T(void*, const je_type_info_t*)`、`T(void*)`、`T(je_game_world_t*, ...)`、`T(const je_type_info_t*)`、`T{}` 等签名（组件构造时参数为空，系统构造时传入世界）；类型不可拷贝/移动构造时，拷贝器/移动器**只记录错误日志**，目标内存保持未构造状态。
 
-⚠️ 注意 上述能力都靠 C++ concept 检测，**检测失败是静默的**：`JERefRegsiter` 拼错，成员就一个都不会登记；`JEScriptTypeName` / `JEScriptTypeDeclare` 不是 `static`，`has_JEScriptTypeInterface` 就不成立，类型拿不到脚本解析器。撰写本文时，Woolang 值成员的存储类型 `woolang_runtime::PinValue`（`src/jeecs_woolang_value.hpp`）这两个函数恰好是非静态的，因此它没有脚本解析器，生成的 `types.wo` 中缺少 `dynamic` 声明，`component!` 中的 `woolang` 成员目前无法正常使用。
+⚠️ 注意 上述能力都靠 C++ concept 检测，**检测失败是静默的**：`JERefRegsiter` 拼错，成员就一个都不会登记；`JEScriptTypeName` / `JEScriptTypeDeclare` 不是 `static`，`has_JEScriptTypeInterface` 就不成立，类型拿不到脚本解析器。
 
 ### 脚本组件的注册
 
@@ -194,9 +194,7 @@ C++ 侧的类型哈希是 `typeid(T).hash_code()`（`basic::type_hash<T>()`）�
 
 桌面平台的 Debug 构建还会把两个文件落盘到源码树的 `je/towoo/` 下，供 IDE 补全；它们已被 `je/towoo/.gitignore` 忽略，不纳入版本管理，也不应手工修改。
 
-运行时，系统函数参数、`towoo::get_component` 等返回的组件结构体由 `create_component_struct` 构造：字段 0 是组件地址，字段 `i+1` 是第 `i` 个成员的地址。成员句柄的 `get` / `set` 进入 `wojeapi_towoo_member_get` / `_set`，用成员类型的脚本解析器在该地址上做 C++ ↔ Woolang 转换。
-
-⚠️ 注意 生成 `components.wo` 时，**没有脚本解析器的成员会被跳过**，而 `create_component_struct` 按全部成员顺序填充字段。若某个已登记成员的类型缺少解析器，Woolang 结构体的字段就会与实际地址错位——登记反射成员时，务必保证成员类型可被脚本识别。
+运行时，系统函数参数、`towoo::get_component` 等返回的组件结构体由 `create_component_struct` 构造：字段 0 是组件地址，字段 `i+1` 是第 `i` 个**有脚本解析器的**成员的地址（与 `components.wo` 的生成规则一致，没有解析器的成员在两侧都被跳过）。成员句柄的 `get` / `set` 进入 `wojeapi_towoo_member_get` / `_set`，用成员类型的脚本解析器在该地址上做 C++ ↔ Woolang 转换。
 
 ### 组件在 chunk 中的布局
 

@@ -87,8 +87,6 @@ Woolang 的 `je::animation` 与 C++ 的 `jeecs::animation`（头文件 `jeecs/an
 * 读取不消费事件，同一帧内多个系统都能读到相同结果；
 * 每个实体每帧最多记录 32 个事件，超出部分丢弃并告警。
 
-⚠️ 注意 正向播放时事件的判定区间为 (上次时刻, 本次时刻]，时刻恰为 0 的事件在正向播放中**不会触发**，“动作开始”事件请放在一个很小的正时刻；`pingpong` 的回程目前只会补发越过 0 端点那一帧内的事件（原因见第二部分）。
-
 ### 示例
 
 #### Woolang（`je::animation`）
@@ -193,7 +191,7 @@ v2 不兼容也不迁移旧版本：缓存生成器与动画编辑器都只接�
 5. 存在过渡目标时同样推进它，`m_fade_elapsed += |scaled_dt|`，`w = elapsed / duration`，w ≥ 1 时 `finish_fade` 让目标接替；目标动作丢失则放弃过渡；
 6. 当前动作以 1 − w、目标动作以 w 采样进栈上的采样缓冲，再一次性写回实体。
 
-`_fire_events_crossed(low, high, direction)` 的区间约定是：正向 (low, high]、反向 [low, high)。端点处的调用都按此传参（如回程越过 0 时为 `[0, from)`），但各分支最后一段统一以 `(from, to, io_direction)` 传入——反向推进时 from > to，区间为空。这就是 `pingpong` 回程（以及负的 `speed`）中途事件丢失的原因。
+`_fire_events_crossed` 的区间约定是：正向 (low, high]、反向 [low, high)，且正向区间起点为 0（播放起点、循环回到起点）时低端为闭。函数内部先按大小归一调用方传入的端点（反向推进时 from > to），各分支统一以 `(from, to, io_direction)` 传入也不会出现空区间。
 
 ### 采样与插值
 
