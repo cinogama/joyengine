@@ -140,10 +140,19 @@ namespace jeecs::graphic::api::dx11
         jedx11_vertex() = default;
         ~jedx11_vertex() = default;
 
+        bool m_modifiable_vertex_buffer;
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_vbo;
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_ebo;
         UINT m_stride;
         D3D_PRIMITIVE_TOPOLOGY m_method;
+    };
+    struct jedx11_modifiable_vertex : public jedx11_vertex
+    {
+        JECS_DISABLE_MOVE_AND_COPY(jedx11_modifiable_vertex);
+        jedx11_modifiable_vertex() = default;
+        ~jedx11_modifiable_vertex() = default;
+
+        jedx11_vertex* m_obsoluted_vertex;
     };
     struct jedx11_uniformbuf
     {
@@ -1622,9 +1631,10 @@ namespace jeecs::graphic::api::dx11
     }
 
     jedx11_vertex* dx11_create_vertex_instance(
-        jegl_dx11_context* context, je_gl_vertex_t* resource)
+        jegl_dx11_context* context, je_gl_vertex_t* resource, bool is_dynamic)
     {
-        auto* vertex = new jedx11_vertex;
+        jedx11_vertex* vertex =
+            is_dynamic ? new jedx11_modifiable_vertex : new jedx11_vertex;
 
         const static D3D_PRIMITIVE_TOPOLOGY DRAW_METHODS[] = {
             D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
@@ -1636,15 +1646,20 @@ namespace jeecs::graphic::api::dx11
 
         vertex->m_stride = resource->m_data_size_per_point;
 
-        // 顶点缓冲始终 DYNAMIC：运行时更新通过 Map/WRITE_DISCARD 整块重写，
-        // 驱动负责与仍在执行的帧隔离
+        // 默认 IMMUTABLE（静态网格占绝大多数）；首次录制更新时重建为 DYNAMIC，
+        // 之后通过 Map/WRITE_DISCARD 整块重写，由驱动负责与仍在执行的帧隔离
+        vertex->m_modifiable_vertex_buffer = is_dynamic;
+
+        // 新建顶点缓冲区
         D3D11_BUFFER_DESC vertex_buffer_describe;
         vertex_buffer_describe.ByteWidth =
             (UINT)resource->m_vertex_length;
 
-        vertex_buffer_describe.Usage = D3D11_USAGE_DYNAMIC;
+        vertex_buffer_describe.Usage =
+            is_dynamic ? D3D11_USAGE_DYNAMIC : D3D11_USAGE_IMMUTABLE;
         vertex_buffer_describe.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-        vertex_buffer_describe.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        vertex_buffer_describe.CPUAccessFlags =
+            is_dynamic ? D3D11_CPU_ACCESS_WRITE : 0;
         vertex_buffer_describe.MiscFlags = 0;
         vertex_buffer_describe.StructureByteStride = 0;
 
@@ -1700,7 +1715,7 @@ namespace jeecs::graphic::api::dx11
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
         resource->m_handle.m_ptr = dx11_create_vertex_instance(
-            context, resource);
+            context, resource, false /* Immutable as default */);
     }
     void dx11_vertex_update(
         je_graphic_impl_context_t ctx,
@@ -1714,12 +1729,32 @@ namespace jeecs::graphic::api::dx11
 
         assert(vertex_length <= resource->m_vertex_length);
 
+        // 只调整激活索引数量：绘制数量随绘制命令携带，不触碰顶点缓冲
+        //（Map/WRITE_DISCARD 会让缓冲原有内容变为未定义）
+        if (vertex_length == 0)
+            return;
+
+        assert(vertices != nullptr);
+
+        if (!vertex_instance->m_modifiable_vertex_buffer)
+        {
+            // This vertex buffer is immutable, we need to recreate it as dynamic
+            jedx11_modifiable_vertex* modifiable_vertex_instance =
+                static_cast<jedx11_modifiable_vertex*>(
+                    dx11_create_vertex_instance(
+                        context, resource, true /* Regenerate it as dynamic */));
+
+            modifiable_vertex_instance->m_obsoluted_vertex = vertex_instance;
+            resource->m_handle.m_ptr = modifiable_vertex_instance;
+
+            vertex_instance = modifiable_vertex_instance;
+        }
+
         // 整块重写本帧顶点内容（索引缓冲内容不变）
         D3D11_MAPPED_SUBRESOURCE mappedData;
         JERCHECK(context->m_dx_context->Map(
             vertex_instance->m_vbo.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
 
-        assert(vertices != nullptr);
         memcpy(mappedData.pData, vertices, vertex_length);
         context->m_dx_context->Unmap(vertex_instance->m_vbo.Get(), 0);
     }
@@ -1727,7 +1762,18 @@ namespace jeecs::graphic::api::dx11
         je_graphic_impl_context_t,
         je_gl_vertex_t* resource)
     {
-        delete static_cast<jedx11_vertex*>(resource->m_handle.m_ptr);
+        jedx11_vertex* vertex_instance =
+            static_cast<jedx11_vertex*>(resource->m_handle.m_ptr);
+
+        if (vertex_instance->m_modifiable_vertex_buffer)
+        {
+            auto* dynamic_vertex_instance =
+                static_cast<jedx11_modifiable_vertex*>(vertex_instance);
+            delete dynamic_vertex_instance->m_obsoluted_vertex;
+            delete dynamic_vertex_instance;
+        }
+        else
+            delete vertex_instance;
     }
 
     void dx11_framebuf_init(

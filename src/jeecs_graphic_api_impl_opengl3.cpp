@@ -547,6 +547,11 @@ namespace jeecs::graphic::api::gl3
 #endif
         glEnable(GL_DEPTH_TEST);
 
+        // 引擎的像素数据（创建期快照与区段上传）都是逐行紧密排布的；GL 默认按
+        // 4 字节对齐解读每一行，会让行字节数不是 4 的倍数的上传（如 MONO 纹理、
+        // 奇数宽度的区段）错行
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
         // Choose how the final linear-to-sRGB encode happens:
         //  * desktop GL: sRGB-capable window + FRAMEBUFFER_SRGB
         //  * GLES with EGL_KHR_gl_colorspace + EXT_sRGB_write_control: same
@@ -1608,6 +1613,13 @@ namespace jeecs::graphic::api::gl3
 
         assert(vertex_length <= resource->m_vertex_length);
 
+        // 只调整激活索引数量：绘制数量随绘制命令携带，不触碰顶点缓冲
+        //（重新指定存储会让缓冲原有内容变为未定义）
+        if (vertex_length == 0)
+            return;
+
+        assert(vertices != nullptr);
+
         // 以容量重新指定存储（孤儿化旧数据，等价 Map(WRITE_DISCARD)：
         // 避免 GPU 仍在读取旧数据时 glBufferSubData 阻塞图形线程），
         // 再写入本帧内容。索引缓冲内容不变。
@@ -1617,12 +1629,8 @@ namespace jeecs::graphic::api::gl3
             nullptr,
             GL_DYNAMIC_DRAW);
 
-        if (vertex_length != 0)
-        {
-            assert(vertices != nullptr);
-            glBufferSubData(
-                GL_ARRAY_BUFFER, 0, (GLsizeiptr)vertex_length, vertices);
-        }
+        glBufferSubData(
+            GL_ARRAY_BUFFER, 0, (GLsizeiptr)vertex_length, vertices);
     }
     void vertex_close(
         je_graphic_impl_context_t,

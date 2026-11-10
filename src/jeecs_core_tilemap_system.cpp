@@ -913,10 +913,13 @@ namespace jeecs::tilemap
         assert(rebuilt.has_value());
         shape->vertex = rebuilt;
 
-        // 未使用的格子保持全 0（退化三角形），不影响绘制
-        (void)used_cells;
-
         je_gl_vertex_t* raw = shape->vertex->get()->resource();
+
+        // 只绘制实际占用的格子（占用格在 staging 中紧凑排在前部，每格 4 个
+        // 子四边形 x 6 索引）；索引缓冲仍按创建容量分配。激活数量保持至少
+        // 1：0 长度的绘制调用在部分后端上非法，而 1 个索引的 TRIANGLES
+        // 绘制不产生任何图元
+        raw->m_index_count = std::max<size_t>(1, used_cells * 4 * 6);
 
         // 分块包围盒（局部空间：1 格 = 1 单位，向 +x 与 -y 展开）
         raw->m_x_min = (float)bx;

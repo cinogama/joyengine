@@ -2990,7 +2990,9 @@ je_gl_uniform_buffer_t* je_graphic_uniformbuf_create(
         static_cast<je_gl_uniform_buffer_t*>(
             malloc(sizeof(je_gl_uniform_buffer_t)));
 
-    // 创建期内容为全 0；运行时内容由 je_graphic_cmd_update_uniform_buffer 按帧录制
+    // 一致变量缓冲区创建后不保证初始化（接口不承诺内容）；这里清零只是让会读取
+    // 该缓冲的后端得到确定的字节。运行时内容由 je_graphic_cmd_update_uniform_buffer
+    // 按帧录制
     uniformbuf->m_initial_buffer = (uint8_t*)calloc(length, 1);
     uniformbuf->m_buffer_size = length;
     uniformbuf->m_buffer_binding_place = binding_place;

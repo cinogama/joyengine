@@ -1600,6 +1600,12 @@ namespace jeecs::graphic::api::metal
             static_cast<metal_vertex*>(resource->m_handle.m_ptr);
 
         assert(vertex_length <= resource->m_vertex_length);
+
+        // 只调整激活索引数量：绘制数量随绘制命令携带，不录制顶点切片
+        //（空切片会让本帧绑定读到 ring 中的无关数据）
+        if (vertex_length == 0)
+            return;
+
         assert(vertices != nullptr);
 
         // 本帧内容写进 frame ring，本帧的绑定改用它

@@ -4184,15 +4184,24 @@ namespace jeecs::graphic::api::vk120
             const size_t staging_size =
                 (size_t)width * height * depth * layer_count * pixel_size;
 
+            // 帧路径要求区段能放进当前帧 ring 的剩余空间（ring 容量在帧开始
+            // 时固定，不能重分配：已录制的命令引用的是当前缓冲）；放不下、
+            // 不在帧录制中、或正处在 render pass 内时，退化为一次临时提交
+            // 并等待完成（与初始化同一路径），代价是独享一块 staging
+            auto& frame_for_fit_check = current_frame();
+            const VkDeviceSize staging_aligned_start =
+                (frame_for_fit_check.m_stream_ring_offset + 15)
+                & ~VkDeviceSize(15);
+
             const bool can_record_into_frame =
                 _vk_frame_recording
                 && _vk_current_command_buffer != VK_NULL_HANDLE
-                && _vk_current_target_framebuffer == nullptr;
+                && _vk_current_target_framebuffer == nullptr
+                && staging_aligned_start + (VkDeviceSize)staging_size
+                    <= frame_for_fit_check.m_stream_ring_size;
 
             if (!can_record_into_frame)
             {
-                // 不在帧录制中，或正处在 render pass 内：退化为一次临时提交
-                // 并等待完成（与初始化同一路径）
                 VkBuffer staging_buffer = VK_NULL_HANDLE;
                 VkDeviceMemory staging_memory = VK_NULL_HANDLE;
                 VkDeviceSize staging_memory_offset = 0;

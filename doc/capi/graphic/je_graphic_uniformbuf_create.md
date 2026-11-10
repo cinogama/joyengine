@@ -60,8 +60,9 @@ je_graphic_uniformbuf_close(ubo);
 - 图形资源创建时自动获取一个引用计数
 - 使用此接口创建的缓冲，其资源路径为 `nullptr`
 - `binding_place` 需要与着色器中声明的绑定位置一致
-- 创建期内容为全 0；运行时内容通过
-  [je_graphic_cmd_update_uniform_buffer](je_graphic_cmd_update_uniform_buffer.md) 按帧录制完整数据
+- 创建后的缓冲区内容**不保证初始化**（各图形后端的表现不一致，不得假定为全 0）；
+  必须先通过 [je_graphic_cmd_update_uniform_buffer](je_graphic_cmd_update_uniform_buffer.md)
+  录制完整数据再使用，并且在绑定它的每一帧都录制一次
 
 ## 相关接口
 

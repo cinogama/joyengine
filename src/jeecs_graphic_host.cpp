@@ -159,9 +159,11 @@
         {
             auto& chain_buffer = get_rendering_chain_buffer();
 
+            // 仅在图形实现请求跳过本帧时生效：skip_all_draw 决定是跳过全部
+            // 绘制，还是只跳过以屏幕为目标的绘制（见下方 m_target 判断）
             const bool skip_draw =
                 skip_all_draw
-                || action != je_gl_update_action_t::JE_GL_UPDATE_CONTINUE;
+                && action != je_gl_update_action_t::JE_GL_UPDATE_CONTINUE;
 
             for (size_t i = 0; i < chain_buffer.m_allocated_command_buffers_count; ++i)
             {

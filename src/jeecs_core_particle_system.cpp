@@ -418,11 +418,13 @@ namespace jeecs::particle
                 // staging 的当前内容重新录一次
                 if (pool.alive_count > 0)
                 {
+                    // 只录存活前缀（存活粒子紧凑排在 staging 前部），
+                    // 没存活的尾部不值得占用命令缓冲与每帧瞬态存储
                     je_graphic_cmd_update_vertex(
                         _m_update_command,
                         pool.gpu_vertex->get()->resource(),
                         pool.staging.data(),
-                        pool.staging.size() * sizeof(float),
+                        pool.alive_count * 4 * FLOATS_PER_VERTEX * sizeof(float),
                         pool.alive_count * 6);
                 }
                 continue;
@@ -548,11 +550,15 @@ namespace jeecs::particle
                 raw_vertex->m_x_max = raw_vertex->m_y_max = raw_vertex->m_z_max = 0.01f;
             }
 
+            // 只录存活前缀；全部死亡时长度为 0（只调整激活索引数量）
+            const size_t alive_vertex_bytes =
+                pool.alive_count * 4 * FLOATS_PER_VERTEX * sizeof(float);
+
             je_graphic_cmd_update_vertex(
                 _m_update_command,
                 raw_vertex,
-                pool.staging.data(),
-                pool.staging.size() * sizeof(float),
+                alive_vertex_bytes != 0 ? pool.staging.data() : nullptr,
+                alive_vertex_bytes,
                 pool.alive_count * 6);
 
             pool.dirty = false;

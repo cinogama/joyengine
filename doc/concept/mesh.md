@@ -179,13 +179,13 @@ if (auto* shape = entity.get_component<Renderer::Shape>(); shape && mesh.has_val
 
 ### 动态更新
 
-顶点内容分两类：创建期快照（`m_initial_vertexs` / `m_initial_indices`，只读，用于后端首次初始化与图形线程重启重建）和**本帧内容**。`je_graphic_cmd_update_vertex` 把顶点数据拷贝进命令缓冲，提交时由后端落实到本帧的瞬态存储，并且只对本次提交中的绘制生效——因此带动态内容的网格（粒子、文本批处理）需要在绘制它的每一帧都录制一次更新；没有录制更新的帧绑定的是创建期内容。索引缓冲创建后不变；`active_index_count` 在录制时同步为绘制数量（钳制到至少 1）。粒子系统在录制前自行改写 `m_x/y/z_min/max`，以修正视锥剔除用的包围盒。
+顶点内容分两类：创建期快照（`m_initial_vertexs` / `m_initial_indices`，只读，用于后端首次初始化与图形线程重启重建）和**本帧内容**。`je_graphic_cmd_update_vertex` 把顶点数据拷贝进命令缓冲，提交时由后端落实，并且只对本次提交中的绘制生效——因此带动态内容的网格（粒子、文本批处理）**必须**在绘制它的每一帧都录制一次更新；没有录制更新的帧，绑定到的顶点内容未定义（取决于后端：可能是创建期内容，也可能是此前某次更新的内容），不得依赖。更新只定义所录制的前缀，粒子与文本批都只录实际用到的部分。索引缓冲创建后不变；`active_index_count` 在录制时同步为绘制数量（钳制到至少 1）。粒子系统在录制前自行改写 `m_x/y/z_min/max`，以修正视锥剔除用的包围盒。
 
 更新数据的选择在 `je_graphic_cmd_commit` 内联完成：先 `prepare_vertex_resource`（首次使用/重启后初始化），再调用后端的 `vertex_update(ctx, vertex, data, length)` 钩子。
 
 ### 各后端的顶点缓冲
 
-与纹理相同，网格在首次被图形线程使用时经 `vertex_create_blob` + `vertex_init` 创建后端对象，并由创建期快照完成初始上传。以 OpenGL 后端为例：`vertex_init` 创建 VAO / VBO / EBO——顶点缓冲按 `GL_STATIC_DRAW` 上传，索引缓冲按 `m_index_capacity` 上传，每个属性按序号 i 设置 `glVertexAttribPointer`（INT32 用 `glVertexAttribIPointer`），图元类型映射为 `GL_LINE_STRIP` / `GL_TRIANGLES` / `GL_TRIANGLE_STRIP`；`vertex_update` 以 `GL_DYNAMIC_DRAW` 重新指定整个顶点缓冲（同时孤儿化旧存储，避免与 GPU 读取冲突）再写入本帧内容，索引缓冲不重传。DX11 顶点缓冲始终为 `DYNAMIC`，更新用 `Map(WRITE_DISCARD)` 整块重写。Vulkan/Metal 把本帧内容写入每帧瞬态 ring，绑定阶段改绑该切片；创建期内容保留在资源自己的持久缓冲中。顶点类资源在 OpenGL 后端没有可跨实例复用的 blob。
+与纹理相同，网格在首次被图形线程使用时经 `vertex_create_blob` + `vertex_init` 创建后端对象，并由创建期快照完成初始上传。以 OpenGL 后端为例：`vertex_init` 创建 VAO / VBO / EBO——顶点缓冲按 `GL_STATIC_DRAW` 上传，索引缓冲按 `m_index_capacity` 上传，每个属性按序号 i 设置 `glVertexAttribPointer`（INT32 用 `glVertexAttribIPointer`），图元类型映射为 `GL_LINE_STRIP` / `GL_TRIANGLES` / `GL_TRIANGLE_STRIP`；`vertex_update` 以 `GL_DYNAMIC_DRAW` 重新指定整个顶点缓冲（同时孤儿化旧存储，避免与 GPU 读取冲突）再写入本帧内容，索引缓冲不重传。DX11 顶点缓冲默认 `IMMUTABLE`，首次更新时重建为 `DYNAMIC`，此后用 `Map(WRITE_DISCARD)` 整块重写。Vulkan/Metal 把本帧内容写入每帧瞬态 ring，绑定阶段改绑该切片；创建期内容保留在资源自己的持久缓冲中。长度为 0 的更新（只调整激活索引数量）在各后端都不触碰顶点缓冲。顶点类资源在 OpenGL 后端没有可跨实例复用的 blob。
 
 渲染系统按 `topology_of(m_type)` 选择 pipeline 拓扑，以 `je_graphic_cmd_draw_indexed(m_index_count)` 绘制；默认四边形由 `DefaultResources` 以 `{0, 1, 2, 3}` 索引和“位置 3 + UV 2 + 法线 3 + 切线 3”格式创建。视锥剔除的包围球半径取 `get_entity_size` 结果长度的一半：各轴为 `local_scale × 2 × max(|min|, |max|)`。
 

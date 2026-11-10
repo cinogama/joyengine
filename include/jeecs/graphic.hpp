@@ -763,8 +763,9 @@ typedef struct je_gl_uniform_buffer_t
 
     size_t m_buffer_binding_place;
     size_t m_buffer_size;
-    // 创建期内容快照：只在后端首次初始化（以及图形线程重建）时读取；
-    // 运行时内容由 je_graphic_cmd_update_uniform_buffer 按帧录制完整数据。
+    // 后端首次初始化（以及图形线程重建）时可能读取的内容缓冲。它的内容、以及
+    // 后端是否读取它，都不作为接口保证：一致变量缓冲区创建后不保证初始化，
+    // 内容必须由 je_graphic_cmd_update_uniform_buffer 按帧录制完整数据。
     uint8_t* m_initial_buffer;
 } je_gl_uniform_buffer_t;
 static_assert(
@@ -1124,6 +1125,8 @@ struct je_gl_graphic_api_t
     提交期落实一个顶点的「本帧内容」（来自 je_graphic_cmd_update_vertex 录制的数据）。
     该内容只对本次提交的绘制生效；图形实现通过每帧瞬态存储（ring / 丢弃重写）保证
     与在飞帧隔离，不得原地覆写仍在执行的帧所读取的持久缓冲。
+    vertex_length 为 0（vertices 为 nullptr）表示只调整激活索引数量：图形实现不得
+    因此改动或丢弃顶点缓冲的现有内容。
     */
     je_gl_graphic_api_vertex_update_func_t vertex_update;
 
@@ -1899,8 +1902,9 @@ JE_API void je_graphic_framebuf_close(je_gl_frame_buffer_t* framebuffer);
 /*
 je_graphic_uniformbuf_create [基本接口]
 创建一个指定大小和绑定位置的一致变量缓冲区资源
-    * 创建期内容为全 0；运行时内容通过 je_graphic_cmd_update_uniform_buffer
-        按帧录制完整数据
+    * 创建后的缓冲区内容不保证初始化（各图形后端表现不一致，不得假定为全 0）；
+        必须通过 je_graphic_cmd_update_uniform_buffer 录制完整数据后再使用，并且
+        在绑定它的每一帧都录制一次
     * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
         用计数，使用 je_graphic_uniformbuf_close 可减少引用计数；当资源的引用计数变为 0 时，
         资源将被释放
@@ -2450,13 +2454,18 @@ JE_API void je_graphic_cmd_bind_sampler(
 je_graphic_cmd_update_vertex [基本接口]
 录制一个顶点的「本帧内容」；提交命令时由图形后端落实，只对本次提交的绘制生效
     * vertices 与 vertex_length 描述一份完整的顶点前缀数据（不得超过资源创建时的
-        顶点数据容量）；vertices 传入 nullptr 时只调整激活的索引数量
+        顶点数据容量）；本命令只定义该前缀，前缀之外的顶点内容未定义，
+        active_index_count 范围内的索引不得引用它们
+    * vertices 传入 nullptr（此时 vertex_length 必须为 0）时只调整激活的索引数量，
+        不算作一次内容录制
     * active_index_count 为本次更新后实际参与绘制的索引数量（不能超过资源创建时
         的索引总数）；传入 0 时会被钳制为 1——0 长度的绘制调用在部分后端上非法，
         而 1 个索引的 TRIANGLES 绘制不产生任何图元
     * 本命令不需要 pass，也不要求先绑定该资源；录制时同步资源的激活索引数量
         （绘制数量属于 CPU 侧状态，仅录制线程读取）
-    * 没有录制更新的帧，绑定的是资源的创建期内容
+    * 带动态内容的缓冲必须在绘制它的每一帧都录制一次内容：没有录制内容的帧，
+        绑定到的顶点内容未定义（取决于图形后端，可能是创建期内容，也可能是此前
+        某次更新的内容），不得依赖。从未录制过内容的缓冲始终绑定创建期内容
 请参见：
     je_graphic_vertex_create
     je_graphic_branch_new_update_command
@@ -2473,7 +2482,9 @@ je_graphic_cmd_update_uniform_buffer [基本接口]
 录制一个一致变量缓冲区的「本帧完整内容」；提交命令时由图形后端落实
     * size 必须等于创建时指定的一致变量缓冲区长度
     * 本命令不需要 pass，也不要求先绑定该资源
-    * 没有录制更新的帧，绑定的是资源的创建期内容（全 0）
+    * 必须在绑定它的每一帧都录制一次内容：没有录制更新的帧，缓冲区内容未定义
+        （取决于图形后端，可能是此前某次更新的内容，也可能是未初始化的数据），
+        不得依赖
 请参见：
     je_graphic_uniformbuf_create
     je_graphic_branch_new_update_command
