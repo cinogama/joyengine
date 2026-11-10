@@ -501,6 +501,13 @@ namespace jeecs::ecs
 
             basic::atomic_list<arch_chunk> _m_chunks;
 
+            // 被碎片整理搬空的 chunk 回收池（单链表，复用 chunk->last 串联）：
+            // 跨帧持有的旧实体句柄仍会解引用其所在 chunk 的元数据（版本号已
+            // 失配，操作不生效），因此搬空的 chunk 不能直接 delete，否则旧句
+            // 悬垂（UB）。后续分配新 chunk 时优先从池中复用。
+            arch_chunk* _m_recycled_chunks = nullptr;
+            shared_mutex _m_recycled_chunks_mx;
+
             // 这个锁用于防止碎片整理的时候，有其他线程在操作chunk链表
             shared_mutex _m_chunk_list_defragmentation_mx;
 
@@ -617,6 +624,14 @@ namespace jeecs::ecs
                     delete chunk;
 
                     chunk = next_chunk;
+                }
+
+                // 回收池中的 chunk 也需要释放（析构时不可能再有并发访问）
+                while (_m_recycled_chunks != nullptr)
+                {
+                    arch_chunk* next_chunk = _m_recycled_chunks->last;
+                    delete _m_recycled_chunks;
+                    _m_recycled_chunks = next_chunk;
                 }
             }
 
@@ -751,7 +766,7 @@ namespace jeecs::ecs
                         for (auto freeid : free_places)
                             pick_chunk->command_add_free_slot(freeid);
 
-                        // 如果pick_chunk中的实体都是空闲的，那么我们就可以直接释放这个chunk了
+                        // 如果pick_chunk中的实体都是空闲的，那么我们就可以回收这个chunk了
                         if (stubborn_count == 0)
                         {
                             assert(!gap_filling_completed);
@@ -759,7 +774,13 @@ namespace jeecs::ecs
                             _m_free_count -= _m_entity_count_per_chunk;
                             _m_total_count -= _m_entity_count_per_chunk;
 
-                            delete pick_chunk;
+                            // 不能直接 delete：跨帧持有的旧句柄仍会解引用此
+                            // chunk 的元数据。放入回收池保持内存有效，待复用。
+                            {
+                                lock_guard g2(_m_recycled_chunks_mx);
+                                pick_chunk->last = _m_recycled_chunks;
+                                _m_recycled_chunks = pick_chunk;
+                            }
                             *pick_chunk_idx = nullptr;
                         }
 
@@ -826,11 +847,21 @@ namespace jeecs::ecs
                         // 有空位，但是没有找到空位（我在说什么？），这是不可能的！
                         abort();
                     }
-                    // OK, 没有空位了，我们需要创建新的chunk
+                    // OK, 没有空位了，优先复用回收池中搬空的chunk，否则创建新的chunk
                     //
                     // NOTE: 实际上如果有并行执行的添加实体操作，此处可能创建"不必要"的实体区块
                     //      不过问题不大，因为我们有碎片整理机制。
-                    arch_chunk* new_chunk = new arch_chunk(this);
+                    arch_chunk* recycled_chunk = nullptr;
+                    {
+                        lock_guard g2(_m_recycled_chunks_mx);
+                        if (_m_recycled_chunks != nullptr)
+                        {
+                            recycled_chunk = _m_recycled_chunks;
+                            _m_recycled_chunks = recycled_chunk->last;
+                        }
+                    }
+                    arch_chunk* new_chunk =
+                        recycled_chunk != nullptr ? recycled_chunk : new arch_chunk(this);
                     _m_chunks.add_one(new_chunk);
 
                     _m_total_count += _m_entity_count_per_chunk;
@@ -2493,6 +2524,11 @@ namespace jeecs::ecs
                             update();
                             assert(_m_universe_actions.peek() == nullptr);
 
+                            lock_guard g1(_m_exit_callbacks_mx);
+                            // 先置退出标记再排水：之后到达的注册会看到标记
+                            // 而直接失败，不会把回调挂进一张不会再被消费的表
+                            _m_universe_exited.store(true, memory_order_relaxed);
+
                             // invoke callback
                             auto* callback_func_node = m_exit_callback_list.pick_all();
                             while (callback_func_node)
@@ -2528,12 +2564,22 @@ namespace jeecs::ecs
                 function<void(void)> m_method;
             };
             basic::atomic_list<callback_function_node> m_exit_callback_list;
+            // 保护退出回调的注册与排水：更新线程退出时置位 _m_universe_exited
+            // 并一次性消费回调表；此后再注册将失败（返回 false），调用方
+            //（如 je_ecs_universe_loop 的 wait）不得继续等待，否则死锁。
+            shared_mutex _m_exit_callbacks_mx;
+            atomic_bool _m_universe_exited{ false };
 
-            inline void register_exit_callback(const function<void(void)>& function) noexcept
+            inline bool register_exit_callback(const function<void(void)>& function) noexcept
             {
+                lock_guard g1(_m_exit_callbacks_mx);
+                if (_m_universe_exited.load(memory_order_relaxed))
+                    return false;
+
                 callback_function_node* node = new callback_function_node();
                 node->m_method = function;
                 m_exit_callback_list.add_one(node);
+                return true;
             }
 
             inline void register_pre_call_once_job(je_job_call_once_t job, void* custom_data, void (*free_function)(void*)) noexcept
@@ -2593,7 +2639,7 @@ namespace jeecs::ecs
 
             inline void unregister_pre_call_once_job(je_job_call_once_t job) noexcept
             {
-                universe_action* action = new universe_action;
+                universe_action* action = new universe_action{};
                 action->m_type = universe_action::action_type::REMOVE_PRE_JOB_CALL_ONCE;
                 action->m_call_once_job = job;
 
@@ -2601,7 +2647,7 @@ namespace jeecs::ecs
             }
             inline void unregister_pre_for_worlds_job(je_job_for_worlds_t job) noexcept
             {
-                universe_action* action = new universe_action;
+                universe_action* action = new universe_action{};
                 action->m_type = universe_action::action_type::REMOVE_PRE_JOB_FOR_WORLDS;
                 action->m_for_worlds_job = job;
 
@@ -2609,7 +2655,7 @@ namespace jeecs::ecs
             }
             inline void unregister_call_once_job(je_job_call_once_t job) noexcept
             {
-                universe_action* action = new universe_action;
+                universe_action* action = new universe_action{};
                 action->m_type = universe_action::action_type::REMOVE_NORMAL_JOB_CALL_ONCE;
                 action->m_call_once_job = job;
 
@@ -2617,7 +2663,7 @@ namespace jeecs::ecs
             }
             inline void unregister_for_worlds_job(je_job_for_worlds_t job) noexcept
             {
-                universe_action* action = new universe_action;
+                universe_action* action = new universe_action{};
                 action->m_type = universe_action::action_type::REMOVE_NORMAL_JOB_FOR_WORLDS;
                 action->m_for_worlds_job = job;
 
@@ -2625,7 +2671,7 @@ namespace jeecs::ecs
             }
             inline void unregister_after_call_once_job(je_job_call_once_t job) noexcept
             {
-                universe_action* action = new universe_action;
+                universe_action* action = new universe_action{};
                 action->m_type = universe_action::action_type::REMOVE_AFTER_JOB_CALL_ONCE;
                 action->m_call_once_job = job;
 
@@ -2633,7 +2679,7 @@ namespace jeecs::ecs
             }
             inline void unregister_after_for_worlds_job(je_job_for_worlds_t job) noexcept
             {
-                universe_action* action = new universe_action;
+                universe_action* action = new universe_action{};
                 action->m_type = universe_action::action_type::REMOVE_AFTER_JOB_FOR_WORLDS;
                 action->m_for_worlds_job = job;
 
@@ -2768,13 +2814,19 @@ void je_ecs_universe_loop(je_game_universe_t* universe_instance)
     atomic_flag exit_flag = {};
     exit_flag.test_and_set();
 
-    static_cast<Universe*>(universe_instance)->register_exit_callback(
-        [&]()
-        {
-            lock_guard g1(exit_mx);
-            exit_flag.clear();
-            exit_cv.notify_all();
-        });
+    const bool registered =
+        static_cast<Universe*>(universe_instance)->register_exit_callback(
+            [&]()
+            {
+                lock_guard g1(exit_mx);
+                exit_flag.clear();
+                exit_cv.notify_all();
+            });
+
+    if (!registered)
+        // 更新线程已经退出（生命周期早已归零），没有会触发回调的一方，
+        // 直接返回而不是永远等待
+        return;
 
     do
     {
