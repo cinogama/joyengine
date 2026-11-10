@@ -63,8 +63,8 @@ JE_API const char* je_build_commit();
 je_core_main_script_entry [基本接口]
 运行入口脚本
     * 阻塞直到入口脚本运行完毕
-    * 尝试带缓存地加载 @/builtin/editor/main.wo
-    * 如果未能加载 @/builtin/editor/main.wo，则尝试 @/builtin/main.wo
+    * 先尝试加载游戏入口 @/builtin/main.wo（不带缓存）
+    * 若游戏入口不存在，则带缓存地加载编辑器入口 @/builtin/editor/main.wo
 */
 JE_API bool je_core_main_script_entry();
 typedef je_version_t je_Version;

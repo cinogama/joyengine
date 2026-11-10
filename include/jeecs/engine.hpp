@@ -25,7 +25,8 @@ namespace jeecs
             GRAPHIC_CONTEXT_READY,
         };
         graphic_state graphic_context_state_for_update_manually;
-        graphic::graphic_syncer_host* graphic_syncer;
+        // 未调用 prepare_graphic 就析构时也会被读取，必须初始化为空
+        graphic::graphic_syncer_host* graphic_syncer = nullptr;
 
     public:
         game_engine_context(int argc, char** argv)
