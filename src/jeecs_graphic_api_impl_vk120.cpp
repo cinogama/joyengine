@@ -337,27 +337,26 @@ namespace jeecs::graphic::api::vk120
         {
         }
     };
+    // 共享 UBO：不持有独立的 VkBuffer，内容驻留在每个帧槽位的 UBO ring 中。
+    // 每次更新 / 绑定都把整块内容复制进当前录制帧 ring 的新块；描述符按帧从
+    // per-frame 池分配，已录制的绘制继续引用旧块，因此“更新 → 后续绘制”的
+    // 顺序语义天然成立，在飞帧之间也相互隔离，图形线程重启后首次绑定会重新
+    // 上载整块内容。
     struct jevk12_uniformbuf
     {
-        JECS_DISABLE_MOVE_AND_COPY(jevk12_uniformbuf);
-
-        VkBuffer m_uniform_buffer;
-        VkDeviceMemory m_uniform_buffer_memory;
-        VkDeviceSize m_memory_offset;
-        VkDeviceSize m_memory_size;
-        VkDeviceSize m_buffer_size;
-        void* m_mapped;
-
         uint32_t m_real_binding_place;
+        size_t m_buffer_size;
+
+        // 内容最近一次上载所在的录制代（begin_frame_recording 实际重置 ring
+        // 时递增），不同即表示缓存块失效；0 表示尚未上载
+        uint64_t m_ring_recording_serial;
+        VkDeviceSize m_ring_offset;
 
         jevk12_uniformbuf()
-            : m_uniform_buffer(VK_NULL_HANDLE)
-            , m_uniform_buffer_memory(VK_NULL_HANDLE)
-            , m_memory_offset(0)
-            , m_memory_size(0)
+            : m_real_binding_place(0)
             , m_buffer_size(0)
-            , m_mapped(nullptr)
-            , m_real_binding_place(0)
+            , m_ring_recording_serial(0)
+            , m_ring_offset(0)
         {
         }
     };
@@ -432,42 +431,42 @@ namespace jeecs::graphic::api::vk120
     //（pre_update 中的 fence 等待）前都可能仍在 GPU 上执行。
     static constexpr uint32_t FRAMES_IN_FLIGHT = 2;
 
-    // 可重命名缓冲：按帧槽位环形重命名，在 Vulkan 上复刻 D3D11
-    // Map(WRITE_DISCARD) / OpenGL glBufferData 重指定的丢弃语义。
-    // 整体更新永远写入环形中的下一个槽位，仍在执行的旧帧继续读它们
-    // 录制时所绑定的槽位，写者与读者永不为同一块内存。首个槽位随资源
-    // 创建分配，其余槽位在整体更新时逐个懒分配（对齐 dx11 / opengl3
-    // 后端 IMMUTABLE→DYNAMIC 的懒升级），从不整体更新的静态资源
-    // 不占额外内存。
+    // 可重命名缓冲：写者永不覆盖仍可能被在飞帧读取的存储，在 Vulkan 上复刻
+    // D3D11 Map(WRITE_DISCARD) / OpenGL glBufferData 重指定的丢弃语义。
+    // 每次整体更新选择一个安全槽位写入：安全指该槽位自上次写入后没有被任何
+    // 绘制读取，或其最后一次读取发生在至少 FRAMES_IN_FLIGHT 个已提交帧之前
+    //（那些帧的 GPU 工作已由本帧录制开始时的槽位 fence 等待
+    //  wait_current_frame_slot 保证完成）。绘制绑定槽位时记录读取帧号
+    // （见 bind_draw_state）。没有安全槽位时（例如同一帧内多次更新同一资源）
+    // 追加分配新槽位；从不更新的静态网格只占一个槽位。
     struct jevk12_renamable_buffer
     {
-        JECS_DISABLE_MOVE_AND_COPY(jevk12_renamable_buffer);
+        struct slot_t
+        {
+            VkBuffer m_vk_buffer;
+            VkDeviceMemory m_vk_memory;
+            VkDeviceSize m_memory_offset;
+            VkDeviceSize m_memory_size;
+            void* m_mapped;
+            // 上次被绘制读取时的已提交帧序号；0 表示从未被读取
+            uint64_t m_serial_read;
+            // 上次写入之后是否被绘制读取过
+            bool m_read_since_write;
+        };
 
         explicit jevk12_renamable_buffer(VkBufferUsageFlagBits buffer_usage)
             : m_buffer_usage(buffer_usage)
             , m_buffer_size(0)
-            , m_allocated_slot_count(0)
             , m_current_slot(0)
         {
-            m_vk_buffer.fill(VK_NULL_HANDLE);
-            m_vk_memory.fill(VK_NULL_HANDLE);
-            m_memory_offset.fill(0);
-            m_memory_size.fill(0);
-            m_mapped.fill(nullptr);
         }
 
-        std::array<VkBuffer, FRAMES_IN_FLIGHT> m_vk_buffer;
-        std::array<VkDeviceMemory, FRAMES_IN_FLIGHT> m_vk_memory;
-        std::array<VkDeviceSize, FRAMES_IN_FLIGHT> m_memory_offset;
-        std::array<VkDeviceSize, FRAMES_IN_FLIGHT> m_memory_size;
-        std::array<void*, FRAMES_IN_FLIGHT> m_mapped;
+        std::vector<slot_t> m_slots;
 
         VkBufferUsageFlagBits m_buffer_usage;
         // 各槽位统一的分配字节数（空数据以 1 字节占位：Vulkan 不允许 0 大小缓冲）
         size_t m_buffer_size;
-        // 已分配槽位数；由槽位分配函数追加，增长到 FRAMES_IN_FLIGHT
-        uint32_t m_allocated_slot_count;
-        // 最新内容所在的槽位；每次整体更新时环形推进
+        // 最新内容所在的槽位
         uint32_t m_current_slot;
     };
 
@@ -482,13 +481,12 @@ namespace jeecs::graphic::api::vk120
             , m_vk_index_buffer_memory(VK_NULL_HANDLE)
             , m_index_memory_offset(0)
             , m_index_memory_size(0)
-            , m_vertex_point_count(0)
             , m_stride(0)
             , m_topology(JE_GL_VERTEX_TYPE_TRIANGLES)
         {
         }
 
-        // 顶点数据可经 je_graphic_vertex_buffer_update 整体更新，
+        // 顶点数据经命令缓冲区录制的更新改写（je_graphic_cmd_update_vertex），
         // 走可重命名缓冲隔离在飞帧
         jevk12_renamable_buffer m_vertex_buffer;
 
@@ -498,7 +496,6 @@ namespace jeecs::graphic::api::vk120
         VkDeviceSize m_index_memory_offset;
         VkDeviceSize m_index_memory_size;
 
-        uint32_t m_vertex_point_count;
         VkDeviceSize m_stride;
 
         je_gl_vertex_type_t m_topology;
@@ -762,6 +759,9 @@ namespace jeecs::graphic::api::vk120
             jegl_vk120_context* m_context;
 
             VkDescriptorBufferInfo m_binded_ubos[MAX_UBO_LAYOUT];
+            // 每个绑定槽位当前绑定的共享 UBO（jevk12_uniformbuf），用于更新
+            // 已绑定的 UBO 时重指描述符；为空表示该槽位未绑定
+            void* m_binded_ubo_owners[MAX_UBO_LAYOUT];
             VkDescriptorImageInfo m_binded_textures[MAX_TEXTURE_LAYOUT];
             VkDescriptorImageInfo m_binded_samplers[MAX_SAMPLER_LAYOUT];
             VkPipelineLayout m_binded_pipeline_layout;
@@ -779,6 +779,7 @@ namespace jeecs::graphic::api::vk120
             explicit descriptor_set_allocator(jegl_vk120_context* context)
                 : m_context(context)
                 , m_binded_ubos{}
+                , m_binded_ubo_owners{}
                 , m_binded_textures{}
                 , m_binded_samplers{}
                 , m_binded_pipeline_layout(VK_NULL_HANDLE)
@@ -797,6 +798,8 @@ namespace jeecs::graphic::api::vk120
                     ubo.offset = 0;
                     ubo.range = VK_WHOLE_SIZE;
                 }
+                for (auto& owner : m_binded_ubo_owners)
+                    owner = nullptr;
                 for (auto& texture : m_binded_textures)
                 {
                     texture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -824,6 +827,8 @@ namespace jeecs::graphic::api::vk120
 
                 for (auto& ubo : m_binded_ubos)
                     ubo.buffer = VK_NULL_HANDLE;
+                for (auto& owner : m_binded_ubo_owners)
+                    owner = nullptr;
                 for (auto& texture : m_binded_textures)
                     texture.imageView = VK_NULL_HANDLE;
                 for (auto& sampler : m_binded_samplers)
@@ -842,13 +847,20 @@ namespace jeecs::graphic::api::vk120
 
                 for (auto& ubo : m_binded_ubos)
                     ubo.buffer = VK_NULL_HANDLE;
+                for (auto& owner : m_binded_ubo_owners)
+                    owner = nullptr;
                 for (auto& texture : m_binded_textures)
                     texture.imageView = VK_NULL_HANDLE;
                 for (auto& sampler : m_binded_samplers)
                     sampler.sampler = VK_NULL_HANDLE;
             }
 
-            void bind_uniform_buffer(uint32_t binding, VkBuffer buffer)
+            void bind_uniform_buffer(
+                uint32_t binding,
+                VkBuffer buffer,
+                VkDeviceSize size,
+                VkDeviceSize offset,
+                void* owner)
             {
                 if (binding >= MAX_UBO_LAYOUT)
                 {
@@ -857,13 +869,48 @@ namespace jeecs::graphic::api::vk120
                         binding, MAX_UBO_LAYOUT);
                     return;
                 }
-                if (m_binded_ubos[binding].buffer != buffer)
+                if (m_binded_ubos[binding].buffer != buffer
+                    || m_binded_ubos[binding].offset != offset
+                    || m_binded_ubos[binding].range != size
+                    || m_binded_ubo_owners[binding] != owner)
                 {
                     m_binded_ubos[binding].buffer = buffer;
-                    m_binded_ubos[binding].offset = 0;
-                    m_binded_ubos[binding].range = VK_WHOLE_SIZE;
+                    m_binded_ubos[binding].offset = offset;
+                    m_binded_ubos[binding].range = size;
+                    m_binded_ubo_owners[binding] = owner;
                     m_ubo_dirty = true;
                 }
+            }
+
+            // 指定 UBO 是否仍处于绑定状态（其内容更新后需要重指描述符）
+            bool is_uniform_buffer_bound(void* owner) const
+            {
+                for (auto binded_owner : m_binded_ubo_owners)
+                {
+                    if (binded_owner == owner)
+                        return true;
+                }
+                return false;
+            }
+
+            // 把处于绑定状态的 UBO 重指到新的 ring 块；未绑定则忽略，
+            // 下一次绑定时会上载并指向最新内容
+            void rebind_uniform_buffer(
+                uint32_t binding,
+                VkBuffer buffer,
+                VkDeviceSize size,
+                VkDeviceSize offset,
+                void* owner)
+            {
+                if (binding >= MAX_UBO_LAYOUT)
+                    return;
+                if (m_binded_ubo_owners[binding] != owner)
+                    return;
+
+                m_binded_ubos[binding].buffer = buffer;
+                m_binded_ubos[binding].offset = offset;
+                m_binded_ubos[binding].range = size;
+                m_ubo_dirty = true;
             }
 
             void bind_texture(uint32_t binding, VkImageView image_view)
@@ -1362,6 +1409,13 @@ namespace jeecs::graphic::api::vk120
 
         std::array<frame_resources, FRAMES_IN_FLIGHT> _vk_frames;
         uint32_t _vk_current_frame_index;
+        // 已提交帧的累计序号：submit_frame 时递增，录制中的帧读取它标记
+        // 可重命名缓冲槽位的读取时刻；帧槽位 fence 只能保证
+        // FRAMES_IN_FLIGHT 个提交之前的帧已完成，槽位复用以此为准
+        uint64_t _vk_frame_serial;
+        // 录制代序号：begin_frame_recording 实际重置 ring 时递增，
+        // 用于识别 ring 中缓存数据（共享 UBO 块）的有效性
+        uint64_t _vk_recording_serial;
 
         // Following is runtime vk states.
         uint32_t _vk_presenting_swapchain_image_index;
@@ -1569,6 +1623,8 @@ namespace jeecs::graphic::api::vk120
             }
 
             _vk_current_frame_index = 0;
+            _vk_frame_serial = 1;
+            _vk_recording_serial = 1;
             _vk_frame_recording = false;
             _vk_frame_has_swapchain_image = false;
         }
@@ -2625,6 +2681,8 @@ namespace jeecs::graphic::api::vk120
             , _vk_temp_command_pool(VK_NULL_HANDLE)
             , _vk_frames{}
             , _vk_current_frame_index(0)
+            , _vk_frame_serial(1)
+            , _vk_recording_serial(1)
             , _vk_presenting_swapchain_image_index(UINT32_MAX)
             , _vk_current_swapchain_image_content(nullptr)
             , _vk_current_target_framebuffer(nullptr)
@@ -3236,19 +3294,27 @@ namespace jeecs::graphic::api::vk120
         // 持久映射，槽位的 m_mapped 恒有效）
         void alloc_renamable_buffer_slot(jevk12_renamable_buffer& target)
         {
-            const uint32_t slot_index = target.m_allocated_slot_count++;
-            assert(slot_index < FRAMES_IN_FLIGHT);
+            jevk12_renamable_buffer::slot_t slot{};
+            slot.m_vk_buffer = VK_NULL_HANDLE;
+            slot.m_vk_memory = VK_NULL_HANDLE;
+            slot.m_memory_offset = 0;
+            slot.m_memory_size = 0;
+            slot.m_mapped = nullptr;
+            slot.m_serial_read = 0;
+            slot.m_read_since_write = false;
 
             alloc_vk_device_buffer_memory(
                 target.m_buffer_size,
                 target.m_buffer_usage,
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                 VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                &target.m_vk_buffer[slot_index],
-                &target.m_vk_memory[slot_index],
-                &target.m_memory_offset[slot_index],
-                &target.m_memory_size[slot_index],
-                &target.m_mapped[slot_index]);
+                &slot.m_vk_buffer,
+                &slot.m_vk_memory,
+                &slot.m_memory_offset,
+                &slot.m_memory_size,
+                &slot.m_mapped);
+
+            target.m_slots.push_back(slot);
         }
 
         // 创建可重命名缓冲的首个槽位并写入初始数据（initial_datas 为
@@ -3263,48 +3329,73 @@ namespace jeecs::graphic::api::vk120
             alloc_renamable_buffer_slot(target);
 
             if (initial_datas != nullptr)
-                memcpy(target.m_mapped[0], initial_datas, initial_data_length);
+                memcpy(target.m_slots[0].m_mapped, initial_datas, initial_data_length);
         }
 
         void destroy_renamable_buffer(jevk12_renamable_buffer& target)
         {
-            // 槽位分配由 m_allocated_slot_count 精确跟踪，
-            // [0, count) 内的缓冲必然有效
-            for (uint32_t slot_index = 0;
-                slot_index < target.m_allocated_slot_count;
-                ++slot_index)
+            for (auto& slot : target.m_slots)
             {
-                vkDestroyBuffer(
-                    _vk_logic_device, target.m_vk_buffer[slot_index], nullptr);
+                vkDestroyBuffer(_vk_logic_device, slot.m_vk_buffer, nullptr);
                 free_vk_memory(
-                    target.m_vk_memory[slot_index],
-                    target.m_memory_offset[slot_index],
-                    target.m_memory_size[slot_index]);
+                    slot.m_vk_memory,
+                    slot.m_memory_offset,
+                    slot.m_memory_size);
             }
+            target.m_slots.clear();
         }
 
-        // 整体更新可重命名缓冲：懒分配下一个槽位（若尚未分配），然后
-        // 写入环形推进后的槽位。
-        //
-        // 写入安全性：逻辑帧与图形帧串行（je_graphic_update 的
-        // WAIT_THIS_FRAME_END），m_modified 只在帧间置位，资源每帧至多
-        // 触发一次更新钩子、至多推进一个槽位，因此仍可能在执行的最近
-        // FRAMES_IN_FLIGHT - 1 帧读的只会是其余槽位；本次写入的是环形中
-        // 最久未用的那个，它的最后一位读者至少在 FRAMES_IN_FLIGHT 帧前
-        // 提交，其完成已由本帧录制开始时的槽位 fence 等待
-        // （wait_current_frame_slot）保证。
+        // 槽位是否可以安全覆写：自上次写入以来没有被任何绘制读取，或其
+        // 最后一次读取至少在 FRAMES_IN_FLIGHT 个已提交帧之前（这些帧的
+        // GPU 工作已由本帧录制开始时的槽位 fence 等待保证完成）
+        bool renamable_slot_writable(
+            const jevk12_renamable_buffer::slot_t& slot) const
+        {
+            return !slot.m_read_since_write
+                || (_vk_frame_serial - slot.m_serial_read >= FRAMES_IN_FLIGHT);
+        }
+
+        // 整体更新可重命名缓冲：选择一个安全槽位写入（当前槽位优先），
+        // 没有安全槽位时追加分配。命令回放按序执行，因此更新之后绑定的
+        // 绘制读到新槽位，之前已录制的绘制继续读各自绑定的旧槽位。
         void upload_renamable_buffer_next_slot(
             jevk12_renamable_buffer& target,
             const void* datas,
             size_t data_length)
         {
-            if (target.m_allocated_slot_count < FRAMES_IN_FLIGHT)
+            uint32_t chosen = UINT32_MAX;
+
+            if (renamable_slot_writable(target.m_slots[target.m_current_slot]))
+                chosen = target.m_current_slot;
+
+            if (chosen == UINT32_MAX)
+            {
+                for (uint32_t slot_index = 0;
+                    slot_index < (uint32_t)target.m_slots.size();
+                    ++slot_index)
+                {
+                    if (slot_index == target.m_current_slot)
+                        continue;
+
+                    if (renamable_slot_writable(target.m_slots[slot_index]))
+                    {
+                        chosen = slot_index;
+                        break;
+                    }
+                }
+            }
+
+            if (chosen == UINT32_MAX)
+            {
                 alloc_renamable_buffer_slot(target);
+                chosen = (uint32_t)target.m_slots.size() - 1;
+            }
 
-            target.m_current_slot =
-                (target.m_current_slot + 1) % FRAMES_IN_FLIGHT;
-
-            memcpy(target.m_mapped[target.m_current_slot], datas, data_length);
+            auto& slot = target.m_slots[chosen];
+            memcpy(slot.m_mapped, datas, data_length);
+            slot.m_serial_read = 0;
+            slot.m_read_since_write = false;
+            target.m_current_slot = chosen;
         }
         /////////////////////////////////////////////////////
         VkSampler create_sampler(
@@ -3654,9 +3745,7 @@ namespace jeecs::graphic::api::vk120
             // Vulkan 不允许 size 为 0 的 buffer；空索引使用 1 字节占位。
             const size_t index_buffer_size = std::max<size_t>(index_data_size, 1);
 
-            // 创建索引缓冲区：按分配容量上传（m_index_count 可能已被
-            // je_graphic_vertex_buffer_update 收缩为激活数量，绘制数量另存于
-            // m_vertex_point_count）
+            // 创建索引缓冲区：按分配容量上传（绘制数量由命令缓冲区给出）
             void* index_mapped = nullptr;
             alloc_vk_device_buffer_memory(
                 index_buffer_size,
@@ -3683,7 +3772,6 @@ namespace jeecs::graphic::api::vk120
                     index_data_size);
             }
 
-            vertex->m_vertex_point_count = (uint32_t)resource->m_index_count;
             vertex->m_stride = (VkDeviceSize)resource->m_data_size_per_point;
 
             return vertex;
@@ -4032,8 +4120,7 @@ namespace jeecs::graphic::api::vk120
 
         template<typename TexT>
         void trans_and_update_texture_pixels(
-            jevk12_texture* texture, TexT* texture_raw_data,
-            bool use_modified_rect = false)
+            jevk12_texture* texture, TexT* texture_raw_data)
         {
             assert(texture != nullptr);
             assert(texture_raw_data != nullptr);
@@ -4072,33 +4159,7 @@ namespace jeecs::graphic::api::vk120
                 pixel_size *= 2;
             }
 
-            size_t upload_min_x = 0;
-            size_t upload_min_y = 0;
-            size_t upload_max_x = texture_raw_data->m_width;
-            size_t upload_max_y = texture_raw_data->m_height;
-            bool full_upload = true;
-
-            if constexpr (!is_3d && !is_array && !is_cube)
-            {
-                if (use_modified_rect
-                    && texture_raw_data->m_width != 0
-                    && texture_raw_data->m_height != 0)
-                {
-                    upload_min_x = texture_raw_data->m_modified_min_x;
-                    upload_min_y = texture_raw_data->m_modified_min_y;
-                    upload_max_x = texture_raw_data->m_modified_max_x;
-                    upload_max_y = texture_raw_data->m_modified_max_y;
-
-                    if (upload_min_x <= upload_max_x
-                        && upload_min_y <= upload_max_y
-                        && upload_max_x < texture_raw_data->m_width
-                        && upload_max_y < texture_raw_data->m_height)
-                    {
-                        full_upload = false;
-                    }
-                }
-            }
-
+            // 纹理内容创建后不可变，始终整张上传
             size_t staging_size;
             size_t buffer_offset;
             uint32_t row_length;
@@ -4106,40 +4167,20 @@ namespace jeecs::graphic::api::vk120
             VkOffset3D image_offset;
             VkExtent3D image_extent;
 
-            if (full_upload)
-            {
-                staging_size = texture_raw_data->m_width * texture_raw_data->m_height
-                    * slice_count * pixel_size;
-                buffer_offset = 0;
-                row_length = 0;
-                image_height = 0;
-                image_offset = { 0, 0, 0 };
-                uint32_t extent_depth = 1;
-                if constexpr (is_3d)
-                    extent_depth = (uint32_t)texture_raw_data->m_depth;
+            staging_size = texture_raw_data->m_width * texture_raw_data->m_height
+                * slice_count * pixel_size;
+            buffer_offset = 0;
+            row_length = 0;
+            image_height = 0;
+            image_offset = { 0, 0, 0 };
+            uint32_t extent_depth = 1;
+            if constexpr (is_3d)
+                extent_depth = (uint32_t)texture_raw_data->m_depth;
 
-                image_extent = {
-                    (uint32_t)texture_raw_data->m_width,
-                    (uint32_t)texture_raw_data->m_height,
-                    extent_depth };
-            }
-            else
-            {
-                const size_t sub_width = upload_max_x - upload_min_x + 1;
-                const size_t sub_height = upload_max_y - upload_min_y + 1;
-                staging_size = sub_width * sub_height * pixel_size;
-                buffer_offset = 0;
-                row_length = (uint32_t)sub_width;
-                image_height = (uint32_t)sub_height;
-                image_offset = {
-                    (int32_t)upload_min_x,
-                    (int32_t)upload_min_y,
-                    0 };
-                image_extent = {
-                    (uint32_t)sub_width,
-                    (uint32_t)sub_height,
-                    1 };
-            }
+            image_extent = {
+                (uint32_t)texture_raw_data->m_width,
+                (uint32_t)texture_raw_data->m_height,
+                extent_depth };
 
             if (staging_size == 0)
                 return;
@@ -4442,82 +4483,63 @@ namespace jeecs::graphic::api::vk120
             delete texture;
         }
 
-        jevk12_uniformbuf* create_uniform_buffer_with_size(uint32_t real_binding_place, size_t size)
+        // 共享 UBO 的内容驻留在当前录制帧的 UBO ring：整块复制进新分配的
+        // ring 块（对齐 minUniformBufferOffsetAlignment），返回块偏移
+        void upload_uniform_buffer_to_ring(
+            jevk12_uniformbuf* ubuf,
+            je_gl_uniform_buffer_t* resource)
         {
-            jevk12_uniformbuf* uniformbuf = new jevk12_uniformbuf{};
-
-            uniformbuf->m_real_binding_place = real_binding_place;
-            uniformbuf->m_buffer_size = std::max<size_t>(size, 1);
-
-            // 获取所需分配的内存类型
-            alloc_vk_device_buffer_memory(
-                uniformbuf->m_buffer_size,
-                VkBufferUsageFlagBits::VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                &uniformbuf->m_uniform_buffer,
-                &uniformbuf->m_uniform_buffer_memory,
-                &uniformbuf->m_memory_offset,
-                &uniformbuf->m_memory_size,
-                &uniformbuf->m_mapped);
-
-            return uniformbuf;
-        }
-        jevk12_uniformbuf* create_uniform_buffer(je_gl_uniform_buffer_t* resource)
-        {
-            return create_uniform_buffer_with_size(
-                (uint32_t)resource->m_buffer_binding_place,
-                resource->m_buffer_size);
-        }
-        void destroy_uniform_buffer(jevk12_uniformbuf* uniformbuf)
-        {
-            if (uniformbuf == nullptr)
-                return;
-            if (uniformbuf->m_uniform_buffer != VK_NULL_HANDLE)
-                vkDestroyBuffer(_vk_logic_device, uniformbuf->m_uniform_buffer, nullptr);
-            if (uniformbuf->m_uniform_buffer_memory != VK_NULL_HANDLE)
-            {
-                free_vk_memory(
-                    uniformbuf->m_uniform_buffer_memory,
-                    uniformbuf->m_memory_offset,
-                    uniformbuf->m_memory_size);
-            }
-            delete uniformbuf;
-        }
-        void update_uniform_buffer_with_range(jevk12_uniformbuf* ubuf, void* data, size_t offset, size_t size)
-        {
-            if (ubuf == nullptr || data == nullptr || size == 0)
-                return;
-            if (offset + size > ubuf->m_buffer_size)
-            {
-                jeecs::debug::logerr(
-                    "VK120: uniform buffer update exceeds the allocated buffer size.");
-                return;
-            }
-
-            if (ubuf->m_mapped == nullptr)
-            {
-                jeecs::debug::logerr(
-                    "VK120: uniform buffer memory is not persistently mapped.");
-                return;
-            }
+            auto& frame = current_frame();
+            const VkDeviceSize offset = frame.allocate_uniform_block(
+                (VkDeviceSize)ubuf->m_buffer_size,
+                _vk_min_uniform_buffer_offset_alignment);
 
             memcpy(
-                (uint8_t*)ubuf->m_mapped + offset,
-                data,
-                size);
+                (uint8_t*)frame.m_ubo_ring_mapped + offset,
+                resource->m_buffer,
+                ubuf->m_buffer_size);
+
+            ubuf->m_ring_recording_serial = _vk_recording_serial;
+            ubuf->m_ring_offset = offset;
         }
-        void update_uniform_buffer(je_gl_uniform_buffer_t* resource)
+
+        // 绑定前确保当前录制帧内有一份最新内容（同一帧内重复绑定复用块）
+        void ensure_uniform_buffer_uploaded(
+            jevk12_uniformbuf* ubuf,
+            je_gl_uniform_buffer_t* resource)
         {
-            jevk12_uniformbuf* uniformbuf =
+            if (ubuf->m_ring_recording_serial != _vk_recording_serial)
+                upload_uniform_buffer_to_ring(ubuf, resource);
+        }
+
+        // 命令缓冲区提交时调用（引擎已把数据写入 resource->m_buffer）：
+        // 缓存的 ring 块失效；若本帧录制进行中且 UBO 处于绑定状态，立即上载
+        // 新块并重指描述符，保证随后的绘制读到新内容。其余情况（未开始录制，
+        // 例如整帧绘制被跳过时的纯更新提交；或未绑定）只失效，留待下次绑定
+        // 时上载——此时不得触碰 ring：本帧槽位的 fence 尚未等待，上一轮使用
+        // 该槽位的帧可能仍在 GPU 上执行
+        void update_uniform_buffer(
+            je_gl_uniform_buffer_t* resource,
+            size_t /*offset*/,
+            size_t /*size*/)
+        {
+            jevk12_uniformbuf* ubuf =
                 static_cast<jevk12_uniformbuf*>(resource->m_handle.m_ptr);
 
-            assert(resource->m_update_length != 0);
-            update_uniform_buffer_with_range(
-                uniformbuf,
-                resource->m_buffer + resource->m_update_begin_offset,
-                resource->m_update_begin_offset,
-                resource->m_update_length);
+            ubuf->m_ring_recording_serial = 0;
+
+            if (_vk_frame_recording
+                && _vk_descriptor_set_allocator->is_uniform_buffer_bound(ubuf))
+            {
+                upload_uniform_buffer_to_ring(ubuf, resource);
+
+                _vk_descriptor_set_allocator->rebind_uniform_buffer(
+                    ubuf->m_real_binding_place,
+                    current_frame().m_ubo_ring_buffer,
+                    (VkDeviceSize)ubuf->m_buffer_size,
+                    ubuf->m_ring_offset,
+                    ubuf);
+            }
         }
 
         /////////////////////////////////////////////////////
@@ -4578,6 +4600,8 @@ namespace jeecs::graphic::api::vk120
 
             JE_VK_CHECK(vkResetCommandBuffer(frame.m_command_buffer, 0));
 
+            // ring 即将重置，此前缓存其中的共享 UBO 块全部失效
+            ++_vk_recording_serial;
             frame.m_ubo_ring_offset = 0;
             JE_VK_CHECK(vkResetDescriptorPool(
                 _vk_logic_device, frame.m_descriptor_pool, 0));
@@ -4641,6 +4665,9 @@ namespace jeecs::graphic::api::vk120
 
             frame.m_submitted = true;
             frame.m_recording = false;
+
+            // 本帧提交完成，槽位读取帧号以此序号推进
+            ++_vk_frame_serial;
 
             if (frame.m_has_swapchain_image)
             {
@@ -5420,12 +5447,17 @@ namespace jeecs::graphic::api::vk120
             _vk_descriptor_set_allocator->bind_all(
                 _vk_current_command_buffer, uniform_vars, dynamic_uniform_offset);
 
-            // 绑定最新内容所在的槽位；仍在执行的旧帧读各自录制时绑定的槽位
+            // 绑定最新内容所在的槽位并记录读取时刻：仍在执行的旧帧读各自
+            // 录制时绑定的旧槽位，之后对该缓冲的更新只会写别的槽位
+            auto& bound_slot = vertex->m_vertex_buffer.m_slots[
+                vertex->m_vertex_buffer.m_current_slot];
+            bound_slot.m_serial_read = _vk_frame_serial;
+            bound_slot.m_read_since_write = true;
+
             VkDeviceSize offsets = 0;
             vkCmdBindVertexBuffers(
                 _vk_current_command_buffer, 0, 1,
-                &vertex->m_vertex_buffer.m_vk_buffer[
-                    vertex->m_vertex_buffer.m_current_slot],
+                &bound_slot.m_vk_buffer,
                 &offsets);
         }
 
@@ -5806,38 +5838,27 @@ namespace jeecs::graphic::api::vk120
 
         fbuffer->m_handle.m_ptr = frame_buffer_instance;
     }
-    void init_ubuffer(je_graphic_impl_context_t ctx, je_gl_uniform_buffer_t* ubuffer)
+    void init_ubuffer(je_graphic_impl_context_t, je_gl_uniform_buffer_t* ubuffer)
     {
-        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
+        // 内容驻留在帧 UBO ring，初始化无需创建任何设备资源；
+        // 首次绑定时上载整块内容
+        auto* uniformbuf_instance = new jevk12_uniformbuf{};
+        uniformbuf_instance->m_real_binding_place =
+            (uint32_t)ubuffer->m_buffer_binding_place;
+        uniformbuf_instance->m_buffer_size =
+            std::max<size_t>(ubuffer->m_buffer_size, 1);
 
-        ubuffer->m_handle.m_ptr = context->create_uniform_buffer(ubuffer);
+        ubuffer->m_handle.m_ptr = uniformbuf_instance;
     }
 
-    void update_shader(je_graphic_impl_context_t ctx, je_gl_shader_t* shader)
+    void update_shader(je_graphic_impl_context_t, je_gl_shader_t*)
     {
     }
-    template<typename TexT>
-    void update_texture(je_graphic_impl_context_t ctx, TexT* texture)
-    {
-        if constexpr (std::is_same_v<TexT, je_gl_texture_msaa_t>)
-        {
-            (void)ctx;
-            (void)texture;
-            // NOTE: MSAA 纹理只存在于 GPU 侧，不支持 CPU 侧像素更新
-            jeecs::debug::logerr("MSAA texture update is not supported.");
-        }
-        else
-        {
-            jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
-
-            // Modified, free current resource id, reload one.
-            context->trans_and_update_texture_pixels(
-                static_cast<jevk12_texture*>(texture->m_handle.m_ptr),
-                texture,
-                true);
-        }
-    }
-    void update_vertex(je_graphic_impl_context_t ctx, je_gl_vertex_t* vertex)
+    void update_vertex(
+        je_graphic_impl_context_t ctx,
+        je_gl_vertex_t* vertex,
+        size_t /*offset*/,
+        size_t /*size*/)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         jevk12_vertex* vertex_instance =
@@ -5853,25 +5874,25 @@ namespace jeecs::graphic::api::vk120
                 return;
             }
 
-            // 写入下一个槽位而非原地覆盖：原地覆盖会改到上一帧尚未执行
-            // 完的绘制正在读的数据（世界空间粒子拖动发射器时整体错位
-            // 抖动的根因）
+            // 写入安全槽位而非原地覆盖：原地覆盖会改到仍在执行的帧正在读的
+            // 数据（世界空间粒子拖动发射器时整体错位抖动的根因）
             context->upload_renamable_buffer_next_slot(
                 vertex_instance->m_vertex_buffer,
                 vertex->m_vertexs,
                 vertex->m_vertex_length);
         }
-
-        vertex_instance->m_vertex_point_count =
-            (uint32_t)vertex->m_index_count;
     }
-    void update_framebuffer(je_graphic_impl_context_t ctx, je_gl_frame_buffer_t* fbuffer)
+    void update_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t* fbuffer)
     {
     }
-    void update_ubuffer(je_graphic_impl_context_t ctx, je_gl_uniform_buffer_t* ubuffer)
+    void update_ubuffer(
+        je_graphic_impl_context_t ctx,
+        je_gl_uniform_buffer_t* ubuffer,
+        size_t offset,
+        size_t size)
     {
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
-        context->update_uniform_buffer(ubuffer);
+        context->update_uniform_buffer(ubuffer, offset, size);
     }
 
     void close_shader(je_graphic_impl_context_t ctx, je_gl_shader_t* shader)
@@ -5895,10 +5916,10 @@ namespace jeecs::graphic::api::vk120
         jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
         context->destroy_frame_buffer(static_cast<jevk12_framebuffer*>(fbuffer->m_handle.m_ptr));
     }
-    void close_ubuffer(je_graphic_impl_context_t ctx, je_gl_uniform_buffer_t* ubuffer)
+    void close_ubuffer(je_graphic_impl_context_t, je_gl_uniform_buffer_t* ubuffer)
     {
-        jegl_vk120_context* context = static_cast<jegl_vk120_context*>(ctx);
-        context->destroy_uniform_buffer(static_cast<jevk12_uniformbuf*>(ubuffer->m_handle.m_ptr));
+        // 内容驻留在帧 UBO ring，无需释放设备资源
+        delete static_cast<jevk12_uniformbuf*>(ubuffer->m_handle.m_ptr);
     }
 
     void bind_uniform_buffer(je_graphic_impl_context_t ctx, je_gl_uniform_buffer_t* uniformbuf)
@@ -5907,8 +5928,15 @@ namespace jeecs::graphic::api::vk120
         jevk12_uniformbuf* uniformbuf_instance =
             static_cast<jevk12_uniformbuf*>(uniformbuf->m_handle.m_ptr);
 
+        // 每个录制帧内保证一份最新内容（同帧重复绑定复用同一块）
+        context->ensure_uniform_buffer_uploaded(uniformbuf_instance, uniformbuf);
+
         context->_vk_descriptor_set_allocator->bind_uniform_buffer(
-            uniformbuf_instance->m_real_binding_place, uniformbuf_instance->m_uniform_buffer);
+            uniformbuf_instance->m_real_binding_place,
+            context->current_frame().m_ubo_ring_buffer,
+            (VkDeviceSize)uniformbuf_instance->m_buffer_size,
+            uniformbuf_instance->m_ring_offset,
+            uniformbuf_instance);
     }
 
     template<typename TexT>
@@ -6290,11 +6318,6 @@ void je_graphic_using_vk120_apis(je_gl_graphic_api_t* write_to_apis)
     write_to_apis->ubuffer_init = init_ubuffer;
 
     write_to_apis->shader_update = update_shader;
-    write_to_apis->texture_2d_update = update_texture<je_gl_texture_2d_t>;
-    write_to_apis->texture_3d_update = update_texture<je_gl_texture_3d_t>;
-    write_to_apis->texture_array_update = update_texture<je_gl_texture_array_t>;
-    write_to_apis->texture_cube_update = update_texture<je_gl_texture_cube_t>;
-    write_to_apis->texture_msaa_update = update_texture<je_gl_texture_msaa_t>;
     write_to_apis->vertex_update = update_vertex;
     write_to_apis->framebuffer_update = update_framebuffer;
     write_to_apis->ubuffer_update = update_ubuffer;

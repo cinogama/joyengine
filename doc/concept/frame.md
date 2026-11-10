@@ -135,7 +135,7 @@ u->set_frame_deltatime(0.);          // 不主动限速
 
 画面呈现工作是图形管线（`je_graphic_uhost_t`）创建时注册的提交时机单独调用工作 `_update_frame_universe_job`：
 
-1. 调用 `je_graphic_update`：置位更新请求并通知图形同步线程（由 `graphic_syncer_host` 驱动，`jedriver` 中即主线程），随后阻塞；同步模式由 `BRANCH_CHAIN_POOL_SIZE` 决定，当前为 1，因此是 `JE_GL_WAIT_THIS_FRAME_END`——**等到图形线程画完本帧**才返回；
+1. 调用 `je_graphic_update`：置位更新请求并通知图形同步线程（由 `graphic_syncer_host` 驱动，`jedriver` 中即主线程），随后阻塞；同步模式由 `BRANCH_CHAIN_POOL_SIZE` 决定，当前为 2，因此是 `JE_GL_WAIT_LAST_FRAME_END`——**等到图形线程画完上一帧**即返回，本帧录制可与上一帧绘制并行；
 2. 等待结束后回调翻转各渲染分支的链式缓冲；
 3. 若 `je_graphic_update` 返回 false（图形已终止，例如窗口被关闭），则停止后续呈现，并对宇宙调用一次 `trim()`（见 [universe.md](universe.md#生命计数)）。
 

@@ -154,6 +154,38 @@ const character* je_font_char_get(
     int texture_pixel_width = pixel_w + 2 * (int)font->m_board_size_x;
     int texture_pixel_height = pixel_h + 2 * (int)font->m_board_size_y;
 
+    // 字形纹理内容在创建时一次确定：先在临时缓冲合成（白色 + 覆盖度
+    // alpha，含 board 边框），经 updater 预处理后作为初始像素创建纹理
+    const size_t texture_pixel_count =
+        (size_t)texture_pixel_width * (size_t)texture_pixel_height * 4;
+    std::vector<uint8_t> glyph_pixels(texture_pixel_count, 0);
+
+    if (ch_tex_buffer != nullptr)
+    {
+        for (size_t j = 0; j < (size_t)pixel_h; j++)
+        {
+            for (size_t i = 0; i < (size_t)pixel_w; i++)
+            {
+                const uint8_t coverage = ch_tex_buffer[i + pixel_w * j];
+                uint8_t* dst = glyph_pixels.data()
+                    + (((size_t)pixel_h - j - 1 + font->m_board_size_y)
+                        * (size_t)texture_pixel_width
+                        + (i + font->m_board_size_x)) * 4;
+                dst[0] = dst[1] = dst[2] = 0xFF;
+                dst[3] = coverage;
+            }
+        }
+        free(ch_tex_buffer);
+    }
+
+    if (font->m_updater != nullptr)
+    {
+        font->m_updater(
+            glyph_pixels.data(),
+            (size_t)texture_pixel_width,
+            (size_t)texture_pixel_height);
+    }
+
     character& ch =
         sized_char_set.emplace(
                 unicode32_char,
@@ -161,7 +193,8 @@ const character* je_font_char_get(
                     texture2d::create(
                         (size_t)texture_pixel_width,
                         (size_t)texture_pixel_height,
-                        JE_GL_TEXTURE_FORMAT_RGBA) }).first->second;
+                        JE_GL_TEXTURE_FORMAT_RGBA,
+                        glyph_pixels.data()) }).first->second;
 
     ch.m_char = unicode32_char;
 
@@ -176,28 +209,6 @@ const character* je_font_char_get(
     // 字符纹理的 y 轴向上、第 0 行是墨水底边下方 board 处，而 bmp_y0 以 y 向下
     // 记录墨水顶边，故墨水底边在基线上方 -(bmp_y0 + pixel_h) 像素
     ch.m_baseline_offset_y = pixel_h ? -(bmp_y0 + pixel_h) - (int)font->m_board_size_y : 0;
-
-    if (ch_tex_buffer != nullptr)
-    {
-        for (size_t j = 0; j < (size_t)pixel_h; j++)
-        {
-            for (size_t i = 0; i < (size_t)pixel_w; i++)
-            {
-                float _vl = ((float)ch_tex_buffer[i + pixel_w * j]) / 255.0f;
-                ch.m_texture->pix(i + font->m_board_size_x, pixel_h - j - 1 + font->m_board_size_y).set({ 1.f, 1.f, 1.f, _vl });
-            }
-        }
-        free(ch_tex_buffer);
-    }
-
-    if (font->m_updater != nullptr)
-    {
-        auto* raw_texture_data = ch.m_texture->resource();
-        font->m_updater(
-            raw_texture_data->m_pixels,
-            raw_texture_data->m_width,
-            raw_texture_data->m_height);
-    }
 
     return &ch;
 }

@@ -11,7 +11,7 @@ JE_API je_gl_command_buffer_t* /* NOT NULL */ je_graphic_branch_new_command_buff
 
 ## 描述
 
-从绘制组申请一个已经 reset 的命令缓冲区；屏幕目标传 nullptr。
+从绘制组申请一个已经 reset、并已对指定目标开始 pass 的命令缓冲区；屏幕目标传 nullptr。只录制资源更新时改用 [je_graphic_branch_new_update_command_buffer](je_graphic_branch_new_update_command_buffer.md)。
 
 ## 参数
 

@@ -3,8 +3,6 @@ import pkg::std;
 
 import je::ecs;
 
-import pkg::buffer;
-
 namespace je
 {
     namespace graphic
@@ -36,14 +34,6 @@ namespace je
             extern("libjoyecs", "wojeapi_vertex_path")
                 public func path(self: vertex)=> option<string>;
 
-            // 整体重写顶点数据并收缩激活索引数量（语义见
-            // je_graphic_vertex_buffer_update）：vertices 为一份完整的顶点数据，
-            // 不能超过创建时的容量；indices 只取"激活索引数量"一个语义
-            //（索引缓冲保持创建时的内容不变）。注意包围盒不会重算，
-            // 依赖视锥剔除的调用方应以覆盖完整范围的初始数据创建缓冲。
-            extern("libjoyecs", "wojeapi_vertex_update")
-                public func update(self: vertex, vertices: array<real>, indices: int)=> void;
-
             // 模型顶点数据的局部空间包围盒，返回
             // (min_x, min_y, min_z, max_x, max_y, max_z)；
             // 顶点格式不含 3 分量位置时包围盒为全 0（由调用方处理退化）
@@ -56,8 +46,13 @@ namespace je
             extern("libjoyecs", "wojeapi_texture2d_open")
                 public func load(univ: option<universe>, path: string)=> option<texture2d>;
 
+            // 创建内容全 0 的纹理；纹理内容创建后不可变
             extern("libjoyecs", "wojeapi_texture2d_create")
                 public func create(width: int, height: int)=> texture2d;
+
+            // 以纯色创建纹理（rgba 各分量取 [0, 1]）；纹理内容创建后不可变
+            extern("libjoyecs", "wojeapi_texture2d_create_with_color")
+                public func create_with_color(width: int, height: int, rgba: (real,real,real,real))=> texture2d;
 
             extern("libjoyecs", "wojeapi_texture2d_clip")
                 public func clip(src: texture2d, x: int, y: int, w: int, h: int)=> texture2d;
@@ -70,19 +65,6 @@ namespace je
 
             extern("libjoyecs", "wojeapi_texture2d_size")
                 public func size(self: texture2d)=> (int, int);
-
-            extern("libjoyecs", "wojeapi_texture2d_pix")
-                public func pix(self: texture2d, pos: (int, int))=> pixel;
-
-            public using pixel = gchandle;
-            namespace pixel
-            {
-                extern("libjoyecs", "wojeapi_texture_set_pixel_color")
-                    public func set_color(self: pixel, rgba: (real,real,real,real))=> void;
-
-                extern("libjoyecs", "wojeapi_texture_pixel_color")
-                    public func get_color(self: pixel)=> (real, real, real, real);
-            }
         }
 
         public using texture3d = gchandle
@@ -98,11 +80,6 @@ namespace je
 
             extern("libjoyecs", "wojeapi_texturearray_layers")
                 public func layers(self: texture_array)=> int;
-
-            // 直接改写纹理层数据（经引擎侧 API 获取像素指针）后，
-            // 调用此接口触发重上传
-            extern("libjoyecs", "wojeapi_texturearray_mark_modified")
-                public func mark_modified(self: texture_array)=> void;
         }
 
         public using texture_cube = gchandle
@@ -257,12 +234,13 @@ namespace je
                 public func size(self: framebuffer)=> (int, int);
         }
         
+        // 一致变量缓冲区：内容自创建起为全 0；更新以命令的形式录制到
+        // 命令缓冲区（引擎 C-API je_graphic_cmd_update_uniform_buffer），
+        // 随命令缓冲区提交生效
         public using uniformbuffer = gchandle
         {
             extern("libjoyecs", "wojeapi_uniformbuffer_create")
                 public func create(binding_place: int, buffer_size: int)=> option<uniformbuffer>;
-            extern("libjoyecs", "wojeapi_uniformbuffer_update")
-                public func update(self: uniformbuffer, offset: int, data: buffer)=> void;
         }
         
         public using command_buffer = handle;

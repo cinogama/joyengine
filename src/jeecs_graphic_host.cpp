@@ -18,10 +18,13 @@
         JECS_DISABLE_MOVE_AND_COPY(je_render_branch_t);
         
         /* 
-        NOTE: 尽管 branch 本身支持双缓冲，但是 branch 中的 ubuffer 只有一份实例，
-            在不同的 branch 中共享相同的 ubuffer 没啥意义
+        NOTE: 顶点 / UBO 的内容更新与绘制一样以命令的形式录制在链里（数据快照
+            保存在命令缓冲区内），资源对象上没有暴露给逻辑线程的可变数据，因此
+            两条链（一录一发）不会通过资源内容互相干扰，双缓冲安全。
+            各绘制组需保证每帧调用 new_frame；某帧未录制的链会重复提交其最近一次
+            录制的命令（对只含资源更新的链等价于重复写同一份数据，无害）。
         */
-        static constexpr uint8_t BRANCH_CHAIN_POOL_SIZE = 1;
+        static constexpr uint8_t BRANCH_CHAIN_POOL_SIZE = 2;
 
         struct allocated_chain_t
         {
@@ -32,7 +35,10 @@
             struct allocated_command_buffer_t
             {
                 je_gl_command_buffer_t* m_command_buffer;
+                // nullptr 表示屏幕目标，或从 update command buffer 分配（无 pass）
                 je_gl_frame_buffer_t* m_target;
+                // 从 update command buffer 分配（未开始 pass，只用于录制资源更新）
+                bool m_update_only;
             };
             std::vector<allocated_command_buffer_t> m_allocated_command_buffers;
             size_t m_allocated_command_buffers_count;
@@ -76,12 +82,37 @@
             chain_buffer.m_priority = priority;
         }
         je_gl_command_buffer_t* allocate_new_command_buffer(
-            /* OPTIONAL */ je_gl_frame_buffer_t* framebuffer,
+            /* OPTIONAL: nullptr means screen framebuffer */ je_gl_frame_buffer_t* framebuffer,
             const je_gl_viewport_t* viewport)
         {
             assert(m_context != nullptr);
             assert(viewport != nullptr);
 
+            auto& entry = allocate_entry();
+
+            je_graphic_cmd_reset(entry.m_command_buffer);
+            je_graphic_cmd_begin_pass(entry.m_command_buffer, framebuffer, viewport);
+            entry.m_target = framebuffer;
+            entry.m_update_only = false;
+
+            return entry.m_command_buffer;
+        }
+
+        je_gl_command_buffer_t* allocate_new_update_command_buffer()
+        {
+            assert(m_context != nullptr);
+
+            auto& entry = allocate_entry();
+
+            je_graphic_cmd_reset(entry.m_command_buffer);
+            entry.m_target = nullptr;
+            entry.m_update_only = true;
+
+            return entry.m_command_buffer;
+        }
+
+        allocated_chain_t::allocated_command_buffer_t& allocate_entry()
+        {
             auto& chain_buffer = get_commiting_chain_buffer();
 
             if (chain_buffer.m_allocated_command_buffers_count
@@ -92,18 +123,11 @@
 
                 chain_buffer.m_allocated_command_buffers.push_back(
                     allocated_chain_t::allocated_command_buffer_t{
-                        je_graphic_cmd_create(m_context), nullptr });
+                        je_graphic_cmd_create(m_context), nullptr, false });
             }
 
-            auto& entry =
-                chain_buffer.m_allocated_command_buffers[
-                    chain_buffer.m_allocated_command_buffers_count++];
-
-            je_graphic_cmd_reset(entry.m_command_buffer);
-            je_graphic_cmd_begin_pass(entry.m_command_buffer, framebuffer, viewport);
-            entry.m_target = framebuffer;
-
-            return entry.m_command_buffer;
+            return chain_buffer.m_allocated_command_buffers[
+                chain_buffer.m_allocated_command_buffers_count++];
         }
 
         allocated_chain_t& get_commiting_chain_buffer()
@@ -128,12 +152,29 @@
             {
                 auto& entry = chain_buffer.m_allocated_command_buffers[i];
 
-                if (action != je_gl_update_action_t::JE_GL_UPDATE_CONTINUE
-                    && entry.m_target == nullptr)
+                // 只含资源更新的缓冲区无需进入完整的提交流程；被跳过的屏幕绘制
+                // 同样只提交其中的资源更新：绘制可以丢弃，但已录制的更新必须生效，
+                // 否则只在内容变化时才录制更新的资源会停留在旧内容上
+                if (entry.m_update_only
+                    || (action != je_gl_update_action_t::JE_GL_UPDATE_CONTINUE
+                        && entry.m_target == nullptr))
+                {
+                    je_graphic_cmd_commit_updates(entry.m_command_buffer);
                     continue;
+                }
 
                 je_graphic_cmd_commit(entry.m_command_buffer);
             }
+        }
+
+        // 整帧绘制被跳过时调用：只提交全部缓冲区中录制的资源更新
+        void _commit_frame_updates()
+        {
+            auto& chain_buffer = get_rendering_chain_buffer();
+
+            for (size_t i = 0; i < chain_buffer.m_allocated_command_buffers_count; ++i)
+                je_graphic_cmd_commit_updates(
+                    chain_buffer.m_allocated_command_buffers[i].m_command_buffer);
         }
     };
     struct je_graphic_uhost_t
@@ -205,6 +246,12 @@
 
         void _frame_rend_impl(je_gl_update_action_t action)
         {
+            // 图形实现请求跳过本帧、且配置为跳过全部绘制时，不执行任何 pass，
+            // 但各绘制组录制的资源更新仍需提交
+            const bool skip_all_draw =
+                action != je_gl_update_action_t::JE_GL_UPDATE_CONTINUE
+                && m_skip_all_draw;
+
             if (action == je_gl_update_action_t::JE_GL_UPDATE_CONTINUE)
             {
                 int window_w = 0, window_h = 0;
@@ -232,13 +279,12 @@
                     je_graphic_cmd_commit(m_screen_clear_command_buffer);
                 }
             }
-            else if (m_skip_all_draw)
-                return;
 
             do
             {
                 std::lock_guard g1(m_je_RenderBranchs_mx);
 
+                // 按优先级从小到大提交：资源更新与绘制的先后也由此决定
                 std::stable_sort(
                     m_je_RenderBranchs.begin(),
                     m_je_RenderBranchs.end(),
@@ -249,7 +295,12 @@
                     });
 
                 for (auto* gpipe : m_je_RenderBranchs)
-                    gpipe->_commit_frame(glthread, action);
+                {
+                    if (skip_all_draw)
+                        gpipe->_commit_frame_updates();
+                    else
+                        gpipe->_commit_frame(glthread, action);
+                }
 
             } while (0);
 
@@ -418,6 +469,11 @@ je_gl_command_buffer_t* je_graphic_branch_new_command_buffer(
     const je_gl_viewport_t* viewport)
 {
     return branch->allocate_new_command_buffer(framebuffer, viewport);
+}
+je_gl_command_buffer_t* je_graphic_branch_new_update_command_buffer(
+    je_render_branch_t* branch)
+{
+    return branch->allocate_new_update_command_buffer();
 }
 void je_graphic_branch_new_frame(je_render_branch_t* branch, int priority)
 {

@@ -44,8 +44,8 @@ struct CameraData {
 CameraData camera_data;
 // 填充数据...
 
-// 更新 UBO 数据
-je_graphic_uniformbuf_update(ubo, &camera_data, 0, sizeof(CameraData));
+// 录制 UBO 内容更新（随命令缓冲区提交生效）
+je_graphic_cmd_update_uniform_buffer(cmd, ubo, 0, &camera_data, sizeof(CameraData));
 
 // 绑定 UBO
 // cmd 为当前命令缓冲区
@@ -57,12 +57,13 @@ je_graphic_uniformbuf_close(ubo);
 
 ## 注意事项
 
+- 缓冲区内容自创建起为全 0；更新只能经 `je_graphic_cmd_update_uniform_buffer` 录制、在命令缓冲区提交时生效
 - 图形资源创建时自动获取一个引用计数
 - 使用此接口创建的缓冲，其资源路径为 `nullptr`
 - `binding_place` 需要与着色器中声明的绑定位置一致
 
 ## 相关接口
 
-- [je_graphic_uniformbuf_update](je_graphic_uniformbuf_update.md) - 更新一致变量缓冲
+- [je_graphic_cmd_update_uniform_buffer](je_graphic_cmd_update_uniform_buffer.md) - 录制一致变量缓冲区更新
 - [je_graphic_cmd_bind_uniform_buffer](je_graphic_cmd_bind_uniform_buffer.md) - 绑定一致变量缓冲
 - [je_graphic_uniformbuf_close](je_graphic_uniformbuf_close.md) - 关闭一致变量缓冲

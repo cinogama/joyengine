@@ -356,19 +356,16 @@ namespace jeecs::graphic::api::metal
         MTL::PrimitiveType m_primitive_type;
         MTL::Buffer* m_vertex_buffer;
         MTL::Buffer* m_index_buffer;
-        uint32_t m_index_count;
         uint32_t m_vertex_stride; // 添加实际顶点步长信息
 
         metal_vertex(
             MTL::PrimitiveType primitive_type,
             MTL::Buffer* vertex_buffer,
             MTL::Buffer* index_buffer,
-            uint32_t index_count,
             uint32_t vertex_stride)
             : m_primitive_type(primitive_type)
             , m_vertex_buffer(vertex_buffer)
             , m_index_buffer(index_buffer)
-            , m_index_count(index_count)
             , m_vertex_stride(vertex_stride)
         {
         }
@@ -1239,10 +1236,8 @@ namespace jeecs::graphic::api::metal
             vertex->m_vertex_length,
             MTL::ResourceStorageModeShared);
 
-        // Create index buffer: sized by allocation capacity (m_index_count
-        // may have been shrunk to the active count by
-        // je_graphic_vertex_buffer_update; the draw count is kept separately in
-        // metal_vertex::m_index_count)
+        // Create index buffer: sized by allocation capacity (the draw count is
+        // given by the command buffer)
         MTL::Buffer* index_buffer = metal_context->m_metal_device->newBuffer(
             vertex->m_indices,
             vertex->m_index_capacity * sizeof(uint32_t),
@@ -1271,7 +1266,6 @@ namespace jeecs::graphic::api::metal
             primitive_type,
             vertex_buffer,
             index_buffer,
-            vertex->m_index_count,
             vertex->m_data_size_per_point);
     }
     void init_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t* fbuffer)
@@ -1344,44 +1338,48 @@ namespace jeecs::graphic::api::metal
     void update_shader(je_graphic_impl_context_t, je_gl_shader_t*)
     {
     }
-    template<typename TexT>
-    void update_texture(je_graphic_impl_context_t, TexT*)
-    {
-        // TODO;
-    }
-    void update_vertex(je_graphic_impl_context_t, je_gl_vertex_t* resource)
+    void update_vertex(
+        je_graphic_impl_context_t,
+        je_gl_vertex_t* resource,
+        size_t offset,
+        size_t size)
     {
         metal_vertex* vertex =
             static_cast<metal_vertex*>(resource->m_handle.m_ptr);
 
-        // Shared 存储模式：整体重写顶点数据（索引缓冲内容不变），
-        // 并同步激活索引数量
+        (void)offset;
+        (void)size;
+
+        // Shared 存储模式：整体重写顶点数据（索引缓冲内容不变）。
+        // NOTE: Metal 绘制经延迟编码器提交，同帧内对同一缓冲“先画后改”时，
+        // 先前编码的绘制可能读到新内容；当前引擎用法（更新先于绑定/绘制）
+        // 不触发该情形
         memcpy(
             vertex->m_vertex_buffer->contents(),
             resource->m_vertexs,
             resource->m_vertex_length);
-
-        vertex->m_index_count = resource->m_index_count;
     }
     void update_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t*)
     {
     }
-    void update_ubuffer(je_graphic_impl_context_t, je_gl_uniform_buffer_t* ubuffer)
+    void update_ubuffer(
+        je_graphic_impl_context_t,
+        je_gl_uniform_buffer_t* ubuffer,
+        size_t offset,
+        size_t size)
     {
         metal_uniform_buffer* ubuf =
             static_cast<metal_uniform_buffer*>(ubuffer->m_handle.m_ptr);
 
-        assert(ubuffer->m_update_length != 0);
+        // NOTE: 与 update_vertex 相同的延迟编码注意事项
         void* buffer_contents = ubuf->m_uniform_buffer->contents();
 
         memcpy(
             static_cast<void*>(
-                static_cast<char*>(buffer_contents)
-                + ubuffer->m_update_begin_offset),
+                static_cast<char*>(buffer_contents) + offset),
             static_cast<void*>(
-                reinterpret_cast<char*>(ubuffer->m_buffer)
-                + ubuffer->m_update_begin_offset),
-            ubuffer->m_update_length);
+                reinterpret_cast<char*>(ubuffer->m_buffer) + offset),
+            size);
     }
 
     void close_shader(je_graphic_impl_context_t, je_gl_shader_t* shader)
@@ -2229,11 +2227,6 @@ void je_graphic_using_metal_apis(je_gl_graphic_api_t* write_to_apis)
     write_to_apis->ubuffer_init = init_ubuffer;
 
     write_to_apis->shader_update = update_shader;
-    write_to_apis->texture_2d_update = update_texture<je_gl_texture_2d_t>;
-    write_to_apis->texture_3d_update = update_texture<je_gl_texture_3d_t>;
-    write_to_apis->texture_array_update = update_texture<je_gl_texture_array_t>;
-    write_to_apis->texture_cube_update = update_texture<je_gl_texture_cube_t>;
-    write_to_apis->texture_msaa_update = update_texture<je_gl_texture_msaa_t>;
     write_to_apis->vertex_update = update_vertex;
     write_to_apis->framebuffer_update = update_framebuffer;
     write_to_apis->ubuffer_update = update_ubuffer;

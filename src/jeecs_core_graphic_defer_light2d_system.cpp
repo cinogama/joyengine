@@ -977,7 +977,10 @@ namespace jeecs::graphic
             const float(&MAT4_PROJECTION)[4][4] = current_camera.projection->projection;
             const float(&MAT4_VP)[4][4] = current_camera.projection->view_projection;
 
+            // 相机默认 UBO 的内容更新录制在本分支最前（无 pass 命令缓冲），
+            // 先于本相机全部阴影 / 光照 / 主 pass 提交
             update_default_uniform_buffer(
+                je_graphic_branch_new_update_command_buffer(current_camera.branchPipeline),
                 *current_camera.projection, MAT4_VIEW, MAT4_PROJECTION, MAT4_VP, shader_time);
 
             je_gl_command_buffer_t* rend_chain = nullptr;

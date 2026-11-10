@@ -2149,12 +2149,10 @@ namespace jeecs
 
             // Keep the atlas' color-space flag: the layer pixels are copied
             // raw, so the array must decode sRGB exactly like the source.
-            auto arr = graphic::texture_array::create(
-                cw, ch, (size_t)(xcount * ycount),
-                (je_gl_texture_format_t)(
-                    JE_GL_TEXTURE_FORMAT_RGBA
-                    | (raw->m_format & JE_GL_TEXTURE_FORMAT_SRGB)));
-            uint8_t* dst = arr->pixels();
+            // 纹理内容在创建时确定：先在临时缓冲展开各层，再以初始像素创建
+            std::vector<je_gl_texture_pixel_data_t> staging(
+                (size_t)(xcount * ycount) * cw * ch * 4, 0);
+            uint8_t* dst = staging.data();
 
             for (int32_t ty = 0; ty < yc; ++ty)
             {
@@ -2178,6 +2176,13 @@ namespace jeecs
                             cw * 4);
                 }
             }
+
+            auto arr = graphic::texture_array::create(
+                cw, ch, (size_t)(xcount * ycount),
+                (je_gl_texture_format_t)(
+                    JE_GL_TEXTURE_FORMAT_RGBA
+                    | (raw->m_format & JE_GL_TEXTURE_FORMAT_SRGB)),
+                staging.data());
             return arr;
         }
 

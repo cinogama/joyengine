@@ -7,7 +7,8 @@ JE_API je_gl_texture_3d_t* je_graphic_texture_3d_create(
     size_t width,
     size_t height,
     size_t depth,
-    je_gl_texture_format_t format);
+    je_gl_texture_format_t format,
+    /* OPTIONAL: nullptr 表示分配置 0 的像素缓冲 */ const je_gl_texture_pixel_data_t* initial_pixels);
 ```
 
 ## 描述

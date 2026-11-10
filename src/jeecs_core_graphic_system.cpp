@@ -9,6 +9,8 @@
 #include "jeecs/io.hpp"
 #include "jeecs/math.hpp"
 #include "jeecs/prefix.hpp"
+#include <cstring>
+
 #include "jeecs_core_graphic_system.hpp"
 #include "jeecs_core_render_helpers.hpp"
 
@@ -42,7 +44,7 @@ namespace jeecs::graphic
             }
         }
 
-        // Clear attachment 0 if the camera requested a clear color.
+        // 清除颜色若有的话，清除附件 0
         void clear_color_if_any(
             je_gl_command_buffer_t* cmd, /* OPTIONAL */ const Camera::Clear* clear)
         {
@@ -53,6 +55,21 @@ namespace jeecs::graphic
                     clear_color.x, clear_color.y, clear_color.z, clear_color.w };
                 je_graphic_cmd_clear_color(cmd, 0, clear_buffer_color);
             }
+        }
+
+        // 默认 2x2 棋盘格纹理的初始像素（自底向上行序，RGBA）
+        std::vector<je_gl_texture_pixel_data_t> default_checkerboard_pixels()
+        {
+            constexpr je_gl_texture_pixel_data_t MAGENTA[] = { 0xFF, 0x40, 0xFF, 0xFF };
+            constexpr je_gl_texture_pixel_data_t GRAY[] = { 0x40, 0x40, 0x40, 0xFF };
+
+            std::vector<je_gl_texture_pixel_data_t> pixels(2 * 2 * 4);
+            // 行 0（底行）: (0,0)=品红, (1,0)=灰；行 1: (0,1)=灰, (1,1)=品红
+            memcpy(&pixels[0 * 4], MAGENTA, sizeof(MAGENTA));
+            memcpy(&pixels[1 * 4], GRAY, sizeof(GRAY));
+            memcpy(&pixels[2 * 4], GRAY, sizeof(GRAY));
+            memcpy(&pixels[3 * 4], MAGENTA, sizeof(MAGENTA));
+            return pixels;
         }
     }
 
@@ -74,13 +91,11 @@ namespace jeecs::graphic
               nullptr,
               "!/builtin/shader/internal/builtin_default.shader")
               .value() }
-        , default_texture{ graphic::texture2d::create(2, 2, JE_GL_TEXTURE_FORMAT_RGBA) }
+        , default_texture{
+              graphic::texture2d::create(
+                  2, 2, JE_GL_TEXTURE_FORMAT_RGBA, default_checkerboard_pixels().data()) }
         , default_shaders_list{ default_shader }
     {
-        default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
-        default_texture->pix(1, 1).set({ 1.f, 0.25f, 1.f, 1.f });
-        default_texture->pix(0, 1).set({ 0.25f, 0.25f, 0.25f, 1.f });
-        default_texture->pix(1, 0).set({ 0.25f, 0.25f, 0.25f, 1.f });
     }
 
     const basic::resource<graphic::vertex>& DefaultResources::shape_of(
@@ -236,25 +251,30 @@ namespace jeecs::graphic
     }
 
     void GraphicPipelineBase::update_default_uniform_buffer(
+        je_gl_command_buffer_t* cmd,
         const Projection& projection,
         const float(&view)[4][4],
         const float(&proj)[4][4],
         const float(&vp)[4][4],
         const math::vec4& shader_time)
     {
-        auto* ub = projection.default_uniform_buffer.get();
-        ub->update_buffer(
+        auto* ub = projection.default_uniform_buffer->resource();
+        je_graphic_cmd_update_uniform_buffer(
+            cmd, ub,
             offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_v_float4x4),
-            sizeof(view), view);
-        ub->update_buffer(
+            view, sizeof(view));
+        je_graphic_cmd_update_uniform_buffer(
+            cmd, ub,
             offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_p_float4x4),
-            sizeof(proj), proj);
-        ub->update_buffer(
+            proj, sizeof(proj));
+        je_graphic_cmd_update_uniform_buffer(
+            cmd, ub,
             offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_vp_float4x4),
-            sizeof(vp), vp);
-        ub->update_buffer(
+            vp, sizeof(vp));
+        je_graphic_cmd_update_uniform_buffer(
+            cmd, ub,
             offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_time),
-            sizeof(shader_time), &shader_time);
+            &shader_time, sizeof(shader_time));
     }
 
     math::vec3 GraphicPipelineBase::get_entity_size(
@@ -489,15 +509,8 @@ namespace jeecs::graphic
                     perspec->angle, projection.znear, projection.zfar);
             }
 
-            projection.default_uniform_buffer->update_buffer(
-                offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_v_float4x4),
-                sizeof(projection.view),
-                projection.view);
-            projection.default_uniform_buffer->update_buffer(
-                offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_p_float4x4),
-                sizeof(projection.projection),
-                projection.projection);
-
+            // 视图/投影矩阵写入 Projection 组件供本帧各处使用；相机默认
+            // UBO 的内容更新由各管线在绘制前录制（update_default_uniform_buffer）
             math::mat4xmat4(projection.view_projection, projection.projection, projection.view);
 
             if (frustumCulling != nullptr)

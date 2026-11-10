@@ -37,11 +37,11 @@
 
 * **图片会被预处理**：首次加载时图片被解码并写入*缓存* `<图片路径>.je4cache`，之后直接读取缓存；图片或其属性文件变化后缓存自动重建（见[缓存](cache.md)）。解码后的像素一律是 8 位 RGBA。
 * **颜色空间**：图片默认按 sRGB 颜色贴图处理，采样时由硬件转换为线性值；法线图、遮罩等非颜色数据应在属性文件 `<图片路径>.je4texture`（TOML）中写 `color_space = "linear"`。
-* **按路径共享**：传入宇宙（`option::value(universe)`）时，同一宇宙中**同一路径只会得到同一份纹理**——修改它的像素会影响所有使用者；传入 `option::none` 则每次得到独立的新实例。
+* **按路径共享**：传入宇宙（`option::value(universe)`）时，同一宇宙中**同一路径只会得到同一份纹理**；传入 `option::none` 则每次得到独立的新实例。
 
 #### 程序化创建
 
-`texture2d::create(w, h)` 创建一张 RGBA 纹理，像素初始为全 0（透明黑）；宽或高为 0 时按 1 处理。C++ 侧可以指定像素格式，例如单通道的 `JE_GL_TEXTURE_FORMAT_MONO`；带有 `FLOAT16`、`DEPTH`、`FRAMEBUF` 标志的格式不保留 CPU 像素（帧缓冲附件即属此类）。
+`texture2d::create(w, h)` 创建一张 RGBA 纹理，像素初始为全 0（透明黑）；宽或高为 0 时按 1 处理。`texture2d::create_with_color(w, h, rgba)` 以纯色创建（各分量 0~1）。C++ 侧创建时可以指定像素格式，并在创建时给定初始像素（`create(w, h, format, pixels)`）；带有 `FLOAT16`、`DEPTH`、`FRAMEBUF` 标志的格式不保留 CPU 像素（帧缓冲附件即属此类）。**纹理内容在创建后不可变**：引擎不提供创建后修改或读取像素的接口。
 
 程序化创建的纹理没有资源路径，`path()` 返回 `none`。
 
@@ -49,16 +49,9 @@
 
 `texture2d::clip(src, x, y, w, h)` 新建一张 w × h 的纹理（沿用源纹理的通道数与 sRGB 标志），并复制源纹理中以 (x, y) 为起点的矩形区域。结果与源纹理互相独立，也没有资源路径（当前实现的限制见[第二部分](#裁剪的实现限制)）。
 
-### 像素读写
+### 像素读写（已废弃）
 
-`texture2d::pix(tex, (x, y))` 取得一个像素句柄，`get_color` 读出 `(r, g, b, a)`（各分量 0~1），`set_color` 写入（钳制到 0~1 后量化为 8 位）。
-
-* **坐标原点在左下角**：x 向右、y 向上，像素数据也按自下而上的行序存储；
-* 越界坐标读到全 0，写入被忽略；单通道纹理读出 `(v, v, v, v)`，写入只取 r 分量；
-* 写入只修改 CPU 侧的像素副本，并记录“已修改”；纹理下一次被图形线程使用时**自动重新上传**，无需手动提交；
-* **不持有 CPU 像素的纹理（如帧缓冲附件）不能读写像素**。
-
-纹理数组、3D 纹理与立方体贴图没有像素句柄：C++ 侧通过 `pixels()` / `layer_pixels(layer)` 直接改写像素缓冲后，调用 `mark_modified()` 触发整张纹理重新上传（Woolang 侧只提供纹理数组的 `mark_modified`）。
+纹理内容在创建时确定、此后不可变：创建后修改像素与读取像素的接口（`pix` / `get_color` / `set_color` / `mark_modified` / 快照等）已废弃移除——编辑器当前没有绘图工具，这些功能没有实际使用方；需要初始内容的场合请在创建时给定（`create_with_color`，或 C++ 的带初始像素重载）。确有像素处理需求时请使用 CPU 侧图像（`pkg::image`）处理完毕后再创建纹理。
 
 ### 绑定到实体：纹理通道
 
@@ -85,13 +78,13 @@
 | 函数 | 说明 |
 | --- | --- |
 | `texture2d::load(universe, path)` | 从图片加载，失败返回 `none`；传入宇宙时按路径共享 |
-| `texture2d::create(w, h)` | 创建 RGBA 纹理（像素全 0） |
+| `texture2d::create(w, h)` | 创建 RGBA 纹理（像素全 0）；内容创建后不可变 |
+| `texture2d::create_with_color(w, h, rgba)` | 以纯色创建 RGBA 纹理 |
 | `texture2d::clip(src, x, y, w, h)` | 复制矩形区域为新纹理 |
 | `texture2d::size(tex)` / `texture2d::path(tex)` | 宽高；资源路径（可能为 `none`） |
 | `texture2d::bind_path(tex, path)` | 改写纹理记录的路径 |
-| `texture2d::pix(tex, (x, y))` | 像素句柄，配合 `get_color` / `set_color` |
 | `texture3d::create` / `texture_cube::create` / `texture_msaa::create` | 创建其它种类纹理 |
-| `texture_array::create(w, h, layers)` | 创建纹理数组；另有 `layers`、`mark_modified` |
+| `texture_array::create(w, h, layers)` | 创建纹理数组；另有 `layers` |
 | `entity::bind_texture(e, 通道, tex)` / `entity::get_textures(e)` | 实体纹理通道的绑定与查询 |
 
 ```woolang
@@ -113,11 +106,8 @@ func setup_texture(e: entity, univ: universe)
             je::logerr("纹理加载失败");
     }
 
-    // 程序化创建 2x2 纹理并逐像素写入；坐标原点在左下角
-    let checker = texture2d::create(2, 2);
-    checker->pix((0, 0))->set_color((1., 1., 1., 1.));
-    let (r, g, b, a) = checker->pix((0, 1))->get_color;
-    std::println(F"({r}, {g}, {b}, {a})");
+    // 以纯色创建纹理；纹理内容创建后不可变
+    let white = texture2d::create_with_color(2, 2, (1., 1., 1., 1.));
 }
 ```
 
@@ -126,11 +116,10 @@ func setup_texture(e: entity, univ: universe)
 | 方法 | 说明 |
 | --- | --- |
 | `texture2d::load(context, path)` | 返回 `std::optional`；context 为 nullptr 时不参与按路径共享 |
-| `texture2d::create(w, h, format)` | 指定像素格式创建 |
+| `texture2d::create(w, h, format)` | 指定像素格式创建（像素全 0） |
+| `texture2d::create(w, h, format, pixels)` | 以初始像素创建（内容此后不可变） |
 | `texture2d::clip(src, x, y, w, h)` | 同 Woolang |
-| `tex->pix(x, y).get()` / `.set(vec4)` | 读写像素 |
 | `texture3d` / `texture_array` / `texture_cube` / `texture_msaa` 的 `create(...)` | 其它种类，需显式给出格式 |
-| `pixels()` / `layer_pixels(layer)` + `mark_modified()` | 直接改写 CPU 像素后触发重新上传 |
 | `Renderer::Textures2D::bind_texture` / `remove_texture` / `get_texture` | 实体纹理通道（头文件 `jeecs/components.hpp`） |
 
 ```cpp
@@ -139,8 +128,7 @@ using namespace jeecs;
 auto tex = graphic::texture2d::load(nullptr, "@/texture/player.png");
 
 basic::resource<graphic::texture2d> checker =
-    graphic::texture2d::create(2, 2, JE_GL_TEXTURE_FORMAT_RGBA);
-checker->pix(0, 0).set({ 1.f, 1.f, 1.f, 1.f });
+    graphic::texture2d::create(2, 2, JE_GL_TEXTURE_FORMAT_RGBA, pixels); // pixels: 初始内容
 
 if (auto* textures = entity.get_component<Renderer::Textures2D>())
     textures->bind_texture(0, checker);
@@ -165,9 +153,9 @@ if (auto* textures = entity.get_component<Renderer::Textures2D>())
 
 ### 纹理数据结构与像素格式
 
-五种纹理都继承公共前缀 `je_gl_texture_common_t`：资源句柄 `m_handle`（`static_assert` 保证位于偏移 0，以复用统一的资源生命周期管理）、类别标签 `m_kind`（`je_gl_texture_kind_t`，供 Woolang 包装层等类型被擦除的边界区分类别）、`m_pixels`、`m_width` / `m_height`、`m_format`，以及脏矩形 `m_modified_min/max_x/y`。派生类型各自追加 `m_depth`（3D）、`m_layers`（数组）、`m_samples`（MSAA）；立方体贴图按 6 × 宽 × 高排布，面序与图形 API 的 +X..−Z 一致。
+五种纹理都继承公共前缀 `je_gl_texture_common_t`：资源句柄 `m_handle`（`static_assert` 保证位于偏移 0，以复用统一的资源生命周期管理）、类别标签 `m_kind`（`je_gl_texture_kind_t`，供 Woolang 包装层等类型被擦除的边界区分类别）、`m_pixels`、`m_width` / `m_height`、`m_format`。`m_pixels` 是创建时确定的初始内容，此后不可变，只作为图形层初始化（首次使用 / 图形线程重启后重建）的数据来源。派生类型各自追加 `m_depth`（3D）、`m_layers`（数组）、`m_samples`（MSAA）；立方体贴图按 6 × 宽 × 高排布，面序与图形 API 的 +X..−Z 一致。
 
-`je_gl_texture_format_t` 的低 4 位是通道数，恰好等于每像素字节数（`MONO = 1`、`RGBA = 4`，掩码 `COLOR_DEPTH_MASK`）；其余位是标志：`FLOAT16`、`DEPTH`、`FRAMEBUF`、`SRGB`（采样时硬件解码 sRGB，存储不变，alpha 恒为线性）。前三者合称 `NON_PIXEL_FORMAT_MASK`，带有其一的纹理不分配 CPU 像素（`m_pixels == nullptr`）；MSAA 纹理在创建时被强制加上 `FRAMEBUF`。各 `create` 接口把为 0 的尺寸按 1 处理，并用 0 填充像素缓冲。
+`je_gl_texture_format_t` 的低 4 位是通道数，恰好等于每像素字节数（`MONO = 1`、`RGBA = 4`，掩码 `COLOR_DEPTH_MASK`）；其余位是标志：`FLOAT16`、`DEPTH`、`FRAMEBUF`、`SRGB`（采样时硬件解码 sRGB，存储不变，alpha 恒为线性）。前三者合称 `NON_PIXEL_FORMAT_MASK`，带有其一的纹理不分配 CPU 像素（`m_pixels == nullptr`）；MSAA 纹理在创建时被强制加上 `FRAMEBUF`。各 `create` 接口把为 0 的尺寸按 1 处理；`initial_pixels` 非空时逐字节拷贝为初始像素缓冲，否则用 0 填充。
 
 ### 图片纹理的加载链路
 
@@ -180,28 +168,28 @@ if (auto* textures = entity.get_component<Renderer::Textures2D>())
 
 生成器 `texture.wo` 用 `pkg::image` 解码图片、用 `pkg::toml` 读取颜色空间，按 `je_cache_binary_*` 文档格式写出。编辑器的热重载走 `je_graphic_shared_resources_mark_outdated`：把路径移出共享缓存并标记其 GPU blob 过时，之后的加载会重新读取，已加载的实例不受影响。
 
-### 上传与修改：m_modified 与脏矩形
+### 上传：一次性初始化
 
-图形线程使用资源前检查其状态（`_jegl_check_resource_state`）：首次在该图形线程（或线程重启后的新版本）中使用为 NEED_INIT，调用后端的 `texture_*_create_blob` + `texture_*_init`；`m_handle.m_modified` 为真时为 NEED_UPDATE，调用 `texture_*_update` 并清除标记；否则为 READY。资源与首个使用它的图形线程绑定，跨图形线程使用会报错。
+图形线程使用资源前检查其状态（`_jegl_check_resource_state`）：首次在该图形线程（或线程重启后的新版本）中使用为 NEED_INIT，调用后端的 `texture_*_create_blob` + `texture_*_init`；否则为 READY。纹理内容创建后不可变，纹理没有更新路径（`je_gl_graphic_api_t` 不再包含 `texture_*_update`）。资源与首个使用它的图形线程绑定，跨图形线程使用会报错。
 
-`texture2d::pixel::set` 在首次写入时把脏矩形初始化为该像素并置 `m_modified`，之后的写入扩展矩形；`mark_modified`（`detail::mark_texture_modified`）则在未标记时把整张纹理标为脏。后端可以只上传脏矩形（Vulkan 后端对 2D 纹理如此），OpenGL 后端则整张重传。各后端经 `je_gl_graphic_api_t` 函数表实现每类纹理的 create_blob / init / update / close，例如 OpenGL 后端为带 `SRGB` 标志的 RGBA 纹理选用 `GL_SRGB8_ALPHA8` 内部格式。
+各后端经 `je_gl_graphic_api_t` 函数表实现每类纹理的 create_blob / init / close，例如 OpenGL 后端为带 `SRGB` 标志的 RGBA 纹理选用 `GL_SRGB8_ALPHA8` 内部格式。需要“变化的纹理”时以新内容重建纹理资源替换引用：UI 文本的字形图集页在 CPU 侧缓冲上累积字形，页面有新增后按整页内容重建纹理（旧纹理由仍引用它的命令缓冲区经引用计数保持存活）。
 
 ### 资源与组件槽位
 
 Woolang 的 `texture2d` 是包装 `basic::resource<graphic::texture2d>` 的 gchandle，后者是指向 RAII 包装 `resource_basic` 的共享指针，析构时调用 `je_graphic_texture_2d_close` 减少引用计数。所有 `resource<textureN>` 的布局一致，`woje_texture_kind_of` 借此按 2D 视图读出 `m_kind`：实体绑定（`woje_bind_texture_to_component`）据此拒绝非 2D 纹理，命令缓冲的 `bind_texture` 据此分派到 2D / 3D / 数组 / 立方体的绑定接口（MSAA 不受支持，会报错）。
 
-`Renderer::Textures2D::textures` 是 `texture_with_passid` 的列表，每项持有一份纹理引用；`bind_texture` 替换同通道的项或追加新项。组件只反射了 `tiling` / `offset`，纹理列表不走通用的成员编辑，编辑器材质面板因此经实体接口就地修改。渲染时 `GraphicPipelineBase::bind_entity_textures` 依次绑定默认纹理（通道 0）、`Textures2D` 各项、`Textures2DArray` 各项，并返回 tiling / offset 供 `JE_UV_TILING` / `JE_UV_OFFSET` 使用。默认纹理由 `DefaultResources` 创建：(0,0)、(1,1) 为 (1, 0.25, 1)，(0,1)、(1,0) 为 (0.25, 0.25, 0.25)。
+`Renderer::Textures2D::textures` 是 `texture_with_passid` 的列表，每项持有一份纹理引用；`bind_texture` 替换同通道的项或追加新项。组件只反射了 `tiling` / `offset`，纹理列表不走通用的成员编辑，编辑器材质面板因此经实体接口就地修改。渲染时 `GraphicPipelineBase::bind_entity_textures` 依次绑定默认纹理（通道 0）、`Textures2D` 各项、`Textures2DArray` 各项，并返回 tiling / offset 供 `JE_UV_TILING` / `JE_UV_OFFSET` 使用。默认纹理由 `DefaultResources` 以初始像素创建：(0,0)、(1,1) 为 (1, 0.25, 1)，(0,1)、(1,0) 为 (0.25, 0.25, 0.25)。
 
 ### 裁剪的实现
 
-`texture2d::clip` 按源纹理宽度计算行跨度（`src_pixels + (x + (y + iy) * 源宽度) * color_depth`），逐行 `memcpy` 到新纹理；裁剪矩形先与源纹理边界求交（`copy_w = min(w, 源宽 − x)`、`copy_h = min(h, 源高 − y)`），越出源纹理的区域不拷贝、目标保持新纹理的初始内容。
+`texture2d::clip` 按源纹理宽度计算行跨度（`src_pixels + (x + (y + iy) * 源宽度) * color_depth`），逐行 `memcpy` 到临时缓冲，再以其为初始像素创建新纹理；裁剪矩形先与源纹理边界求交（`copy_w = min(w, 源宽 − x)`、`copy_h = min(h, 源高 − y)`），越出源纹理的区域不拷贝、保持为 0。
 
 ### 关键源码位置
 
 | 内容 | 位置 |
 | --- | --- |
 | 纹理结构、像素格式、C ABI 与行为注释 | `include/jeecs/graphic.hpp` |
-| C++ 包装（`texture2d` / `pixel` / `clip` / `mark_modified` 等） | 同上（`jeecs::graphic` 命名空间） |
+| C++ 包装（`texture2d` / `clip` 等） | 同上（`jeecs::graphic` 命名空间） |
 | 创建、图片加载、共享缓存与资源状态机 | `src/jeecs_graphic_api_basic.cpp` |
 | 图片纹理缓存生成器 | `builtin/script/internal/cache/texture.wo` |
 | Woolang 绑定 | `je/graphic.wo`、`je/ecs.wo`、`src/jeecs_graphic_woolang_api.cpp` |
