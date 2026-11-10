@@ -3629,23 +3629,23 @@ namespace jeecs
             basic::resource<texture2d> m_texture;
 
             // 字符本身
-            char32_t m_char = 0;
+            char32_t m_char;
             // 字符本身的宽度和高度, 单位是像素
             // * 包含边框的影响
-            int m_width = 0;
-            int m_height = 0;
+            int m_width;
+            int m_height;
 
             // 建议的字符横向进展，通常用于计算下一列字符的起始位置，单位是像素，正数表示向右方延伸
-            int m_advance_x = 0;
+            int m_advance_x;
             // 建议的字符纵向进展，即行间距，通常用于计算下一行字符的起始位置，单位是像素，正数表示向上方延伸
-            int m_advance_y = 0;
+            int m_advance_y;
 
             // 当前字符基线横向偏移量，单位是像素，正数表示向右方偏移
             // * 包含边框的影响
-            int m_baseline_offset_x = 0;
+            int m_baseline_offset_x;
             // 当前字符基线纵向偏移量，单位是像素，正数表示向上方偏移
             // * 包含边框的影响
-            int m_baseline_offset_y = 0;
+            int m_baseline_offset_y;
         };
         class font
         {
@@ -3764,10 +3764,10 @@ namespace jeecs
             std::condition_variable cv;
             std::optional<std::thread> entry_script_thread;
 
-            bool entry_script_ended = false;
-            std::optional<je_gl_context_t*> graphic_context = std::nullopt;
+            bool entry_script_ended;
+            std::optional<je_gl_context_t*> graphic_context;
 
-            je_gl_context_t* in_frame_current_context = nullptr;
+            je_gl_context_t* in_frame_current_context;
 
             static void callback(je_gl_context_t* context, void* p)
             {
@@ -3860,6 +3860,9 @@ namespace jeecs
                 }
             }
             graphic_syncer_host(bool execute_entry_script)
+                : entry_script_ended(false)
+                , graphic_context(std::nullopt)
+                , in_frame_current_context(nullptr)
             {
                 je_graphic_sync_thread_callback_register(
                     graphic_syncer_host::callback, this);

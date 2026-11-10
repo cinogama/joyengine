@@ -91,7 +91,7 @@ namespace jeecs::tilemap
         // 全部格子（不同源纹理顶点无法合批进同一缓冲）
         struct part_key
         {
-            int32_t layer = 0, chunk_x = 0, chunk_y = 0, tileset = 0, source = 0;
+            int32_t layer, chunk_x, chunk_y, tileset, source;
             bool operator<(const part_key& o) const;
         };
         // 图层样式（着色器实例与附加纹理）直接储存在文档的 LayerStyle 里：
@@ -108,19 +108,29 @@ namespace jeecs::tilemap
             // 不落簿记，当帧由查询结果配对）
             std::map<part_key, uint64_t> parts;
             std::set<part_key> needed;
-            uint64_t needed_stamp = 0;
-            bool needed_valid = false;
+            uint64_t needed_stamp;
+            bool needed_valid;
             // 碰撞体墙簿记（无实体句柄，墙体当帧由 WallPart 查询定位）：
             // 掩码哈希用于把"版本戳变化但通行性未变"的编辑（纯视觉/
             // 样式）与真正的墙体重建区分开
-            uint64_t wall_stamp = 0;   // 上次掩码扫描对应的版本戳
-            uint64_t wall_mask = 0;    // 当前碰撞体实体对应的掩码哈希
-            bool wall_block_empty = false; // 当前实体按哪个 block_empty 开关构建
-            bool wall_valid = false;   // wall_stamp / wall_mask 是否有效
+            uint64_t wall_stamp;   // 上次掩码扫描对应的版本戳
+            uint64_t wall_mask;    // 当前碰撞体实体对应的掩码哈希
+            bool wall_block_empty; // 当前实体按哪个 block_empty 开关构建
+            bool wall_valid;   // wall_stamp / wall_mask 是否有效
             // 本根实体当前持有的地图文档（nullopt = 无）：observe 取得
             // 的 shared_ptr 不占外部引用计数，根实体存续期间以其保活；
             // 路径变更/失效时随赋值自动换手释放，根销毁随析构释放
             std::optional<std::shared_ptr<Tilemap::MapDocument>> held_map;
+
+            root_state()
+                : needed_stamp(0)
+                , needed_valid(false)
+                , wall_stamp(0)
+                , wall_mask(0)
+                , wall_block_empty(false)
+                , wall_valid(false)
+            {
+            }
         };
 
         std::unordered_map<uint32_t, root_state> _m_roots;

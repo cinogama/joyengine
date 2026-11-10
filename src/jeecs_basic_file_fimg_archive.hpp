@@ -121,18 +121,18 @@ namespace jeecs::file::fimg
 
         std::shared_ptr<const Archive> m_owner;
         Entry m_entry;
-        uint64_t m_position = 0;
+        uint64_t m_position;
 
-        uint64_t m_open_shard = 0;
-        uint64_t m_open_shard_pos = 0;
-        je_raw_file_t m_handle = nullptr;
-        bool m_failed = false;
+        uint64_t m_open_shard;
+        uint64_t m_open_shard_pos;
+        je_raw_file_t m_handle;
+        bool m_failed;
 
-        uint64_t m_stored_cursor = 0;
-        uint64_t m_stream_position = 0;
-        bool m_stream_ended = false;
+        uint64_t m_stored_cursor;
+        uint64_t m_stream_position;
+        bool m_stream_ended;
         std::unique_ptr<mz_stream_s> m_inflate_stream;
-        bool m_inflate_initialized = false;
+        bool m_inflate_initialized;
         std::vector<uint8_t> m_input_buffer;
         std::vector<uint8_t> m_skip_buffer;
     };
@@ -176,19 +176,19 @@ namespace jeecs::file::fimg
 
         std::string m_root;
         uint64_t m_shard_size;
-        uint64_t m_shard_count = 0;
-        uint64_t m_shard_offset = 0;
-        FILE* m_shard_file = nullptr;
+        uint64_t m_shard_count;
+        uint64_t m_shard_offset;
+        FILE* m_shard_file;
         std::map<std::string, Entry> m_entries;
-        bool m_failed = false;
-        bool m_finished = false;
+        bool m_failed;
+        bool m_finished;
 
         int m_compression_level;
         uint64_t m_min_compress_size;
         std::unordered_set<std::string> m_skip_extensions;
         std::unique_ptr<mz_stream_s> m_deflate_stream;
-        bool m_deflate_active = false;
-        uint64_t m_deflate_output_size = 0;
+        bool m_deflate_active;
+        uint64_t m_deflate_output_size;
         std::vector<uint8_t> m_compress_buffer;
     };
 }

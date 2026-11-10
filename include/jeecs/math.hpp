@@ -876,12 +876,18 @@ namespace jeecs
         */
         struct color
         {
-            float r = 1.f;
-            float g = 1.f;
-            float b = 1.f;
-            float a = 1.f;
+            float r;
+            float g;
+            float b;
+            float a;
 
-            constexpr color() noexcept = default;
+            constexpr color() noexcept
+                : r(1.f)
+                , g(1.f)
+                , b(1.f)
+                , a(1.f)
+            {
+            }
             constexpr color(float _r, float _g, float _b, float _a = 1.f) noexcept
                 : r(_r), g(_g), b(_b), a(_a)
             {

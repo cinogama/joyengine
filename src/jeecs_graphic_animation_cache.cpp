@@ -242,35 +242,62 @@ namespace jeecs::animation
 
         struct KeyData
         {
-            float m_time = 0.0f;
-            je_animation_value_t m_value{};
-            uint8_t m_interp = JE_ANIMATION_INTERP_CONSTANT;
-            uint8_t m_tangent_mode = JE_ANIMATION_TANGENT_AUTO;
+            float m_time;
+            je_animation_value_t m_value;
+            uint8_t m_interp;
+            uint8_t m_tangent_mode;
             vector<float> m_tangents;
+
+            KeyData()
+                : m_time(0.0f)
+                , m_value()
+                , m_interp(JE_ANIMATION_INTERP_CONSTANT)
+                , m_tangent_mode(JE_ANIMATION_TANGENT_AUTO)
+            {
+            }
         };
         struct TrackData
         {
-            uint8_t m_kind = JE_ANIMATION_TRACK_MEMBER;
-            bool m_offset_mode = false;
+            uint8_t m_kind;
+            bool m_offset_mode;
 
-            const je_type_info_t* m_component_type = nullptr;
-            const je_member_info_t* m_member_info = nullptr;
+            const je_type_info_t* m_component_type;
+            const je_member_info_t* m_member_info;
             string m_uniform_name;
 
             vector<KeyData> m_keys;
+
+            TrackData()
+                : m_kind(JE_ANIMATION_TRACK_MEMBER)
+                , m_offset_mode(false)
+                , m_component_type(nullptr)
+                , m_member_info(nullptr)
+            {
+            }
         };
         struct EventData
         {
-            float m_time = 0.0f;
+            float m_time;
             string m_name;
+
+            EventData()
+                : m_time(0.0f)
+            {
+            }
         };
         struct ActionData
         {
             string m_name;
-            float m_duration = 0.0f;
-            uint8_t m_loop_mode = JE_ANIMATION_LOOP_NONE;
+            float m_duration;
+            uint8_t m_loop_mode;
             vector<TrackData> m_tracks;
             vector<EventData> m_events;
+
+            ActionData()
+                : m_duration(0.0f)
+                , m_loop_mode(JE_ANIMATION_LOOP_NONE)
+            {
+            }
         };
 
         char* _copy_c_string(const string& str)

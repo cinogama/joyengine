@@ -63,14 +63,26 @@ namespace jeecs::graphic::api::metal
             MTL::RenderCommandEncoder* m_current_command_encoder;
 
             // Render API (v2) deferred encoder state.
-            metal_vertex* m_current_vertex = nullptr;
-            bool m_pending_pass = false;
-            metal_framebuffer* m_pending_target = nullptr;
-            int32_t m_pending_viewport[4] = { 0, 0, 0, 0 };
-            uint64_t m_pending_color_clear_mask = 0;
-            float m_pending_color_clears[8][4] = {};
-            bool m_pending_depth_clear = false;
-            float m_pending_depth_clear_value = 1.f;
+            metal_vertex* m_current_vertex;
+            bool m_pending_pass;
+            metal_framebuffer* m_pending_target;
+            int32_t m_pending_viewport[4];
+            uint64_t m_pending_color_clear_mask;
+            float m_pending_color_clears[8][4];
+            bool m_pending_depth_clear;
+            float m_pending_depth_clear_value;
+
+            render_runtime_states()
+                : m_current_vertex(nullptr)
+                , m_pending_pass(false)
+                , m_pending_target(nullptr)
+                , m_pending_viewport{ 0, 0, 0, 0 }
+                , m_pending_color_clear_mask(0)
+                , m_pending_color_clears()
+                , m_pending_depth_clear(false)
+                , m_pending_depth_clear_value(1.f)
+            {
+            }
         };
         render_runtime_states m_render_states;
 

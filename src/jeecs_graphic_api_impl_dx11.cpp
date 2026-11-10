@@ -47,7 +47,10 @@ namespace jeecs::graphic::api::dx11
     struct jegl_dx11_context
     {
         JECS_DISABLE_MOVE_AND_COPY(jegl_dx11_context);
-        jegl_dx11_context() = default;
+        jegl_dx11_context()
+            : m_current_vertex(nullptr)
+        {
+        }
         ~jegl_dx11_context() = default;
 
         graphic::glfw* m_interface;
@@ -82,7 +85,7 @@ namespace jeecs::graphic::api::dx11
 
         jedx11_shader* m_current_target_shader;
         jedx11_framebuffer* m_current_target_framebuffer;
-        jedx11_vertex* m_current_vertex = nullptr;
+        jedx11_vertex* m_current_vertex;
     };
 
     struct jedx11_texture

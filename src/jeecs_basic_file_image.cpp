@@ -76,9 +76,15 @@ namespace jeecs::file
 
 struct je_file_t
 {
-    je_raw_file_t m_native_file_handle = nullptr;
+    je_raw_file_t m_native_file_handle;
     unique_ptr<fimg::File> m_image_file_handle;
-    size_t m_file_length = 0;
+    size_t m_file_length;
+
+    je_file_t()
+        : m_native_file_handle(nullptr)
+        , m_file_length(0)
+    {
+    }
 };
 
 struct je_fimg_archive_t

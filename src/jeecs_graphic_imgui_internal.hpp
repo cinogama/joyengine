@@ -37,11 +37,11 @@ namespace jeecs::graphic::gui
     };
     struct GUIThreadContext
     {
-        je_gl_context_t* _jegl_context = nullptr;
-        bool _jegui_stop_work_flag = false;
+        je_gl_context_t* _jegl_context;
+        bool _jegui_stop_work_flag;
 
-        je_gui_user_image_loader_t _jegl_get_native_texture = nullptr;
-        je_gui_user_sampler_loader_t _jegl_bind_shader_sampler_state = nullptr;
+        je_gui_user_image_loader_t _jegl_get_native_texture;
+        je_gui_user_sampler_loader_t _jegl_bind_shader_sampler_state;
 
         std::string _jegui_imgui_config_path;
         std::optional<basic::resource<graphic::shader>>
@@ -53,16 +53,23 @@ namespace jeecs::graphic::gui
             _jegl_srgb_encode_shader;
         std::optional<basic::resource<graphic::vertex>>
             _jegl_srgb_encode_quad;
-        je_gl_pipeline_t* _jegl_srgb_encode_pipeline = nullptr;
-        je_gl_command_buffer_t* _jegl_srgb_encode_cmd = nullptr;
+        je_gl_pipeline_t* _jegl_srgb_encode_pipeline;
+        je_gl_command_buffer_t* _jegl_srgb_encode_cmd;
     };
     struct GUIContext
     {
-        woort_vm* _jegui_exit_callback_handler_vm = nullptr;
-        woort_GCPin* _jegui_exit_callback_function = nullptr;
-        std::optional<std::string> _jegui_specify_font_path = std::nullopt;
-        std::optional<std::string> _jegui_specify_latin_font_path = std::nullopt;
-        size_t _jegui_specify_font_size = 18;
+        woort_vm* _jegui_exit_callback_handler_vm;
+        woort_GCPin* _jegui_exit_callback_function;
+        std::optional<std::string> _jegui_specify_font_path;
+        std::optional<std::string> _jegui_specify_latin_font_path;
+        size_t _jegui_specify_font_size;
+
+        GUIContext()
+            : _jegui_exit_callback_handler_vm(nullptr)
+            , _jegui_exit_callback_function(nullptr)
+            , _jegui_specify_font_size(18)
+        {
+        }
     };
 
     extern GUIContext _je_gui_static_ctx;

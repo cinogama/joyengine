@@ -196,9 +196,9 @@ namespace jeecs
         template <typename ElemT>
         class vector
         {
-            ElemT* _elems_ptr_begin = nullptr;
-            ElemT* _elems_ptr_end = nullptr;
-            ElemT* _elems_buf_end = nullptr;
+            ElemT* _elems_ptr_begin;
+            ElemT* _elems_ptr_end;
+            ElemT* _elems_buf_end;
 
             static constexpr size_t _single_elem_size = sizeof(ElemT);
 
@@ -263,6 +263,9 @@ namespace jeecs
 
         public:
             vector() noexcept
+                : _elems_ptr_begin(nullptr)
+                , _elems_ptr_end(nullptr)
+                , _elems_buf_end(nullptr)
             {
             }
             ~vector() noexcept
@@ -272,11 +275,13 @@ namespace jeecs
             }
 
             vector(const vector& another_list) noexcept
+                : vector()
             {
                 _reserve(another_list.size());
                 _elems_ptr_end += _copy(_elems_ptr_begin, another_list.begin(), another_list.end());
             }
             vector(const std::initializer_list<ElemT>& another_list) noexcept
+                : vector()
             {
                 for (auto& elem : another_list)
                     push_back(elem);
@@ -476,10 +481,10 @@ namespace jeecs
                 alignas(pair) unsigned char storage[sizeof(pair)];
             };
 
-            slot* m_slots = nullptr;
-            size_t m_capacity = 0;
-            size_t m_size = 0;
-            size_t m_tombstones = 0;
+            slot* m_slots;
+            size_t m_capacity;
+            size_t m_size;
+            size_t m_tombstones;
 
             static constexpr size_t MIN_CAPACITY = 16;
             static constexpr size_t LOAD_FACTOR_NUM = 3;
@@ -671,7 +676,13 @@ namespace jeecs
             using iterator = basic_iterator<false>;
             using const_iterator = basic_iterator<true>;
 
-            map() noexcept = default;
+            map() noexcept
+                : m_slots(nullptr)
+                , m_capacity(0)
+                , m_size(0)
+                , m_tombstones(0)
+            {
+            }
 
             ~map() noexcept
             {
@@ -679,6 +690,7 @@ namespace jeecs
             }
 
             map(const map& o) noexcept
+                : map()
             {
                 if (o.m_capacity > 0)
                 {
@@ -867,9 +879,9 @@ namespace jeecs
         */
         class string
         {
-            char* _c_str = nullptr;
-            size_t _str_len = 0;
-            size_t _buf_len = 0;
+            char* _c_str;
+            size_t _str_len;
+            size_t _buf_len;
 
             inline void _reserve(size_t buf_sz)
             {
@@ -888,6 +900,9 @@ namespace jeecs
             }
 
             string() noexcept
+                : _c_str(nullptr)
+                , _str_len(0)
+                , _buf_len(0)
             {
                 _reserve(1);
             }
@@ -913,7 +928,9 @@ namespace jeecs
             }
 
             string(const char* str) noexcept
-                : _str_len(strlen(str))
+                : _c_str(nullptr)
+                , _str_len(strlen(str))
+                , _buf_len(0)
             {
                 _reserve(_str_len + 1);
                 memcpy(_c_str, str, _str_len);
@@ -1042,7 +1059,12 @@ namespace jeecs
         template <typename NodeT>
         struct atomic_list
         {
-            std::atomic<NodeT*> last_node = nullptr;
+            std::atomic<NodeT*> last_node;
+
+            atomic_list() noexcept
+                : last_node(nullptr)
+            {
+            }
 
             void add_one(NodeT* node) noexcept
             {
@@ -1112,9 +1134,9 @@ namespace jeecs
                 delete ptr;
             }
 
-            T* m_resource = nullptr;
-            mutable count_t* m_count = nullptr;
-            free_func_t m_freer = nullptr;
+            T* m_resource;
+            mutable count_t* m_count;
+            free_func_t m_freer;
 
             inline const static count_t* _COUNT_USING_SPIN_LOCK_MARK = (count_t*)SIZE_MAX;
 

@@ -15,10 +15,14 @@ namespace jeecs
         struct ray
         {
         public:
-            vec3 orgin = { 0, 0, 0 };
-            vec3 direction = { 0, 0, 1 };
+            vec3 orgin;
+            vec3 direction;
 
-            ray() = default;
+            ray() noexcept
+                : orgin(0, 0, 0)
+                , direction(0, 0, 1)
+            {
+            }
 
             ray(ray&&) = default;
             ray(const ray&) = default;
@@ -62,11 +66,16 @@ namespace jeecs
 
             struct intersect_result
             {
-                bool intersected = false;
-                vec3 place = {};
-                float distance = INFINITY;
+                bool intersected;
+                vec3 place;
+                float distance;
 
-                intersect_result() = default;
+                intersect_result() noexcept
+                    : intersected(false)
+                    , place(0, 0, 0)
+                    , distance(INFINITY)
+                {
+                }
                 intersect_result(bool rslt, float dist = INFINITY, const vec3& plce = vec3(0, 0, 0)) : intersected(rslt),
                     place(plce),
                     distance(dist)

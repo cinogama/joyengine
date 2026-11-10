@@ -48,7 +48,12 @@ namespace jeecs::graphic
 
         struct __physical_gamepad
         {
-            je_io_gamepad_handle_t handle = nullptr;
+            je_io_gamepad_handle_t handle;
+
+            __physical_gamepad()
+                : handle(nullptr)
+            {
+            }
         };
         __physical_gamepad _m_gamepads[GLFW_JOYSTICK_LAST + 1];
         // The global glfwSetJoystickCallback receives no user pointer, so route

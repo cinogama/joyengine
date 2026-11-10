@@ -63,13 +63,17 @@ namespace jeecs::graphic::ui
         struct page_t
         {
             basic::resource<graphic::texture2d> m_texture;
-            size_t m_cursor_x = PAGE_GUTTER;
-            size_t m_cursor_y = PAGE_GUTTER;
-            size_t m_row_height = 0;
-            uint64_t m_last_used_frame = 0;
+            size_t m_cursor_x;
+            size_t m_cursor_y;
+            size_t m_row_height;
+            uint64_t m_last_used_frame;
 
             explicit page_t(basic::resource<graphic::texture2d>&& tex) noexcept
                 : m_texture(std::move(tex))
+                , m_cursor_x(PAGE_GUTTER)
+                , m_cursor_y(PAGE_GUTTER)
+                , m_row_height(0)
+                , m_last_used_frame(0)
             {
             }
         };
@@ -78,19 +82,40 @@ namespace jeecs::graphic::ui
         // 发射（取 UV）共用；无位图的字形（空格等，w/h 为 0）只保留度量。
         struct glyph_slot
         {
-            float u0 = 0.f, v0 = 0.f, u1 = 0.f, v1 = 0.f;
-            int16_t w = 0, h = 0;
-            int16_t baseline_offset_x = 0, baseline_offset_y = 0;
-            float advance_x = 0.f;
-            page_t* page = nullptr; // 所属图集页；无位图为 nullptr
+            float u0, v0, u1, v1;
+            int16_t w, h;
+            int16_t baseline_offset_x, baseline_offset_y;
+            float advance_x;
+            page_t* page; // 所属图集页；无位图为 nullptr
+
+            glyph_slot()
+                : u0(0.f)
+                , v0(0.f)
+                , u1(0.f)
+                , v1(0.f)
+                , w(0)
+                , h(0)
+                , baseline_offset_x(0)
+                , baseline_offset_y(0)
+                , advance_x(0.f)
+                , page(nullptr)
+            {
+            }
         };
 
         // 行网格度量：仅取决于（字体, 基准字号），与文本内容无关。
         struct font_metrics_t
         {
-            float line_height = 0.f; // 行距：基线到基线
-            float ascent = 0.f;      // 基线以上部分（像素）
-            float descent = 0.f;     // 基线以下部分（像素，正值）
+            float line_height; // 行距：基线到基线
+            float ascent;      // 基线以上部分（像素）
+            float descent;     // 基线以下部分（像素，正值）
+
+            font_metrics_t()
+                : line_height(0.f)
+                , ascent(0.f)
+                , descent(0.f)
+            {
+            }
         };
 
         // 每帧首调用：推进帧计数并做 LRU 淘汰。
@@ -144,13 +169,28 @@ namespace jeecs::graphic::ui
             basic::optional<basic::resource<graphic::font>> m_font; // 持有字体引用，键存活期内稳定
             std::list<page_t> m_pages;
             std::unordered_map<uint64_t, glyph_slot> m_glyphs; // key = (size<<32)|cp
-            uint64_t m_last_used_frame = 0;
+            uint64_t m_last_used_frame;
+
+            font_atlas_t()
+                : m_last_used_frame(0)
+            {
+            }
         };
 
         std::unordered_map<je_font_t*, font_atlas_t> m_fonts;
-        size_t m_total_pages = 0;
-        uint64_t m_frame = 0;
-        bool m_warned_page_eviction = false;
+        size_t m_total_pages;
+        uint64_t m_frame;
+        bool m_warned_page_eviction;
+
+    public:
+        TextRenderer()
+            : m_total_pages(0)
+            , m_frame(0)
+            , m_warned_page_eviction(false)
+        {
+        }
+
+    private:
 
         glyph_slot& _create_glyph(
             font_atlas_t& entry, int raster_px, char32_t cp, uint64_t key);

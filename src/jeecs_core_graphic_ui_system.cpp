@@ -32,6 +32,12 @@ namespace jeecs::graphic
 
     UserInterfaceGraphicPipelineSystem::UserInterfaceGraphicPipelineSystem(game_world w)
         : GraphicPipelineBase(w)
+        , m_text_vb_used(0)
+        , m_warned_text_vb_exhausted(false)
+        , m_text_batch_page(nullptr)
+        , m_text_batch_shader(nullptr)
+        , m_text_batch_vb(nullptr)
+        , m_text_batch_quads(0)
     {
     }
 

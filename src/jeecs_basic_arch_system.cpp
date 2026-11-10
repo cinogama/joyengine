@@ -505,7 +505,7 @@ namespace jeecs::ecs
             // 跨帧持有的旧实体句柄仍会解引用其所在 chunk 的元数据（版本号已
             // 失配，操作不生效），因此搬空的 chunk 不能直接 delete，否则旧句
             // 悬垂（UB）。后续分配新 chunk 时优先从池中复用。
-            arch_chunk* _m_recycled_chunks = nullptr;
+            arch_chunk* _m_recycled_chunks;
             shared_mutex _m_recycled_chunks_mx;
 
             // 这个锁用于防止碎片整理的时候，有其他线程在操作chunk链表
@@ -564,6 +564,7 @@ namespace jeecs::ecs
                 , _m_arch_manager(_arch_manager)
                 , _m_free_count(0)
                 , _m_total_count(0)
+                , _m_recycled_chunks(nullptr)
             {
                 static_assert(offsetof(game_entity, _m_raw) == 0);
                 static_assert(offsetof(je_game_entity_t, _m_in_chunk) == offsetof(entity, _m_in_chunk));
@@ -982,11 +983,12 @@ namespace jeecs::ecs
             map<TypesSet, ArchType*> _m_arch_types_mapping;
 
             mutable shared_mutex _m_arch_types_mapping_mx;
-            atomic_flag _m_arch_modified = {};
+            atomic_flag _m_arch_modified;
 
         public:
             ArchManager(World* world)
                 : _m_world(world)
+                , _m_arch_modified()
             {
             }
             ~ArchManager()
@@ -2486,6 +2488,7 @@ namespace jeecs::ecs
                 , _m_smooth_deltatime(1. / 60.)
                 , _m_max_deltatime(0.2)
                 , _m_time_scale(1.0)
+                , _m_universe_exited(false)
             {
                 lock_guard g1(_m_alive_universes_mx);
                 _m_alive_universes.push_back(this);
@@ -2568,7 +2571,7 @@ namespace jeecs::ecs
             // 并一次性消费回调表；此后再注册将失败（返回 false），调用方
             //（如 je_ecs_universe_loop 的 wait）不得继续等待，否则死锁。
             shared_mutex _m_exit_callbacks_mx;
-            atomic_bool _m_universe_exited{ false };
+            atomic_bool _m_universe_exited;
 
             inline bool register_exit_callback(const function<void(void)>& function) noexcept
             {

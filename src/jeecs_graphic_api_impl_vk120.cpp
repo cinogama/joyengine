@@ -225,7 +225,21 @@ namespace jeecs::graphic::api::vk120
         {
             JECS_DISABLE_MOVE_AND_COPY(blob_data);
 
-            blob_data() = default;
+            blob_data()
+                : m_context(nullptr)
+                , m_shader_resource(nullptr)
+                , m_vertex_shader_module(VK_NULL_HANDLE)
+                , m_fragment_shader_module(VK_NULL_HANDLE)
+                , m_shader_stage_infos{}
+                , m_shader_output_color_attachment_count(0)
+                , m_viewport{}
+                , m_scissor{}
+                , m_viewport_state_create_info{}
+                , m_dynamic_state_create_info{}
+                , m_pipeline_layout(VK_NULL_HANDLE)
+                , m_uniform_size(0)
+            {
+            }
             ~blob_data();
 
             inline static const VkDynamicState m_dynamic_states[] =
@@ -235,36 +249,36 @@ namespace jeecs::graphic::api::vk120
                 VkDynamicState::VK_DYNAMIC_STATE_SCISSOR,
             };
 
-            jegl_vk120_context* m_context = nullptr;
-            je_gl_shader_t* m_shader_resource = nullptr;
+            jegl_vk120_context* m_context;
+            je_gl_shader_t* m_shader_resource;
 
-            VkShaderModule m_vertex_shader_module = VK_NULL_HANDLE;
-            VkShaderModule m_fragment_shader_module = VK_NULL_HANDLE;
-            VkPipelineShaderStageCreateInfo m_shader_stage_infos[2] = {};
+            VkShaderModule m_vertex_shader_module;
+            VkShaderModule m_fragment_shader_module;
+            VkPipelineShaderStageCreateInfo m_shader_stage_infos[2];
 
             std::vector<VkVertexInputAttributeDescription> m_vertex_input_attribute_descriptions;
-            size_t m_shader_output_color_attachment_count = 0;
+            size_t m_shader_output_color_attachment_count;
 
-            VkViewport m_viewport = {};
-            VkRect2D m_scissor = {};
-            VkPipelineViewportStateCreateInfo m_viewport_state_create_info = {};
-            VkPipelineDynamicStateCreateInfo m_dynamic_state_create_info = {};
-            VkPipelineLayout m_pipeline_layout = VK_NULL_HANDLE;
+            VkViewport m_viewport;
+            VkRect2D m_scissor;
+            VkPipelineViewportStateCreateInfo m_viewport_state_create_info;
+            VkPipelineDynamicStateCreateInfo m_dynamic_state_create_info;
+            VkPipelineLayout m_pipeline_layout;
 
             struct sampler_data
             {
-                VkSampler m_vk_sampler = VK_NULL_HANDLE;
-                uint32_t m_sampler_id = 0;
+                VkSampler m_vk_sampler;
+                uint32_t m_sampler_id;
             };
             std::vector<sampler_data> m_samplers;
             struct texture_sampler_binding
             {
-                uint32_t m_pass = 0;
-                uint32_t m_sampler_id = 0;
+                uint32_t m_pass;
+                uint32_t m_sampler_id;
             };
             std::vector<texture_sampler_binding> m_texture_sampler_bindings;
             std::unordered_map<std::string, uint32_t> m_uniform_locations;
-            size_t m_uniform_size = 0;
+            size_t m_uniform_size;
         };
 
         jeecs::basic::resource<blob_data> m_blob_data;
@@ -287,40 +301,65 @@ namespace jeecs::graphic::api::vk120
     {
         JECS_DISABLE_MOVE_AND_COPY(jevk12_texture);
 
-        VkImage m_vk_texture_image = VK_NULL_HANDLE;
-        VkDeviceMemory m_vk_texture_image_memory = VK_NULL_HANDLE;
-        VkDeviceSize m_vk_texture_memory_offset = 0;
-        VkDeviceSize m_vk_texture_memory_size = 0;
+        VkImage m_vk_texture_image;
+        VkDeviceMemory m_vk_texture_image_memory;
+        VkDeviceSize m_vk_texture_memory_offset;
+        VkDeviceSize m_vk_texture_memory_size;
 
-        VkImageView m_vk_texture_image_view = VK_NULL_HANDLE;
-        VkFormat m_vk_texture_format = VK_FORMAT_UNDEFINED;
-        VkImageLayout m_current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-        VkImageAspectFlags m_aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+        VkImageView m_vk_texture_image_view;
+        VkFormat m_vk_texture_format;
+        VkImageLayout m_current_layout;
+        VkImageAspectFlags m_aspect;
 
-        uint32_t m_width = 0;
-        uint32_t m_height = 0;
-        uint32_t m_depth = 1;
-        uint32_t m_layers = 1;
-        uint32_t m_samples = 1;
+        uint32_t m_width;
+        uint32_t m_height;
+        uint32_t m_depth;
+        uint32_t m_layers;
+        uint32_t m_samples;
 
-        bool m_owns_image = true;
+        bool m_owns_image;
 
-        jevk12_texture() = default;
+        jevk12_texture()
+            : m_vk_texture_image(VK_NULL_HANDLE)
+            , m_vk_texture_image_memory(VK_NULL_HANDLE)
+            , m_vk_texture_memory_offset(0)
+            , m_vk_texture_memory_size(0)
+            , m_vk_texture_image_view(VK_NULL_HANDLE)
+            , m_vk_texture_format(VK_FORMAT_UNDEFINED)
+            , m_current_layout(VK_IMAGE_LAYOUT_UNDEFINED)
+            , m_aspect(VK_IMAGE_ASPECT_COLOR_BIT)
+            , m_width(0)
+            , m_height(0)
+            , m_depth(1)
+            , m_layers(1)
+            , m_samples(1)
+            , m_owns_image(true)
+        {
+        }
     };
     struct jevk12_uniformbuf
     {
         JECS_DISABLE_MOVE_AND_COPY(jevk12_uniformbuf);
 
-        VkBuffer m_uniform_buffer = VK_NULL_HANDLE;
-        VkDeviceMemory m_uniform_buffer_memory = VK_NULL_HANDLE;
-        VkDeviceSize m_memory_offset = 0;
-        VkDeviceSize m_memory_size = 0;
-        VkDeviceSize m_buffer_size = 0;
-        void* m_mapped = nullptr;
+        VkBuffer m_uniform_buffer;
+        VkDeviceMemory m_uniform_buffer_memory;
+        VkDeviceSize m_memory_offset;
+        VkDeviceSize m_memory_size;
+        VkDeviceSize m_buffer_size;
+        void* m_mapped;
 
-        uint32_t m_real_binding_place = 0;
+        uint32_t m_real_binding_place;
 
-        jevk12_uniformbuf() = default;
+        jevk12_uniformbuf()
+            : m_uniform_buffer(VK_NULL_HANDLE)
+            , m_uniform_buffer_memory(VK_NULL_HANDLE)
+            , m_memory_offset(0)
+            , m_memory_size(0)
+            , m_buffer_size(0)
+            , m_mapped(nullptr)
+            , m_real_binding_place(0)
+        {
+        }
     };
     struct jevk12_shader
     {
@@ -328,8 +367,8 @@ namespace jeecs::graphic::api::vk120
 
         jeecs::basic::resource<jevk12_shader_blob::blob_data> m_blob_data;
 
-        size_t m_uniform_cpu_buffer_size = 0;
-        uint8_t* m_uniform_cpu_buffer = nullptr;
+        size_t m_uniform_cpu_buffer_size;
+        uint8_t* m_uniform_cpu_buffer;
 
         jevk12_shader(jevk12_shader_blob* blob)
             : m_blob_data(blob->m_blob_data)
@@ -352,56 +391,85 @@ namespace jeecs::graphic::api::vk120
         JECS_DISABLE_MOVE_AND_COPY(jevk12_framebuffer);
 
         // 由 context 的 render pass 缓存持有，本结构不负责销毁。
-        VkRenderPass m_rendpass = VK_NULL_HANDLE;
+        VkRenderPass m_rendpass;
 
         std::vector<jevk12_texture*> m_color_attachments;
-        jevk12_texture* m_resolve_attachment = nullptr;
-        jevk12_texture* m_depth_attachment = nullptr;
-        VkFramebuffer m_framebuffer = VK_NULL_HANDLE;
+        jevk12_texture* m_resolve_attachment;
+        jevk12_texture* m_depth_attachment;
+        VkFramebuffer m_framebuffer;
 
-        size_t m_width = 0;
-        size_t m_height = 0;
+        size_t m_width;
+        size_t m_height;
 
-        VkSampleCountFlagBits m_sample_count = VK_SAMPLE_COUNT_1_BIT;
-        VkImageLayout m_color_initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-        VkImageLayout m_resolve_initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-        VkImageLayout m_depth_initial_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-        VkImageLayout m_color_final_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        VkImageLayout m_resolve_final_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        VkImageLayout m_depth_final_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        bool m_is_screen_framebuffer = false;
+        VkSampleCountFlagBits m_sample_count;
+        VkImageLayout m_color_initial_layout;
+        VkImageLayout m_resolve_initial_layout;
+        VkImageLayout m_depth_initial_layout;
+        VkImageLayout m_color_final_layout;
+        VkImageLayout m_resolve_final_layout;
+        VkImageLayout m_depth_final_layout;
+        bool m_is_screen_framebuffer;
 
-        jevk12_framebuffer() = default;
+        jevk12_framebuffer()
+            : m_rendpass(VK_NULL_HANDLE)
+            , m_resolve_attachment(nullptr)
+            , m_depth_attachment(nullptr)
+            , m_framebuffer(VK_NULL_HANDLE)
+            , m_width(0)
+            , m_height(0)
+            , m_sample_count(VK_SAMPLE_COUNT_1_BIT)
+            , m_color_initial_layout(VK_IMAGE_LAYOUT_UNDEFINED)
+            , m_resolve_initial_layout(VK_IMAGE_LAYOUT_UNDEFINED)
+            , m_depth_initial_layout(VK_IMAGE_LAYOUT_UNDEFINED)
+            , m_color_final_layout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            , m_resolve_final_layout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+            , m_depth_final_layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            , m_is_screen_framebuffer(false)
+        {
+        }
     };
     struct jevk12_vertex
     {
         JECS_DISABLE_MOVE_AND_COPY(jevk12_vertex);
 
-        jevk12_vertex() = default;
+        jevk12_vertex()
+            : m_vk_vertex_buffer(VK_NULL_HANDLE)
+            , m_vk_vertex_buffer_memory(VK_NULL_HANDLE)
+            , m_vertex_memory_offset(0)
+            , m_vertex_memory_size(0)
+            , m_mapped(nullptr)
+            , m_vk_index_buffer(VK_NULL_HANDLE)
+            , m_vk_index_buffer_memory(VK_NULL_HANDLE)
+            , m_index_memory_offset(0)
+            , m_index_memory_size(0)
+            , m_vertex_point_count(0)
+            , m_size(0)
+            , m_stride(0)
+            , m_topology(JE_GL_VERTEX_TYPE_TRIANGLES)
+        {
+        }
 
-        VkBuffer m_vk_vertex_buffer = VK_NULL_HANDLE;
-        VkDeviceMemory m_vk_vertex_buffer_memory = VK_NULL_HANDLE;
-        VkDeviceSize m_vertex_memory_offset = 0;
-        VkDeviceSize m_vertex_memory_size = 0;
-        void* m_mapped = nullptr;
+        VkBuffer m_vk_vertex_buffer;
+        VkDeviceMemory m_vk_vertex_buffer_memory;
+        VkDeviceSize m_vertex_memory_offset;
+        VkDeviceSize m_vertex_memory_size;
+        void* m_mapped;
 
-        VkBuffer m_vk_index_buffer = VK_NULL_HANDLE;
-        VkDeviceMemory m_vk_index_buffer_memory = VK_NULL_HANDLE;
-        VkDeviceSize m_index_memory_offset = 0;
-        VkDeviceSize m_index_memory_size = 0;
+        VkBuffer m_vk_index_buffer;
+        VkDeviceMemory m_vk_index_buffer_memory;
+        VkDeviceSize m_index_memory_offset;
+        VkDeviceSize m_index_memory_size;
 
-        uint32_t m_vertex_point_count = 0;
-        VkDeviceSize m_size = 0;
-        VkDeviceSize m_stride = 0;
+        uint32_t m_vertex_point_count;
+        VkDeviceSize m_size;
+        VkDeviceSize m_stride;
 
-        je_gl_vertex_type_t m_topology = JE_GL_VERTEX_TYPE_TRIANGLES;
+        je_gl_vertex_type_t m_topology;
     };
 
     struct jegl_vk120_context
     {
         JECS_DISABLE_MOVE_AND_COPY(jegl_vk120_context);
-
-        jegl_vk120_context() = default;
 
 #if JE4_VK_USE_DYNAMIC_VK_LIB
         struct vklibrary_instance_proxy
@@ -465,7 +533,7 @@ namespace jeecs::graphic::api::vk120
 
         // 一些配置项
         size_t _vk_msaa_config;
-        VkSampleCountFlagBits _vk_active_msaa_samples = VK_SAMPLE_COUNT_1_BIT;
+        VkSampleCountFlagBits _vk_active_msaa_samples;
         bool _vk_vsync_config;
 
         // Vk的全局实例
@@ -488,8 +556,8 @@ namespace jeecs::graphic::api::vk120
         // When the surface offers no sRGB format, all screen-bound draws are
         // redirected to a linear offscreen framebuffer; a woshader-based
         // encode pass then writes it to the real swapchain image.
-        bool _vk_use_srgb_encode_pass = false;
-        bool _vk_encoding_srgb_screen = false;
+        bool _vk_use_srgb_encode_pass;
+        bool _vk_encoding_srgb_screen;
         std::optional<jeecs::basic::resource<jeecs::graphic::framebuffer>>
             _vk_srgb_encode_screen_target;
 
@@ -509,7 +577,7 @@ namespace jeecs::graphic::api::vk120
             DEAR_IMGUI_TEXTURE = COUNT,
             BEGIN = UNIFORM_VARIABLES,
         };
-        VkDescriptorSetLayout _vk_global_descriptor_set_layouts[descriptor_set_type::COUNT + 1] = {};
+        VkDescriptorSetLayout _vk_global_descriptor_set_layouts[descriptor_set_type::COUNT + 1];
 
         template <VkDescriptorType DESC_SET_TYPE, VkShaderStageFlags STAGE, size_t MAX_BINDING>
         VkDescriptorSetLayout create_descriptor_set_layout()
@@ -551,12 +619,12 @@ namespace jeecs::graphic::api::vk120
 
         struct swapchain_image_content
         {
-            jegl_vk120_context* m_main_context = nullptr;
+            jegl_vk120_context* m_main_context;
 
-            jevk12_framebuffer* m_framebuffer = nullptr;
-            jevk12_texture* m_color_attachment = nullptr;
-            jevk12_texture* m_depth_attachment = nullptr;
-            jevk12_texture* m_msaa_attachment = nullptr;
+            jevk12_framebuffer* m_framebuffer;
+            jevk12_texture* m_color_attachment;
+            jevk12_texture* m_depth_attachment;
+            jevk12_texture* m_msaa_attachment;
 
             swapchain_image_content(
                 jegl_vk120_context* main_contant,
@@ -589,24 +657,41 @@ namespace jeecs::graphic::api::vk120
         struct frame_resources
         {
             JECS_DISABLE_MOVE_AND_COPY(frame_resources);
-            frame_resources() = default;
 
-            VkCommandBuffer m_command_buffer = VK_NULL_HANDLE;
-            VkFence m_fence = VK_NULL_HANDLE;
-            VkSemaphore m_image_available = VK_NULL_HANDLE;
-            VkDescriptorPool m_descriptor_pool = VK_NULL_HANDLE;
+            VkCommandBuffer m_command_buffer;
+            VkFence m_fence;
+            VkSemaphore m_image_available;
+            VkDescriptorPool m_descriptor_pool;
 
-            VkBuffer m_ubo_ring_buffer = VK_NULL_HANDLE;
-            VkDeviceMemory m_ubo_ring_memory = VK_NULL_HANDLE;
-            VkDeviceSize m_ubo_ring_memory_offset = 0;
-            VkDeviceSize m_ubo_ring_memory_size = 0;
-            void* m_ubo_ring_mapped = nullptr;
-            VkDeviceSize m_ubo_ring_size = 0;
-            VkDeviceSize m_ubo_ring_offset = 0;
+            VkBuffer m_ubo_ring_buffer;
+            VkDeviceMemory m_ubo_ring_memory;
+            VkDeviceSize m_ubo_ring_memory_offset;
+            VkDeviceSize m_ubo_ring_memory_size;
+            void* m_ubo_ring_mapped;
+            VkDeviceSize m_ubo_ring_size;
+            VkDeviceSize m_ubo_ring_offset;
 
-            bool m_recording = false;
-            bool m_has_swapchain_image = false;
-            bool m_submitted = false;
+            bool m_recording;
+            bool m_has_swapchain_image;
+            bool m_submitted;
+
+            frame_resources()
+                : m_command_buffer(VK_NULL_HANDLE)
+                , m_fence(VK_NULL_HANDLE)
+                , m_image_available(VK_NULL_HANDLE)
+                , m_descriptor_pool(VK_NULL_HANDLE)
+                , m_ubo_ring_buffer(VK_NULL_HANDLE)
+                , m_ubo_ring_memory(VK_NULL_HANDLE)
+                , m_ubo_ring_memory_offset(0)
+                , m_ubo_ring_memory_size(0)
+                , m_ubo_ring_mapped(nullptr)
+                , m_ubo_ring_size(0)
+                , m_ubo_ring_offset(0)
+                , m_recording(false)
+                , m_has_swapchain_image(false)
+                , m_submitted(false)
+            {
+            }
 
             VkDeviceSize allocate_uniform_block(VkDeviceSize size, VkDeviceSize alignment)
             {
@@ -639,25 +724,35 @@ namespace jeecs::graphic::api::vk120
             constexpr static size_t MAX_TEXTURE_LAYOUT = MAX_LAYOUT_COUNT;
             constexpr static size_t MAX_SAMPLER_LAYOUT = MAX_LAYOUT_COUNT;
 
-            jegl_vk120_context* m_context = nullptr;
+            jegl_vk120_context* m_context;
 
-            VkDescriptorBufferInfo m_binded_ubos[MAX_UBO_LAYOUT] = {};
-            VkDescriptorImageInfo m_binded_textures[MAX_TEXTURE_LAYOUT] = {};
-            VkDescriptorImageInfo m_binded_samplers[MAX_SAMPLER_LAYOUT] = {};
-            VkPipelineLayout m_binded_pipeline_layout = VK_NULL_HANDLE;
+            VkDescriptorBufferInfo m_binded_ubos[MAX_UBO_LAYOUT];
+            VkDescriptorImageInfo m_binded_textures[MAX_TEXTURE_LAYOUT];
+            VkDescriptorImageInfo m_binded_samplers[MAX_SAMPLER_LAYOUT];
+            VkPipelineLayout m_binded_pipeline_layout;
 
-            bool m_ubo_dirty = true;
-            bool m_texture_dirty = true;
-            bool m_sampler_dirty = true;
+            bool m_ubo_dirty;
+            bool m_texture_dirty;
+            bool m_sampler_dirty;
+            VkDescriptorSet m_ubo_set;
 
-            VkDescriptorSet m_ubo_set = VK_NULL_HANDLE;
-            VkDescriptorSet m_texture_set = VK_NULL_HANDLE;
-            VkDescriptorSet m_sampler_set = VK_NULL_HANDLE;
+            VkDescriptorSet m_texture_set;
+            VkDescriptorSet m_sampler_set;
 
             std::unordered_map<jevk12_shader*, VkDescriptorSet> m_uniform_vars_sets;
 
             explicit descriptor_set_allocator(jegl_vk120_context* context)
                 : m_context(context)
+                , m_binded_ubos{}
+                , m_binded_textures{}
+                , m_binded_samplers{}
+                , m_binded_pipeline_layout(VK_NULL_HANDLE)
+                , m_ubo_dirty(true)
+                , m_texture_dirty(true)
+                , m_sampler_dirty(true)
+                , m_ubo_set(VK_NULL_HANDLE)
+                , m_texture_set(VK_NULL_HANDLE)
+                , m_sampler_set(VK_NULL_HANDLE)
             {
                 assert(m_context != nullptr);
 
@@ -953,28 +1048,47 @@ namespace jeecs::graphic::api::vk120
 
             struct block
             {
-                VkDeviceMemory m_memory = VK_NULL_HANDLE;
-                VkDeviceSize m_size = 0;
-                uint32_t m_memory_type = 0;
-                void* m_mapped = nullptr;
+                VkDeviceMemory m_memory;
+                VkDeviceSize m_size;
+                uint32_t m_memory_type;
+                void* m_mapped;
                 std::vector<std::pair<VkDeviceSize, VkDeviceSize>> m_free_ranges;
+
+                block()
+                    : m_memory(VK_NULL_HANDLE)
+                    , m_size(0)
+                    , m_memory_type(0)
+                    , m_mapped(nullptr)
+                {
+                }
             };
             struct allocation
             {
-                VkDeviceMemory m_memory = VK_NULL_HANDLE;
-                VkDeviceSize m_offset = 0;
-                VkDeviceSize m_size = 0;
-                void* m_mapped = nullptr;
+                VkDeviceMemory m_memory;
+                VkDeviceSize m_offset;
+                VkDeviceSize m_size;
+                void* m_mapped;
+
+                allocation()
+                    : m_memory(VK_NULL_HANDLE)
+                    , m_offset(0)
+                    , m_size(0)
+                    , m_mapped(nullptr)
+                {
+                }
             };
 
-            jegl_vk120_context* m_context = nullptr;
-            VkDeviceSize m_buffer_image_granularity = 1;
-            VkDeviceSize m_default_device_block_size = 64ull * 1024 * 1024;
-            VkDeviceSize m_default_host_block_size = 16ull * 1024 * 1024;
+            jegl_vk120_context* m_context;
+            VkDeviceSize m_buffer_image_granularity;
+            VkDeviceSize m_default_device_block_size;
+            VkDeviceSize m_default_host_block_size;
             std::vector<block> m_blocks;
 
             explicit memory_allocator(jegl_vk120_context* context)
                 : m_context(context)
+                , m_buffer_image_granularity(1)
+                , m_default_device_block_size(64ull * 1024 * 1024)
+                , m_default_host_block_size(16ull * 1024 * 1024)
             {
                 assert(m_context != nullptr);
             }
@@ -1193,10 +1307,10 @@ namespace jeecs::graphic::api::vk120
             }
         };
 
-        descriptor_set_allocator* _vk_descriptor_set_allocator = nullptr;
-        memory_allocator* _vk_memory_allocator = nullptr;
+        descriptor_set_allocator* _vk_descriptor_set_allocator;
+        memory_allocator* _vk_memory_allocator;
 
-        VkSwapchainKHR _vk_swapchain = VK_NULL_HANDLE;
+        VkSwapchainKHR _vk_swapchain;
         std::vector<swapchain_image_content*> _vk_swapchain_images;
 
         // 每个交换链图像一个 render-finished 信号量。按帧槽复用会让信号量
@@ -1205,36 +1319,36 @@ namespace jeecs::graphic::api::vk120
         // 已完成，此时复用对应信号量是安全的。
         std::vector<VkSemaphore> _vk_image_render_finished_semaphores;
 
-        VkSampler _vk_dear_imgui_sampler = VK_NULL_HANDLE;
-        VkDescriptorPool _vk_dear_imgui_descriptor_pool = VK_NULL_HANDLE;
+        VkSampler _vk_dear_imgui_sampler;
+        VkDescriptorPool _vk_dear_imgui_descriptor_pool;
 
-        VkCommandPool _vk_frame_command_pool = VK_NULL_HANDLE;
-        VkCommandPool _vk_temp_command_pool = VK_NULL_HANDLE;
+        VkCommandPool _vk_frame_command_pool;
+        VkCommandPool _vk_temp_command_pool;
 
-        std::array<frame_resources, FRAMES_IN_FLIGHT> _vk_frames = {};
-        uint32_t _vk_current_frame_index = 0;
+        std::array<frame_resources, FRAMES_IN_FLIGHT> _vk_frames;
+        uint32_t _vk_current_frame_index;
 
         // Following is runtime vk states.
-        uint32_t _vk_presenting_swapchain_image_index = UINT32_MAX;
-        swapchain_image_content* _vk_current_swapchain_image_content = nullptr;
+        uint32_t _vk_presenting_swapchain_image_index;
+        swapchain_image_content* _vk_current_swapchain_image_content;
 
-        jevk12_framebuffer* _vk_current_target_framebuffer = nullptr;
-        VkCommandBuffer _vk_current_command_buffer = VK_NULL_HANDLE;
-        jevk12_shader* _vk_current_binded_shader = nullptr;
-        je_gl_pipeline_t* _vk_current_pipeline = nullptr;
-        jevk12_vertex* _vk_current_vertex = nullptr;
-        je_gl_shader_t* _vk_current_shader_resource = nullptr;
+        jevk12_framebuffer* _vk_current_target_framebuffer;
+        VkCommandBuffer _vk_current_command_buffer;
+        jevk12_shader* _vk_current_binded_shader;
+        je_gl_pipeline_t* _vk_current_pipeline;
+        jevk12_vertex* _vk_current_vertex;
+        je_gl_shader_t* _vk_current_shader_resource;
 
-        bool _vk_frame_recording = false;
-        bool _vk_frame_has_swapchain_image = false;
+        bool _vk_frame_recording;
+        bool _vk_frame_has_swapchain_image;
 
-        bool _vk_pending_present = false;
-        uint32_t _vk_pending_present_image_index = UINT32_MAX;
-        bool _vk_swapchain_out_of_date = false;
-        bool _vk_imgui_initialized = false;
+        bool _vk_pending_present;
+        uint32_t _vk_pending_present_image_index;
+        bool _vk_swapchain_out_of_date;
+        bool _vk_imgui_initialized;
 
-        VkPipelineCache _vk_pipeline_cache = VK_NULL_HANDLE;
-        VkDeviceSize _vk_min_uniform_buffer_offset_alignment = 1;
+        VkPipelineCache _vk_pipeline_cache;
+        VkDeviceSize _vk_min_uniform_buffer_offset_alignment;
 
         using pso_key_t =
             std::tuple<je_gl_pipeline_t*, jevk12_framebuffer*, uint32_t, uint32_t, uint32_t>;
@@ -2463,6 +2577,35 @@ namespace jeecs::graphic::api::vk120
             je_gl_context_t* ctx,
             const je_gl_interface_config_t* config,
             bool reboot)
+            : _vk_active_msaa_samples(VK_SAMPLE_COUNT_1_BIT)
+            , _vk_use_srgb_encode_pass(false)
+            , _vk_encoding_srgb_screen(false)
+            , _vk_global_descriptor_set_layouts{}
+            , _vk_descriptor_set_allocator(nullptr)
+            , _vk_memory_allocator(nullptr)
+            , _vk_swapchain(VK_NULL_HANDLE)
+            , _vk_dear_imgui_sampler(VK_NULL_HANDLE)
+            , _vk_dear_imgui_descriptor_pool(VK_NULL_HANDLE)
+            , _vk_frame_command_pool(VK_NULL_HANDLE)
+            , _vk_temp_command_pool(VK_NULL_HANDLE)
+            , _vk_frames{}
+            , _vk_current_frame_index(0)
+            , _vk_presenting_swapchain_image_index(UINT32_MAX)
+            , _vk_current_swapchain_image_content(nullptr)
+            , _vk_current_target_framebuffer(nullptr)
+            , _vk_current_command_buffer(VK_NULL_HANDLE)
+            , _vk_current_binded_shader(nullptr)
+            , _vk_current_pipeline(nullptr)
+            , _vk_current_vertex(nullptr)
+            , _vk_current_shader_resource(nullptr)
+            , _vk_frame_recording(false)
+            , _vk_frame_has_swapchain_image(false)
+            , _vk_pending_present(false)
+            , _vk_pending_present_image_index(UINT32_MAX)
+            , _vk_swapchain_out_of_date(false)
+            , _vk_imgui_initialized(false)
+            , _vk_pipeline_cache(VK_NULL_HANDLE)
+            , _vk_min_uniform_buffer_offset_alignment(1)
         {
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW
             _vk_jegl_interface = new egl(egl::VULKAN120);
@@ -2474,26 +2617,11 @@ namespace jeecs::graphic::api::vk120
 
             _vk_jegl_context = ctx;
 
-            _vk_current_target_framebuffer = nullptr;
-            _vk_current_command_buffer = VK_NULL_HANDLE;
-            _vk_current_binded_shader = nullptr;
-            _vk_current_pipeline = nullptr;
-            _vk_current_vertex = nullptr;
-            _vk_current_shader_resource = nullptr;
-            _vk_current_swapchain_image_content = nullptr;
-            _vk_frame_recording = false;
-            _vk_frame_has_swapchain_image = false;
-            _vk_pending_present = false;
-            _vk_pending_present_image_index = UINT32_MAX;
-            _vk_presenting_swapchain_image_index = UINT32_MAX;
-
             _vk_msaa_config = config->m_msaa;
             if (_vk_msaa_config == 0)
                 _vk_msaa_config = 1;
 
             _vk_vsync_config = config->m_fps == 0;
-
-            _vk_swapchain = VK_NULL_HANDLE;
 
             // 获取所有支持的层
             uint32_t vk_layer_count;

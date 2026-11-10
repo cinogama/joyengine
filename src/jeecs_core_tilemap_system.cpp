@@ -1030,9 +1030,9 @@ namespace jeecs::tilemap
         // 1. 收集地图根实体并解析文档（Wall 为可选的碰撞体开关）
         struct root_info
         {
-            je_game_entity_t raw{};
-            Tilemap::Map* comp = nullptr;
-            Tilemap::Wall* wall = nullptr;
+            je_game_entity_t raw;
+            Tilemap::Map* comp;
+            Tilemap::Wall* wall;
             std::optional<std::shared_ptr<Tilemap::MapDocument>> doc;
         };
         std::vector<root_info> roots;

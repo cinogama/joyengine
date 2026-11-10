@@ -101,16 +101,29 @@ namespace jeecs::graphic
         // Used by both world-space (Unlit / DeferLight2D main) and screen-space (UI) passes.
         struct pass_uniforms_t
         {
-            const float (*m)[4] = nullptr;
-            const float (*mv)[4] = nullptr;
-            const float (*mvp)[4] = nullptr;
-            math::vec3 local_scale = math::vec3(1.f, 1.f, 1.f);
-            math::vec2 tiling = math::vec2(1.f, 1.f);
-            math::vec2 offset = math::vec2(0.f, 0.f);
-            math::vec4 color = math::vec4(1.f, 1.f, 1.f, 1.f);
+            const float (*m)[4];
+            const float (*mv)[4];
+            const float (*mvp)[4];
+            math::vec3 local_scale;
+            math::vec2 tiling;
+            math::vec2 offset;
+            math::vec4 color;
             // Light2D-only extras; set when non-null.
-            const math::vec2* light2d_resolution = nullptr;
-            const float* light2d_decay = nullptr;
+            const math::vec2* light2d_resolution;
+            const float* light2d_decay;
+
+            pass_uniforms_t()
+                : m(nullptr)
+                , mv(nullptr)
+                , mvp(nullptr)
+                , local_scale(1.f, 1.f, 1.f)
+                , tiling(1.f, 1.f)
+                , offset(0.f, 0.f)
+                , color(1.f, 1.f, 1.f, 1.f)
+                , light2d_resolution(nullptr)
+                , light2d_decay(nullptr)
+            {
+            }
         };
 
         DefaultResources m_defaults;
@@ -120,8 +133,8 @@ namespace jeecs::graphic
         std::map<std::pair<je_gl_shader_t*, uint8_t>, je_gl_pipeline_t*> m_pipeline_cache;
 
         // 窗口尺寸，帧首（begin_frame）读取。
-        size_t m_window_width = 0;
-        size_t m_window_height = 0;
+        size_t m_window_width;
+        size_t m_window_height;
 
         GraphicPipelineBase(game_world w);
         ~GraphicPipelineBase();
@@ -254,15 +267,15 @@ namespace jeecs::graphic
         // 动态顶点缓冲池：跨帧复用；同一帧内每个运行段独占一块（command buffer
         // 记录绘制动作后图形线程滞后消费，同帧内重复更新同一缓冲会互相覆盖）。
         std::vector<basic::resource<graphic::vertex>> m_text_vb_pool;
-        size_t m_text_vb_used = 0;
-        bool m_warned_text_vb_exhausted = false;
+        size_t m_text_vb_used;
+        bool m_warned_text_vb_exhausted;
         // 当前批（连续同键运行段）状态；发射端逐字追加，键变化/缓冲满/相机
         // 切换时 flush 成一次 command-buffer draw。
         std::vector<float> m_text_quad_data;
-        je_gl_texture_2d_t* m_text_batch_page = nullptr;
-        graphic::shader* m_text_batch_shader = nullptr;
-        basic::resource<graphic::vertex>* m_text_batch_vb = nullptr;
-        size_t m_text_batch_quads = 0;
+        je_gl_texture_2d_t* m_text_batch_page;
+        graphic::shader* m_text_batch_shader;
+        basic::resource<graphic::vertex>* m_text_batch_vb;
+        size_t m_text_batch_quads;
 
         void GraphicUpdate();
 
@@ -494,8 +507,14 @@ namespace jeecs::graphic
         // ZTEST(LESS_EQUAL) 保留最靠前的阴影贡献。
         struct shadow_depth_mapping
         {
-            float scale = 1.f;
-            float bias = 0.f;
+            float scale;
+            float bias;
+
+            shadow_depth_mapping()
+                : scale(1.f)
+                , bias(0.f)
+            {
+            }
         };
         shadow_depth_mapping make_shadow_depth_mapping(
             const std::vector<block2d_arch>& blocks, bool topdown) const;

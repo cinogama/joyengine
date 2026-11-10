@@ -440,6 +440,15 @@ namespace jeecs::file::fimg
     File::File(shared_ptr<const Archive> owner, const Entry& ent)
         : m_owner(move(owner))
         , m_entry(ent)
+        , m_position(0)
+        , m_open_shard(0)
+        , m_open_shard_pos(0)
+        , m_handle(nullptr)
+        , m_failed(false)
+        , m_stored_cursor(0)
+        , m_stream_position(0)
+        , m_stream_ended(false)
+        , m_inflate_initialized(false)
     {
         assert(m_owner != nullptr);
     }
@@ -853,9 +862,16 @@ namespace jeecs::file::fimg
     Writer::Writer(string root, uint64_t shard_size, WriterOptions options)
         : m_root(move(root))
         , m_shard_size(shard_size)
+        , m_shard_count(0)
+        , m_shard_offset(0)
+        , m_shard_file(nullptr)
+        , m_failed(false)
+        , m_finished(false)
         , m_compression_level(options.compression_level)
         , m_min_compress_size(options.min_compress_size)
         , m_skip_extensions(parse_extensions(options.skip_extensions))
+        , m_deflate_active(false)
+        , m_deflate_output_size(0)
     {
         if (m_compression_level < 0)
             m_compression_level = 6;

@@ -551,6 +551,9 @@ namespace jeecs::physics
 
     Physics2DUpdatingSystem::Physics2DUpdatingSystem(game_world w)
         : game_system(w)
+        , m_frame(0)
+        , m_scene_config()
+        , m_config_loaded(false)
     {
     }
 

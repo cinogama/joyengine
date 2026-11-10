@@ -268,23 +268,36 @@ namespace jeecs::audio
 
             struct OpenALEfx
             {
-                LPALGENEFFECTS alGenEffects = nullptr;
-                LPALDELETEEFFECTS alDeleteEffects = nullptr;
-                LPALEFFECTI alEffecti = nullptr;
-                LPALEFFECTF alEffectf = nullptr;
-                LPALEFFECTFV alEffectfv = nullptr;
-                LPALGENAUXILIARYEFFECTSLOTS alGenAuxiliaryEffectSlots = nullptr;
-                LPALDELETEAUXILIARYEFFECTSLOTS alDeleteAuxiliaryEffectSlots = nullptr;
-                LPALAUXILIARYEFFECTSLOTI alAuxiliaryEffectSloti = nullptr;
-                LPALAUXILIARYEFFECTSLOTF alAuxiliaryEffectSlotf = nullptr;
-                LPALGENFILTERS alGenFilters = nullptr;
-                LPALDELETEFILTERS alDeleteFilters = nullptr;
-                LPALFILTERI alFilteri = nullptr;
-                LPALFILTERF alFilterf = nullptr;
+                LPALGENEFFECTS alGenEffects;
+                LPALDELETEEFFECTS alDeleteEffects;
+                LPALEFFECTI alEffecti;
+                LPALEFFECTF alEffectf;
+                LPALEFFECTFV alEffectfv;
+                LPALGENAUXILIARYEFFECTSLOTS alGenAuxiliaryEffectSlots;
+                LPALDELETEAUXILIARYEFFECTSLOTS alDeleteAuxiliaryEffectSlots;
+                LPALAUXILIARYEFFECTSLOTI alAuxiliaryEffectSloti;
+                LPALAUXILIARYEFFECTSLOTF alAuxiliaryEffectSlotf;
+                LPALGENFILTERS alGenFilters;
+                LPALDELETEFILTERS alDeleteFilters;
+                LPALFILTERI alFilteri;
+                LPALFILTERF alFilterf;
 
                 JECS_DISABLE_MOVE_AND_COPY(OpenALEfx);
 
                 OpenALEfx(je_audio_native_play_device_instance_t* device)
+                    : alGenEffects(nullptr)
+                    , alDeleteEffects(nullptr)
+                    , alEffecti(nullptr)
+                    , alEffectf(nullptr)
+                    , alEffectfv(nullptr)
+                    , alGenAuxiliaryEffectSlots(nullptr)
+                    , alDeleteAuxiliaryEffectSlots(nullptr)
+                    , alAuxiliaryEffectSloti(nullptr)
+                    , alAuxiliaryEffectSlotf(nullptr)
+                    , alGenFilters(nullptr)
+                    , alDeleteFilters(nullptr)
+                    , alFilteri(nullptr)
+                    , alFilterf(nullptr)
                 {
                     auto* aldevice = JE_AL_DEVICE(device);
 
@@ -312,7 +325,7 @@ namespace jeecs::audio
 #undef JEAL_LOAD_FUNC
                 }
             };
-            optional<OpenALEfx> m_alext_efx = nullopt;
+            optional<OpenALEfx> m_alext_efx;
 
             struct jeal_play_device_states_dump
             {
@@ -327,7 +340,7 @@ namespace jeecs::audio
                 unordered_map<je_audio_filter_t*, je_audio_native_filter_instance_t*>
                     m_filters_dump;
             };
-            optional<jeal_play_device_states_dump> m_play_state_dump = nullopt;
+            optional<jeal_play_device_states_dump> m_play_state_dump;
 
             static bool check_device_instance_connected(je_audio_native_play_device_instance_t* device)
             {

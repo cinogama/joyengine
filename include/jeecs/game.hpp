@@ -558,9 +558,12 @@ namespace jeecs
             // 预缓存本视图所需的 component_info（按 SliceView::Components... 顺序）。
             // 在进入新 arch 时一次性刷新，避免每次解引用都走 je_dependence_arch_infos_t 的
             // m_view_component_offset / m_view_component_size 双重间接。
-            std::array<typename SliceView::component_info, _component_count> m_cached_infos{};
+            std::array<typename SliceView::component_info, _component_count> m_cached_infos;
 
-            slice_base() = default;
+            slice_base()
+                : m_cached_infos()
+            {
+            }
 
             // For `end()` only.
             explicit slice_base(const je_dependence_arch_infos_t* _archs_end)
@@ -569,6 +572,7 @@ namespace jeecs
                 , m_chunk_current(nullptr)
                 , m_chunk_current_entity_meta(nullptr)
                 , m_chunk_entity_current_index(0)
+                , m_cached_infos()
             {
             }
 

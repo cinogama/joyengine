@@ -54,17 +54,27 @@ namespace jeecs::particle
             // 粒子唯一 ID：发射时按 next_particle_id 单调递增分配，
             // 交换删除时随粒子一起移动，供着色器区分不同粒子
             std::vector<uint32_t> particle_ids;
-            uint32_t next_particle_id = 0;
+            uint32_t next_particle_id;
 
-            size_t alive_count = 0;
-            size_t capacity = 0;
+            size_t alive_count;
+            size_t capacity;
 
-            double spawn_accumulator = 0.0;
-            double burst_timer = 0.0;
-            bool dirty = true; // 池新建/重置后至少完整上传一次
+            double spawn_accumulator;
+            double burst_timer;
+            bool dirty; // 池新建/重置后至少完整上传一次
 
             basic::optional<basic::resource<graphic::vertex>> gpu_vertex;
             std::vector<float> staging; // capacity * 4 顶点 * FLOATS_PER_VERTEX
+
+            particle_pool()
+                : next_particle_id(0)
+                , alive_count(0)
+                , capacity(0)
+                , spawn_accumulator(0.0)
+                , burst_timer(0.0)
+                , dirty(true)
+            {
+            }
 
             void reset();
             void resize(size_t new_capacity);

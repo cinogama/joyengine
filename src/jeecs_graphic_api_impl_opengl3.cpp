@@ -194,32 +194,32 @@ namespace jeecs::graphic::api::gl3
     {
         basic_interface* m_interface;
 
-        size_t RESOLUTION_WIDTH = 0;
-        size_t RESOLUTION_HEIGHT = 0;
+        size_t RESOLUTION_WIDTH;
+        size_t RESOLUTION_HEIGHT;
 
-        jegl_gl3_shader* current_active_shader_may_null = nullptr;
-        GLenum ACTIVE_DEPTH_MODE = GL_INVALID_ENUM;
+        jegl_gl3_shader* current_active_shader_may_null;
+        GLenum ACTIVE_DEPTH_MODE;
 
         // 此处使用 GLenum 是因为 GLboolean 无法准确表示未初始化状态，
         // 我们需要知道这玩意儿实际上是 GLboolean
-        GLenum /*GLboolean*/ ACTIVE_MASK_MODE = GL_INVALID_ENUM;
-        GLenum ACTIVE_BLEND_EQUATION = GL_INVALID_ENUM;
-        GLenum ACTIVE_BLEND_SRC_MODE = GL_INVALID_ENUM;
-        GLenum ACTIVE_BLEND_DST_MODE = GL_INVALID_ENUM;
-        GLenum ACTIVE_CULL_MODE = GL_INVALID_ENUM;
+        GLenum /*GLboolean*/ ACTIVE_MASK_MODE;
+        GLenum ACTIVE_BLEND_EQUATION;
+        GLenum ACTIVE_BLEND_SRC_MODE;
+        GLenum ACTIVE_BLEND_DST_MODE;
+        GLenum ACTIVE_CULL_MODE;
 
         // Render API (v2) state.
-        GLuint m_render_uniform_ring = 0;
-        GLsizeiptr m_render_uniform_ring_size = 4 * 1024 * 1024;
-        GLintptr m_render_uniform_ring_offset = 0;
-        GLint m_render_uniform_alignment = 256;
+        GLuint m_render_uniform_ring;
+        GLsizeiptr m_render_uniform_ring_size;
+        GLintptr m_render_uniform_ring_offset;
+        GLint m_render_uniform_alignment;
 
-        je_gl_shader_t* m_render_current_shader_resource = nullptr;
-        jegl3_vertex_data* m_render_current_vertex = nullptr;
+        je_gl_shader_t* m_render_current_shader_resource;
+        jegl3_vertex_data* m_render_current_vertex;
 
         // Clears of the default framebuffer need an explicit sRGB encode on
         // desktop GL because glClearBufferfv bypasses FRAMEBUFFER_SRGB.
-        bool m_render_target_is_default = false;
+        bool m_render_target_is_default;
 
         // sRGB presentation mode. Hardware mode uses an sRGB-capable default
         // framebuffer plus FRAMEBUFFER_SRGB; otherwise all screen-bound draws
@@ -230,8 +230,8 @@ namespace jeecs::graphic::api::gl3
             HARDWARE,
             ENCODE_PASS,
         };
-        srgb_output_mode m_srgb_output_mode = srgb_output_mode::ENCODE_PASS;
-        bool m_encoding_srgb_screen = false;
+        srgb_output_mode m_srgb_output_mode;
+        bool m_encoding_srgb_screen;
 
         bool is_srgb_hardware() const
         {
@@ -248,6 +248,24 @@ namespace jeecs::graphic::api::gl3
         JECS_DISABLE_MOVE_AND_COPY(jegl_gl3_context);
 
         jegl_gl3_context(je_gl_context_t* gthread, const je_gl_interface_config_t* config, bool reboot)
+            : RESOLUTION_WIDTH(0)
+            , RESOLUTION_HEIGHT(0)
+            , current_active_shader_may_null(nullptr)
+            , ACTIVE_DEPTH_MODE(GL_INVALID_ENUM)
+            , ACTIVE_MASK_MODE(GL_INVALID_ENUM)
+            , ACTIVE_BLEND_EQUATION(GL_INVALID_ENUM)
+            , ACTIVE_BLEND_SRC_MODE(GL_INVALID_ENUM)
+            , ACTIVE_BLEND_DST_MODE(GL_INVALID_ENUM)
+            , ACTIVE_CULL_MODE(GL_INVALID_ENUM)
+            , m_render_uniform_ring(0)
+            , m_render_uniform_ring_size(4 * 1024 * 1024)
+            , m_render_uniform_ring_offset(0)
+            , m_render_uniform_alignment(256)
+            , m_render_current_shader_resource(nullptr)
+            , m_render_current_vertex(nullptr)
+            , m_render_target_is_default(false)
+            , m_srgb_output_mode(srgb_output_mode::ENCODE_PASS)
+            , m_encoding_srgb_screen(false)
         {
             m_interface =
 #ifdef JE_GL_USE_EGL_INSTEAD_GLFW

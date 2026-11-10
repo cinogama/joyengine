@@ -384,10 +384,10 @@ WOORT_API woort_api wojeapi_world_get_all_entities(void)
 // ===========================================================================
 struct wo_entity_selector_state
 {
-    je_game_world_t* world = nullptr;
-    je_requirement_collection_t collection{};
+    je_game_world_t* world;
+    je_requirement_collection_t collection;
     // arch-change version captured at the selector's last refresh.
-    woort_Int arch_version = 0;
+    woort_Int arch_version;
 
     ~wo_entity_selector_state()
     {
@@ -400,10 +400,10 @@ struct wo_entity_selector_state
 // for at least as long as the loop is running).
 struct wo_entity_iter_state
 {
-    wo_entity_selector_state* selector = nullptr;
-    size_t arch_index = 0;
-    je_chunk_t* chunk = nullptr;
-    je_entity_id_in_chunk_t entity_index = 0;
+    wo_entity_selector_state* selector;
+    size_t arch_index;
+    je_chunk_t* chunk;
+    je_entity_id_in_chunk_t entity_index;
 };
 
 // woort_pointer(0) = world

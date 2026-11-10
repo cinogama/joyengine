@@ -24,9 +24,9 @@ struct dynamic_parser_impl_t
 
     // saving/restoring 来自 types 脚本，edit 来自 editor 脚本，
     // 三者相互独立：任一脚本缺失或未提供某槽位时对应标志为 false。
-    bool m_has_saving = false;
-    bool m_has_restoring = false;
-    bool m_has_edit = false;
+    bool m_has_saving;
+    bool m_has_restoring;
+    bool m_has_edit;
 
     const je_typeinfo_script_parser_t*
         m_script_parser;
@@ -40,8 +40,8 @@ struct dynamic_parser_global_context_t
     mutex _je_dynamic_parser_mx;
 
     parser_table_t _je_dynamic_parser_impls;
-    woort_CodeEnv* _je_dynamic_parser_types_cenv = nullptr;
-    woort_CodeEnv* _je_dynamic_parser_editor_cenv = nullptr;
+    woort_CodeEnv* _je_dynamic_parser_types_cenv;
+    woort_CodeEnv* _je_dynamic_parser_editor_cenv;
 };
 
 static dynamic_parser_global_context_t _je_dynamic_parser_global_context;

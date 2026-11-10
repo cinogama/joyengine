@@ -47,12 +47,18 @@ namespace jeecs::physics
         struct group_definition
         {
             std::vector<group_filter_rule> m_filters;
-            uint16_t                       m_collide_mask = 0; // Bit i set => this group collides with group i.
+            uint16_t                       m_collide_mask; // Bit i set => this group collides with group i.
         };
         struct collision_group_table
         {
             std::array<group_definition, MAX_GROUP_COUNT> m_groups;
-            size_t                                         m_count = 0; // Number of valid groups (rest unused).
+            size_t                                         m_count; // Number of valid groups (rest unused).
+
+            collision_group_table()
+                : m_groups()
+                , m_count(0)
+            {
+            }
         };
 
         // ============================================================
@@ -64,11 +70,11 @@ namespace jeecs::physics
         {
             struct layer_info
             {
-                size_t     layerid = 0;
-                math::vec2 gravity = math::vec2(0.f, -9.8f);
-                size_t     substeps = 4;
-                bool       sleep = false;
-                bool       continuous = false;
+                size_t     layerid;
+                math::vec2 gravity;
+                size_t     substeps;
+                bool       sleep;
+                bool       continuous;
             };
             std::vector<layer_info> layers;
             collision_group_table   collide_groups; // shared across every layer
@@ -89,41 +95,57 @@ namespace jeecs::physics
     {
         struct PhysicsWorld
         {
-            b2WorldId                                world{};
-            size_t                                   layerid = 0;
+            b2WorldId                                world;
+            size_t                                   layerid;
 
             // Snapshot of last-applied world config (for diff'ing).
-            math::vec2                               gravity_snap = math::vec2(0.f, -9.8f);
-            size_t                                   substeps_snap = 4;
-            bool                                     sleep_snap = false;
-            bool                                     continuous_snap = false;
+            math::vec2                               gravity_snap;
+            size_t                                   substeps_snap;
+            bool                                     sleep_snap;
+            bool                                     continuous_snap;
 
-            physics2d_detail::collision_group_table  groups{};
+            physics2d_detail::collision_group_table  groups;
 
             // Per-body runtime record. Stable pointer lifetime = life of the entry.
             struct BodyRecord
             {
                 game_entity     entity;          // Refreshed every frame in phase_sync_bodies_in.
-                b2BodyId        body{};
-                b2ShapeId       shape{};
+                b2BodyId        body;
+                b2ShapeId       shape;
                 // Collider::Mesh decomposes into compound shapes (convex
                 // polygon or ear-cut triangles); primitive kinds use `shape`.
-                std::vector<b2ShapeId> mesh_shapes{};
+                std::vector<b2ShapeId> mesh_shapes;
 
                 // Diff cache: decides whether the fixture must be rebuilt.
                 enum class ShapeKind : uint8_t { None, Box, Circle, Capsule, Mesh };
-                ShapeKind       cached_kind = ShapeKind::None;
-                math::vec2      cached_box_size = {};
-                float           cached_circle_r = 0.f;
-                float           cached_capsule_r = 0.f;
-                float           cached_capsule_h = 0.f;
-                basic::vector<math::vec2> cached_mesh_vertices{};
-                float           cached_density = -1.f;
-                float           cached_friction = -1.f;
-                float           cached_restitution = -1.f;
-                bool            cached_trigger = false;
+                ShapeKind       cached_kind;
+                math::vec2      cached_box_size;
+                float           cached_circle_r;
+                float           cached_capsule_r;
+                float           cached_capsule_h;
+                basic::vector<math::vec2> cached_mesh_vertices;
+                float           cached_density;
+                float           cached_friction;
+                float           cached_restitution;
+                bool            cached_trigger;
 
-                uint64_t        last_seen_frame = 0;
+                uint64_t        last_seen_frame;
+
+                BodyRecord()
+                    : body()
+                    , shape()
+                    , cached_kind(ShapeKind::None)
+                    , cached_box_size()
+                    , cached_circle_r(0.f)
+                    , cached_capsule_r(0.f)
+                    , cached_capsule_h(0.f)
+                    , cached_density(-1.f)
+                    , cached_friction(-1.f)
+                    , cached_restitution(-1.f)
+                    , cached_trigger(false)
+                    , last_seen_frame(0)
+                {
+                }
             };
             std::unordered_map<b2BodyId, BodyRecord,
                 physics2d_detail::B2BodyKeyHash,
@@ -131,11 +153,22 @@ namespace jeecs::physics
 
             // Scratch for dead-body sweep.
             std::vector<b2BodyId> dead_scratch;
+
+            PhysicsWorld()
+                : world()
+                , layerid(0)
+                , gravity_snap(math::vec2(0.f, -9.8f))
+                , substeps_snap(4)
+                , sleep_snap(false)
+                , continuous_snap(false)
+                , groups()
+            {
+            }
         };
 
         // Active worlds keyed by layerid.
         std::unordered_map<size_t, std::unique_ptr<PhysicsWorld>> m_worlds;
-        uint64_t                                                   m_frame = 0;
+        uint64_t                                                   m_frame;
 
         // Reused scratch buffers (avoids per-frame allocation).
         std::vector<b2ContactData>                                 m_contact_data_scratch;
@@ -145,8 +178,8 @@ namespace jeecs::physics
         // collision-group table. Reloaded only when Physics2D::Scene's
         // referenced path changes.
         std::string                                                m_loaded_config_path;
-        physics2d_detail::scene_physics_config                     m_scene_config{};
-        bool                                                       m_config_loaded = false;
+        physics2d_detail::scene_physics_config                     m_scene_config;
+        bool                                                       m_config_loaded;
 
         Physics2DUpdatingSystem(game_world w);
         ~Physics2DUpdatingSystem();

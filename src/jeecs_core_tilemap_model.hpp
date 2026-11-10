@@ -147,8 +147,8 @@ namespace jeecs
         struct SourceTexture
         {
             std::string path;   // 运行时路径（@/ 或 !/）
-            int32_t tile_px = 32;
-            int32_t xcount = 1, ycount = 1;
+            int32_t tile_px;
+            int32_t xcount, ycount;
             // 每格的瓦片 id（行优先，长度恒 = xcount*ycount）。添加源时
             // 按行优先连续分配；纹理尺寸变化后已有格保留原 id、新增格
             // 从文档的 next_tile_id 追加——地图按 id 引用瓦片不会漂移，
@@ -164,17 +164,25 @@ namespace jeecs
             std::optional<basic::resource<graphic::texture_array>> array;
             // 运行期：构建失败标记（纹理不可读时只试一次，避免逐帧兜底
             // 重试刷日志；图集重载后随新实例重置）
-            bool array_failed = false;
+            bool array_failed;
 
             // 附加层级纹理（如法线图集）：与主纹理共用同一瓦片网格
             //（xcount/ycount/tile 索引），按各自 pass 展开为独立数组纹理
             std::vector<struct SourceExtra> extras;
+
+            SourceTexture()
+                : tile_px(32)
+                , xcount(1)
+                , ycount(1)
+                , array_failed(false)
+            {
+            }
         };
         // 图集源纹理的附加层级：pass 为绑定通道 id（>= 1；主纹理固定
         // 占通道 0，与图层样式"槽 0 保留给图集源纹理"约定一致）
         struct SourceExtra
         {
-            int32_t pass = 1;
+            int32_t pass;
             std::string path;   // 运行时路径（@/ 或 !/）
             // 纹理像素尺寸（添加时测量，cell 尺寸由此与主纹理网格推得）
             std::optional<int32_t> tex_w, tex_h;
@@ -182,7 +190,13 @@ namespace jeecs
             // 构建；不参与序列化）。nullopt = 尚未构建
             std::optional<basic::resource<graphic::texture_array>> array;
             // 运行期：构建失败标记（同 SourceTexture::array_failed）
-            bool array_failed = false;
+            bool array_failed;
+
+            SourceExtra()
+                : pass(1)
+                , array_failed(false)
+            {
+            }
         };
         // 瓦片默认法线：指向屏幕外侧（引擎内 -Z 为朝向摄像机的方向）。
         // 参与网格顶点生成，瓦片的显式法线与之相同即视为默认（可从稀疏
@@ -196,20 +210,32 @@ namespace jeecs
         struct TileDef
         {
             std::string name;
-            bool walkable = true;
-            je_tile_kind_t kind = JE_TILE_KIND_PLAIN;  // 自动拼接类型
+            bool walkable;
+            je_tile_kind_t kind;  // 自动拼接类型
             // 顶点法线（局部空间单位向量，默认 DEFAULT_TILE_NORMAL）：
             // 网格生成时写入该瓦片全部顶点，供光照判定"这块瓦片朝哪"。
             // 自动拼接格整格共享锚点瓦片的法线（四象限/变体不各自取用）。
-            std::array<float, 3> normal = DEFAULT_TILE_NORMAL;
+            std::array<float, 3> normal;
             std::vector<int32_t> variant_tiles;     // blob47 显式变体表（瓦片 id）
             std::map<std::string, property_value> properties;   // 瓦片默认属性
+
+            TileDef()
+                : walkable(true)
+                , kind(JE_TILE_KIND_PLAIN)
+                , normal(DEFAULT_TILE_NORMAL)
+            {
+            }
         };
         struct PropertyDef
         {
             std::string name;
-            je_property_type_t type = JE_PROPERTY_TYPE_BOOL;
+            je_property_type_t type;
             property_value default_value;    // 与 type 一致
+
+            PropertyDef()
+                : type(JE_PROPERTY_TYPE_BOOL)
+            {
+            }
         };
 
         struct TilesetDocument
@@ -224,10 +250,16 @@ namespace jeecs
             std::unordered_map<int32_t, std::array<int32_t, 3>> tile_cells;
             // 下一个可分配的瓦片 id（只增不减：删除源/裁掉格子后其 id
             // 作废，已有地图按 id 引用不会漂移到别的格子）
-            int32_t next_tile_id = 1;
+            int32_t next_tile_id;
             std::vector<PropertyDef> properties;
 
-            uint64_t version = 1;
+            uint64_t version;
+
+            TilesetDocument()
+                : next_tile_id(1)
+                , version(1)
+            {
+            }
 
             // 重建 id -> 格 反向索引（先整表构建再换入，读者不会看到
             // 半成品索引）
@@ -323,8 +355,14 @@ namespace jeecs
         // .je4entity 保存 Shaders 的口径一致），加载后写回新实例。
         struct LayerTexture
         {
-            int32_t slot = 1;       // 槽 0 保留给图集源纹理
+            int32_t slot;       // 槽 0 保留给图集源纹理
             basic::resource<graphic::texture2d> texture;
+
+            LayerTexture(int32_t slot_, basic::resource<graphic::texture2d> texture_)
+                : slot(slot_)
+                , texture(std::move(texture_))
+            {
+            }
         };
         struct LayerStyle
         {
@@ -334,7 +372,12 @@ namespace jeecs
             // 样式独立版本戳：样式变化不 bump doc->version，避免触发
             // 全网格重扫与顶点重建；渲染侧只做轻量的着色器/纹理对齐。
             // 不落盘（加载即 1）。
-            uint64_t style_version = 1;
+            uint64_t style_version;
+
+            LayerStyle()
+                : style_version(1)
+            {
+            }
         };
 
         // 新建图层的缺省渲染队列基数：rend_queue = 基数 + 层下标。与场景
@@ -345,34 +388,46 @@ namespace jeecs
         struct MapLayer
         {
             std::string name;
-            bool visible = true;
-            bool locked = false;    // 编辑器锁定标记（运行时忽略）
+            bool visible;
+            bool locked;    // 编辑器锁定标记（运行时忽略）
             // 该层在世界中的 z 偏移（相对地图根实体，世界单位）。
             // 不同层须错开 z 以避免深度冲突；缺省按层下标错开。
-            float z = 0.f;
+            float z;
             // 该层分片的渲染队列值（Renderer::Rendqueue）：同图各层按
             // 此值升序绘制（画家算法，层间叠放的权威顺序）；z 只在与
             // 写深度的场景物体之间参与裁决。缺省按基数 + 层下标错开。
-            int32_t rend_queue = LAYER_REND_QUEUE_BASE;
+            int32_t rend_queue;
             // 该层的 2D 光照自阴影行为（je_layer_self_shadow_t）：OFF = 该层
             // 分片不挂 Light2D::SelfShadow 组件；ON/AUTO = 挂载且
             // auto_disable 分别固定为 false/true。分片组件由
             // TilemapSystem 逐帧对齐（增删走命令缓冲）。
-            je_layer_self_shadow_t selfshadow = JE_LAYER_SELFSHADOW_OFF;
+            je_layer_self_shadow_t selfshadow;
             // 自阴影覆盖强度（写入分片 SelfShadow::factor，即覆盖色
             // RGBA 乘子，0..1 常用）：仅 selfshadow != OFF 时生效
-            float selfshadow_factor = 1.f;
+            float selfshadow_factor;
             // 该层的 2D 光照遮挡阴影行为（je_layer_block_shadow_t）：OFF =
             // 该层分片不挂 Light2D::BlockShadow 组件；ON/AUTO = 挂载且
-            // auto_disable 分别固定 false/true，factor 取 blockshadow_factor。
+            // auto_disable 分别固定为 false/true，factor 取 blockshadow_factor。
             // 遮挡轮廓（实心格边界，贪心合并）由 TilemapSystem 按分块
             // 网格生成到组件的 m_block_mesh（随版本戳重建）。
-            je_layer_block_shadow_t blockshadow = JE_LAYER_BLOCKSHADOW_OFF;
+            je_layer_block_shadow_t blockshadow;
             // 遮挡阴影强度（写入分片 BlockShadow::factor，阴影体浓度，
             // 0..1 常用）：仅 blockshadow != OFF 时生效
-            float blockshadow_factor = 1.f;
+            float blockshadow_factor;
             std::vector<int32_t> grid;  // w*h 稠密网格，行优先、y 自上而下
             LayerStyle style;           // 逐层着色器样式（可空）
+
+            MapLayer()
+                : visible(true)
+                , locked(false)
+                , z(0.f)
+                , rend_queue(LAYER_REND_QUEUE_BASE)
+                , selfshadow(JE_LAYER_SELFSHADOW_OFF)
+                , selfshadow_factor(1.f)
+                , blockshadow(JE_LAYER_BLOCKSHADOW_OFF)
+                , blockshadow_factor(1.f)
+            {
+            }
         };
         // 地图对单个图集的引用槽：引用路径与解析结果同槽存储，天然对齐。
         // 生命周期即 resolved 本身：持有 shared_ptr 即保活图集实例，地图
@@ -387,7 +442,7 @@ namespace jeecs
         struct MapDocument
         {
             std::string path;   // .je4tilemap 运行时路径；未保存为空
-            int32_t width = 0, height = 0, tile_px = 32;
+            int32_t width, height, tile_px;
             std::vector<TilesetRef> tilesets;   // 引用的图集（路径 + 解析结果）
             std::vector<MapLayer> layers;
             // 逐格属性覆盖：(layer, x + y*width) -> (name -> value)
@@ -396,7 +451,15 @@ namespace jeecs
             // 文档实例生死，重载/销毁后自然从空表开始
             std::vector<std::pair<int32_t, int32_t>> find_result;
 
-            uint64_t version = 1;
+            uint64_t version;
+
+            MapDocument()
+                : width(0)
+                , height(0)
+                , tile_px(32)
+                , version(1)
+            {
+            }
 
             bool in_bounds(int32_t layer, int32_t x, int32_t y) const
             {
@@ -1669,7 +1732,12 @@ namespace jeecs
                 struct entry
                 {
                     std::shared_ptr<T> hold;  // 条目存在期间恒非空
-                    int32_t refs = 0;
+                    int32_t refs;
+
+                    entry()
+                        : refs(0)
+                    {
+                    }
                 };
                 std::unordered_map<T*, entry> held;
                 std::unordered_map<std::string, std::weak_ptr<T>> by_path;
@@ -2024,15 +2092,27 @@ namespace jeecs
         // 瓦片（自动拼接的变体/象限不各自取用）。
         struct cell_quad_info
         {
-            int32_t tileset_idx = 0;        // 地图引用表中的图集下标
-            int32_t source_idx = 0;         // 图集内源纹理下标
-            float u0 = 0.f, v0 = 0.f, u1 = 0.f, v1 = 0.f; // tile-local UV（v0 下 v1 上，[0,1]²）
-            int32_t layer = 0;              // 数组纹理层号（每层一个瓦片）
+            int32_t tileset_idx;        // 地图引用表中的图集下标
+            int32_t source_idx;         // 图集内源纹理下标
+            float u0, v0, u1, v1; // tile-local UV（v0 下 v1 上，[0,1]²）
+            int32_t layer;              // 数组纹理层号（每层一个瓦片）
             // 顶点法线（局部空间单位向量，取自格子的锚点瓦片；自动拼接
             // 的整格/四象限变体共享锚点瓦片的法线）
-            std::array<float, 3> normal = DEFAULT_TILE_NORMAL;
+            std::array<float, 3> normal;
             // 目标象限：nullopt = 整格；0=LU 1=RU 2=LD 3=RD（四象限自动图块）
             std::optional<int32_t> corner;
+
+            cell_quad_info()
+                : tileset_idx(0)
+                , source_idx(0)
+                , u0(0.f)
+                , v0(0.f)
+                , u1(0.f)
+                , v1(0.f)
+                , layer(0)
+                , normal(DEFAULT_TILE_NORMAL)
+            {
+            }
         };
 
         // 通用网格数组构建：把 2D 纹理按 (xcount × ycount) 网格逐格拷贝

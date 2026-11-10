@@ -103,6 +103,8 @@ namespace jeecs::graphic
 
     GraphicPipelineBase::GraphicPipelineBase(game_world w)
         : BasePipelineInterface(w, nullptr)
+        , m_window_width(0)
+        , m_window_height(0)
     {
     }
 
