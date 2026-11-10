@@ -1421,6 +1421,14 @@ namespace jeecs::graphic
                         (uint32_t)vertex_resource->m_index_count, 0, 1);
                 }
             } // Finish for Light2d effect.
+            else if (current_camera.light2DPostPass != nullptr)
+            {
+                // 挂了 Light2D::CameraPostPass 但没有 Renderer::Shaders：
+                // G-buffer 照常渲染，但没有任何合成 pass，画面不会呈现。
+                debug::logwarn(
+                    "Camera has Light2D::CameraPostPass but no Renderer::Shaders, "
+                    "light2d composition is skipped.");
+            }
         }
     }
 }
