@@ -151,6 +151,9 @@ namespace vec2
     {
         return (a[0] - b[0], a[1] - b[1]) as vec2;
     }
+    // 注意：Woolang 运算符只解析左操作数类型提供的重载（a 恒为首个参数），
+    // 且开发规范禁止为基础类型（real/int）重载运算符，因此只支持 v * 2. 的
+    // 写法，不支持 2. * v（BUGS.md BUG-09，语言设计限制）。
     public func operator * (a: vec2, b)
         where b is vec2 || b is real;
     {
@@ -316,17 +319,17 @@ namespace ivec2
         where b is ivec2 || b is int;
     {
         if (b is ivec2)
-            return (a[0] * b[0], a[1] * b[1]): ivec2;
+            return (a[0] * b[0], a[1] * b[1]) as ivec2;
         else
-            return (a[0] * b, a[1] * b): ivec2;
+            return (a[0] * b, a[1] * b) as ivec2;
     }
     public func operator / (a: ivec2, b)
         where b is ivec2 || b is int;
     {
         if (b is ivec2)
-            return (a[0] / b[0], a[1] / b[1]): ivec2;
+            return (a[0] / b[0], a[1] / b[1]) as ivec2;
         else
-            return (a[0] / b, a[1] / b): ivec2;
+            return (a[0] / b, a[1] / b) as ivec2;
     }
 }
 namespace quat
@@ -357,11 +360,15 @@ namespace quat
     {
         let sv = je::mathf::sin(ang * 0.5 * je::mathf::DEG2RAD);
         let cv = je::mathf::cos(ang * 0.5 * je::mathf::DEG2RAD);
-        return (a[0] * sv, a[1] * sv, a[2] * sv, cv) as quat;
+        // 与 C++ 侧一致：结果单位化（C++ quat 构造函数会自动单位化）
+        let x = a[0] * sv, y = a[1] * sv, z = a[2] * sv;
+        let mag = je::mathf::sqrt(x*x + y*y + z*z + cv*cv);
+        return (x / mag, y / mag, z / mag, cv / mag) as quat;
     }
     public func rotation(a: vec3, b: vec3)
     {
-        let axi = b->cross(a);
+        // 求把 a 转到 b 的旋转：轴为 a × b
+        let axi = a->cross(b);
         let angle = je::mathf::RAD2DEG * je::mathf::acos(b->dot(a) / (b->length * a->length));
         return axis(axi->unit, angle);
     }
@@ -391,12 +398,13 @@ namespace quat
     }
     public func lerp(a: quat, b: quat, t: real)
     {
-        return (
-            je::mathf::lerp(a[0], b[0], t),
-            je::mathf::lerp(a[1], b[1], t),
-            je::mathf::lerp(a[2], b[2], t),
-            je::mathf::lerp(a[3], b[3], t),
-        ) as quat;
+        // 与 C++ 侧一致：插值结果单位化（C++ quat 构造函数会自动单位化）
+        let x = je::mathf::lerp(a[0], b[0], t),
+            y = je::mathf::lerp(a[1], b[1], t),
+            z = je::mathf::lerp(a[2], b[2], t),
+            w = je::mathf::lerp(a[3], b[3], t);
+        let mag = je::mathf::sqrt(x*x + y*y + z*z + w*w);
+        return (x / mag, y / mag, z / mag, w / mag) as quat;
     }
     
     extern("libjoyecs", "wojeapi_towoo_math_quat_slerp")
@@ -547,7 +555,12 @@ namespace Physics2D
         // `position` is the world-space contact point; `normalize` is the
         // direction from self to the other body. Both come straight from
         // Box2D's manifold data.
-        using collide_result = struct{position: vec2, normalize: vec2};
+        // 成员必须标 public（Woolang 结构成员默认私有，否则脚本侧无法访问）。
+        using collide_result = struct
+        {
+            public position: vec2,
+            public normalize: vec2,
+        };
         
         extern("libjoyecs", "wojeapi_towoo_physics2d_collisionresult_all")
             public func all(self: CollisionResult)=> dict<Rigidbody::Id, collide_result>;

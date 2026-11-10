@@ -39,8 +39,8 @@ namespace jeecs
         template <typename T>
         inline T random(T from, T to)
         {
-            static std::random_device rd;
-            static std::mt19937 gen(rd());
+            // thread_local：粒子系统（并行阶段）等可能并发调用，避免数据竞争
+            thread_local std::mt19937 gen{ std::random_device{}() };
 
             if constexpr (std::is_floating_point_v<T>)
             {
@@ -1175,7 +1175,8 @@ namespace jeecs
 
             static inline quat rotation(const vec3& a, const vec3& b) noexcept
             {
-                auto axis = b.cross(a);
+                // 求把 a 转到 b 的旋转：轴为 a × b
+                auto axis = a.cross(b);
                 auto angle = RAD2DEG * acos(b.dot(a) / (b.length() * a.length()));
 
                 return quat::axis_angle(axis.unit(), angle);
