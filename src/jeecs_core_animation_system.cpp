@@ -272,16 +272,25 @@ namespace jeecs::animation
         // 触发 low/high 之间被越过的事件：
         //     direction > 0 —— (low, high]
         //     direction < 0 —— [low, high)
+        // 反向推进时调用方传入的 from > to（时间倒退），先按大小归一，
+        // 否则区间为空、回程中途的事件全部丢失。
+        // 另外正向区间在 low==0（播放起点 / 循环回到起点）时把低端改为
+        // 闭区间，否则恰好放在 0 处的事件在正向播放中永不触发；反向
+        // 区间的低端本来就是闭的，回程到达 0 时事件照常触发。
         void _fire_events_crossed(
             Animation::Animator& animator,
             const je_animation_action_data_t& action,
-            double low, double high, int direction)
+            double a, double b, int direction)
         {
+            const double low = std::min(a, b);
+            const double high = std::max(a, b);
+
             for (size_t i = 0; i < action.m_event_count; ++i)
             {
                 const je_animation_event_t& e = action.m_events[i];
+                const bool low_inclusive = direction > 0 && low <= 0.0;
                 const bool crossed = direction > 0
-                    ? (e.m_time > low && e.m_time <= high)
+                    ? ((e.m_time > low || (low_inclusive && e.m_time == low)) && e.m_time <= high)
                     : (e.m_time >= low && e.m_time < high);
                 if (crossed)
                     _push_frame_event(animator, e.m_name);
