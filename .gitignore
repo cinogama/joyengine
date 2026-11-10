@@ -354,6 +354,7 @@ _deps
 
 /out/
 /cmakebuild/
+/cmake_build/
 /build/*
 #!/build/.keepme
 /build/builtin/*

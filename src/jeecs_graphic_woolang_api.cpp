@@ -102,19 +102,24 @@ WOORT_API woort_api wojeapi_texture2d_create(void)
         nullptr);
 }
 
-WOORT_API woort_api wojeapi_texture2d_clip(void)
+// 创建带初始像素的 RGBA 纹理：pixels 为完整像素缓冲（width*height*4 字节，
+// 自底向上行序）
+WOORT_API woort_api wojeapi_texture2d_create_with_pixels(void)
 {
-    auto* loaded_texture =
-        (basic::resource<graphic::texture2d> *)woort_gcpointer(0);
+    const size_t w = (size_t)woort_int(0);
+    const size_t h = (size_t)woort_int(1);
+
+    size_t buffer_length = 0;
+    const void* pixels = woort_buffer(2, &buffer_length);
+
+    assert(pixels != nullptr);
+    assert(buffer_length == w * h * 4);
+
+    auto loaded_texture = graphic::texture2d::create(
+        w, h, JE_GL_TEXTURE_FORMAT_RGBA, pixels);
 
     return woort_ret_gchandle(
-        new basic::resource<graphic::texture2d>(
-            graphic::texture2d::clip(
-                *loaded_texture,
-                (size_t)woort_int(1),
-                (size_t)woort_int(2),
-                (size_t)woort_int(3),
-                (size_t)woort_int(4))),
+        new basic::resource<graphic::texture2d>(loaded_texture),
         WOORT_IGNORE,
         [](void* ptr)
         {
@@ -134,68 +139,6 @@ WOORT_API woort_api wojeapi_texture2d_bind_path(void)
 
     path = basic::make_new_string(woort_string(1));
     return woort_ret_void();
-}
-
-WOORT_API woort_api wojeapi_texture2d_pix(void)
-{
-    auto* loaded_texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(0);
-
-    const size_t x = woort_struct_get_int(1, 0);
-    const size_t y = woort_struct_get_int(1, 1);
-
-    auto* pix = new graphic::texture2d::pixel((*loaded_texture)->resource(), x, y);
-
-    return woort_ret_gchandle(
-        pix,
-        0,
-        [](void* ptr)
-        {
-            delete (graphic::texture2d::pixel*)ptr;
-        },
-        nullptr);
-}
-
-WOORT_API woort_api wojeapi_texture2d_take_snapshot(void)
-{
-    auto* loaded_texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(0);
-
-    auto tex_raw = loaded_texture->get()->resource();
-    if (tex_raw->m_pixels)
-    {
-        auto memsz = tex_raw->m_width * tex_raw->m_height *
-            (tex_raw->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
-        if (memsz > 0)
-        {
-            auto* membuf = malloc(memsz);
-            memcpy(membuf, tex_raw->m_pixels, memsz);
-            return woort_ret_result_ok_gchandle(
-                membuf,
-                WOORT_IGNORE,
-                [](void* buf)
-                {
-                    free(buf);
-                },
-                nullptr);
-        }
-    }
-    return woort_ret_option_none();
-}
-
-WOORT_API woort_api wojeapi_texture2d_restore_snapshot(void)
-{
-    auto* loaded_texture = (basic::resource<graphic::texture2d> *)woort_gcpointer(0);
-    auto* texture_buf = woort_gcpointer(1);
-
-    auto tex_raw = loaded_texture->get()->resource();
-    if (tex_raw->m_pixels)
-    {
-        auto memsz = tex_raw->m_width * tex_raw->m_height *
-            (tex_raw->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
-        memcpy(tex_raw->m_pixels, texture_buf, memsz);
-
-        return woort_ret_bool(true);
-    }
-    return woort_ret_bool(false);
 }
 
 WOORT_API woort_api wojeapi_texture3d_create(void)
@@ -241,14 +184,6 @@ WOORT_API woort_api wojeapi_texturearray_layers(void)
     auto* texture =
         (basic::resource<graphic::texture_array> *)woort_gcpointer(0);
     return woort_ret_int((woort_Int)(*texture)->layers());
-}
-
-WOORT_API woort_api wojeapi_texturearray_mark_modified(void)
-{
-    auto* texture =
-        (basic::resource<graphic::texture_array> *)woort_gcpointer(0);
-    (*texture)->mark_modified();
-    return woort_ret_void();
 }
 
 WOORT_API woort_api wojeapi_texturecube_create(void)
@@ -315,36 +250,6 @@ static void woje_bind_texture_to_component(
         *(basic::resource<graphic::texture2d> *)texture_gchandle_payload);
 }
 
-WOORT_API woort_api wojeapi_texture_pixel_color(void)
-{
-    auto* pix = (graphic::texture2d::pixel*)woort_gcpointer(0);
-    auto color = pix->get();
-
-    woort_set_struct(WOORT_RETURN_SLOT, 4);
-
-    woort_struct_set_float(WOORT_RETURN_SLOT, 0, color.x);
-    woort_struct_set_float(WOORT_RETURN_SLOT, 1, color.y);
-    woort_struct_set_float(WOORT_RETURN_SLOT, 2, color.z);
-    woort_struct_set_float(WOORT_RETURN_SLOT, 3, color.w);
-
-    return woort_ret();
-}
-
-WOORT_API woort_api wojeapi_texture_set_pixel_color(void)
-{
-    auto* pix = (graphic::texture2d::pixel*)woort_gcpointer(0);
-    auto color = math::vec4();
-
-    color.x = woort_struct_get_float(1, 0);
-    color.y = woort_struct_get_float(1, 1);
-    color.z = woort_struct_get_float(1, 2);
-    color.w = woort_struct_get_float(1, 3);
-
-    pix->set(color);
-
-    return woort_ret_void();
-}
-
 /////////////////////////////////////////////////////////////
 WOORT_API woort_api wojeapi_font_open(void)
 {
@@ -386,7 +291,6 @@ WOORT_API woort_api wojeapi_font_load_char(void)
 
     /*
     public using character = struct{
-            m_texture: texture,
             m_character: char,
             m_width: int,
             m_height: int,
@@ -399,36 +303,23 @@ WOORT_API woort_api wojeapi_font_load_char(void)
 
     woort_value s;
 
-    if (!woort_push_reserve(2, &s))
+    if (!woort_push_reserve(1, &s))
         return woort_ret_panic("Stack overflow.");
 
     const woort_value result = s + 0;
-    const woort_value elem = s + 1;
 
-    woort_set_struct(result, 8);
+    woort_set_struct(result, 7);
 
-    woort_set_gchandle(
-        elem,
-        new basic::resource<graphic::texture2d>(ch->m_texture),
-        WOORT_IGNORE,
-        [](void* ptr)
-        {
-            delete (basic::resource<graphic::texture2d> *)ptr;
-        },
-        nullptr);
+    woort_struct_set_int(result, 0, (woort_Int)ch->m_char);
 
-    woort_struct_set(result, 0, elem);
+    woort_struct_set_int(result, 1, ch->m_width);
+    woort_struct_set_int(result, 2, ch->m_height);
 
-    woort_struct_set_int(result, 1, (woort_Int)ch->m_char);
+    woort_struct_set_int(result, 3, ch->m_advance_x);
+    woort_struct_set_int(result, 4, ch->m_advance_y);
 
-    woort_struct_set_int(result, 2, ch->m_width);
-    woort_struct_set_int(result, 3, ch->m_height);
-
-    woort_struct_set_int(result, 4, ch->m_advance_x);
-    woort_struct_set_int(result, 5, ch->m_advance_y);
-
-    woort_struct_set_int(result, 6, ch->m_baseline_offset_x);
-    woort_struct_set_int(result, 7, ch->m_baseline_offset_y);
+    woort_struct_set_int(result, 5, ch->m_baseline_offset_x);
+    woort_struct_set_int(result, 6, ch->m_baseline_offset_y);
 
     return woort_ret_value(result);
 }
@@ -714,8 +605,8 @@ WOORT_API woort_api wojeapi_vertex_aabb(void)
     return woort_ret();
 }
 
-// 整体重写已有顶点缓冲的数据并收缩激活索引数量（语义见
-// je_graphic_vertex_buffer_update）。索引缓冲保持创建时的内容不变，因此
+// 录制本帧的顶点内容并收缩激活索引数量（语义见
+// je_graphic_cmd_update_vertex）。索引缓冲保持创建时的内容不变，因此
 // 调用方应按"最坏容量创建、静态角点索引"的方式使用（文本批处理与
 // 粒子系统在 C++ 侧的同款消费者）。注意包围盒不会被重算：需要视锥
 // 剔除正确时应以覆盖完整范围的初始数据创建缓冲。
@@ -723,16 +614,19 @@ WOORT_API woort_api wojeapi_vertex_update(void)
 {
     auto* loaded_vertex =
         (basic::resource<graphic::vertex> *)woort_gcpointer(0);
-    const size_t active_index_count = (size_t)woort_int(2);
+    auto* cmd =
+        (je_gl_command_buffer_t*)woort_pointer(1);
+    const size_t active_index_count = (size_t)woort_int(3);
 
-    vector<float> vertices(woort_vec_len(1));
+    vector<float> vertices(woort_vec_len(2));
     for (size_t i = 0; i < vertices.size(); ++i)
     {
-        (void)woort_vec_get(WOORT_RETURN_SLOT, 1, i);
+        (void)woort_vec_get(WOORT_RETURN_SLOT, 2, i);
         vertices[i] = woort_unbox_float(WOORT_RETURN_SLOT);
     }
 
     (*loaded_vertex)->update_buffer(
+        cmd,
         vertices.data(),
         vertices.size() * sizeof(float),
         active_index_count);
@@ -1126,12 +1020,13 @@ WOORT_API woort_api wojeapi_uniformbuffer_update(void)
 {
     auto* ub =
         (basic::resource<graphic::uniformbuffer> *)woort_gcpointer(0);
-    const size_t offset = (size_t)woort_int(1);
+    auto* cmd =
+        (je_gl_command_buffer_t*)woort_pointer(1);
 
     size_t buflen = 0;
     const void* buf = woort_buffer(2, &buflen);
 
-    (*ub)->update_buffer(offset, buflen, buf);
+    (*ub)->update_buffer(cmd, buf, buflen);
 
     return woort_ret_void();
 }
@@ -1371,6 +1266,32 @@ WOORT_API woort_api wojeapi_command_buffer_bind_texture(void)
             "Unknown texture kind when binding texture to command buffer.");
         break;
     }
+
+    return woort_ret_void();
+}
+
+// 持久区段上传（见 je_graphic_cmd_upload_texture_2d）：pixels 为
+// width*height*4 字节的 RGBA 缓冲，行序自底向上
+WOORT_API woort_api wojeapi_command_buffer_upload_texture_2d(void)
+{
+    auto* cmd = (je_gl_command_buffer_t*)woort_pointer(0);
+    auto* tex =
+        (basic::resource<graphic::texture2d> *)woort_gcpointer(1);
+
+    const size_t x = (size_t)woort_int(2);
+    const size_t y = (size_t)woort_int(3);
+    const size_t w = (size_t)woort_int(4);
+    const size_t h = (size_t)woort_int(5);
+
+    size_t buffer_length = 0;
+    const void* pixels = woort_buffer(6, &buffer_length);
+
+    assert(pixels != nullptr);
+    assert(buffer_length == w * h * 4);
+
+    je_graphic_cmd_upload_texture_2d(
+        cmd, (*tex)->resource(), x, y, w, h,
+        static_cast<const je_gl_texture_pixel_data_t*>(pixels));
 
     return woort_ret_void();
 }

@@ -94,7 +94,6 @@ namespace jeecs::graphic::api::dx11
         jedx11_texture() = default;
         ~jedx11_texture() = default;
 
-        bool m_modifiable_texture_buffer;
         // 二维/数组/立方体/MSAA 纹理使用 m_texture；三维纹理使用 m_texture_3d，
         // 两者互斥（未使用的一者为空）
         jegl_dx11_context::MSWRLComPtr<ID3D11Texture2D> m_texture;
@@ -108,14 +107,6 @@ namespace jeecs::graphic::api::dx11
                 ? static_cast<ID3D11Resource*>(m_texture_3d.Get())
                 : static_cast<ID3D11Resource*>(m_texture.Get());
         }
-    };
-    struct jedx11_modifiable_texture : public jedx11_texture
-    {
-        JECS_DISABLE_MOVE_AND_COPY(jedx11_modifiable_texture);
-        jedx11_modifiable_texture() = default;
-        ~jedx11_modifiable_texture() = default;
-
-        jedx11_texture* m_obsoluted_texture;
     };
     struct jedx11_shader
     {
@@ -149,20 +140,10 @@ namespace jeecs::graphic::api::dx11
         jedx11_vertex() = default;
         ~jedx11_vertex() = default;
 
-        bool m_modifiable_vertex_buffer;
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_vbo;
         jegl_dx11_context::MSWRLComPtr<ID3D11Buffer> m_ebo;
-        UINT m_count;
         UINT m_stride;
         D3D_PRIMITIVE_TOPOLOGY m_method;
-    };
-    struct jedx11_modifiable_vertex : public jedx11_vertex
-    {
-        JECS_DISABLE_MOVE_AND_COPY(jedx11_modifiable_vertex);
-        jedx11_modifiable_vertex() = default;
-        ~jedx11_modifiable_vertex() = default;
-
-        jedx11_vertex* m_obsoluted_vertex;
     };
     struct jedx11_uniformbuf
     {
@@ -1344,7 +1325,7 @@ namespace jeecs::graphic::api::dx11
     }
 
     template<typename TexT>
-    jedx11_texture* dx11_create_texture_instance(jegl_dx11_context* context, TexT* resource, bool is_dynamic)
+    jedx11_texture* dx11_create_texture_instance(jegl_dx11_context* context, TexT* resource)
     {
         constexpr bool is_3d = std::is_same_v<TexT, je_gl_texture_3d_t>;
         constexpr bool is_array = std::is_same_v<TexT, je_gl_texture_array_t>;
@@ -1358,21 +1339,12 @@ namespace jeecs::graphic::api::dx11
 
         DXGI_FORMAT texture_format = _dx11_pick_texture_format(resource);
 
-        // MSAA 纹理只存在于 GPU 侧，且 FRAMEBUF 纹理必须是 DEFAULT usage
-        // （不能是 DYNAMIC/IMMUTABLE），因为它们需要绑定为 render target 或
-        // depth stencil；同时 CPUAccessFlags 必须为 0，否则与 DEPTH_STENCIL
-        // 绑定标志冲突。
-        const bool default_usage = is_msaa || is_framebuf;
-        const D3D11_USAGE usage =
-            default_usage ? D3D11_USAGE_DEFAULT
-            : (is_dynamic ? D3D11_USAGE_DYNAMIC : D3D11_USAGE_IMMUTABLE);
-        const UINT cpu_access = default_usage ? 0 : (is_dynamic ? D3D11_CPU_ACCESS_WRITE : 0);
+        // 纹理统一使用 DEFAULT usage：区段上传通过 UpdateSubresource 完成，
+        // 由驱动负责与仍在执行的帧同步（渲染目标附件同样要求 DEFAULT）。
+        const D3D11_USAGE usage = D3D11_USAGE_DEFAULT;
+        const UINT cpu_access = 0;
 
-        jedx11_texture* jedx11_texture_res =
-            (is_dynamic && !default_usage) ? new jedx11_modifiable_texture : new jedx11_texture;
-
-        // All texture is unmodifiable as default.
-        jedx11_texture_res->m_modifiable_texture_buffer = (is_dynamic && !default_usage);
+        jedx11_texture* jedx11_texture_res = new jedx11_texture;
 
         UINT bind_flags = D3D11_BIND_SHADER_RESOURCE;
         UINT misc_flags = 0;
@@ -1400,7 +1372,7 @@ namespace jeecs::graphic::api::dx11
         // 于 3D 纹理。漏配会让运行时越界读取条目数组导致崩溃。
         std::vector<D3D11_SUBRESOURCE_DATA> texture_sub_data_array;
 
-        if (!default_usage && resource->m_pixels != nullptr)
+        if (resource->m_initial_pixels != nullptr)
         {
             const UINT bytes_per_row =
                 (UINT)resource->m_width
@@ -1420,7 +1392,7 @@ namespace jeecs::graphic::api::dx11
                 for (UINT s = 0; s < slice_count; ++s)
                 {
                     texture_sub_data_array[s].pSysMem =
-                        resource->m_pixels + (size_t)s * bytes_per_slice;
+                        resource->m_initial_pixels + (size_t)s * bytes_per_slice;
                     texture_sub_data_array[s].SysMemPitch = bytes_per_row;
                     texture_sub_data_array[s].SysMemSlicePitch = 0;
                 }
@@ -1428,7 +1400,7 @@ namespace jeecs::graphic::api::dx11
             }
             else
             {
-                texture_sub_data.pSysMem = resource->m_pixels;
+                texture_sub_data.pSysMem = resource->m_initial_pixels;
                 texture_sub_data.SysMemPitch = bytes_per_row;
                 texture_sub_data.SysMemSlicePitch =
                     is_3d ? bytes_per_slice : 0u;
@@ -1542,111 +1514,103 @@ namespace jeecs::graphic::api::dx11
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
         resource->m_handle.m_ptr = dx11_create_texture_instance(
-            context, resource, false /* Immutable as default */);
+            context, resource);
     }
 
+    // 2D 类区段上传：subresource 为目标层/面（2D 为 0），box 限定区段
     template<typename TexT>
-    void dx11_texture_update(
-        je_graphic_impl_context_t ctx,
-        TexT* resource)
+    void dx11_texture_upload_2d_like(
+        jegl_dx11_context* context,
+        TexT* resource,
+        UINT subresource,
+        UINT x, UINT y, UINT width, UINT height,
+        const je_gl_texture_pixel_data_t* pixels)
     {
-        if constexpr (std::is_same_v<TexT, je_gl_texture_msaa_t>)
+        jedx11_texture* texture_instance =
+            static_cast<jedx11_texture*>(resource->m_handle.m_ptr);
+
+        D3D11_BOX box;
+        box.left = x;
+        box.top = y;
+        box.front = 0;
+        box.right = x + width;
+        box.bottom = y + height;
+        box.back = 1;
+
+        // RowPitch/DepthPitch 传 0 时 D3D11 按 box 尺寸推导源行跨度
+        context->m_dx_context->UpdateSubresource(
+            texture_instance->texture_resource(), subresource, &box,
+            pixels, 0, 0);
+    }
+
+    void dx11_texture_2d_upload(
+        je_graphic_impl_context_t ctx,
+        je_gl_texture_2d_t* resource,
+        size_t x, size_t y, size_t width, size_t height,
+        const je_gl_texture_pixel_data_t* pixels)
+    {
+        dx11_texture_upload_2d_like(
+            static_cast<jegl_dx11_context*>(ctx), resource, 0,
+            (UINT)x, (UINT)y, (UINT)width, (UINT)height, pixels);
+    }
+
+    void dx11_texture_3d_upload(
+        je_graphic_impl_context_t ctx,
+        je_gl_texture_3d_t* resource,
+        size_t x, size_t y, size_t z,
+        size_t width, size_t height, size_t depth,
+        const je_gl_texture_pixel_data_t* pixels)
+    {
+        jedx11_texture* texture_instance =
+            static_cast<jedx11_texture*>(resource->m_handle.m_ptr);
+
+        D3D11_BOX box;
+        box.left = (UINT)x;
+        box.top = (UINT)y;
+        box.front = (UINT)z;
+        box.right = (UINT)(x + width);
+        box.bottom = (UINT)(y + height);
+        box.back = (UINT)(z + depth);
+
+        static_cast<jegl_dx11_context*>(ctx)->m_dx_context->UpdateSubresource(
+            texture_instance->texture_resource(), 0, &box,
+            pixels, 0, 0);
+    }
+
+    void dx11_texture_array_upload(
+        je_graphic_impl_context_t ctx,
+        je_gl_texture_array_t* resource,
+        size_t x, size_t y, size_t layer,
+        size_t width, size_t height, size_t layers,
+        const je_gl_texture_pixel_data_t* pixels)
+    {
+        auto* context = static_cast<jegl_dx11_context*>(ctx);
+
+        const size_t plane_size =
+            width * height
+            * (size_t)(resource->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
+
+        for (size_t i = 0; i < layers; ++i)
         {
-            (void)resource;
-            // NOTE: MSAA 纹理只存在于 GPU 侧，不支持 CPU 侧像素更新
-            jeecs::debug::logerr("MSAA texture update is not supported.");
+            dx11_texture_upload_2d_like(
+                context, resource, (UINT)(layer + i),
+                (UINT)x, (UINT)y, (UINT)width, (UINT)height,
+                pixels + i * plane_size);
         }
-        else
-        {
-            jegl_dx11_context* context =
-                static_cast<jegl_dx11_context*>(ctx);
-            jedx11_texture* texture_instance =
-                static_cast<jedx11_texture*>(resource->m_handle.m_ptr);
+    }
 
-            if (texture_instance->m_modifiable_texture_buffer)
-            {
-                const bool is_float16 =
-                    0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
+    void dx11_texture_cube_upload(
+        je_graphic_impl_context_t ctx,
+        je_gl_texture_cube_t* resource,
+        size_t face,
+        size_t x, size_t y, size_t width, size_t height,
+        const je_gl_texture_pixel_data_t* pixels)
+    {
+        assert(face < 6);
 
-                const size_t row_byte_size =
-                    resource->m_width
-                    * (resource->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK)
-                    * (is_float16 ? 2 : 1);
-
-                constexpr bool is_3d = std::is_same_v<TexT, je_gl_texture_3d_t>;
-
-                if constexpr (is_3d)
-                {
-                    // 3D 纹理：单一子资源，映射后经 DepthPitch 寻址深度
-                    D3D11_MAPPED_SUBRESOURCE mappedData;
-                    JERCHECK(context->m_dx_context->Map(
-                        texture_instance->texture_resource(), 0,
-                        D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
-
-                    for (size_t z = 0; z < resource->m_depth; ++z)
-                    {
-                        for (size_t i = 0; i < resource->m_height; ++i)
-                        {
-                            void* dst_row_data = (void*)(
-                                (intptr_t)mappedData.pData
-                                + z * mappedData.DepthPitch
-                                + i * mappedData.RowPitch);
-                            const void* src_row_data =
-                                resource->m_pixels
-                                + (z * resource->m_height + i) * row_byte_size;
-
-                            memcpy(dst_row_data, src_row_data, row_byte_size);
-                        }
-                    }
-                    context->m_dx_context->Unmap(
-                        texture_instance->texture_resource(), 0);
-                }
-                else
-                {
-                    // 2D 数组/立方体贴图：每个数组切片是独立子资源，
-                    // 需逐层 Map（与创建时逐切片初始数据同一子资源语义）
-                    size_t slice_count = 1;
-                    if constexpr (std::is_same_v<TexT, je_gl_texture_array_t>)
-                        slice_count = resource->m_layers;
-                    else if constexpr (std::is_same_v<TexT, je_gl_texture_cube_t>)
-                        slice_count = 6;
-
-                    // mappedData is not byte-aligned, we need to copy it byte by row
-                    for (size_t slice = 0; slice < slice_count; ++slice)
-                    {
-                        D3D11_MAPPED_SUBRESOURCE mappedData;
-                        JERCHECK(context->m_dx_context->Map(
-                            texture_instance->texture_resource(), (UINT)slice,
-                            D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
-
-                        for (size_t i = 0; i < resource->m_height; ++i)
-                        {
-                            void* dst_row_data = (void*)(
-                                (intptr_t)mappedData.pData
-                                + i * mappedData.RowPitch);
-                            const void* src_row_data =
-                                resource->m_pixels
-                                + (slice * resource->m_height + i) * row_byte_size;
-
-                            memcpy(dst_row_data, src_row_data, row_byte_size);
-                        }
-                        context->m_dx_context->Unmap(
-                            texture_instance->texture_resource(), (UINT)slice);
-                    }
-                }
-            }
-            else
-            {
-                // This texture is immutable, we need to recreate it as dynamic
-                jedx11_modifiable_texture* modifiable_texture_instance =
-                    static_cast<jedx11_modifiable_texture*>(
-                        dx11_create_texture_instance(
-                            context, resource, true /* Regenerate it as dynamic */));
-
-                modifiable_texture_instance->m_obsoluted_texture = texture_instance;
-                resource->m_handle.m_ptr = modifiable_texture_instance;
-            }
-        }
+        dx11_texture_upload_2d_like(
+            static_cast<jegl_dx11_context*>(ctx), resource, (UINT)face,
+            (UINT)x, (UINT)y, (UINT)width, (UINT)height, pixels);
     }
 
     template<typename TexT>
@@ -1654,24 +1618,13 @@ namespace jeecs::graphic::api::dx11
         je_graphic_impl_context_t,
         TexT* resource)
     {
-        jedx11_texture* texture_instance =
-            static_cast<jedx11_texture*>(resource->m_handle.m_ptr);
-
-        if (texture_instance->m_modifiable_texture_buffer)
-        {
-            auto* dynamic_texture_instance = static_cast<jedx11_modifiable_texture*>(texture_instance);
-            delete dynamic_texture_instance->m_obsoluted_texture;
-            delete dynamic_texture_instance;
-        }
-        else
-            delete texture_instance;
+        delete static_cast<jedx11_texture*>(resource->m_handle.m_ptr);
     }
 
     jedx11_vertex* dx11_create_vertex_instance(
-        jegl_dx11_context* context, je_gl_vertex_t* resource, bool is_dynamic)
+        jegl_dx11_context* context, je_gl_vertex_t* resource)
     {
-        jedx11_vertex* vertex =
-            is_dynamic ? new jedx11_modifiable_vertex : new jedx11_vertex;
+        auto* vertex = new jedx11_vertex;
 
         const static D3D_PRIMITIVE_TOPOLOGY DRAW_METHODS[] = {
             D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
@@ -1681,28 +1634,22 @@ namespace jeecs::graphic::api::dx11
         vertex->m_method =
             DRAW_METHODS[resource->m_type];
 
-        vertex->m_count = (UINT)resource->m_index_count;
         vertex->m_stride = resource->m_data_size_per_point;
 
-        // 与纹理相同策略：默认 IMMUTABLE，首次更新时重建为 DYNAMIC，
-        // 之后通过 Map/WRITE_DISCARD 重写，避免 UpdateSubresource 中转拷贝
-        vertex->m_modifiable_vertex_buffer = is_dynamic;
-
-        // 新建顶点缓冲区
+        // 顶点缓冲始终 DYNAMIC：运行时更新通过 Map/WRITE_DISCARD 整块重写，
+        // 驱动负责与仍在执行的帧隔离
         D3D11_BUFFER_DESC vertex_buffer_describe;
         vertex_buffer_describe.ByteWidth =
             (UINT)resource->m_vertex_length;
 
-        vertex_buffer_describe.Usage =
-            is_dynamic ? D3D11_USAGE_DYNAMIC : D3D11_USAGE_IMMUTABLE;
+        vertex_buffer_describe.Usage = D3D11_USAGE_DYNAMIC;
         vertex_buffer_describe.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-        vertex_buffer_describe.CPUAccessFlags =
-            is_dynamic ? D3D11_CPU_ACCESS_WRITE : 0;
+        vertex_buffer_describe.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
         vertex_buffer_describe.MiscFlags = 0;
         vertex_buffer_describe.StructureByteStride = 0;
 
         D3D11_SUBRESOURCE_DATA vertex_buffer_data;
-        vertex_buffer_data.pSysMem = resource->m_vertexs;
+        vertex_buffer_data.pSysMem = resource->m_initial_vertexs;
         vertex_buffer_data.SysMemPitch = 0;
         vertex_buffer_data.SysMemSlicePitch = 0;
         JERCHECK(context->m_dx_device->CreateBuffer(
@@ -1719,9 +1666,7 @@ namespace jeecs::graphic::api::dx11
         // 新建索引缓冲区
         static_assert(sizeof(uint32_t) == sizeof(UINT));
 
-        // 按分配容量创建（m_index_count 可能已被 je_graphic_vertex_buffer_update
-        // 收缩为激活数量——D3D11 不允许 ByteWidth 为 0；绘制数量另存于
-        // vertex->m_count）
+        // 按分配容量创建；D3D11 不允许 ByteWidth 为 0
         D3D11_BUFFER_DESC index_buffer_describe;
         index_buffer_describe.ByteWidth =
             (UINT)resource->m_index_capacity * sizeof(uint32_t);
@@ -1732,7 +1677,7 @@ namespace jeecs::graphic::api::dx11
         index_buffer_describe.StructureByteStride = 0;
 
         D3D11_SUBRESOURCE_DATA index_buffer_data;
-        index_buffer_data.pSysMem = resource->m_indices;
+        index_buffer_data.pSysMem = resource->m_initial_indices;
         index_buffer_data.SysMemPitch = 0;
         index_buffer_data.SysMemSlicePitch = 0;
         JERCHECK(context->m_dx_device->CreateBuffer(
@@ -1755,57 +1700,34 @@ namespace jeecs::graphic::api::dx11
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
         resource->m_handle.m_ptr = dx11_create_vertex_instance(
-            context, resource, false /* Immutable as default */);
+            context, resource);
     }
     void dx11_vertex_update(
         je_graphic_impl_context_t ctx,
-        je_gl_vertex_t* resource)
+        je_gl_vertex_t* resource,
+        const void* vertices, size_t vertex_length)
     {
         jegl_dx11_context* context =
             static_cast<jegl_dx11_context*>(ctx);
         jedx11_vertex* vertex_instance =
             static_cast<jedx11_vertex*>(resource->m_handle.m_ptr);
 
-        if (vertex_instance->m_modifiable_vertex_buffer)
-        {
-            // 整体重写顶点数据（索引缓冲内容不变），并同步激活索引数量
-            D3D11_MAPPED_SUBRESOURCE mappedData;
-            JERCHECK(context->m_dx_context->Map(
-                vertex_instance->m_vbo.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+        assert(vertex_length <= resource->m_vertex_length);
 
-            memcpy(mappedData.pData, resource->m_vertexs, resource->m_vertex_length);
-            context->m_dx_context->Unmap(vertex_instance->m_vbo.Get(), 0);
+        // 整块重写本帧顶点内容（索引缓冲内容不变）
+        D3D11_MAPPED_SUBRESOURCE mappedData;
+        JERCHECK(context->m_dx_context->Map(
+            vertex_instance->m_vbo.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
 
-            vertex_instance->m_count = (UINT)resource->m_index_count;
-        }
-        else
-        {
-            // This vertex buffer is immutable, we need to recreate it as dynamic
-            jedx11_modifiable_vertex* modifiable_vertex_instance =
-                static_cast<jedx11_modifiable_vertex*>(
-                    dx11_create_vertex_instance(
-                        context, resource, true /* Regenerate it as dynamic */));
-
-            modifiable_vertex_instance->m_obsoluted_vertex = vertex_instance;
-            resource->m_handle.m_ptr = modifiable_vertex_instance;
-        }
+        assert(vertices != nullptr);
+        memcpy(mappedData.pData, vertices, vertex_length);
+        context->m_dx_context->Unmap(vertex_instance->m_vbo.Get(), 0);
     }
     void dx11_vertex_close(
         je_graphic_impl_context_t,
         je_gl_vertex_t* resource)
     {
-        jedx11_vertex* vertex_instance =
-            static_cast<jedx11_vertex*>(resource->m_handle.m_ptr);
-
-        if (vertex_instance->m_modifiable_vertex_buffer)
-        {
-            auto* dynamic_vertex_instance =
-                static_cast<jedx11_modifiable_vertex*>(vertex_instance);
-            delete dynamic_vertex_instance->m_obsoluted_vertex;
-            delete dynamic_vertex_instance;
-        }
-        else
-            delete vertex_instance;
+        delete static_cast<jedx11_vertex*>(resource->m_handle.m_ptr);
     }
 
     void dx11_framebuf_init(
@@ -1927,11 +1849,11 @@ namespace jeecs::graphic::api::dx11
 
         D3D11_SUBRESOURCE_DATA const_buffer_resource_describe;
         const_buffer_resource_describe.pSysMem =
-            resource->m_buffer;
+            resource->m_initial_buffer;
         const_buffer_resource_describe.SysMemPitch = 0;
         const_buffer_resource_describe.SysMemSlicePitch = 0;
 
-        // 新建常量缓冲区，不使用初始数据
+        // 新建常量缓冲区，初始内容取自创建期快照
         JERCHECK(context->m_dx_device->CreateBuffer(
             &const_buffer_describe, &const_buffer_resource_describe,
             jedx11_uniformbuf_res->m_uniformbuf.GetAddressOf()));
@@ -1944,20 +1866,21 @@ namespace jeecs::graphic::api::dx11
     }
     void dx11_ubuffer_update(
         je_graphic_impl_context_t ctx,
-        je_gl_uniform_buffer_t* resource)
+        je_gl_uniform_buffer_t* resource,
+        const void* data, size_t data_length)
     {
         jegl_dx11_context* context = static_cast<jegl_dx11_context*>(ctx);
 
         auto* uniformbuf_instance = static_cast<jedx11_uniformbuf*>(resource->m_handle.m_ptr);
-        assert(resource->m_update_length != 0);
+        assert(data != nullptr);
+        assert(data_length == resource->m_buffer_size);
+
         D3D11_MAPPED_SUBRESOURCE mappedData;
         JERCHECK(context->m_dx_context->Map(
             uniformbuf_instance->m_uniformbuf.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
 
-        // DX11 Donot support partial update, update all.
-        memcpy((void*)((intptr_t)mappedData.pData),
-            resource->m_buffer,
-            resource->m_buffer_size);
+        // DX11 不支持常量缓冲的局部更新，整块重写本帧完整内容
+        memcpy((void*)((intptr_t)mappedData.pData), data, data_length);
 
         context->m_dx_context->Unmap(uniformbuf_instance->m_uniformbuf.Get(), 0);
     }
@@ -2525,11 +2448,10 @@ void je_graphic_using_dx11_apis(je_gl_graphic_api_t* write_to_apis)
     write_to_apis->ubuffer_init = dx11_ubuffer_init;
 
     write_to_apis->shader_update = dx11_shader_update;
-    write_to_apis->texture_2d_update = dx11_texture_update<je_gl_texture_2d_t>;
-    write_to_apis->texture_3d_update = dx11_texture_update<je_gl_texture_3d_t>;
-    write_to_apis->texture_array_update = dx11_texture_update<je_gl_texture_array_t>;
-    write_to_apis->texture_cube_update = dx11_texture_update<je_gl_texture_cube_t>;
-    write_to_apis->texture_msaa_update = dx11_texture_update<je_gl_texture_msaa_t>;
+    write_to_apis->texture_2d_upload = dx11_texture_2d_upload;
+    write_to_apis->texture_3d_upload = dx11_texture_3d_upload;
+    write_to_apis->texture_array_upload = dx11_texture_array_upload;
+    write_to_apis->texture_cube_upload = dx11_texture_cube_upload;
     write_to_apis->vertex_update = dx11_vertex_update;
     write_to_apis->framebuffer_update = dx11_framebuf_update;
     write_to_apis->ubuffer_update = dx11_ubuffer_update;

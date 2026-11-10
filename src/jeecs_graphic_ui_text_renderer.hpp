@@ -67,6 +67,9 @@ namespace jeecs::graphic::ui
             size_t m_cursor_y;
             size_t m_row_height;
             uint64_t m_last_used_frame;
+            // 页纹理最近一次已知的图形线程版本：版本变化（reboot）后
+            // 页内容被重建，需要丢弃整个图集缓存重新光栅化
+            je_version_t m_graphic_thread_version;
 
             explicit page_t(basic::resource<graphic::texture2d>&& tex) noexcept
                 : m_texture(std::move(tex))
@@ -74,6 +77,7 @@ namespace jeecs::graphic::ui
                 , m_cursor_y(PAGE_GUTTER)
                 , m_row_height(0)
                 , m_last_used_frame(0)
+                , m_graphic_thread_version(0)
             {
             }
         };
@@ -123,9 +127,11 @@ namespace jeecs::graphic::ui
 
         // 解析（必要时光栅化并装箱）一个字形。同帧内返回的指针稳定；
         // 跨帧不保证（页可能被淘汰），发射端应每帧重新解析。
+        // update_cmd 是资源更新命令缓冲：新字形装箱时向其录制图集区段上传。
         const glyph_slot* resolve(
             const basic::resource<graphic::font>& font,
-            int raster_px, char32_t cp);
+            int raster_px, char32_t cp,
+            je_gl_command_buffer_t* update_cmd);
 
         // 行网格度量。行距取自任意字形的 m_advance_y（同一字号下全字符
         // 一致），像素换算比例由 行距/字体行高单位 推出，ascent/descent
@@ -153,7 +159,8 @@ namespace jeecs::graphic::ui
             UserInterface::Text& text,
             const UserInterface::Element& elem,
             const UserInterface::WorldLayout& world,
-            float win_w, float win_h);
+            float win_w, float win_h,
+            je_gl_command_buffer_t* update_cmd);
 
     private:
         struct styled_char_t
@@ -193,13 +200,17 @@ namespace jeecs::graphic::ui
     private:
 
         glyph_slot& _create_glyph(
-            font_atlas_t& entry, int raster_px, char32_t cp, uint64_t key);
+            font_atlas_t& entry, int raster_px, char32_t cp, uint64_t key,
+            je_gl_command_buffer_t* update_cmd);
         void _pack_glyph(
-            font_atlas_t& entry, glyph_slot& slot, graphic::texture2d& src);
+            font_atlas_t& entry, glyph_slot& slot, const graphic::character& src,
+            je_gl_command_buffer_t* update_cmd);
         void _blit_glyph(
-            page_t& page, glyph_slot& slot, graphic::texture2d& src);
+            page_t& page, glyph_slot& slot, const graphic::character& src,
+            je_gl_command_buffer_t* update_cmd);
         void _new_page(font_atlas_t& entry);
         bool _evict_one_lru_page();
+        void _drop_all_pages_and_glyphs() noexcept;
 
         // ---- 标记解析 ----
         static bool _is_space(char32_t c) noexcept;

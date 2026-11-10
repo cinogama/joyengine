@@ -129,7 +129,7 @@ func setup_mesh(e: entity, univ: universe)
 | --- | --- |
 | `vertex::load(context, path)` | 返回 `std::optional`；context 为 nullptr 时不参与共享 |
 | `vertex::create(type, data, size, indices, formats)` | 属性可为 `JE_GL_VERTEX_DATA_TYPE_FLOAT32` 或 `INT32` |
-| `v->update_buffer(data, size, active_index_count)` | 动态更新 |
+| `v->update_buffer(cmd, data, size, active_index_count)` | 录制本帧顶点内容 |
 | `Renderer::Shape::vertex` | `basic::optional<basic::resource<vertex>>`，为空即默认四边形 |
 
 ```cpp
@@ -164,9 +164,9 @@ if (auto* shape = entity.get_component<Renderer::Shape>(); shape && mesh.has_val
 
 ### je_gl_vertex_t 的结构
 
-`je_gl_vertex_t` 以资源句柄 `m_handle` 开头（偏移 0），之后依次是局部包围盒 `m_x/y/z_min/max`、顶点数据 `m_vertexs` / `m_vertex_length`（字节）、索引 `m_indices`（uint32）/ `m_index_count`（当前参与绘制的数量）/ `m_index_capacity`（创建时的数量，收缩的上限）、属性布局 `m_formats`（`je_gl_vertex_data_layout_t`：`m_type` 为 INT32 或 FLOAT32，`m_count` 为分量数）、每顶点字节数 `m_data_size_per_point`（两种类型都按 4 字节计）、图元类型 `m_type`，以及骨骼表 `m_bones` / `m_bone_count`（`je_gl_vertex_bone_data_t`：名字、索引、模型到骨骼的变换矩阵）。
+`je_gl_vertex_t` 以资源句柄 `m_handle` 开头（偏移 0），之后依次是局部包围盒 `m_x/y/z_min/max`、创建期顶点快照 `m_initial_vertexs` / `m_vertex_length`（字节）、索引快照 `m_initial_indices`（uint32）/ `m_index_count`（当前参与绘制的数量）/ `m_index_capacity`（创建时的数量，收缩的上限）、属性布局 `m_formats`（`je_gl_vertex_data_layout_t`：`m_type` 为 INT32 或 FLOAT32，`m_count` 为分量数）、每顶点字节数 `m_data_size_per_point`（两种类型都按 4 字节计）、图元类型 `m_type`，以及骨骼表 `m_bones` / `m_bone_count`（`je_gl_vertex_bone_data_t`：名字、索引、模型到骨骼的变换矩阵）。
 
-`_jegl_create_vertex_impl` 拷贝顶点、索引与布局，在第一个属性是 FLOAT32 × 3 时遍历**全部顶点**（而非索引引用到的顶点）计算包围盒；数据长度不是每顶点字节数的整数倍时只记录警告。Woolang 的 `vertex::create` 把 `formats` 中每个整数转为 `{FLOAT32, n}`，`vertex::update` 转发到 `je_graphic_vertex_buffer_update`。
+`_jegl_create_vertex_impl` 拷贝顶点、索引与布局，在第一个属性是 FLOAT32 × 3 时遍历**全部顶点**（而非索引引用到的顶点）计算包围盒；数据长度不是每顶点字节数的整数倍时只记录警告。Woolang 的 `vertex::create` 把 `formats` 中每个整数转为 `{FLOAT32, n}`，`vertex::update` 转发到 `je_graphic_cmd_update_vertex`。
 
 ### 模型文件的解析
 
@@ -179,11 +179,13 @@ if (auto* shape = entity.get_component<Renderer::Shape>(); shape && mesh.has_val
 
 ### 动态更新
 
-`je_graphic_vertex_buffer_update` 把 `active_index_count` 钳制到 `[1, m_index_capacity]`；有新数据时拷贝覆盖 `m_vertexs` 并置 `m_handle.m_modified`，只改变激活数量时同样置位，让已初始化的后端同步绘制数量。粒子系统在调用前自行改写 `m_x/y/z_min/max`，以修正视锥剔除用的包围盒。按注释约定，本接口必须在逻辑帧窗口内（图形线程静默时）调用。
+顶点内容分两类：创建期快照（`m_initial_vertexs` / `m_initial_indices`，只读，用于后端首次初始化与图形线程重启重建）和**本帧内容**。`je_graphic_cmd_update_vertex` 把顶点数据拷贝进命令缓冲，提交时由后端落实到本帧的瞬态存储，并且只对本次提交中的绘制生效——因此带动态内容的网格（粒子、文本批处理）需要在绘制它的每一帧都录制一次更新；没有录制更新的帧绑定的是创建期内容。索引缓冲创建后不变；`active_index_count` 在录制时同步为绘制数量（钳制到至少 1）。粒子系统在录制前自行改写 `m_x/y/z_min/max`，以修正视锥剔除用的包围盒。
+
+更新数据的选择在 `je_graphic_cmd_commit` 内联完成：先 `prepare_vertex_resource`（首次使用/重启后初始化），再调用后端的 `vertex_update(ctx, vertex, data, length)` 钩子。
 
 ### 各后端的顶点缓冲
 
-与纹理相同，网格在首次被图形线程使用时经 `vertex_create_blob` + `vertex_init` 创建后端对象，`m_modified` 置位后经 `vertex_update` 重传。以 OpenGL 后端为例：`vertex_init` 创建 VAO / VBO / EBO——顶点缓冲按 `GL_STATIC_DRAW` 上传，索引缓冲按 `m_index_capacity` 上传，每个属性按序号 i 设置 `glVertexAttribPointer`（INT32 用 `glVertexAttribIPointer`），图元类型映射为 `GL_LINE_STRIP` / `GL_TRIANGLES` / `GL_TRIANGLE_STRIP`；`vertex_update` 以 `GL_DYNAMIC_DRAW` 重新指定整个顶点缓冲（同时孤儿化旧存储，避免与 GPU 读取冲突）并同步绘制数量，索引缓冲不重传。顶点类资源在 OpenGL 后端没有可跨实例复用的 blob。
+与纹理相同，网格在首次被图形线程使用时经 `vertex_create_blob` + `vertex_init` 创建后端对象，并由创建期快照完成初始上传。以 OpenGL 后端为例：`vertex_init` 创建 VAO / VBO / EBO——顶点缓冲按 `GL_STATIC_DRAW` 上传，索引缓冲按 `m_index_capacity` 上传，每个属性按序号 i 设置 `glVertexAttribPointer`（INT32 用 `glVertexAttribIPointer`），图元类型映射为 `GL_LINE_STRIP` / `GL_TRIANGLES` / `GL_TRIANGLE_STRIP`；`vertex_update` 以 `GL_DYNAMIC_DRAW` 重新指定整个顶点缓冲（同时孤儿化旧存储，避免与 GPU 读取冲突）再写入本帧内容，索引缓冲不重传。DX11 顶点缓冲始终为 `DYNAMIC`，更新用 `Map(WRITE_DISCARD)` 整块重写。Vulkan/Metal 把本帧内容写入每帧瞬态 ring，绑定阶段改绑该切片；创建期内容保留在资源自己的持久缓冲中。顶点类资源在 OpenGL 后端没有可跨实例复用的 blob。
 
 渲染系统按 `topology_of(m_type)` 选择 pipeline 拓扑，以 `je_graphic_cmd_draw_indexed(m_index_count)` 绘制；默认四边形由 `DefaultResources` 以 `{0, 1, 2, 3}` 索引和“位置 3 + UV 2 + 法线 3 + 切线 3”格式创建。视锥剔除的包围球半径取 `get_entity_size` 结果长度的一半：各轴为 `local_scale × 2 × max(|min|, |max|)`。
 
@@ -193,7 +195,7 @@ if (auto* shape = entity.get_component<Renderer::Shape>(); shape && mesh.has_val
 | --- | --- |
 | `je_gl_vertex_t`、布局与骨骼结构、C ABI | `include/jeecs/graphic.hpp` |
 | C++ 包装 `graphic::vertex` | 同上 |
-| 创建、Assimp 加载、动态更新 | `src/jeecs_graphic_api_basic.cpp`（`_jegl_create_vertex_impl`、`je_graphic_vertex_load`、`je_graphic_vertex_buffer_update`） |
+| 创建、Assimp 加载、动态更新 | `src/jeecs_graphic_api_basic.cpp`（`_jegl_create_vertex_impl`、`je_graphic_vertex_load`、`je_graphic_cmd_update_vertex`） |
 | Woolang 绑定 | `je/graphic.wo`、`je/ecs.wo`、`src/jeecs_graphic_woolang_api.cpp` |
 | `Renderer::Shape` 组件 | `include/jeecs/components.hpp` |
 | 默认四边形、拓扑映射、视锥剔除 | `src/jeecs_core_graphic_system.cpp` |

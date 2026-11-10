@@ -1,4 +1,5 @@
 import pkg::std;
+import pkg::buffer;
 
 import je::graphic;
 
@@ -7,8 +8,9 @@ using je::graphic;
 
 namespace JEEditor::GUI::Icons
 {
-    public let WHITE = texture2d::create(1, 1);
-    WHITE->pix((0, 0))->set_color((1., 1., 1., 1.));
+    // 1x1 纯白纹理（RGBA 像素在创建时给定）
+    public let WHITE = texture2d::create_with_pixels(1, 1,
+        buffer::createui8(255)->appendui8(255)->appendui8(255)->appendui8(255));
 
     public let WARNING = texture2d::load(option::none, "!/builtin/icon/Warning.png");
     public let ERROR = texture2d::load(option::none, "!/builtin/icon/Error.png");

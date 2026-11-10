@@ -86,6 +86,99 @@ namespace jeecs::graphic::api::metal
         };
         render_runtime_states m_render_states;
 
+        // 每帧共享的瞬态存储（顶点/用户 UBO 的本帧内容）。槽位按帧序号轮转，
+        // 复用前等待上一次使用它的命令缓冲完成；帧永远只读自己槽位的内容，
+        // 因此不会读到别的帧写入的数据。
+        static constexpr size_t STREAM_RING_SLOT_COUNT = 3;
+        static constexpr size_t STREAM_RING_SIZE = 8 * 1024 * 1024;
+
+        MTL::Buffer* m_stream_ring_buffers[STREAM_RING_SLOT_COUNT];
+        MTL::CommandBuffer* m_stream_ring_last_committed[STREAM_RING_SLOT_COUNT];
+        size_t m_stream_ring_offsets[STREAM_RING_SLOT_COUNT];
+
+        size_t stream_ring_slot() const
+        {
+            return (size_t)(m_render_states.m_frame_counter % STREAM_RING_SLOT_COUNT);
+        }
+
+        // 帧开始：确认复用槽位上一次的使用者已完成，重置该槽位的线性分配
+        void begin_stream_ring_frame()
+        {
+            const size_t slot = stream_ring_slot();
+
+            if (m_stream_ring_last_committed[slot] != nullptr)
+            {
+                m_stream_ring_last_committed[slot]->waitUntilCompleted();
+                m_stream_ring_last_committed[slot]->release();
+                m_stream_ring_last_committed[slot] = nullptr;
+            }
+
+            m_stream_ring_offsets[slot] = 0;
+
+            if (m_stream_ring_buffers[slot] == nullptr)
+            {
+                m_stream_ring_buffers[slot] = m_metal_device->newBuffer(
+                    STREAM_RING_SIZE, MTL::ResourceStorageModeShared);
+            }
+        }
+
+        MTL::Buffer* current_stream_ring_buffer()
+        {
+            const size_t slot = stream_ring_slot();
+            assert(m_stream_ring_buffers[slot] != nullptr);
+            return m_stream_ring_buffers[slot];
+        }
+
+        size_t allocate_stream_memory(size_t size, size_t alignment)
+        {
+            const size_t slot = stream_ring_slot();
+            assert(m_stream_ring_buffers[slot] != nullptr);
+
+            const size_t offset =
+                (m_stream_ring_offsets[slot] + alignment - 1) & ~(alignment - 1);
+
+            if (offset + size > STREAM_RING_SIZE)
+            {
+                jeecs::debug::logfatal(
+                    "Metal: per-frame stream ring exhausted (need %zu bytes, %zu available). "
+                    "Consider increasing STREAM_RING_SIZE.",
+                    size, STREAM_RING_SIZE - offset);
+                return 0;
+            }
+
+            m_stream_ring_offsets[slot] = offset + size;
+            return offset;
+        }
+
+        // 记录本帧已提交的命令缓冲；槽位复用时等待它完成
+        void note_stream_ring_commit(MTL::CommandBuffer* command_buffer)
+        {
+            const size_t slot = stream_ring_slot();
+
+            if (m_stream_ring_last_committed[slot] == command_buffer)
+                return;
+
+            if (m_stream_ring_last_committed[slot] != nullptr)
+                m_stream_ring_last_committed[slot]->release();
+
+            command_buffer->retain();
+            m_stream_ring_last_committed[slot] = command_buffer;
+        }
+
+        // 等待此前所有仍在执行的帧完成（持久纹理上传等稀有路径使用）
+        void wait_all_frames_in_flight()
+        {
+            for (size_t i = 0; i < STREAM_RING_SLOT_COUNT; ++i)
+            {
+                if (m_stream_ring_last_committed[i] != nullptr)
+                {
+                    m_stream_ring_last_committed[i]->waitUntilCompleted();
+                    m_stream_ring_last_committed[i]->release();
+                    m_stream_ring_last_committed[i] = nullptr;
+                }
+            }
+        }
+
         void create_main_depth_texture(int w, int h)
         {
             MTL::TextureDescriptor* depthTexDesc = MTL::TextureDescriptor::alloc()->init();
@@ -129,11 +222,26 @@ namespace jeecs::graphic::api::metal
 
             m_frame_auto_release = nullptr;
             m_render_states.m_frame_counter = 1;
+
+            for (size_t i = 0; i < STREAM_RING_SLOT_COUNT; ++i)
+            {
+                m_stream_ring_buffers[i] = nullptr;
+                m_stream_ring_last_committed[i] = nullptr;
+                m_stream_ring_offsets[i] = 0;
+            }
         }
         ~jegl_metal_context()
         {
             // Must release window before device.
             delete m_interface;
+
+            for (size_t i = 0; i < STREAM_RING_SLOT_COUNT; ++i)
+            {
+                if (m_stream_ring_last_committed[i] != nullptr)
+                    m_stream_ring_last_committed[i]->release();
+                if (m_stream_ring_buffers[i] != nullptr)
+                    m_stream_ring_buffers[i]->release();
+            }
 
             m_command_queue->release();
             m_metal_device->release();
@@ -334,11 +442,17 @@ namespace jeecs::graphic::api::metal
         MTL::Buffer* m_uniform_buffer;
         uint32_t m_binding_place;
 
+        // 本帧流式内容所在的 frame ring 偏移；serial 与当前帧序号一致时有效
+        uint64_t m_stream_frame_serial;
+        size_t m_stream_offset;
+
         metal_uniform_buffer(jegl_metal_context* ctx, je_gl_uniform_buffer_t* res)
+            : m_stream_frame_serial(0)
+            , m_stream_offset(0)
         {
             m_uniform_buffer =
                 ctx->m_metal_device->newBuffer(
-                    res->m_buffer,
+                    res->m_initial_buffer,
                     res->m_buffer_size,
                     MTL::ResourceStorageModeShared);
             m_binding_place =
@@ -359,6 +473,10 @@ namespace jeecs::graphic::api::metal
         uint32_t m_index_count;
         uint32_t m_vertex_stride; // 添加实际顶点步长信息
 
+        // 本帧流式内容所在的 frame ring 偏移；serial 与当前帧序号一致时有效
+        uint64_t m_stream_frame_serial;
+        size_t m_stream_offset;
+
         metal_vertex(
             MTL::PrimitiveType primitive_type,
             MTL::Buffer* vertex_buffer,
@@ -370,6 +488,8 @@ namespace jeecs::graphic::api::metal
             , m_index_buffer(index_buffer)
             , m_index_count(index_count)
             , m_vertex_stride(vertex_stride)
+            , m_stream_frame_serial(0)
+            , m_stream_offset(0)
         {
         }
         ~metal_vertex()
@@ -540,6 +660,9 @@ namespace jeecs::graphic::api::metal
         // Update frame counter.
         ++metal_context->m_render_states.m_frame_counter;
 
+        // 准备本帧的瞬态存储槽位（等待上一次使用者完成）
+        metal_context->begin_stream_ring_frame();
+
         // Reset render target states.
         metal_context->m_render_states.m_current_target_framebuffer_may_null = nullptr;
         metal_context->m_render_states.m_current_target_shader = nullptr;
@@ -612,6 +735,8 @@ namespace jeecs::graphic::api::metal
         metal_context->m_render_states.m_current_command_encoder->endEncoding();
         metal_context->m_render_states.m_current_command_buffer->presentDrawable(
             metal_context->m_render_states.m_main_this_frame_drawable);
+        metal_context->note_stream_ring_commit(
+            metal_context->m_render_states.m_current_command_buffer);
         metal_context->m_render_states.m_current_command_buffer->commit();
 
         // 帧结束后释放自动释放池
@@ -1179,9 +1304,10 @@ namespace jeecs::graphic::api::metal
         MTL::Texture* texture_instance =
             metal_context->m_metal_device->newTexture(texture_desc);
 
-        if (texture->m_format & JE_GL_TEXTURE_FORMAT_FRAMEBUF)
+        if ((texture->m_format & JE_GL_TEXTURE_FORMAT_FRAMEBUF)
+            || texture->m_initial_pixels == nullptr)
         {
-            // No need to upload data.
+            // GPU 侧纹理 / 无创建期像素：不执行初始上传
         }
         else
         {
@@ -1202,7 +1328,7 @@ namespace jeecs::graphic::api::metal
                         (uint32_t)texture->m_depth),
                     0,
                     0,
-                    texture->m_pixels,
+                    texture->m_initial_pixels,
                     bytes_per_row,
                     bytes_per_slice);
             }
@@ -1219,7 +1345,7 @@ namespace jeecs::graphic::api::metal
                             1),
                         0,
                         slice,
-                        texture->m_pixels + (size_t)slice * bytes_per_slice,
+                        texture->m_initial_pixels + (size_t)slice * bytes_per_slice,
                         bytes_per_row,
                         bytes_per_slice);
                 }
@@ -1235,16 +1361,13 @@ namespace jeecs::graphic::api::metal
 
         // Create vertex buffer
         MTL::Buffer* vertex_buffer = metal_context->m_metal_device->newBuffer(
-            vertex->m_vertexs,
+            vertex->m_initial_vertexs,
             vertex->m_vertex_length,
             MTL::ResourceStorageModeShared);
 
-        // Create index buffer: sized by allocation capacity (m_index_count
-        // may have been shrunk to the active count by
-        // je_graphic_vertex_buffer_update; the draw count is kept separately in
-        // metal_vertex::m_index_count)
+        // Create index buffer: sized by allocation capacity (索引内容创建后不变)
         MTL::Buffer* index_buffer = metal_context->m_metal_device->newBuffer(
-            vertex->m_indices,
+            vertex->m_initial_indices,
             vertex->m_index_capacity * sizeof(uint32_t),
             MTL::ResourceStorageModeShared);
 
@@ -1344,44 +1467,182 @@ namespace jeecs::graphic::api::metal
     void update_shader(je_graphic_impl_context_t, je_gl_shader_t*)
     {
     }
-    template<typename TexT>
-    void update_texture(je_graphic_impl_context_t, TexT*)
+
+    // 持久纹理区段上传：Metal 的共享/托管纹理可直接 replaceRegion，
+    // 但必须确保没有在飞帧仍在采样它（稀有路径，等待此前所有帧完成）
+    void update_texture_2d(
+        je_graphic_impl_context_t ctx,
+        je_gl_texture_2d_t* texture,
+        size_t x, size_t y, size_t width, size_t height,
+        const je_gl_texture_pixel_data_t* pixels)
     {
-        // TODO;
+        jegl_metal_context* metal_context =
+            static_cast<jegl_metal_context*>(ctx);
+
+        metal_context->wait_all_frames_in_flight();
+
+        metal_texture* texture_instance =
+            static_cast<metal_texture*>(texture->m_handle.m_ptr);
+
+        const size_t pixel_size =
+            (size_t)(texture->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
+
+        texture_instance->m_texture->replaceRegion(
+            MTL::Region(
+                (size_t)x, (size_t)y, 0,
+                (size_t)width, (size_t)height, 1),
+            0,
+            0,
+            pixels,
+            (size_t)(width * pixel_size),
+            (size_t)(width * height * pixel_size));
     }
-    void update_vertex(je_graphic_impl_context_t, je_gl_vertex_t* resource)
+    void update_texture_3d(
+        je_graphic_impl_context_t ctx,
+        je_gl_texture_3d_t* texture,
+        size_t x, size_t y, size_t z,
+        size_t width, size_t height, size_t depth,
+        const je_gl_texture_pixel_data_t* pixels)
     {
+        jegl_metal_context* metal_context =
+            static_cast<jegl_metal_context*>(ctx);
+
+        metal_context->wait_all_frames_in_flight();
+
+        metal_texture* texture_instance =
+            static_cast<metal_texture*>(texture->m_handle.m_ptr);
+
+        const size_t pixel_size =
+            (size_t)(texture->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
+
+        texture_instance->m_texture->replaceRegion(
+            MTL::Region(
+                (size_t)x, (size_t)y, (size_t)z,
+                (size_t)width, (size_t)height, (size_t)depth),
+            0,
+            0,
+            pixels,
+            (size_t)(width * pixel_size),
+            (size_t)(width * height * pixel_size));
+    }
+    void update_texture_array(
+        je_graphic_impl_context_t ctx,
+        je_gl_texture_array_t* texture,
+        size_t x, size_t y, size_t layer,
+        size_t width, size_t height, size_t layers,
+        const je_gl_texture_pixel_data_t* pixels)
+    {
+        jegl_metal_context* metal_context =
+            static_cast<jegl_metal_context*>(ctx);
+
+        metal_context->wait_all_frames_in_flight();
+
+        metal_texture* texture_instance =
+            static_cast<metal_texture*>(texture->m_handle.m_ptr);
+
+        const size_t pixel_size =
+            (size_t)(texture->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
+        const size_t plane_bytes = width * height * pixel_size;
+
+        for (size_t i = 0; i < layers; ++i)
+        {
+            texture_instance->m_texture->replaceRegion(
+                MTL::Region(
+                    (size_t)x, (size_t)y, 0,
+                    (size_t)width, (size_t)height, 1),
+                0,
+                (size_t)(layer + i),
+                pixels + i * plane_bytes,
+                (size_t)(width * pixel_size),
+                (size_t)plane_bytes);
+        }
+    }
+    void update_texture_cube(
+        je_graphic_impl_context_t ctx,
+        je_gl_texture_cube_t* texture,
+        size_t face,
+        size_t x, size_t y, size_t width, size_t height,
+        const je_gl_texture_pixel_data_t* pixels)
+    {
+        assert(face < 6);
+
+        jegl_metal_context* metal_context =
+            static_cast<jegl_metal_context*>(ctx);
+
+        metal_context->wait_all_frames_in_flight();
+
+        metal_texture* texture_instance =
+            static_cast<metal_texture*>(texture->m_handle.m_ptr);
+
+        const size_t pixel_size =
+            (size_t)(texture->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
+
+        texture_instance->m_texture->replaceRegion(
+            MTL::Region(
+                (size_t)x, (size_t)y, 0,
+                (size_t)width, (size_t)height, 1),
+            0,
+            (size_t)face,
+            pixels,
+            (size_t)(width * pixel_size),
+            (size_t)(width * height * pixel_size));
+    }
+
+    void update_vertex(
+        je_graphic_impl_context_t ctx,
+        je_gl_vertex_t* resource,
+        const void* vertices, size_t vertex_length)
+    {
+        jegl_metal_context* metal_context =
+            static_cast<jegl_metal_context*>(ctx);
+
         metal_vertex* vertex =
             static_cast<metal_vertex*>(resource->m_handle.m_ptr);
 
-        // Shared 存储模式：整体重写顶点数据（索引缓冲内容不变），
-        // 并同步激活索引数量
-        memcpy(
-            vertex->m_vertex_buffer->contents(),
-            resource->m_vertexs,
-            resource->m_vertex_length);
+        assert(vertex_length <= resource->m_vertex_length);
+        assert(vertices != nullptr);
 
-        vertex->m_index_count = resource->m_index_count;
+        // 本帧内容写进 frame ring，本帧的绑定改用它
+        const size_t offset =
+            metal_context->allocate_stream_memory(vertex_length, 16);
+
+        memcpy(
+            (uint8_t*)metal_context->current_stream_ring_buffer()->contents() + offset,
+            vertices,
+            vertex_length);
+
+        vertex->m_stream_frame_serial =
+            metal_context->m_render_states.m_frame_counter;
+        vertex->m_stream_offset = offset;
     }
     void update_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t*)
     {
     }
-    void update_ubuffer(je_graphic_impl_context_t, je_gl_uniform_buffer_t* ubuffer)
+    void update_ubuffer(
+        je_graphic_impl_context_t ctx,
+        je_gl_uniform_buffer_t* ubuffer,
+        const void* data, size_t data_length)
     {
+        jegl_metal_context* metal_context =
+            static_cast<jegl_metal_context*>(ctx);
+
         metal_uniform_buffer* ubuf =
             static_cast<metal_uniform_buffer*>(ubuffer->m_handle.m_ptr);
 
-        assert(ubuffer->m_update_length != 0);
-        void* buffer_contents = ubuf->m_uniform_buffer->contents();
+        assert(data != nullptr);
+        assert(data_length == ubuffer->m_buffer_size);
+
+        const size_t offset =
+            metal_context->allocate_stream_memory(data_length, 16);
 
         memcpy(
-            static_cast<void*>(
-                static_cast<char*>(buffer_contents)
-                + ubuffer->m_update_begin_offset),
-            static_cast<void*>(
-                reinterpret_cast<char*>(ubuffer->m_buffer)
-                + ubuffer->m_update_begin_offset),
-            ubuffer->m_update_length);
+            (uint8_t*)metal_context->current_stream_ring_buffer()->contents() + offset,
+            data,
+            data_length);
+
+        ubuf->m_stream_frame_serial =
+            metal_context->m_render_states.m_frame_counter;
+        ubuf->m_stream_offset = offset;
     }
 
     void close_shader(je_graphic_impl_context_t, je_gl_shader_t* shader)
@@ -1413,10 +1674,21 @@ namespace jeecs::graphic::api::metal
 
         auto* metal_context = static_cast<jegl_metal_context*>(ctx);
 
+        MTL::Buffer* buffer = ubuf->m_uniform_buffer;
+        size_t offset = 0;
+
+        // 本帧录制过更新则绑定 frame ring 切片，否则绑定创建期持久缓冲
+        if (ubuf->m_stream_frame_serial
+            == metal_context->m_render_states.m_frame_counter)
+        {
+            buffer = metal_context->current_stream_ring_buffer();
+            offset = ubuf->m_stream_offset;
+        }
+
         metal_context->m_render_states.m_current_command_encoder->setVertexBuffer(
-            ubuf->m_uniform_buffer, 0, ubuf->m_binding_place);
+            buffer, offset, ubuf->m_binding_place);
         metal_context->m_render_states.m_current_command_encoder->setFragmentBuffer(
-            ubuf->m_uniform_buffer, 0, ubuf->m_binding_place);
+            buffer, offset, ubuf->m_binding_place);
     }
     bool bind_shader(je_graphic_impl_context_t ctx, je_gl_shader_t* res)
     {
@@ -1723,6 +1995,8 @@ namespace jeecs::graphic::api::metal
             assert(metal_context->m_render_states.m_current_command_buffer != nullptr);
 
             metal_context->m_render_states.m_current_command_encoder->endEncoding();
+            metal_context->note_stream_ring_commit(
+                metal_context->m_render_states.m_current_command_buffer);
             metal_context->m_render_states.m_current_command_buffer->commit();
         }
 
@@ -1801,6 +2075,7 @@ namespace jeecs::graphic::api::metal
         if (states.m_current_command_encoder != nullptr)
         {
             states.m_current_command_encoder->endEncoding();
+            ctx->note_stream_ring_commit(states.m_current_command_buffer);
             states.m_current_command_buffer->commit();
 
             states.m_current_command_encoder = nullptr;
@@ -2105,8 +2380,19 @@ namespace jeecs::graphic::api::metal
         assert(vertex != nullptr);
         assert(states.m_current_command_encoder != nullptr);
 
+        MTL::Buffer* vertex_buffer = vertex->m_vertex_buffer;
+        size_t vertex_buffer_offset = 0;
+
+        // 本帧录制过更新则绑定 frame ring 切片，否则绑定创建期持久缓冲
+        if (vertex->m_stream_frame_serial
+            == metal_context->m_render_states.m_frame_counter)
+        {
+            vertex_buffer = metal_context->current_stream_ring_buffer();
+            vertex_buffer_offset = vertex->m_stream_offset;
+        }
+
         states.m_current_command_encoder->setVertexBuffer(
-            vertex->m_vertex_buffer, 0, vertex->m_vertex_stride, 0);
+            vertex_buffer, vertex_buffer_offset, vertex->m_vertex_stride, 0);
 
         if (shader->m_uniform_cpu_buffer_size != 0)
         {
@@ -2229,11 +2515,10 @@ void je_graphic_using_metal_apis(je_gl_graphic_api_t* write_to_apis)
     write_to_apis->ubuffer_init = init_ubuffer;
 
     write_to_apis->shader_update = update_shader;
-    write_to_apis->texture_2d_update = update_texture<je_gl_texture_2d_t>;
-    write_to_apis->texture_3d_update = update_texture<je_gl_texture_3d_t>;
-    write_to_apis->texture_array_update = update_texture<je_gl_texture_array_t>;
-    write_to_apis->texture_cube_update = update_texture<je_gl_texture_cube_t>;
-    write_to_apis->texture_msaa_update = update_texture<je_gl_texture_msaa_t>;
+    write_to_apis->texture_2d_upload = update_texture_2d;
+    write_to_apis->texture_3d_upload = update_texture_3d;
+    write_to_apis->texture_array_upload = update_texture_array;
+    write_to_apis->texture_cube_upload = update_texture_cube;
     write_to_apis->vertex_update = update_vertex;
     write_to_apis->framebuffer_update = update_framebuffer;
     write_to_apis->ubuffer_update = update_ubuffer;

@@ -33,6 +33,8 @@
             {
                 je_gl_command_buffer_t* m_command_buffer;
                 je_gl_frame_buffer_t* m_target;
+                // 不开启 pass 的资源更新命令缓冲：跳过帧也必须提交（只跳过绘制）
+                bool m_is_update_command;
             };
             std::vector<allocated_command_buffer_t> m_allocated_command_buffers;
             size_t m_allocated_command_buffers_count;
@@ -92,7 +94,7 @@
 
                 chain_buffer.m_allocated_command_buffers.push_back(
                     allocated_chain_t::allocated_command_buffer_t{
-                        je_graphic_cmd_create(m_context), nullptr });
+                        je_graphic_cmd_create(m_context), nullptr, false });
             }
 
             auto& entry =
@@ -102,6 +104,36 @@
             je_graphic_cmd_reset(entry.m_command_buffer);
             je_graphic_cmd_begin_pass(entry.m_command_buffer, framebuffer, viewport);
             entry.m_target = framebuffer;
+            entry.m_is_update_command = false;
+
+            return entry.m_command_buffer;
+        }
+
+        // 申请一个不开启 pass 的资源更新命令缓冲；宿主在跳过帧时也会提交它
+        je_gl_command_buffer_t* allocate_new_update_command()
+        {
+            assert(m_context != nullptr);
+
+            auto& chain_buffer = get_commiting_chain_buffer();
+
+            if (chain_buffer.m_allocated_command_buffers_count
+                >= chain_buffer.m_allocated_command_buffers.size())
+            {
+                assert(chain_buffer.m_allocated_command_buffers_count
+                    == chain_buffer.m_allocated_command_buffers.size());
+
+                chain_buffer.m_allocated_command_buffers.push_back(
+                    allocated_chain_t::allocated_command_buffer_t{
+                        je_graphic_cmd_create(m_context), nullptr, true });
+            }
+
+            auto& entry =
+                chain_buffer.m_allocated_command_buffers[
+                    chain_buffer.m_allocated_command_buffers_count++];
+
+            je_graphic_cmd_reset(entry.m_command_buffer);
+            entry.m_target = nullptr;
+            entry.m_is_update_command = true;
 
             return entry.m_command_buffer;
         }
@@ -120,17 +152,32 @@
             m_writing_chain_buffer_p = &m_chain_buffers[++m_writing_chain_buffer_index % BRANCH_CHAIN_POOL_SIZE];
         }
 
-        void _commit_frame(je_gl_context_t* thread, je_gl_update_action_t action)
+        void _commit_frame(
+            je_gl_context_t* thread,
+            je_gl_update_action_t action,
+            bool skip_all_draw)
         {
             auto& chain_buffer = get_rendering_chain_buffer();
+
+            const bool skip_draw =
+                skip_all_draw
+                || action != je_gl_update_action_t::JE_GL_UPDATE_CONTINUE;
 
             for (size_t i = 0; i < chain_buffer.m_allocated_command_buffers_count; ++i)
             {
                 auto& entry = chain_buffer.m_allocated_command_buffers[i];
 
-                if (action != je_gl_update_action_t::JE_GL_UPDATE_CONTINUE
-                    && entry.m_target == nullptr)
-                    continue;
+                // 资源更新与刷新无关：即使这一帧跳过绘制，也要落实（避免
+                // 纹理上传/动态顶点内容在最小化期间丢失）
+                if (!entry.m_is_update_command)
+                {
+                    if (skip_draw)
+                        continue;
+
+                    if (entry.m_target == nullptr
+                        && action != je_gl_update_action_t::JE_GL_UPDATE_CONTINUE)
+                        continue;
+                }
 
                 je_graphic_cmd_commit(entry.m_command_buffer);
             }
@@ -232,8 +279,6 @@
                     je_graphic_cmd_commit(m_screen_clear_command_buffer);
                 }
             }
-            else if (m_skip_all_draw)
-                return;
 
             do
             {
@@ -249,7 +294,7 @@
                     });
 
                 for (auto* gpipe : m_je_RenderBranchs)
-                    gpipe->_commit_frame(glthread, action);
+                    gpipe->_commit_frame(glthread, action, m_skip_all_draw);
 
             } while (0);
 
@@ -418,6 +463,11 @@ je_gl_command_buffer_t* je_graphic_branch_new_command_buffer(
     const je_gl_viewport_t* viewport)
 {
     return branch->allocate_new_command_buffer(framebuffer, viewport);
+}
+je_gl_command_buffer_t* je_graphic_branch_new_update_command(
+    je_render_branch_t* branch)
+{
+    return branch->allocate_new_update_command();
 }
 void je_graphic_branch_new_frame(je_render_branch_t* branch, int priority)
 {

@@ -42,6 +42,13 @@ namespace jeecs
         inline constexpr int EDITOR_GIZMO_BRANCH_QUEUE = 50000;
 
         /*
+        jeecs::graphic::GRAPHIC_UPDATE_BRANCH_QUEUE [常量]
+        资源更新链使用的优先级：先于所有绘制链（render queue）提交，保证本帧的绘制
+        看到的是本帧录制的瞬态内容（见 je_graphic_branch_new_update_command）
+        */
+        inline constexpr int GRAPHIC_UPDATE_BRANCH_QUEUE = INT_MIN;
+
+        /*
         jeecs::graphic::INVALID_UNIFORM_LOCATION [常量]
         图形库的一致变量位置信息无效值，通常用于指示着色器中不存在指定名称的一致变量
         请参见：
@@ -231,20 +238,17 @@ typedef struct je_gl_texture_common_t
 {
     // NOTE:
     // * Pixel data is storage from LEFT/BOTTOM to RIGHT/TOP
-    // * If texture's m_pixels is nullptr, only create a texture in pipeline.
+    // * m_initial_pixels 是创建期像素快照：只在后端首次初始化（以及图形线程
+    //   重建）时读取，创建完成后不再允许任何改写。运行时修改纹理只能通过
+    //   je_graphic_cmd_upload_texture_* 录制区段上传。
+    // * If texture's m_initial_pixels is nullptr, only create a texture in pipeline.
     je_gl_resource_handle_t m_handle;
     je_gl_texture_kind_t m_kind;
 
-    je_gl_texture_pixel_data_t* m_pixels;
+    je_gl_texture_pixel_data_t* m_initial_pixels;
     size_t m_width;
     size_t m_height;
     je_gl_texture_format_t m_format;
-
-    // Partical texture data update
-    size_t m_modified_min_x;
-    size_t m_modified_min_y;
-    size_t m_modified_max_x;
-    size_t m_modified_max_y;
 } je_gl_texture_common_t;
 
 /*
@@ -366,12 +370,13 @@ typedef struct je_gl_vertex_t
         m_y_min, m_y_max,
         m_z_min, m_z_max;
 
-    const void* m_vertexs;
+    // 创建期顶点/索引快照：只在后端首次初始化（以及图形线程重建）时读取；
+    // 运行时修改顶点内容只能通过 je_graphic_cmd_update_vertex 录制本帧内容。
+    const void* m_initial_vertexs;
     size_t m_vertex_length;
-    const uint32_t* m_indices;
+    const uint32_t* m_initial_indices;
     size_t m_index_count;
-    // 索引缓冲的分配容量：m_index_count 可被 je_graphic_vertex_buffer_update 收缩为
-    // 激活数量，本字段保持创建时的分配大小，作为收缩的上限
+    // 索引缓冲的分配容量；m_index_count 是当前激活的绘制数量（不得超过容量）
     size_t m_index_capacity;
     const je_gl_vertex_data_layout_t* m_formats;
     size_t m_format_count;
@@ -758,11 +763,9 @@ typedef struct je_gl_uniform_buffer_t
 
     size_t m_buffer_binding_place;
     size_t m_buffer_size;
-    uint8_t* m_buffer;
-
-    // Used for marking update range;
-    size_t m_update_begin_offset;
-    size_t m_update_length;
+    // 创建期内容快照：只在后端首次初始化（以及图形线程重建）时读取；
+    // 运行时内容由 je_graphic_cmd_update_uniform_buffer 按帧录制完整数据。
+    uint8_t* m_initial_buffer;
 } je_gl_uniform_buffer_t;
 static_assert(
     std::is_trivial_v<je_gl_uniform_buffer_t> && 0 == offsetof(je_gl_uniform_buffer_t, m_handle));
@@ -861,11 +864,22 @@ typedef void (*je_gl_graphic_api_texture_3d_init_func_t)(je_graphic_impl_context
 typedef void (*je_gl_graphic_api_texture_array_init_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_array_t*);
 typedef void (*je_gl_graphic_api_texture_cube_init_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_cube_t*);
 typedef void (*je_gl_graphic_api_texture_msaa_init_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_texture_msaa_t*);
-typedef void (*je_gl_graphic_api_texture_2d_update_func_t)(je_graphic_impl_context_t, je_gl_texture_2d_t*);
-typedef void (*je_gl_graphic_api_texture_3d_update_func_t)(je_graphic_impl_context_t, je_gl_texture_3d_t*);
-typedef void (*je_gl_graphic_api_texture_array_update_func_t)(je_graphic_impl_context_t, je_gl_texture_array_t*);
-typedef void (*je_gl_graphic_api_texture_cube_update_func_t)(je_graphic_impl_context_t, je_gl_texture_cube_t*);
-typedef void (*je_gl_graphic_api_texture_msaa_update_func_t)(je_graphic_impl_context_t, je_gl_texture_msaa_t*);
+typedef void (*je_gl_graphic_api_texture_2d_upload_func_t)(
+    je_graphic_impl_context_t, je_gl_texture_2d_t*,
+    size_t x, size_t y, size_t width, size_t height,
+    const je_gl_texture_pixel_data_t* pixels);
+typedef void (*je_gl_graphic_api_texture_3d_upload_func_t)(
+    je_graphic_impl_context_t, je_gl_texture_3d_t*,
+    size_t x, size_t y, size_t z, size_t width, size_t height, size_t depth,
+    const je_gl_texture_pixel_data_t* pixels);
+typedef void (*je_gl_graphic_api_texture_array_upload_func_t)(
+    je_graphic_impl_context_t, je_gl_texture_array_t*,
+    size_t x, size_t y, size_t layer, size_t width, size_t height, size_t layers,
+    const je_gl_texture_pixel_data_t* pixels);
+typedef void (*je_gl_graphic_api_texture_cube_upload_func_t)(
+    je_graphic_impl_context_t, je_gl_texture_cube_t*,
+    size_t face, size_t x, size_t y, size_t width, size_t height,
+    const je_gl_texture_pixel_data_t* pixels);
 typedef void (*je_gl_graphic_api_texture_2d_close_func_t)(je_graphic_impl_context_t, je_gl_texture_2d_t*);
 typedef void (*je_gl_graphic_api_texture_3d_close_func_t)(je_graphic_impl_context_t, je_gl_texture_3d_t*);
 typedef void (*je_gl_graphic_api_texture_array_close_func_t)(je_graphic_impl_context_t, je_gl_texture_array_t*);
@@ -875,7 +889,9 @@ typedef void (*je_gl_graphic_api_texture_msaa_close_func_t)(je_graphic_impl_cont
 typedef je_gl_resource_blob_t(*je_gl_graphic_api_vertex_create_blob_func_t)(je_graphic_impl_context_t, je_gl_vertex_t*);
 typedef void (*je_gl_graphic_api_vertex_close_blob_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t);
 typedef void (*je_gl_graphic_api_vertex_init_func_t)(je_graphic_impl_context_t, je_gl_resource_blob_t, je_gl_vertex_t*);
-typedef void (*je_gl_graphic_api_vertex_update_func_t)(je_graphic_impl_context_t, je_gl_vertex_t*);
+typedef void (*je_gl_graphic_api_vertex_update_func_t)(
+    je_graphic_impl_context_t, je_gl_vertex_t*,
+    const void* vertices, size_t vertex_length);
 typedef void (*je_gl_graphic_api_vertex_close_func_t)(je_graphic_impl_context_t, je_gl_vertex_t*);
 
 typedef void (*je_gl_graphic_api_framebuffer_init_func_t)(je_graphic_impl_context_t, je_gl_frame_buffer_t*);
@@ -883,7 +899,9 @@ typedef void (*je_gl_graphic_api_framebuffer_update_func_t)(je_graphic_impl_cont
 typedef void (*je_gl_graphic_api_framebuffer_close_func_t)(je_graphic_impl_context_t, je_gl_frame_buffer_t*);
 
 typedef void (*je_gl_graphic_api_ubuffer_init_func_t)(je_graphic_impl_context_t, je_gl_uniform_buffer_t*);
-typedef void (*je_gl_graphic_api_ubuffer_update_func_t)(je_graphic_impl_context_t, je_gl_uniform_buffer_t*);
+typedef void (*je_gl_graphic_api_ubuffer_update_func_t)(
+    je_graphic_impl_context_t, je_gl_uniform_buffer_t*,
+    const void* data, size_t data_length);
 typedef void (*je_gl_graphic_api_ubuffer_close_func_t)(je_graphic_impl_context_t, je_gl_uniform_buffer_t*);
 
 // 渲染接口（pipeline / sampler / render pass / draw）相关接口
@@ -1091,21 +1109,21 @@ struct je_gl_graphic_api_t
     je_gl_graphic_api_shader_update_func_t shader_update;
 
     /*
-    je_gl_graphic_api_t::texture_2d_update / texture_3d_update / texture_array_update / texture_cube_update /
-    texture_msaa_update [成员]
-    当一个对应类别纹理资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此
-    接口。图形接口负责准备好对应的更新工作。
+    je_gl_graphic_api_t::texture_2d_upload / texture_3d_upload / texture_array_upload /
+    texture_cube_upload [成员]
+    提交期落实一个持久纹理区段上传（来自 je_graphic_cmd_upload_texture_* 录制的数据）。
+    图形实现负责保证上传不会与仍在执行的帧冲突：允许在必要时等待在飞帧，这是稀有路径。
     */
-    je_gl_graphic_api_texture_2d_update_func_t texture_2d_update;
-    je_gl_graphic_api_texture_3d_update_func_t texture_3d_update;
-    je_gl_graphic_api_texture_array_update_func_t texture_array_update;
-    je_gl_graphic_api_texture_cube_update_func_t texture_cube_update;
-    je_gl_graphic_api_texture_msaa_update_func_t texture_msaa_update;
+    je_gl_graphic_api_texture_2d_upload_func_t texture_2d_upload;
+    je_gl_graphic_api_texture_3d_upload_func_t texture_3d_upload;
+    je_gl_graphic_api_texture_array_upload_func_t texture_array_upload;
+    je_gl_graphic_api_texture_cube_upload_func_t texture_cube_upload;
 
     /*
     je_gl_graphic_api_t::vertex_update [成员]
-    当一个 vertex 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
-    负责准备好对应的更新工作。
+    提交期落实一个顶点的「本帧内容」（来自 je_graphic_cmd_update_vertex 录制的数据）。
+    该内容只对本次提交的绘制生效；图形实现通过每帧瞬态存储（ring / 丢弃重写）保证
+    与在飞帧隔离，不得原地覆写仍在执行的帧所读取的持久缓冲。
     */
     je_gl_graphic_api_vertex_update_func_t vertex_update;
 
@@ -1118,8 +1136,8 @@ struct je_gl_graphic_api_t
 
     /*
     je_gl_graphic_api_t::ubuffer_update [成员]
-    当一个 ubuffer 资源的 m_modified 标记被设置为 true 时，引擎中间层将在此资源的下次使用时调用此接口。图形接口
-    负责准备好对应的更新工作。
+    提交期落实一个一致变量缓冲区的「本帧完整内容」（来自
+    je_graphic_cmd_update_uniform_buffer 录制的数据）。隔离要求与 vertex_update 相同。
     */
     je_gl_graphic_api_ubuffer_update_func_t  ubuffer_update;
 
@@ -1398,11 +1416,10 @@ typedef je_gl_graphic_api_texture_3d_init_func_t je_GlGraphicApiTexture3DInitFun
 typedef je_gl_graphic_api_texture_array_init_func_t je_GlGraphicApiTextureArrayInitFunc;
 typedef je_gl_graphic_api_texture_cube_init_func_t je_GlGraphicApiTextureCubeInitFunc;
 typedef je_gl_graphic_api_texture_msaa_init_func_t je_GlGraphicApiTextureMsaaInitFunc;
-typedef je_gl_graphic_api_texture_2d_update_func_t je_GlGraphicApiTexture2DUpdateFunc;
-typedef je_gl_graphic_api_texture_3d_update_func_t je_GlGraphicApiTexture3DUpdateFunc;
-typedef je_gl_graphic_api_texture_array_update_func_t je_GlGraphicApiTextureArrayUpdateFunc;
-typedef je_gl_graphic_api_texture_cube_update_func_t je_GlGraphicApiTextureCubeUpdateFunc;
-typedef je_gl_graphic_api_texture_msaa_update_func_t je_GlGraphicApiTextureMsaaUpdateFunc;
+typedef je_gl_graphic_api_texture_2d_upload_func_t je_GlGraphicApiTexture2DUploadFunc;
+typedef je_gl_graphic_api_texture_3d_upload_func_t je_GlGraphicApiTexture3DUploadFunc;
+typedef je_gl_graphic_api_texture_array_upload_func_t je_GlGraphicApiTextureArrayUploadFunc;
+typedef je_gl_graphic_api_texture_cube_upload_func_t je_GlGraphicApiTextureCubeUploadFunc;
 typedef je_gl_graphic_api_texture_2d_close_func_t je_GlGraphicApiTexture2DCloseFunc;
 typedef je_gl_graphic_api_texture_3d_close_func_t je_GlGraphicApiTexture3DCloseFunc;
 typedef je_gl_graphic_api_texture_array_close_func_t je_GlGraphicApiTextureArrayCloseFunc;
@@ -1682,9 +1699,12 @@ JE_API /* OPTIONAL */ je_gl_texture_2d_t* je_graphic_texture_2d_load(
 /*
 je_graphic_texture_2d_create [基本接口]
 创建一个指定大小和格式的二维纹理资源
-    * 若指定的格式包含 FLOAT16、DEPTH 或 FRAMEBUF，则不创建像素缓冲，
-        对应纹理原始数据的像素将被设置为 nullptr
-    * 若创建像素缓冲，像素缓存的将按字节置为 0 填充初始化
+    * initial_pixels 是一份完整像素快照（行序与 je_gl_texture_common_t 的
+        m_initial_pixels 一致，自底向上），创建时拷贝保存；传 nullptr 表示不创建
+        像素快照（纹理在 GPU 侧未初始化）
+    * 若指定的格式包含 FLOAT16、DEPTH 或 FRAMEBUF，则 initial_pixels 必须为 nullptr
+    * 创建期快照只在后端首次初始化（以及图形线程重建）时读取，创建后不再允许改写；
+        运行时修改纹理请使用 je_graphic_cmd_upload_texture_2d
     * 考虑到部分图形库的实现，如果指定的宽度或高度为 0，je_graphic_texture_2d_create将视其为 1
     * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
         用计数，使用 je_graphic_texture_2d_close 可减少引用计数；当资源的引用计数变为 0 时，
@@ -1693,58 +1713,66 @@ je_graphic_texture_2d_create [基本接口]
 请参见：
     jegl_share_resource
     je_graphic_texture_2d_close
+    je_graphic_cmd_upload_texture_2d
 */
 JE_API je_gl_texture_2d_t* /* NOT NULL */ je_graphic_texture_2d_create(
     size_t width,
     size_t height,
-    je_gl_texture_format_t format);
+    je_gl_texture_format_t format,
+    /* OPTIONAL: nullptr 表示不创建像素快照 */ const je_gl_texture_pixel_data_t* initial_pixels);
 
 /*
 je_graphic_texture_3d_create [基本接口]
 创建一个指定大小、深度和格式的三维纹理资源
-    * 若指定的格式包含 FLOAT16，则不创建像素缓冲
-    * 若创建像素缓冲，像素数据按 宽度 x 高度 x 深度 连续排布并置为 0 填充初始化
+    * initial_pixels 语义同 je_graphic_texture_2d_create，数据按 宽度 x 高度 x 深度 连续排布
+    * 若指定的格式包含 FLOAT16，则 initial_pixels 必须为 nullptr
     * 若指定的宽度、高度或深度为 0，将视其为 1
 请参见：
     jegl_share_resource
     je_graphic_texture_3d_close
+    je_graphic_cmd_upload_texture_3d
 */
 JE_API je_gl_texture_3d_t* /* NOT NULL */ je_graphic_texture_3d_create(
     size_t width,
     size_t height,
     size_t depth,
-    je_gl_texture_format_t format);
+    je_gl_texture_format_t format,
+    /* OPTIONAL: nullptr 表示不创建像素快照 */ const je_gl_texture_pixel_data_t* initial_pixels);
 
 /*
 je_graphic_texture_array_create [基本接口]
 创建一个指定大小、层数和格式的纹理数组资源
-    * 若指定的格式包含 FLOAT16，则不创建像素缓冲
-    * 若创建像素缓冲，像素数据按 宽度 x 高度 x 层数 连续排布并置为 0 填充初始化
+    * initial_pixels 语义同 je_graphic_texture_2d_create，数据按 宽度 x 高度 x 层数 连续排布
+    * 若指定的格式包含 FLOAT16，则 initial_pixels 必须为 nullptr
     * 若指定的宽度、高度或层数为 0，将视其为 1
 请参见：
     jegl_share_resource
     je_graphic_texture_array_close
+    je_graphic_cmd_upload_texture_array
 */
 JE_API je_gl_texture_array_t* /* NOT NULL */ je_graphic_texture_array_create(
     size_t width,
     size_t height,
     size_t layers,
-    je_gl_texture_format_t format);
+    je_gl_texture_format_t format,
+    /* OPTIONAL: nullptr 表示不创建像素快照 */ const je_gl_texture_pixel_data_t* initial_pixels);
 
 /*
 je_graphic_texture_cube_create [基本接口]
 创建一个指定大小和格式的立方体贴图纹理资源，固定包含 6 个面
-    * 若指定的格式包含 FLOAT16，则不创建像素缓冲
-    * 若创建像素缓冲，像素数据按 6 x 宽度 x 高度 连续排布并置为 0 填充初始化
+    * initial_pixels 语义同 je_graphic_texture_2d_create，数据按 6 x 宽度 x 高度 连续排布
+    * 若指定的格式包含 FLOAT16，则 initial_pixels 必须为 nullptr
     * 若指定的宽度或高度为 0，将视其为 1
 请参见：
     jegl_share_resource
     je_graphic_texture_cube_close
+    je_graphic_cmd_upload_texture_cube
 */
 JE_API je_gl_texture_cube_t* /* NOT NULL */ je_graphic_texture_cube_create(
     size_t width,
     size_t height,
-    je_gl_texture_format_t format);
+    je_gl_texture_format_t format,
+    /* OPTIONAL: nullptr 表示不创建像素快照 */ const je_gl_texture_pixel_data_t* initial_pixels);
 
 /*
 je_graphic_texture_msaa_create [基本接口]
@@ -1824,29 +1852,6 @@ JE_API /* OPTIONAL: If bad format or no completed vertex point */ je_gl_vertex_t
     size_t format_count);
 
 /*
-je_graphic_vertex_buffer_update [基本接口]
-整体更新一个顶点（模型）资源中的顶点数据，用于逐帧改写动态网格（如粒子系统）
-    * vertex_data 与 vertex_length 描述一份完整的顶点数据，将被拷贝替换掉资源中
-        原有的顶点数据；vertex_data 传入 nullptr 时只调整激活的索引数量
-    * active_index_count 为本次更新后实际参与绘制的索引数量（不能超过资源创建时
-        的索引总数），用于在容量固定的缓冲区上收缩绘制范围；传入 0 时会被钳制
-        为 1——0 长度的绘制调用与 0 字节的缓冲区分配在部分后端上非法，而 1 个
-        索引的 TRIANGLES 绘制不产生任何图元
-    * 调用后资源的 m_modified 标记被置位，图形后端将在该资源的下次使用时通过
-        vertex_update 钩子重新上传数据（索引缓冲本身不重传，只刷新绘制数量；
-        索引缓冲在初始化时按创建时的索引总量分配，与激活数量无关）
-    * 与 je_graphic_uniformbuf_update 相同，本接口必须在逻辑帧窗口内（图形线程静默时）调用
-请参见：
-    je_graphic_vertex_create
-    je_graphic_uniformbuf_update
-*/
-JE_API void je_graphic_vertex_buffer_update(
-    je_gl_vertex_t* vertex,
-    /* OPTIONAL */ const void* vertex_data,
-    size_t vertex_length,
-    size_t active_index_count);
-
-/*
 je_graphic_vertex_close [基本接口]
 关闭一个顶点（模型）资源（使得其引用计数减少），如果资源被 jegl_share_resource 引用过多次，
 那么需要对应调用多次才能真正释放资源；
@@ -1854,6 +1859,7 @@ je_graphic_vertex_close [基本接口]
         源将由资源对应的图形线程上下文在适当的时机释放。
 请参见：
     jegl_share_resource
+    je_graphic_cmd_update_vertex
 */
 JE_API void je_graphic_vertex_close(je_gl_vertex_t* vertex);
 
@@ -1893,6 +1899,8 @@ JE_API void je_graphic_framebuf_close(je_gl_frame_buffer_t* framebuffer);
 /*
 je_graphic_uniformbuf_create [基本接口]
 创建一个指定大小和绑定位置的一致变量缓冲区资源
+    * 创建期内容为全 0；运行时内容通过 je_graphic_cmd_update_uniform_buffer
+        按帧录制完整数据
     * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
         用计数，使用 je_graphic_uniformbuf_close 可减少引用计数；当资源的引用计数变为 0 时，
         资源将被释放
@@ -1900,20 +1908,11 @@ je_graphic_uniformbuf_create [基本接口]
 请参见：
     jegl_share_resource
     je_graphic_uniformbuf_close
+    je_graphic_cmd_update_uniform_buffer
 */
 JE_API je_gl_uniform_buffer_t* je_graphic_uniformbuf_create(
     size_t binding_place,
     size_t length);
-
-/*
-je_graphic_uniformbuf_update [基本接口]
-更新一个一致变量缓冲区中，指定位置起，若干长度的数据
-*/
-JE_API void je_graphic_uniformbuf_update(
-    je_gl_uniform_buffer_t* uniformbuf,
-    /* OPTIONAL: If update_length == 0 */ const void* buf,
-    size_t update_offset,
-    size_t update_length);
 
 /*
 je_graphic_uniformbuf_close [基本接口]
@@ -2409,7 +2408,7 @@ je_graphic_cmd_bind_uniform_buffer [基本接口]
     * 使用 buffer 创建时指定的 binding place，避免绑定位置不一致
 请参见：
     je_graphic_uniformbuf_create
-    je_graphic_uniformbuf_update
+    je_graphic_cmd_update_uniform_buffer
 */
 JE_API void je_graphic_cmd_bind_uniform_buffer(
     je_gl_command_buffer_t* cmd, je_gl_uniform_buffer_t* buffer);
@@ -2446,6 +2445,88 @@ je_graphic_cmd_bind_sampler [基本接口]
 */
 JE_API void je_graphic_cmd_bind_sampler(
     je_gl_command_buffer_t* cmd, uint32_t sampler_id, je_gl_sampler_t* sampler);
+
+/*
+je_graphic_cmd_update_vertex [基本接口]
+录制一个顶点的「本帧内容」；提交命令时由图形后端落实，只对本次提交的绘制生效
+    * vertices 与 vertex_length 描述一份完整的顶点前缀数据（不得超过资源创建时的
+        顶点数据容量）；vertices 传入 nullptr 时只调整激活的索引数量
+    * active_index_count 为本次更新后实际参与绘制的索引数量（不能超过资源创建时
+        的索引总数）；传入 0 时会被钳制为 1——0 长度的绘制调用在部分后端上非法，
+        而 1 个索引的 TRIANGLES 绘制不产生任何图元
+    * 本命令不需要 pass，也不要求先绑定该资源；录制时同步资源的激活索引数量
+        （绘制数量属于 CPU 侧状态，仅录制线程读取）
+    * 没有录制更新的帧，绑定的是资源的创建期内容
+请参见：
+    je_graphic_vertex_create
+    je_graphic_branch_new_update_command
+*/
+JE_API void je_graphic_cmd_update_vertex(
+    je_gl_command_buffer_t* cmd,
+    je_gl_vertex_t* vertex,
+    /* OPTIONAL: nullptr 时只调整激活索引数量 */ const void* vertices,
+    size_t vertex_length,
+    size_t active_index_count);
+
+/*
+je_graphic_cmd_update_uniform_buffer [基本接口]
+录制一个一致变量缓冲区的「本帧完整内容」；提交命令时由图形后端落实
+    * size 必须等于创建时指定的一致变量缓冲区长度
+    * 本命令不需要 pass，也不要求先绑定该资源
+    * 没有录制更新的帧，绑定的是资源的创建期内容（全 0）
+请参见：
+    je_graphic_uniformbuf_create
+    je_graphic_branch_new_update_command
+*/
+JE_API void je_graphic_cmd_update_uniform_buffer(
+    je_gl_command_buffer_t* cmd,
+    je_gl_uniform_buffer_t* buffer,
+    const void* data,
+    size_t size);
+
+/*
+je_graphic_cmd_upload_texture_2d / je_graphic_cmd_upload_texture_3d /
+je_graphic_cmd_upload_texture_array / je_graphic_cmd_upload_texture_cube [基本接口]
+录制一个持久纹理区段上传；提交命令时由图形后端落实
+    * 写入的是纹理自身的持久存储，后续帧持续可见（资产语义，不同于顶点/UBO 的
+        本帧内容）；图形后端负责与仍在执行的帧同步，可能因此等待一次在飞帧
+    * 区段越界、或对不含 CPU 像素的格式（FLOAT16 / DEPTH / FRAMEBUF）上传均属
+        调用错误，由断言检查
+    * 像素数据行序与创建期快照一致（自底向上）；数据按区段行连续排布：
+        - 2D：height 行
+        - 3D：depth 个 2D 区段
+        - array：layer 起连续 layers 个 2D 区段
+        - cube：face 指定面的 height 行
+    * MSAA 纹理仅存在于 GPU 侧，不支持上传
+请参见：
+    je_graphic_texture_2d_create
+    je_graphic_branch_new_update_command
+*/
+JE_API void je_graphic_cmd_upload_texture_2d(
+    je_gl_command_buffer_t* cmd,
+    je_gl_texture_2d_t* texture,
+    size_t x, size_t y,
+    size_t width, size_t height,
+    const je_gl_texture_pixel_data_t* pixels);
+JE_API void je_graphic_cmd_upload_texture_3d(
+    je_gl_command_buffer_t* cmd,
+    je_gl_texture_3d_t* texture,
+    size_t x, size_t y, size_t z,
+    size_t width, size_t height, size_t depth,
+    const je_gl_texture_pixel_data_t* pixels);
+JE_API void je_graphic_cmd_upload_texture_array(
+    je_gl_command_buffer_t* cmd,
+    je_gl_texture_array_t* texture,
+    size_t x, size_t y, size_t layer,
+    size_t width, size_t height, size_t layers,
+    const je_gl_texture_pixel_data_t* pixels);
+JE_API void je_graphic_cmd_upload_texture_cube(
+    je_gl_command_buffer_t* cmd,
+    je_gl_texture_cube_t* texture,
+    size_t face,
+    size_t x, size_t y,
+    size_t width, size_t height,
+    const je_gl_texture_pixel_data_t* pixels);
 
 /*
 je_graphic_cmd_set_uniform [基本接口]
@@ -2529,6 +2610,7 @@ JE_API void je_graphic_cmd_draw(
 je_graphic_cmd_commit [基本接口]
 在图形线程提交命令缓冲区。
     * 若仍有未结束的 pass，commit 会自动结束它
+    * 没有任何命令的命令缓冲区会被直接忽略（不触发后端提交）
     * 提交完成后命令缓冲区保留已录制的命令，需要复用请先调用 je_graphic_cmd_reset
 */
 JE_API void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd);
@@ -2541,6 +2623,23 @@ JE_API je_gl_command_buffer_t* /* NOT NULL */ je_graphic_branch_new_command_buff
     je_render_branch_t* branch,
     /* OPTIONAL: nullptr 表示屏幕 */ je_gl_frame_buffer_t* framebuffer,
     const je_gl_viewport_t* viewport);
+
+/*
+je_graphic_branch_new_update_command [基本接口]
+从绘制组申请一个已经 reset、且不开启任何 pass 的命令缓冲区，用于录制资源更新
+（je_graphic_cmd_update_* / je_graphic_cmd_upload_texture_*）
+    * 更新命令缓冲只承载资源更新，不会开始/结束绘制 pass；宿主的帧任务会把这类
+        空闲 pass 的命令缓冲提交，即使这一帧窗口被跳过（更新不丢失）
+    * 建议用宿主支持的最低优先级（INT32_MIN）调用 je_graphic_branch_new_frame，
+        使更新先于本帧所有绘制链提交
+请参见：
+    je_graphic_cmd_update_vertex
+    je_graphic_cmd_update_uniform_buffer
+    je_graphic_cmd_upload_texture_2d
+    je_graphic_branch_new_frame
+*/
+JE_API je_gl_command_buffer_t* /* NOT NULL */ je_graphic_branch_new_update_command(
+    je_render_branch_t* branch);
 
 /*
 je_graphic_uhost_get_or_create_for_universe [基本接口]
@@ -2746,174 +2845,31 @@ namespace jeecs
             }
             static basic::resource<texture2d> create(size_t width, size_t height, je_gl_texture_format_t format)
             {
-                je_gl_texture_2d_t* res = je_graphic_texture_2d_create(width, height, format);
+                return create(width, height, format, nullptr);
+            }
+            // initial_pixels 是创建期像素快照（自底向上行序）；传 nullptr 表示不创建快照
+            static basic::resource<texture2d> create(
+                size_t width, size_t height, je_gl_texture_format_t format,
+                /* OPTIONAL */ const void* initial_pixels)
+            {
+                je_gl_texture_2d_t* res = je_graphic_texture_2d_create(
+                    width, height, format,
+                    static_cast<const je_gl_texture_pixel_data_t*>(initial_pixels));
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
                 return basic::resource<texture2d>(new texture2d(res));
             }
-            static basic::resource<texture2d> clip(
-                const basic::resource<texture2d>& src, size_t x, size_t y, size_t w, size_t h)
+
+            // 持久区段上传（见 je_graphic_cmd_upload_texture_2d）
+            void upload(je_gl_command_buffer_t* cmd,
+                size_t x, size_t y, size_t w, size_t h, const void* pixels) const
             {
-                je_gl_texture_format_t new_texture_format =
-                    (je_gl_texture_format_t)(
-                        src->resource()->m_format
-                        & (JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK
-                            | JE_GL_TEXTURE_FORMAT_SRGB));
-
-                je_gl_texture_2d_t* res =
-                    je_graphic_texture_2d_create(w, h, new_texture_format);
-
-                // Create texture must be successfully.
-                assert(res != nullptr);
-
-                auto* new_texture = new texture2d(res);
-
-#if 0
-                for (size_t iy = 0; iy < h; ++iy)
-                {
-                    for (size_t ix = 0; ix < w; ++ix)
-                    {
-                        new_texture->pix(ix, iy).set(
-                            src->pix(ix + x, iy + y).get());
-                    }
-                }
-#else
-                auto color_depth = (int)(new_texture_format
-                    & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
-                auto* dst_pixels = new_texture->resource()->m_pixels;
-                auto* src_pixels = src->resource()->m_pixels;
-
-                const size_t src_tex_w = src->resource()->m_width;
-                const size_t src_tex_h = src->resource()->m_height;
-
-                // 与源纹理边界求交后的实际可拷贝范围（裁剪矩形可能越出源纹理）
-                const size_t copy_w = std::min(w, src_tex_w > x ? src_tex_w - x : 0);
-                const size_t copy_h = std::min(h, src_tex_h > y ? src_tex_h - y : 0);
-
-                for (size_t iy = 0; iy < copy_h; ++iy)
-                {
-                    // 源侧行跨度必须按源纹理宽度计算，而不是裁剪宽度
-                    memcpy(
-                        dst_pixels + iy * w * color_depth,
-                        src_pixels + (x + (y + iy) * src_tex_w) * color_depth,
-                        copy_w * color_depth);
-                }
-#endif
-                return basic::resource<texture2d>(new_texture);
+                je_graphic_cmd_upload_texture_2d(
+                    cmd, resource(), x, y, w, h,
+                    static_cast<const je_gl_texture_pixel_data_t*>(pixels));
             }
 
-            class pixel
-            {
-                je_gl_texture_2d_t* _m_texture;
-                je_gl_texture_pixel_data_t*
-                    _m_pixel;
-                size_t _m_x, _m_y;
-
-            public:
-                pixel(je_gl_texture_2d_t* _texture, size_t x, size_t y) noexcept
-                    : _m_texture(_texture), _m_x(x), _m_y(y)
-                {
-                    assert(sizeof(je_gl_texture_pixel_data_t) == 1);
-
-                    auto color_depth =
-                        _m_texture->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK;
-
-                    if (x < _m_texture->m_width && y < _m_texture->m_height)
-                        _m_pixel = _m_texture->m_pixels + y * _m_texture->m_width * color_depth + x * color_depth;
-                    else
-                        _m_pixel = nullptr;
-                }
-                inline math::vec4 get() const noexcept
-                {
-                    if (_m_pixel == nullptr)
-                        return {};
-                    switch (_m_texture->m_format
-                        & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK)
-                    {
-                    case JE_GL_TEXTURE_FORMAT_MONO:
-                        return math::vec4{
-                            _m_pixel[0] / 255.0f,
-                            _m_pixel[0] / 255.0f,
-                            _m_pixel[0] / 255.0f,
-                            _m_pixel[0] / 255.0f };
-                    case JE_GL_TEXTURE_FORMAT_RGBA:
-                        return math::vec4{
-                            _m_pixel[0] / 255.0f,
-                            _m_pixel[1] / 255.0f,
-                            _m_pixel[2] / 255.0f,
-                            _m_pixel[3] / 255.0f };
-                    default:
-                        assert(0);
-                        return {};
-                    }
-                }
-                inline void set(const math::vec4& value) const noexcept
-                {
-                    if (_m_pixel == nullptr)
-                        return;
-
-                    auto* raw_texture_data = _m_texture;
-
-                    if (!_m_texture->m_handle.m_modified)
-                    {
-                        // Set texture modified flag & range.
-                        raw_texture_data->m_modified_max_x = _m_x;
-                        raw_texture_data->m_modified_max_y = _m_y;
-                        raw_texture_data->m_modified_min_x = _m_x;
-                        raw_texture_data->m_modified_min_y = _m_y;
-
-                        _m_texture->m_handle.m_modified = true;
-                    }
-                    else
-                    {
-                        // Update texture updating range.
-
-                        if (_m_x < raw_texture_data->m_modified_min_x)
-                            raw_texture_data->m_modified_min_x = _m_x;
-                        else if (_m_x > raw_texture_data->m_modified_max_x)
-                            raw_texture_data->m_modified_max_x = _m_x;
-
-                        if (_m_y < raw_texture_data->m_modified_min_y)
-                            raw_texture_data->m_modified_min_y = _m_y;
-                        else if (_m_y > raw_texture_data->m_modified_max_y)
-                            raw_texture_data->m_modified_max_y = _m_y;
-                    }
-
-                    switch (raw_texture_data->m_format
-                        & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK)
-                    {
-                    case JE_GL_TEXTURE_FORMAT_MONO:
-                        _m_pixel[0] = (je_gl_texture_pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
-                        break;
-                    case JE_GL_TEXTURE_FORMAT_RGBA:
-                        _m_pixel[0] = (je_gl_texture_pixel_data_t)round(math::clamp(value.x, 0.f, 1.f) * 255.0f);
-                        _m_pixel[1] = (je_gl_texture_pixel_data_t)round(math::clamp(value.y, 0.f, 1.f) * 255.0f);
-                        _m_pixel[2] = (je_gl_texture_pixel_data_t)round(math::clamp(value.z, 0.f, 1.f) * 255.0f);
-                        _m_pixel[3] = (je_gl_texture_pixel_data_t)round(math::clamp(value.w, 0.f, 1.f) * 255.0f);
-                        break;
-                    default:
-                        assert(0);
-                        break;
-                    }
-                }
-
-                inline operator math::vec4() const noexcept
-                {
-                    return get();
-                }
-                inline pixel& operator=(const math::vec4& col) noexcept
-                {
-                    set(col);
-                    return *this;
-                }
-            };
-
-            // pixel's x/y is from LEFT-BOTTOM to RIGHT/TOP
-            pixel pix(size_t x, size_t y) const noexcept
-            {
-                return pixel(resource(), x, y);
-            }
             inline size_t height() const noexcept
             {
                 return resource()->m_height;
@@ -2930,23 +2886,6 @@ namespace jeecs
             }
         };
 
-        namespace detail
-        {
-            // 标记 CPU 侧像素被整体改写，供不含像素代理的类型在直接写
-            // m_pixels 之后触发重上传使用
-            inline void mark_texture_modified(je_gl_texture_common_t* texture) noexcept
-            {
-                if (!texture->m_handle.m_modified)
-                {
-                    texture->m_modified_min_x = 0;
-                    texture->m_modified_min_y = 0;
-                    texture->m_modified_max_x = texture->m_width ? texture->m_width - 1 : 0;
-                    texture->m_modified_max_y = texture->m_height ? texture->m_height - 1 : 0;
-                    texture->m_handle.m_modified = true;
-                }
-            }
-        }
-
         class texture3d : public resource_basic<je_gl_texture_3d_t>
         {
             explicit texture3d(je_gl_texture_3d_t* res)
@@ -2958,22 +2897,32 @@ namespace jeecs
             static basic::resource<texture3d> create(
                 size_t width, size_t height, size_t depth, je_gl_texture_format_t format)
             {
-                je_gl_texture_3d_t* res = je_graphic_texture_3d_create(width, height, depth, format);
+                return create(width, height, depth, format, nullptr);
+            }
+            // initial_pixels 是创建期像素快照（按 宽度 x 高度 x 深度 连续排布）
+            static basic::resource<texture3d> create(
+                size_t width, size_t height, size_t depth, je_gl_texture_format_t format,
+                /* OPTIONAL */ const void* initial_pixels)
+            {
+                je_gl_texture_3d_t* res = je_graphic_texture_3d_create(
+                    width, height, depth, format,
+                    static_cast<const je_gl_texture_pixel_data_t*>(initial_pixels));
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
                 return basic::resource<texture3d>(new texture3d(res));
             }
 
-            // 直接写 m_pixels 之后调用以触发重上传
-            inline void mark_modified() noexcept
+            // 持久区段上传（见 je_graphic_cmd_upload_texture_3d）
+            void upload(je_gl_command_buffer_t* cmd,
+                size_t x, size_t y, size_t z,
+                size_t w, size_t h, size_t d, const void* pixels) const
             {
-                detail::mark_texture_modified(resource());
+                je_graphic_cmd_upload_texture_3d(
+                    cmd, resource(), x, y, z, w, h, d,
+                    static_cast<const je_gl_texture_pixel_data_t*>(pixels));
             }
-            inline je_gl_texture_pixel_data_t* pixels() const noexcept
-            {
-                return resource()->m_pixels;
-            }
+
             inline size_t height() const noexcept { return resource()->m_height; }
             inline size_t width() const noexcept { return resource()->m_width; }
             inline size_t depth() const noexcept { return resource()->m_depth; }
@@ -2990,30 +2939,32 @@ namespace jeecs
             static basic::resource<texture_array> create(
                 size_t width, size_t height, size_t layers, je_gl_texture_format_t format)
             {
-                je_gl_texture_array_t* res = je_graphic_texture_array_create(width, height, layers, format);
+                return create(width, height, layers, format, nullptr);
+            }
+            // initial_pixels 是创建期像素快照（按 宽度 x 高度 x 层数 连续排布）
+            static basic::resource<texture_array> create(
+                size_t width, size_t height, size_t layers, je_gl_texture_format_t format,
+                /* OPTIONAL */ const void* initial_pixels)
+            {
+                je_gl_texture_array_t* res = je_graphic_texture_array_create(
+                    width, height, layers, format,
+                    static_cast<const je_gl_texture_pixel_data_t*>(initial_pixels));
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
                 return basic::resource<texture_array>(new texture_array(res));
             }
 
-            // 直接写 m_pixels 之后调用以触发重上传
-            inline void mark_modified() noexcept
+            // 持久区段上传（见 je_graphic_cmd_upload_texture_array）
+            void upload(je_gl_command_buffer_t* cmd,
+                size_t x, size_t y, size_t layer,
+                size_t w, size_t h, size_t layers, const void* pixels) const
             {
-                detail::mark_texture_modified(resource());
+                je_graphic_cmd_upload_texture_array(
+                    cmd, resource(), x, y, layer, w, h, layers,
+                    static_cast<const je_gl_texture_pixel_data_t*>(pixels));
             }
-            inline je_gl_texture_pixel_data_t* pixels() const noexcept
-            {
-                return resource()->m_pixels;
-            }
-            // 返回第 layer 层像素数据的起始指针
-            inline je_gl_texture_pixel_data_t* layer_pixels(size_t layer) const noexcept
-            {
-                auto color_depth =
-                    resource()->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK;
-                return resource()->m_pixels
-                    + layer * resource()->m_width * resource()->m_height * color_depth;
-            }
+
             inline size_t height() const noexcept { return resource()->m_height; }
             inline size_t width() const noexcept { return resource()->m_width; }
             inline size_t layers() const noexcept { return resource()->m_layers; }
@@ -3030,21 +2981,31 @@ namespace jeecs
             static basic::resource<texture_cube> create(
                 size_t width, size_t height, je_gl_texture_format_t format)
             {
-                je_gl_texture_cube_t* res = je_graphic_texture_cube_create(width, height, format);
+                return create(width, height, format, nullptr);
+            }
+            // initial_pixels 是创建期像素快照（按 6 x 宽度 x 高度 连续排布）
+            static basic::resource<texture_cube> create(
+                size_t width, size_t height, je_gl_texture_format_t format,
+                /* OPTIONAL */ const void* initial_pixels)
+            {
+                je_gl_texture_cube_t* res = je_graphic_texture_cube_create(
+                    width, height, format,
+                    static_cast<const je_gl_texture_pixel_data_t*>(initial_pixels));
 
                 // Create texture must be successfully.
                 assert(res != nullptr);
                 return basic::resource<texture_cube>(new texture_cube(res));
             }
 
-            inline void mark_modified() noexcept
+            // 持久区段上传（见 je_graphic_cmd_upload_texture_cube）
+            void upload(je_gl_command_buffer_t* cmd, size_t face,
+                size_t x, size_t y, size_t w, size_t h, const void* pixels) const
             {
-                detail::mark_texture_modified(resource());
+                je_graphic_cmd_upload_texture_cube(
+                    cmd, resource(), face, x, y, w, h,
+                    static_cast<const je_gl_texture_pixel_data_t*>(pixels));
             }
-            inline je_gl_texture_pixel_data_t* pixels() const noexcept
-            {
-                return resource()->m_pixels;
-            }
+
             inline size_t height() const noexcept { return resource()->m_height; }
             inline size_t width() const noexcept { return resource()->m_width; }
         };
@@ -3398,11 +3359,13 @@ namespace jeecs
                     return basic::resource<vertex>(new vertex(res));
                 return std::nullopt;
             }
-            // 整体替换顶点数据并收缩激活索引数量（见 je_graphic_vertex_buffer_update），
+            // 录制本帧顶点内容并收缩激活索引数量（见 je_graphic_cmd_update_vertex），
             // 供逐帧改写的动态网格使用；索引缓冲保持创建时的内容不变
-            void update_buffer(const void* pdatas, size_t pdatalen, size_t active_index_count) const
+            void update_buffer(je_gl_command_buffer_t* cmd,
+                const void* pdatas, size_t pdatalen, size_t active_index_count) const
             {
-                je_graphic_vertex_buffer_update(resource(), pdatas, pdatalen, active_index_count);
+                je_graphic_cmd_update_vertex(
+                    cmd, resource(), pdatas, pdatalen, active_index_count);
             }
         };
         class framebuffer : public resource_basic<je_gl_frame_buffer_t>
@@ -3473,9 +3436,10 @@ namespace jeecs
                     return basic::resource<uniformbuffer>(new uniformbuffer(res));
                 return std::nullopt;
             }
-            void update_buffer(size_t offset, size_t size, const void* datafrom) const noexcept
+            // 录制本帧的完整一致变量内容（见 je_graphic_cmd_update_uniform_buffer）
+            void update_buffer(je_gl_command_buffer_t* cmd, const void* datafrom, size_t size) const noexcept
             {
-                je_graphic_uniformbuf_update(resource(), datafrom, offset, size);
+                je_graphic_cmd_update_uniform_buffer(cmd, resource(), datafrom, size);
             }
         };
 
@@ -3625,8 +3589,10 @@ namespace jeecs
 
         struct character
         {
-            // 字符的纹理
-            basic::resource<texture2d> m_texture;
+            // 字符位图（RGBA：RGB 恒为白，A 为覆盖度），行序自底向上，
+            // 尺寸为 m_width x m_height（含边框）；由字体对象持有，
+            // 生命周期与所在字符缓存一致
+            const je_gl_texture_pixel_data_t* m_bitmap;
 
             // 字符本身
             char32_t m_char;
@@ -3709,11 +3675,15 @@ namespace jeecs
 
             je_graphic_uhost_t* _m_graphic_host;
             std::vector<je_render_branch_t*> _m_render_branches;
+            je_render_branch_t* _m_update_branch;
+            je_gl_command_buffer_t* _m_update_command;
             size_t _m_this_frame_allocate_render_branch_count;
 
             BasePipelineInterface(game_world w, const je_gl_interface_config_t* config)
                 : game_system(w)
                 , _m_graphic_host(je_graphic_uhost_get_or_create_for_universe(w.get_universe().handle(), config))
+                , _m_update_branch(nullptr)
+                , _m_update_command(nullptr)
                 , _m_this_frame_allocate_render_branch_count(0)
             {
             }
@@ -3728,6 +3698,13 @@ namespace jeecs
                 for (auto* branch : _m_render_branches)
                     je_graphic_uhost_free_branch(_m_graphic_host, branch);
 
+                if (_m_update_branch != nullptr)
+                {
+                    je_graphic_uhost_free_branch(_m_graphic_host, _m_update_branch);
+                    _m_update_branch = nullptr;
+                }
+
+                _m_update_command = nullptr;
                 _m_render_branches.clear();
                 _m_this_frame_allocate_render_branch_count = 0;
             }
@@ -3735,6 +3712,21 @@ namespace jeecs
             void branch_allocate_begin()
             {
                 _m_this_frame_allocate_render_branch_count = 0;
+
+                // 资源更新链：最低优先级，保证先于本帧所有绘制链提交；
+                // 不开启 pass，窗口跳过帧也会被宿主提交。
+                if (_m_update_branch == nullptr)
+                    _m_update_branch = je_graphic_uhost_alloc_branch(_m_graphic_host);
+
+                je_graphic_branch_new_frame(
+                    _m_update_branch, GRAPHIC_UPDATE_BRANCH_QUEUE);
+                _m_update_command =
+                    je_graphic_branch_new_update_command(_m_update_branch);
+            }
+            je_gl_command_buffer_t* update_command() const
+            {
+                assert(_m_update_command != nullptr);
+                return _m_update_command;
             }
             je_render_branch_t* allocate_branch(int priority)
             {

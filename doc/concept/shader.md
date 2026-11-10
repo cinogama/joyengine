@@ -196,7 +196,7 @@ if (auto* shaders = entity.get_component<Renderer::Shaders>(); shaders && shad.h
 
 生成的 HLSL 把用到的自定义 uniform 放进 `cbuffer SHADER_UNIFORM : register(b0)`（Vulkan 绑定 (0, 0)），按对齐等级（4 / 3 / 2 / 1 分量）降序、同级按名字排序，使 HLSL 的打包结果与 std140 一致。`_jegl_resolve_canonical_uniform_layout` 按 std140 规则（标量 4/4、二维 8/8、三维 12/16、四维 16/16、float2x2 16/8、float3x3 48/16、float4x4 64/16，纹理不占空间）计算每个 uniform 的 `m_offset` / `m_size` 与整块大小 `m_uniform_block_size`，所有后端与命令缓冲录制器共用这一布局。同时按名字解析内建位置表 `m_builtin_uniforms`（`m_builtin_uniform_m` 对应 `JE_M`，依此类推）。
 
-`WOSHADER_UNIFORM_BLOCK!(0)` 声明的 `JE_V` / `JE_P` / `JE_VP` / `JE_TIME` 与 `BasePipelineInterface::default_uniform_buffer_data_t` 布局一致：每个摄像机的 `Camera::Projection::default_uniform_buffer`（绑定位置 0）在相机矩阵更新时写入，并在该摄像机的绘制 pass 开始时绑定。`JE_NDC_SCALE` 是图形库的保留变量，生成的顶点入口把输出位置乘以它，渲染时由图形库自动更新，任何情况下都不要从外部修改。
+`WOSHADER_UNIFORM_BLOCK!(0)` 声明的 `JE_V` / `JE_P` / `JE_VP` / `JE_TIME` 与 `BasePipelineInterface::default_uniform_buffer_data_t` 布局一致：每个摄像机的 `Camera::Projection::default_uniform_buffer`（绑定位置 0）在 `DrawFrame` 中被整体录制为本帧内容（`je_graphic_cmd_update_uniform_buffer`），并在该摄像机的绘制 pass 开始时绑定。`JE_NDC_SCALE` 是图形库的保留变量，生成的顶点入口把输出位置乘以它，渲染时由图形库自动更新，任何情况下都不要从外部修改。
 
 ### 内置 uniform 与 set_uniform 的写入
 

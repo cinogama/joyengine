@@ -18,6 +18,8 @@ namespace je
             LINEAR = 1,
         }
 
+        public using command_buffer = handle;
+
         public using vertex = gchandle
         {
             public enum type
@@ -36,13 +38,13 @@ namespace je
             extern("libjoyecs", "wojeapi_vertex_path")
                 public func path(self: vertex)=> option<string>;
 
-            // 整体重写顶点数据并收缩激活索引数量（语义见
-            // je_graphic_vertex_buffer_update）：vertices 为一份完整的顶点数据，
+            // 录制本帧顶点内容并收缩激活索引数量（语义见
+            // je_graphic_cmd_update_vertex）：vertices 为一份完整的顶点数据，
             // 不能超过创建时的容量；indices 只取"激活索引数量"一个语义
             //（索引缓冲保持创建时的内容不变）。注意包围盒不会重算，
             // 依赖视锥剔除的调用方应以覆盖完整范围的初始数据创建缓冲。
             extern("libjoyecs", "wojeapi_vertex_update")
-                public func update(self: vertex, vertices: array<real>, indices: int)=> void;
+                public func update(self: vertex, cmd: command_buffer, vertices: array<real>, indices: int)=> void;
 
             // 模型顶点数据的局部空间包围盒，返回
             // (min_x, min_y, min_z, max_x, max_y, max_z)；
@@ -59,8 +61,11 @@ namespace je
             extern("libjoyecs", "wojeapi_texture2d_create")
                 public func create(width: int, height: int)=> texture2d;
 
-            extern("libjoyecs", "wojeapi_texture2d_clip")
-                public func clip(src: texture2d, x: int, y: int, w: int, h: int)=> texture2d;
+            // 创建带初始像素的纹理：pixels 为 width*height*4 字节的 RGBA
+            // 缓冲（自底向上行序）；创建后内容只读，运行时修改请用
+            // command_buffer::upload_texture_2d
+            extern("libjoyecs", "wojeapi_texture2d_create_with_pixels")
+                public func create_with_pixels(width: int, height: int, pixels: buffer)=> texture2d;
 
             extern("libjoyecs", "wojeapi_texture2d_bind_path")
                 public func bind_path(self: texture2d, new_path: string)=> void;
@@ -70,19 +75,6 @@ namespace je
 
             extern("libjoyecs", "wojeapi_texture2d_size")
                 public func size(self: texture2d)=> (int, int);
-
-            extern("libjoyecs", "wojeapi_texture2d_pix")
-                public func pix(self: texture2d, pos: (int, int))=> pixel;
-
-            public using pixel = gchandle;
-            namespace pixel
-            {
-                extern("libjoyecs", "wojeapi_texture_set_pixel_color")
-                    public func set_color(self: pixel, rgba: (real,real,real,real))=> void;
-
-                extern("libjoyecs", "wojeapi_texture_pixel_color")
-                    public func get_color(self: pixel)=> (real, real, real, real);
-            }
         }
 
         public using texture3d = gchandle
@@ -98,11 +90,6 @@ namespace je
 
             extern("libjoyecs", "wojeapi_texturearray_layers")
                 public func layers(self: texture_array)=> int;
-
-            // 直接改写纹理层数据（经引擎侧 API 获取像素指针）后，
-            // 调用此接口触发重上传
-            extern("libjoyecs", "wojeapi_texturearray_mark_modified")
-                public func mark_modified(self: texture_array)=> void;
         }
 
         public using texture_cube = gchandle
@@ -118,7 +105,6 @@ namespace je
         }
 
         public using character = struct{
-            m_texture: texture2d,
             m_character: char,
             m_width: int,
             m_height: int,
@@ -261,11 +247,11 @@ namespace je
         {
             extern("libjoyecs", "wojeapi_uniformbuffer_create")
                 public func create(binding_place: int, buffer_size: int)=> option<uniformbuffer>;
+            // 录制本帧的完整一致变量内容（见 je_graphic_cmd_update_uniform_buffer）
             extern("libjoyecs", "wojeapi_uniformbuffer_update")
-                public func update(self: uniformbuffer, offset: int, data: buffer)=> void;
+                public func update(self: uniformbuffer, cmd: command_buffer, data: buffer)=> void;
         }
-        
-        public using command_buffer = handle;
+
         namespace command_buffer
         {
             extern("libjoyecs", "wojeapi_command_buffer_bind_uniform_buffer")
@@ -279,6 +265,11 @@ namespace je
             
             extern("libjoyecs", "wojeapi_command_buffer_bind_texture")
                 public func bind_texture(self: command_buffer, binding_pass: int, tex: texture2d)=> void;
+
+            // 持久区段上传（见 je_graphic_cmd_upload_texture_2d）：
+            // pixels 为 width*height*4 字节的 RGBA 缓冲（自底向上行序）
+            extern("libjoyecs", "wojeapi_command_buffer_upload_texture_2d")
+                public func upload_texture_2d(self: command_buffer, tex: texture2d, x: int, y: int, w: int, h: int, pixels: buffer)=> void;
             
             extern("libjoyecs", "wojeapi_command_buffer_bind_shader")
                 public func bind_shader(self: command_buffer, shad: shader, vert: vertex)=> bound_shader;

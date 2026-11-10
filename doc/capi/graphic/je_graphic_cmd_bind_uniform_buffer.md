@@ -30,4 +30,4 @@ JE_API void je_graphic_cmd_bind_uniform_buffer(
 ## 相关接口
 
 - [je_graphic_uniformbuf_create](je_graphic_uniformbuf_create.md) - 创建一个指定大小和绑定位置的一致变量缓冲区资源
-- [je_graphic_uniformbuf_update](je_graphic_uniformbuf_update.md) - 更新一个一致变量缓冲区中，指定位置起，若干长度的数据
+- [je_graphic_cmd_update_uniform_buffer](je_graphic_cmd_update_uniform_buffer.md) - 录制本帧的完整一致变量内容

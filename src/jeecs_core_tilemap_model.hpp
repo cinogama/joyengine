@@ -2129,7 +2129,7 @@ namespace jeecs
             if (!tex.has_value())
                 return std::nullopt;
             auto* raw = tex.value()->resource();
-            if (raw->m_pixels == nullptr
+            if (raw->m_initial_pixels == nullptr
                 || cell_w <= 0 || cell_h <= 0 || xcount <= 0 || ycount <= 0)
                 return std::nullopt;
 
@@ -2149,12 +2149,12 @@ namespace jeecs
 
             // Keep the atlas' color-space flag: the layer pixels are copied
             // raw, so the array must decode sRGB exactly like the source.
-            auto arr = graphic::texture_array::create(
-                cw, ch, (size_t)(xcount * ycount),
-                (je_gl_texture_format_t)(
-                    JE_GL_TEXTURE_FORMAT_RGBA
-                    | (raw->m_format & JE_GL_TEXTURE_FORMAT_SRGB)));
-            uint8_t* dst = arr->pixels();
+            const size_t layer_count = (size_t)(xcount * ycount);
+
+            // 先在 CPU 侧构建完整像素快照，再交给数组纹理创建
+            std::vector<uint8_t> layer_pixels(
+                layer_count * cw * ch * 4, 0);
+            uint8_t* dst = layer_pixels.data();
 
             for (int32_t ty = 0; ty < yc; ++ty)
             {
@@ -2163,7 +2163,7 @@ namespace jeecs
                     uint8_t* dst_layer =
                         dst + (size_t)((ty * xcount + tx) * cell_w * cell_h) * 4;
                     // 2D 纹理经 stbi_set_flip_vertically_on_load 加载，
-                    // m_pixels 为自底向上行序（缓冲行 0 = 图像底行），
+                    // m_initial_pixels 为自底向上行序（缓冲行 0 = 图像底行），
                     // 瓦片 (tx,ty) 在缓冲中位于行 [th-(ty+1)*ch, th-ty*ch)。
                     // 层行序沿用该翻转序（层行 0 = 瓦片底行，采样 v=1 =
                     // 瓦片顶），与 tile-local UV 及编辑器换算的 v=1 为顶
@@ -2172,13 +2172,19 @@ namespace jeecs
                     for (size_t r = 0; r < ch; ++r)
                         memcpy(
                             dst_layer + r * cw * 4,
-                            raw->m_pixels
+                            raw->m_initial_pixels
                                 + ((buf_row0 + r) * (size_t)tw
                                     + (size_t)(tx * cell_w)) * 4,
                             cw * 4);
                 }
             }
-            return arr;
+
+            return graphic::texture_array::create(
+                cw, ch, layer_count,
+                (je_gl_texture_format_t)(
+                    JE_GL_TEXTURE_FORMAT_RGBA
+                    | (raw->m_format & JE_GL_TEXTURE_FORMAT_SRGB)),
+                layer_pixels.data());
         }
 
         // 构建主纹理（反照率）的数组纹理：层尺寸 = tile_px

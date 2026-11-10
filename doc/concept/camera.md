@@ -167,7 +167,7 @@ struct SplitScreenSystem : public game_system
 
 1. `view = 逆旋转 × 平移(-world_position)`，取自 `Translation` 的世界位置与朝向（变换结算阶段早于图形阶段，用的是本帧结果）；
 2. 以 `Viewport` 宽高 × 目标尺寸（帧缓冲已设置时取帧缓冲，否则取窗口）为画面像素尺寸，`OrthoProjection` 存在则调用 `ortho_projection` / `ortho_inv_projection`，否则调用透视版本——这就是“两个投影组件都挂时按正交处理”的来源；
-3. 把 view / projection 写入 `default_uniform_buffer`，并计算 `view_projection = projection × view`；
+3. 计算 `view_projection = projection × view`；相机矩阵在 `DrawFrame` 中由 `update_default_uniform_buffer` 作为**本帧完整 UBO 内容**录制进更新命令缓冲（提交时落实，只对当帧绘制生效）；
 4. 带 `FrustumCulling` 时，由 `view_projection` 的元素组合出左、右、上、下、近、远 6 个平面，经 `set_plane_normal_and_distance` 归一化后写入组件。
 
 正交投影的半高为 `ORTHO_PROJECTION_RATIO / scale`（常量 5.0），半宽再乘宽高比；透视投影以 `angle` 为垂直视场角。三条管线的 `begin_frame` 都执行这一步，同一世界装有多条管线时，摄像机矩阵会被重复计算（结果相同）。

@@ -87,6 +87,17 @@ void je_font_free(je_font_t* font)
     free(font->m_font_file_buf);
     free(const_cast<char*>(font->m_path));
 
+    // 释放所有已缓存的字形位图
+    for (auto& [size, chars] : font->m_stb_font_data->m_character_set)
+    {
+        (void)size;
+        for (auto& [code, ch] : chars)
+        {
+            (void)code;
+            free(const_cast<je_gl_texture_pixel_data_t*>(ch.m_bitmap));
+        }
+    }
+
     delete font->m_stb_font_data;
     delete font;
 }
@@ -157,11 +168,7 @@ const character* je_font_char_get(
     character& ch =
         sized_char_set.emplace(
                 unicode32_char,
-                character{
-                    texture2d::create(
-                        (size_t)texture_pixel_width,
-                        (size_t)texture_pixel_height,
-                        JE_GL_TEXTURE_FORMAT_RGBA) }).first->second;
+                character{ nullptr }).first->second;
 
     ch.m_char = unicode32_char;
 
@@ -173,9 +180,19 @@ const character* je_font_char_get(
     ch.m_advance_x = (int)round(scale * (float)advance);
     ch.m_advance_y = -(int)round(scale * (float)font->m_line_space);
     ch.m_baseline_offset_x = pixel_w ? bmp_x0 - (int)font->m_board_size_x : 0;
-    // 字符纹理的 y 轴向上、第 0 行是墨水底边下方 board 处，而 bmp_y0 以 y 向下
+    // 字符位图的 y 轴向上、第 0 行是墨水底边下方 board 处，而 bmp_y0 以 y 向下
     // 记录墨水顶边，故墨水底边在基线上方 -(bmp_y0 + pixel_h) 像素
     ch.m_baseline_offset_y = pixel_h ? -(bmp_y0 + pixel_h) - (int)font->m_board_size_y : 0;
+
+    const size_t bitmap_width = (size_t)texture_pixel_width;
+    const size_t bitmap_height = (size_t)texture_pixel_height;
+
+    // 字形位图：RGBA，RGB 恒为白，A 为覆盖度；行序自底向上
+    auto* bitmap = (je_gl_texture_pixel_data_t*)calloc(
+        bitmap_width * bitmap_height * 4, 1);
+    assert(bitmap != nullptr);
+
+    ch.m_bitmap = bitmap;
 
     if (ch_tex_buffer != nullptr)
     {
@@ -183,8 +200,13 @@ const character* je_font_char_get(
         {
             for (size_t i = 0; i < (size_t)pixel_w; i++)
             {
-                float _vl = ((float)ch_tex_buffer[i + pixel_w * j]) / 255.0f;
-                ch.m_texture->pix(i + font->m_board_size_x, pixel_h - j - 1 + font->m_board_size_y).set({ 1.f, 1.f, 1.f, _vl });
+                je_gl_texture_pixel_data_t* dst = bitmap
+                    + ((size_t)(pixel_h - (int)j - 1 + (int)font->m_board_size_y)
+                        * bitmap_width
+                        + (size_t)((int)i + (int)font->m_board_size_x)) * 4;
+
+                dst[0] = dst[1] = dst[2] = 0xFF;
+                dst[3] = ch_tex_buffer[i + (size_t)pixel_w * j];
             }
         }
         free(ch_tex_buffer);
@@ -192,11 +214,10 @@ const character* je_font_char_get(
 
     if (font->m_updater != nullptr)
     {
-        auto* raw_texture_data = ch.m_texture->resource();
         font->m_updater(
-            raw_texture_data->m_pixels,
-            raw_texture_data->m_width,
-            raw_texture_data->m_height);
+            const_cast<je_gl_texture_pixel_data_t*>(bitmap),
+            bitmap_width,
+            bitmap_height);
     }
 
     return &ch;

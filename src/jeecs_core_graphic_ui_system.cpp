@@ -101,7 +101,8 @@ namespace jeecs::graphic
         {
             m_text_renderer.layout_text(
                 text, elem, layout,
-                (float)m_window_width, (float)m_window_height);
+                (float)m_window_width, (float)m_window_height,
+                update_command());
         }
     }
 
@@ -366,7 +367,7 @@ namespace jeecs::graphic
         for (const auto& glyph : layout.glyphs)
         {
             const auto* slot = m_text_renderer.resolve(
-                font_res, glyph.raster_px, glyph.cp);
+                font_res, glyph.raster_px, glyph.cp, update_command());
             if (slot->page == nullptr)
                 continue; // 无位图字形（布局阶段已过滤，防御）
 
@@ -470,7 +471,9 @@ namespace jeecs::graphic
         }
 
         auto& vb = *m_text_batch_vb;
+        // 本帧的顶点内容随更新命令录制（更新链先于所有绘制链提交）
         vb->update_buffer(
+            update_command(),
             m_text_quad_data.data(),
             m_text_batch_quads * 4 * TEXT_VERTEX_FLOATS * sizeof(float),
             m_text_batch_quads * 6);

@@ -56,6 +56,17 @@ namespace jeecs::graphic
         }
     }
 
+    namespace
+    {
+        // 默认棋盘格纹理的创建期像素（2x2 RGBA，自底向上行序）
+        const je_gl_texture_pixel_data_t s_default_texture_pixels[2 * 2 * 4] = {
+            // row 0 (bottom): (0,0) magenta, (1,0) dark gray
+            255, 64, 255, 255, 64, 64, 64, 255,
+            // row 1 (top): (0,1) dark gray, (1,1) magenta
+            64, 64, 64, 255, 255, 64, 255, 255,
+        };
+    }
+
     DefaultResources::DefaultResources()
         : default_shape_quad{
               graphic::vertex::create(
@@ -74,13 +85,10 @@ namespace jeecs::graphic
               nullptr,
               "!/builtin/shader/internal/builtin_default.shader")
               .value() }
-        , default_texture{ graphic::texture2d::create(2, 2, JE_GL_TEXTURE_FORMAT_RGBA) }
+        , default_texture{ graphic::texture2d::create(
+              2, 2, JE_GL_TEXTURE_FORMAT_RGBA, s_default_texture_pixels) }
         , default_shaders_list{ default_shader }
     {
-        default_texture->pix(0, 0).set({ 1.f, 0.25f, 1.f, 1.f });
-        default_texture->pix(1, 1).set({ 1.f, 0.25f, 1.f, 1.f });
-        default_texture->pix(0, 1).set({ 0.25f, 0.25f, 0.25f, 1.f });
-        default_texture->pix(1, 0).set({ 0.25f, 0.25f, 0.25f, 1.f });
     }
 
     const basic::resource<graphic::vertex>& DefaultResources::shape_of(
@@ -242,19 +250,19 @@ namespace jeecs::graphic
         const float(&vp)[4][4],
         const math::vec4& shader_time)
     {
-        auto* ub = projection.default_uniform_buffer.get();
-        ub->update_buffer(
-            offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_v_float4x4),
-            sizeof(view), view);
-        ub->update_buffer(
-            offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_p_float4x4),
-            sizeof(proj), proj);
-        ub->update_buffer(
-            offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_vp_float4x4),
-            sizeof(vp), vp);
-        ub->update_buffer(
-            offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_time),
-            sizeof(shader_time), &shader_time);
+        // 录制本帧的完整一致变量内容（更新只对包含该命令的帧生效）
+        graphic::BasePipelineInterface::default_uniform_buffer_data_t data;
+
+        memcpy(data.m_v_float4x4, view, sizeof(view));
+        memcpy(data.m_p_float4x4, proj, sizeof(proj));
+        memcpy(data.m_vp_float4x4, vp, sizeof(vp));
+        data.m_time[0] = shader_time.x;
+        data.m_time[1] = shader_time.y;
+        data.m_time[2] = shader_time.z;
+        data.m_time[3] = shader_time.w;
+
+        projection.default_uniform_buffer->update_buffer(
+            update_command(), &data, sizeof(data));
     }
 
     math::vec3 GraphicPipelineBase::get_entity_size(
@@ -488,15 +496,6 @@ namespace jeecs::graphic
                     (float)RENDAIMBUFFER_WIDTH, (float)RENDAIMBUFFER_HEIGHT,
                     perspec->angle, projection.znear, projection.zfar);
             }
-
-            projection.default_uniform_buffer->update_buffer(
-                offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_v_float4x4),
-                sizeof(projection.view),
-                projection.view);
-            projection.default_uniform_buffer->update_buffer(
-                offsetof(graphic::BasePipelineInterface::default_uniform_buffer_data_t, m_p_float4x4),
-                sizeof(projection.projection),
-                projection.projection);
 
             math::mat4xmat4(projection.view_projection, projection.projection, projection.view);
 

@@ -35,6 +35,14 @@ namespace
         BIND_TEXTURE_CUBE,
         BIND_SAMPLER,
 
+        // 资源更新：提交期落实，数据由命令缓冲的 m_data_arena 持有
+        UPDATE_VERTEX,
+        UPDATE_UNIFORM_BUFFER,
+        UPDATE_TEXTURE_2D,
+        UPDATE_TEXTURE_3D,
+        UPDATE_TEXTURE_ARRAY,
+        UPDATE_TEXTURE_CUBE,
+
         DRAW_INDEXED,
         DRAW,
     };
@@ -43,6 +51,11 @@ namespace
     {
         jegl_cmd_op m_op;
         uint32_t m_a, m_b, m_c, m_d;
+        // UPDATE_TEXTURE_* 的额外参数（高度/层数/深度等）
+        uint32_t m_e, m_g;
+        // 更新命令的数据在命令缓冲 m_data_arena 中的偏移与长度
+        uint32_t m_data_offset;
+        uint32_t m_data_size;
         uint32_t m_uniform_offset;
         uint32_t m_uniform_size;
         uintptr_t m_ptr0;
@@ -192,6 +205,8 @@ struct je_gl_command_buffer_t
 
     std::vector<jegl_cmd> m_commands;
     std::vector<uint8_t> m_uniform_arena;
+    // 资源更新命令的数据（顶点/UBO 内容、纹理区段像素），按 16 字节对齐追加
+    std::vector<uint8_t> m_data_arena;
 
     // Open-addressing set of resources that must stay alive until reset/close.
     std::vector<jegl_resource_entry> m_resources;
@@ -348,6 +363,7 @@ struct je_gl_command_buffer_t
         release_all_resources();
         m_commands.clear();
         m_uniform_arena.clear();
+        m_data_arena.clear();
 
         m_pass_has_draw = false;
         m_has_pipeline = false;
@@ -370,6 +386,21 @@ struct je_gl_command_buffer_t
     void push_command(const jegl_cmd& command)
     {
         m_commands.push_back(command);
+    }
+
+    // 追加一段资源更新数据，返回其在 m_data_arena 中的偏移
+    uint32_t append_data(const void* data, size_t size)
+    {
+        assert(data != nullptr);
+        assert(size != 0);
+
+        const size_t aligned = (m_data_arena.size() + 15) & ~size_t(15);
+        assert(aligned + size <= 0xFFFFFFFFu);
+
+        m_data_arena.resize(aligned + size);
+        memcpy(m_data_arena.data() + aligned, data, size);
+
+        return (uint32_t)aligned;
     }
 
     void reset_uniform_staging(je_gl_pipeline_t* pipeline)
@@ -813,6 +844,211 @@ void je_graphic_cmd_bind_sampler(
     cmd->push_command(command);
 }
 
+static size_t _jegl_upload_byte_size(
+    const je_gl_texture_common_t* texture, size_t pixel_count)
+{
+    assert(0 == (texture->m_format & JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK));
+
+    const size_t pixel_size =
+        (size_t)(texture->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
+    assert(pixel_size != 0);
+
+    return pixel_count * pixel_size;
+}
+
+void je_graphic_cmd_update_vertex(
+    je_gl_command_buffer_t* cmd,
+    je_gl_vertex_t* vertex,
+    /* OPTIONAL: nullptr 时只调整激活索引数量 */ const void* vertices,
+    size_t vertex_length,
+    size_t active_index_count)
+{
+    assert(cmd != nullptr);
+    assert(vertex != nullptr);
+    assert(vertex_length <= vertex->m_vertex_length);
+    assert(active_index_count <= vertex->m_index_capacity);
+    if (vertex_length != 0)
+        assert(vertices != nullptr);
+    else
+        assert(vertices == nullptr);
+
+    // 激活数量保持至少 1：0 长度的绘制调用在部分后端上非法；1 个索引的
+    // TRIANGLES 绘制不产生任何图元，视觉上等价于不绘制
+    if (active_index_count == 0)
+        active_index_count = 1;
+
+    cmd->retain(vertex);
+
+    jegl_cmd command{};
+    command.m_op = jegl_cmd_op::UPDATE_VERTEX;
+    command.m_ptr0 = reinterpret_cast<uintptr_t>(vertex);
+    command.m_a = (uint32_t)active_index_count;
+
+    if (vertex_length != 0)
+    {
+        command.m_data_offset = cmd->append_data(vertices, vertex_length);
+        command.m_data_size = (uint32_t)vertex_length;
+    }
+
+    cmd->push_command(command);
+
+    // 绘制数量属于 CPU 侧状态，仅录制线程读取
+    vertex->m_index_count = active_index_count;
+}
+
+void je_graphic_cmd_update_uniform_buffer(
+    je_gl_command_buffer_t* cmd,
+    je_gl_uniform_buffer_t* buffer,
+    const void* data,
+    size_t size)
+{
+    assert(cmd != nullptr);
+    assert(buffer != nullptr);
+    assert(data != nullptr);
+    assert(size != 0);
+    assert(size == buffer->m_buffer_size);
+
+    cmd->retain(buffer);
+
+    jegl_cmd command{};
+    command.m_op = jegl_cmd_op::UPDATE_UNIFORM_BUFFER;
+    command.m_ptr0 = reinterpret_cast<uintptr_t>(buffer);
+    command.m_data_offset = cmd->append_data(data, size);
+    command.m_data_size = (uint32_t)size;
+    cmd->push_command(command);
+}
+
+void je_graphic_cmd_upload_texture_2d(
+    je_gl_command_buffer_t* cmd,
+    je_gl_texture_2d_t* texture,
+    size_t x, size_t y,
+    size_t width, size_t height,
+    const je_gl_texture_pixel_data_t* pixels)
+{
+    assert(cmd != nullptr);
+    assert(texture != nullptr);
+    assert(pixels != nullptr);
+    assert(width != 0 && height != 0);
+    assert(x + width <= texture->m_width);
+    assert(y + height <= texture->m_height);
+
+    const size_t byte_size = _jegl_upload_byte_size(texture, width * height);
+
+    cmd->retain(texture);
+
+    jegl_cmd command{};
+    command.m_op = jegl_cmd_op::UPDATE_TEXTURE_2D;
+    command.m_ptr0 = reinterpret_cast<uintptr_t>(texture);
+    command.m_a = (uint32_t)x;
+    command.m_b = (uint32_t)y;
+    command.m_c = (uint32_t)width;
+    command.m_d = (uint32_t)height;
+    command.m_data_offset = cmd->append_data(pixels, byte_size);
+    command.m_data_size = (uint32_t)byte_size;
+    cmd->push_command(command);
+}
+
+void je_graphic_cmd_upload_texture_3d(
+    je_gl_command_buffer_t* cmd,
+    je_gl_texture_3d_t* texture,
+    size_t x, size_t y, size_t z,
+    size_t width, size_t height, size_t depth,
+    const je_gl_texture_pixel_data_t* pixels)
+{
+    assert(cmd != nullptr);
+    assert(texture != nullptr);
+    assert(pixels != nullptr);
+    assert(width != 0 && height != 0 && depth != 0);
+    assert(x + width <= texture->m_width);
+    assert(y + height <= texture->m_height);
+    assert(z + depth <= texture->m_depth);
+
+    const size_t byte_size =
+        _jegl_upload_byte_size(texture, width * height * depth);
+
+    cmd->retain(texture);
+
+    jegl_cmd command{};
+    command.m_op = jegl_cmd_op::UPDATE_TEXTURE_3D;
+    command.m_ptr0 = reinterpret_cast<uintptr_t>(texture);
+    command.m_a = (uint32_t)x;
+    command.m_b = (uint32_t)y;
+    command.m_c = (uint32_t)z;
+    command.m_d = (uint32_t)width;
+    command.m_e = (uint32_t)height;
+    command.m_g = (uint32_t)depth;
+    command.m_data_offset = cmd->append_data(pixels, byte_size);
+    command.m_data_size = (uint32_t)byte_size;
+    cmd->push_command(command);
+}
+
+void je_graphic_cmd_upload_texture_array(
+    je_gl_command_buffer_t* cmd,
+    je_gl_texture_array_t* texture,
+    size_t x, size_t y, size_t layer,
+    size_t width, size_t height, size_t layers,
+    const je_gl_texture_pixel_data_t* pixels)
+{
+    assert(cmd != nullptr);
+    assert(texture != nullptr);
+    assert(pixels != nullptr);
+    assert(width != 0 && height != 0 && layers != 0);
+    assert(x + width <= texture->m_width);
+    assert(y + height <= texture->m_height);
+    assert(layer + layers <= texture->m_layers);
+
+    const size_t byte_size =
+        _jegl_upload_byte_size(texture, width * height * layers);
+
+    cmd->retain(texture);
+
+    jegl_cmd command{};
+    command.m_op = jegl_cmd_op::UPDATE_TEXTURE_ARRAY;
+    command.m_ptr0 = reinterpret_cast<uintptr_t>(texture);
+    command.m_a = (uint32_t)x;
+    command.m_b = (uint32_t)y;
+    command.m_c = (uint32_t)layer;
+    command.m_d = (uint32_t)width;
+    command.m_e = (uint32_t)height;
+    command.m_g = (uint32_t)layers;
+    command.m_data_offset = cmd->append_data(pixels, byte_size);
+    command.m_data_size = (uint32_t)byte_size;
+    cmd->push_command(command);
+}
+
+void je_graphic_cmd_upload_texture_cube(
+    je_gl_command_buffer_t* cmd,
+    je_gl_texture_cube_t* texture,
+    size_t face,
+    size_t x, size_t y,
+    size_t width, size_t height,
+    const je_gl_texture_pixel_data_t* pixels)
+{
+    assert(cmd != nullptr);
+    assert(texture != nullptr);
+    assert(pixels != nullptr);
+    assert(face < 6);
+    assert(width != 0 && height != 0);
+    assert(x + width <= texture->m_width);
+    assert(y + height <= texture->m_height);
+
+    const size_t byte_size = _jegl_upload_byte_size(texture, width * height);
+
+    cmd->retain(texture);
+
+    jegl_cmd command{};
+    command.m_op = jegl_cmd_op::UPDATE_TEXTURE_CUBE;
+    command.m_ptr0 = reinterpret_cast<uintptr_t>(texture);
+    command.m_a = (uint32_t)face;
+    command.m_b = (uint32_t)x;
+    command.m_c = (uint32_t)y;
+    command.m_d = (uint32_t)width;
+    command.m_e = (uint32_t)height;
+    command.m_data_offset = cmd->append_data(pixels, byte_size);
+    command.m_data_size = (uint32_t)byte_size;
+    cmd->push_command(command);
+}
+
 void je_graphic_cmd_set_uniform(
     je_gl_command_buffer_t* cmd,
     je_gl_uniform_slot_t slot,
@@ -994,6 +1230,10 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
     assert(cmd != nullptr);
     assert(cmd->m_context != nullptr);
     assert(jeecs::graphic::_current_graphic_thread == cmd->m_context);
+
+    // 没有任何命令的命令缓冲不触发后端动作（避免提交空帧）
+    if (cmd->m_commands.empty())
+        return;
 
     // A pass begun by je_graphic_branch_new_command_buffer may still be open; close
     // it here so callers can follow the "record, commit" flow.
@@ -1212,6 +1452,102 @@ void je_graphic_cmd_commit(je_gl_command_buffer_t* cmd)
                 render->sampler_bind(impl_context, sampler_id, sampler);
                 last_sampler[sampler_id] = sampler;
             }
+            break;
+        }
+
+        case jegl_cmd_op::UPDATE_VERTEX:
+        {
+            auto* vertex =
+                reinterpret_cast<je_gl_vertex_t*>(command.m_ptr0);
+
+            const bool ready = prepare_vertex_resource(vertex);
+            assert(ready);
+            (void)ready;
+
+            const void* data = command.m_data_size != 0
+                ? cmd->m_data_arena.data() + command.m_data_offset
+                : nullptr;
+
+            render->vertex_update(
+                impl_context, vertex, data, command.m_data_size);
+            break;
+        }
+        case jegl_cmd_op::UPDATE_UNIFORM_BUFFER:
+        {
+            auto* buffer =
+                reinterpret_cast<je_gl_uniform_buffer_t*>(command.m_ptr0);
+
+            const bool ready = prepare_uniform_buffer_resource(buffer);
+            assert(ready);
+            (void)ready;
+
+            render->ubuffer_update(
+                impl_context, buffer,
+                cmd->m_data_arena.data() + command.m_data_offset,
+                command.m_data_size);
+            break;
+        }
+        case jegl_cmd_op::UPDATE_TEXTURE_2D:
+        {
+            auto* texture =
+                reinterpret_cast<je_gl_texture_2d_t*>(command.m_ptr0);
+
+            const bool ready = prepare_texture_2d_resource(texture);
+            assert(ready);
+            (void)ready;
+
+            render->texture_2d_upload(
+                impl_context, texture,
+                command.m_a, command.m_b, command.m_c, command.m_d,
+                cmd->m_data_arena.data() + command.m_data_offset);
+            break;
+        }
+        case jegl_cmd_op::UPDATE_TEXTURE_3D:
+        {
+            auto* texture =
+                reinterpret_cast<je_gl_texture_3d_t*>(command.m_ptr0);
+
+            const bool ready = prepare_texture_3d_resource(texture);
+            assert(ready);
+            (void)ready;
+
+            render->texture_3d_upload(
+                impl_context, texture,
+                command.m_a, command.m_b, command.m_c,
+                command.m_d, command.m_e, command.m_g,
+                cmd->m_data_arena.data() + command.m_data_offset);
+            break;
+        }
+        case jegl_cmd_op::UPDATE_TEXTURE_ARRAY:
+        {
+            auto* texture =
+                reinterpret_cast<je_gl_texture_array_t*>(command.m_ptr0);
+
+            const bool ready = prepare_texture_array_resource(texture);
+            assert(ready);
+            (void)ready;
+
+            render->texture_array_upload(
+                impl_context, texture,
+                command.m_a, command.m_b, command.m_c,
+                command.m_d, command.m_e, command.m_g,
+                cmd->m_data_arena.data() + command.m_data_offset);
+            break;
+        }
+        case jegl_cmd_op::UPDATE_TEXTURE_CUBE:
+        {
+            auto* texture =
+                reinterpret_cast<je_gl_texture_cube_t*>(command.m_ptr0);
+
+            const bool ready = prepare_texture_cube_resource(texture);
+            assert(ready);
+            (void)ready;
+
+            render->texture_cube_upload(
+                impl_context, texture,
+                command.m_a,
+                command.m_b, command.m_c, command.m_d, command.m_e,
+                cmd->m_data_arena.data() + command.m_data_offset);
             break;
         }
 

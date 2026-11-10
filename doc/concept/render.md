@@ -197,7 +197,7 @@ game_system
 2. `collect_cameras()`：查询所有带 `Camera::Projection` 的实体，每个摄像机 `allocate_branch(rend_queue)` 取得一个渲染分支（优先级即摄像机的 `rend_queue`），再按 `rend_queue` 稳定排序；
 3. 按第一部分的切片收集待渲染实体（`world_renderer_arch`，可选组件为空指针），`sort_by_rend_queue` 稳定排序；
 4. `end_frame()`：`branch_allocate_end()` 回收本帧未用到的分支；
-5. `DrawFrame()`：逐摄像机先 `resolve_camera_target`（`RendToFramebuffer` 存在但未设置帧缓冲时**本帧跳过该摄像机**），再 `update_default_uniform_buffer` 写入 V / P / VP 与着色器时间，然后 `begin_camera_pass`——申请命令缓冲（视口 = `Viewport` 归一化矩形 × 目标像素尺寸）、有 `Clear` 时清颜色附件 0、**总是**把深度清为 1.0、绑定摄像机的 uniform 缓冲——最后 `draw_world_renderers`。
+5. `DrawFrame()`：逐摄像机先 `resolve_camera_target`（`RendToFramebuffer` 存在但未设置帧缓冲时**本帧跳过该摄像机**），再 `update_default_uniform_buffer` 把 V / P / VP 与着色器时间作为本帧完整 UBO 内容录制进更新命令缓冲，然后 `begin_camera_pass`——申请命令缓冲（视口 = `Viewport` 归一化矩形 × 目标像素尺寸）、有 `Clear` 时清颜色附件 0、**总是**把深度清为 1.0、绑定摄像机的 uniform 缓冲——最后 `draw_world_renderers`。
 
 `draw_world_renderers` 对每个实体：摄像机带 `FrustumCulling` 时先做包围球剔除；计算 `MV = V × M`、`MVP = VP × M`（M 取 `Translation::object2world`）；`bind_entity_textures` 按“通道 0 兜底纹理 → `Textures2D` → `Textures2DArray`”的顺序绑定；`draw_shader_passes` 遍历着色器列表（空列表换成默认着色器列表），为每个着色器绑定 pipeline 与顶点，只为着色器**实际声明**的内置 uniform 赋值（`JE_CHECK_NEED_AND_SET_UNIFORM`），然后 `draw_indexed`。
 
@@ -211,8 +211,8 @@ pipeline 由 `pipeline_for` 按 **(着色器, 拓扑)** 缓存于 `m_pipeline_ca
 ### 录制与提交：图形宿主、渲染分支、命令缓冲
 
 * **图形宿主**（`je_graphic_uhost_t`）：每个宇宙至多一个，在首次经 `je_graphic_uhost_get_or_create_for_universe` 请求时惰性创建（管线系统在 `BasePipelineInterface` 构造时请求）。它启动图形线程（后端的 `interface_startup` 负责创建窗口；未提供配置时为 640×480 窗口、可缩放、垂直同步、MSAA×4），并在宇宙上注册一个提交任务（after call-once job）；宇宙退出时经退出回调释放。
-* **渲染分支**（`je_render_branch_t`）：一组命令缓冲 + 一个优先级。`new_frame(priority)` 清空本帧计数并设置优先级；申请命令缓冲时复用池中实例，`reset` 后立即以目标（空指针 = 屏幕）和视口 `begin_pass`。`BRANCH_CHAIN_POOL_SIZE = 1`，即单缓冲——源码注释说明分支内的 uniform 缓冲只有一份，双缓冲没有意义。
-* **命令缓冲**（`je_gl_command_buffer_t`）：录制可在任意线程进行，只写 CPU 内存（命令流 + uniform 区），并**持有所有被引用资源的引用**直到 `reset` / `close`；提交只在图形线程进行，按需初始化 / 更新资源后把命令流分发给后端虚表。
+* **渲染分支**（`je_render_branch_t`）：一组命令缓冲 + 一个优先级。`new_frame(priority)` 清空本帧计数并设置优先级；申请绘制命令缓冲时复用池中实例，`reset` 后立即以目标（空指针 = 屏幕）和视口 `begin_pass`；申请更新命令缓冲（`je_graphic_branch_new_update_command`）时只 `reset`、不开启 pass。`BRANCH_CHAIN_POOL_SIZE = 1`，即单缓冲——源码注释说明分支内的 uniform 缓冲只有一份，双缓冲没有意义。
+* **命令缓冲**（`je_gl_command_buffer_t`）：录制可在任意线程进行，只写 CPU 内存（命令流 + uniform 区 + 资源更新数据区），并**持有所有被引用资源的引用**直到 `reset` / `close`；提交只在图形线程进行，按需初始化资源、落实资源更新，再把命令流分发给后端虚表。
 
 ```
 常规任务（第 2 步）  各管线的 GraphicUpdate：收集、排序、录制命令缓冲
@@ -222,7 +222,7 @@ pipeline 由 `pipeline_for` 按 **(着色器, 拓扑)** 缓存于 `m_pipeline_ca
                      → 帧任务 _frame_rend_impl → update_draw_commit（提交设备，GUI 按约定也在此绘制）
 ```
 
-`_frame_rend_impl` 在正常帧先把窗口清为 (0,0,0,0)、深度清为 1.0，再把宇宙内**所有**分支（跨世界、跨管线）按优先级升序稳定排序，依次提交各分支的命令缓冲。后端请求跳过本帧（如窗口最小化）时默认跳过全部绘制；`je_graphic_uhost_set_skip_behavior(host, false)` 可改为只跳过以屏幕为目标的命令缓冲。
+`_frame_rend_impl` 在正常帧先把窗口清为 (0,0,0,0)、深度清为 1.0，再把宇宙内**所有**分支（跨世界、跨管线）按优先级升序稳定排序，依次提交各分支的命令缓冲。资源更新链以最低优先级（`INT32_MIN`）申请，因此先于所有绘制链提交。后端请求跳过本帧（如窗口最小化）时默认跳过全部绘制，但**更新命令缓冲仍会被提交**（资源更新不丢失）；`je_graphic_uhost_set_skip_behavior(host, false)` 可改为只跳过以屏幕为目标的命令缓冲。
 
 这一时序与[世界](world.md#宇宙主循环中的一帧)中“呈现必须在下一帧世界更新之前完成”的约束一致。在 jedriver 中，图形线程就是主线程（`game_engine_context::loop()` → `graphic_syncer_host::loop()`），宇宙循环运行在自己的线程上。
 
@@ -236,10 +236,10 @@ pipeline 由 `pipeline_for` 按 **(着色器, 拓扑)** 缓存于 `m_pipeline_ca
 | --- | --- |
 | 生命周期 | `interface_startup` / `interface_shutdown_before_resource_release` / `interface_shutdown` |
 | 帧 | `update_frame_ready` / `update_draw_commit` |
-| 资源 | 着色器 / 纹理 / 顶点的 `*_create_blob` / `*_close_blob`；各类资源（含帧缓冲、uniform 缓冲）的 `*_init` / `*_update` / `*_close` |
+| 资源 | 着色器 / 纹理 / 顶点的 `*_create_blob` / `*_close_blob`；各类资源（含帧缓冲、uniform 缓冲）的 `*_init` / `*_close`；纹理区段上传 `texture_*_upload`；顶点/UBO 的本帧内容 `vertex_update` / `ubuffer_update` |
 | 渲染 | `pipeline_*`、`sampler_*`、`begin_pass` / `clear_color` / `clear_depth` / `end_pass`、`bind_*`、`draw` / `draw_indexed`、`commit_begin` / `commit_end` |
 
-资源在首次被使用时由图形线程惰性初始化，句柄的 `m_modified` 置位后在下次使用前更新；引用计数归零后排队，由图形线程在适当时机关闭。图形线程上下文 `je_gl_context_t` 持有配置、虚表指针与后端实现上下文；窗口由 `jeecs_graphic_api_interface.hpp` 中的 `basic_interface` 抽象，桌面平台用 GLFW、Android 用 EGL 实现。
+资源在首次被使用时由图形线程惰性初始化（从创建期快照上传），引用计数归零后排队，由图形线程在适当时机关闭。创建之后的修改不再走 CPU 缓冲 + 懒上传：顶点/UBO 的更新随命令缓冲按帧落实，纹理区段上传是稀有的持久操作。图形线程上下文 `je_gl_context_t` 持有配置、虚表指针与后端实现上下文；窗口由 `jeecs_graphic_api_interface.hpp` 中的 `basic_interface` 抽象，桌面平台用 GLFW、Android 用 EGL 实现。
 
 | 后端 | 实现文件（`src/`） | ImGui 后端（`src/`） |
 | --- | --- | --- |

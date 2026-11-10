@@ -21,7 +21,7 @@ namespace jeecs::particle
       * 每个发射器实体在本系统内持有一个 CPU 粒子池（发射器粒子上限容量的
         SoA 数组），死亡粒子以交换删除方式紧凑排布；
       * 发射器实体复用常规渲染组件：系统把存活粒子构建为面向摄像机的公告板
-        四边形网格（每粒子 4 顶点 6 索引），经 je_graphic_vertex_buffer_update 逐帧
+        四边形网格（每粒子 4 顶点 6 索引），经 je_graphic_cmd_update_vertex 逐帧
         写入 Renderer::Shape，由常规图形管线（如 UnlitGraphicPipelineSystem）
         随实体一起绘制；粒子纹理绑定在 Renderer::Textures2D 的 pass 0；
       * 公告板朝向在粒子着色器中用视图矩阵展开（顶点属性携带中心
@@ -83,7 +83,13 @@ namespace jeecs::particle
         std::unordered_map<pool_key_t, particle_pool> _m_pools;
         std::vector<pool_key_t> _m_alive_emitter_ids;
 
+        // 顶点更新的录制通道：最低优先级的更新链，先于所有绘制链提交
+        je_graphic_uhost_t* _m_graphic_host;
+        je_render_branch_t* _m_update_branch;
+        je_gl_command_buffer_t* _m_update_command;
+
         ParticleSystem(game_world w);
+        ~ParticleSystem();
 
         void GraphicUpdate();
     };

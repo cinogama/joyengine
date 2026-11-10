@@ -987,37 +987,31 @@ namespace jeecs::graphic
 
             je_gl_resource_blob_t(*create_blob_fn)(je_graphic_impl_context_t, TexT*);
             void (*init_fn)(je_graphic_impl_context_t, je_gl_resource_blob_t, TexT*);
-            void (*update_fn)(je_graphic_impl_context_t, TexT*);
 
             if constexpr (is_same_v<TexT, je_gl_texture_2d_t>)
             {
                 create_blob_fn = gapi->texture_2d_create_blob;
                 init_fn = gapi->texture_2d_init;
-                update_fn = gapi->texture_2d_update;
             }
             else if constexpr (is_same_v<TexT, je_gl_texture_3d_t>)
             {
                 create_blob_fn = gapi->texture_3d_create_blob;
                 init_fn = gapi->texture_3d_init;
-                update_fn = gapi->texture_3d_update;
             }
             else if constexpr (is_same_v<TexT, je_gl_texture_array_t>)
             {
                 create_blob_fn = gapi->texture_array_create_blob;
                 init_fn = gapi->texture_array_init;
-                update_fn = gapi->texture_array_update;
             }
             else if constexpr (is_same_v<TexT, je_gl_texture_cube_t>)
             {
                 create_blob_fn = gapi->texture_cube_create_blob;
                 init_fn = gapi->texture_cube_init;
-                update_fn = gapi->texture_cube_update;
             }
             else if constexpr (is_same_v<TexT, je_gl_texture_msaa_t>)
             {
                 create_blob_fn = gapi->texture_msaa_create_blob;
                 init_fn = gapi->texture_msaa_init;
-                update_fn = gapi->texture_msaa_update;
             }
             else
             {
@@ -1027,11 +1021,6 @@ namespace jeecs::graphic
             switch (_jegl_check_resource_state(texture))
             {
             case jegl_resouce_state::READY:
-                return true;
-            case jegl_resouce_state::NEED_UPDATE:
-                update_fn(
-                    thread_handle->m_graphic_impl_context,
-                    texture);
                 return true;
             case jegl_resouce_state::NEED_INIT:
             {
@@ -1162,15 +1151,7 @@ namespace jeecs::graphic
             if (_jegl_close_resource_handle(&texture->m_handle))
             {
                 // close resource's raw data, then send this resource to closing-queue
-                if (texture->m_pixels != nullptr)
-                {
-                    assert(0 == (texture->m_format
-                        & JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK));
-                    free(texture->m_pixels);
-                }
-                else
-                    assert(0 != (texture->m_format
-                        & JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK));
+                free(texture->m_initial_pixels);
                 _jegl_free_resource_instance(new resource_to_destroy(texture));
             }
         }
@@ -1420,11 +1401,6 @@ namespace jeecs::graphic
         {
         case jegl_resouce_state::READY:
             return true;
-        case jegl_resouce_state::NEED_UPDATE:
-            gapi->vertex_update(
-                thread_handle->m_graphic_impl_context,
-                vert);
-            return true;
         case jegl_resouce_state::NEED_INIT:
         {
             je_gl_resource_blob_t vertex_blob;
@@ -1482,11 +1458,6 @@ namespace jeecs::graphic
         switch (_jegl_check_resource_state(uniformbuf))
         {
         case jegl_resouce_state::READY:
-            return true;
-        case jegl_resouce_state::NEED_UPDATE:
-            gapi->ubuffer_update(
-                thread_handle->m_graphic_impl_context,
-                uniformbuf);
             return true;
         case jegl_resouce_state::NEED_INIT:
             gapi->ubuffer_init(
@@ -2057,8 +2028,8 @@ void je_graphic_vertex_close(je_gl_vertex_t* vertex)
     if (_jegl_close_resource_handle(&vertex->m_handle))
     {
         // close resource's raw data, then send this resource to closing-queue
-        free(const_cast<void*>(vertex->m_vertexs));
-        free(const_cast<uint32_t*>(vertex->m_indices));
+        free(const_cast<void*>(vertex->m_initial_vertexs));
+        free(const_cast<uint32_t*>(vertex->m_initial_indices));
         free(const_cast<je_gl_vertex_data_layout_t*>(vertex->m_formats));
 
         for (size_t bone_idx = 0; bone_idx < vertex->m_bone_count; ++bone_idx)
@@ -2091,7 +2062,7 @@ void je_graphic_uniformbuf_close(je_gl_uniform_buffer_t* ubuffer)
 {
     if (_jegl_close_resource_handle(&ubuffer->m_handle))
     {
-        free(ubuffer->m_buffer);
+        free(ubuffer->m_initial_buffer);
         _jegl_free_resource_instance(new resource_to_destroy(ubuffer));
     }
 }
@@ -2225,7 +2196,30 @@ void je_graphic_sampler_close(je_gl_sampler_t* sampler)
         _jegl_free_resource_instance(new resource_to_destroy(sampler));
 }
 
-je_gl_texture_2d_t* je_graphic_texture_2d_create(size_t width, size_t height, je_gl_texture_format_t format)
+static /* OPTIONAL */ je_gl_texture_pixel_data_t* _jegl_copy_texture_initial_pixels(
+    je_gl_texture_format_t format,
+    /* OPTIONAL */ const je_gl_texture_pixel_data_t* initial_pixels,
+    size_t pixel_count)
+{
+    if (initial_pixels == nullptr)
+        return nullptr;
+
+    assert(0 == (format & JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK));
+
+    const size_t pixel_size =
+        (size_t)(format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
+    assert(pixel_size != 0);
+
+    auto* pixels = (je_gl_texture_pixel_data_t*)malloc(pixel_count * pixel_size);
+    assert(pixels != nullptr);
+
+    memcpy(pixels, initial_pixels, pixel_count * pixel_size);
+    return pixels;
+}
+
+je_gl_texture_2d_t* je_graphic_texture_2d_create(
+    size_t width, size_t height, je_gl_texture_format_t format,
+    /* OPTIONAL */ const je_gl_texture_pixel_data_t* initial_pixels)
 {
     je_gl_texture_2d_t* texture_instance =
         static_cast<je_gl_texture_2d_t*>(malloc(sizeof(je_gl_texture_2d_t)));
@@ -2237,19 +2231,8 @@ je_gl_texture_2d_t* je_graphic_texture_2d_create(size_t width, size_t height, je
     if (height == 0)
         height = 1;
 
-    if ((format & JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK) == 0)
-    {
-        const size_t pixel_size =
-            (size_t)(format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
-        texture_instance->m_pixels =
-            (je_gl_texture_pixel_data_t*)malloc(width * height * pixel_size);
-
-        assert(texture_instance->m_pixels != nullptr);
-        memset(texture_instance->m_pixels, 0, width * height * pixel_size);
-    }
-    else
-        // For special format texture such as depth, do not alloc for pixel.
-        texture_instance->m_pixels = nullptr;
+    texture_instance->m_initial_pixels = _jegl_copy_texture_initial_pixels(
+        format, initial_pixels, width * height);
 
     texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_2D;
     texture_instance->m_width = width;
@@ -2261,7 +2244,8 @@ je_gl_texture_2d_t* je_graphic_texture_2d_create(size_t width, size_t height, je
 }
 
 je_gl_texture_3d_t* je_graphic_texture_3d_create(
-    size_t width, size_t height, size_t depth, je_gl_texture_format_t format)
+    size_t width, size_t height, size_t depth, je_gl_texture_format_t format,
+    /* OPTIONAL */ const je_gl_texture_pixel_data_t* initial_pixels)
 {
     je_gl_texture_3d_t* texture_instance =
         static_cast<je_gl_texture_3d_t*>(malloc(sizeof(je_gl_texture_3d_t)));
@@ -2275,18 +2259,8 @@ je_gl_texture_3d_t* je_graphic_texture_3d_create(
     if (depth == 0)
         depth = 1;
 
-    if ((format & JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK) == 0)
-    {
-        const size_t pixel_size =
-            (size_t)(format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
-        texture_instance->m_pixels =
-            (je_gl_texture_pixel_data_t*)malloc(width * height * depth * pixel_size);
-
-        assert(texture_instance->m_pixels != nullptr);
-        memset(texture_instance->m_pixels, 0, width * height * depth * pixel_size);
-    }
-    else
-        texture_instance->m_pixels = nullptr;
+    texture_instance->m_initial_pixels = _jegl_copy_texture_initial_pixels(
+        format, initial_pixels, width * height * depth);
 
     texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_3D;
     texture_instance->m_width = width;
@@ -2299,7 +2273,8 @@ je_gl_texture_3d_t* je_graphic_texture_3d_create(
 }
 
 je_gl_texture_array_t* je_graphic_texture_array_create(
-    size_t width, size_t height, size_t layers, je_gl_texture_format_t format)
+    size_t width, size_t height, size_t layers, je_gl_texture_format_t format,
+    /* OPTIONAL */ const je_gl_texture_pixel_data_t* initial_pixels)
 {
     je_gl_texture_array_t* texture_instance =
         static_cast<je_gl_texture_array_t*>(malloc(sizeof(je_gl_texture_array_t)));
@@ -2313,18 +2288,8 @@ je_gl_texture_array_t* je_graphic_texture_array_create(
     if (layers == 0)
         layers = 1;
 
-    if ((format & JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK) == 0)
-    {
-        const size_t pixel_size =
-            (size_t)(format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
-        texture_instance->m_pixels =
-            (je_gl_texture_pixel_data_t*)malloc(width * height * layers * pixel_size);
-
-        assert(texture_instance->m_pixels != nullptr);
-        memset(texture_instance->m_pixels, 0, width * height * layers * pixel_size);
-    }
-    else
-        texture_instance->m_pixels = nullptr;
+    texture_instance->m_initial_pixels = _jegl_copy_texture_initial_pixels(
+        format, initial_pixels, width * height * layers);
 
     texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_ARRAY;
     texture_instance->m_width = width;
@@ -2337,7 +2302,8 @@ je_gl_texture_array_t* je_graphic_texture_array_create(
 }
 
 je_gl_texture_cube_t* je_graphic_texture_cube_create(
-    size_t width, size_t height, je_gl_texture_format_t format)
+    size_t width, size_t height, je_gl_texture_format_t format,
+    /* OPTIONAL */ const je_gl_texture_pixel_data_t* initial_pixels)
 {
     je_gl_texture_cube_t* texture_instance =
         static_cast<je_gl_texture_cube_t*>(malloc(sizeof(je_gl_texture_cube_t)));
@@ -2351,21 +2317,8 @@ je_gl_texture_cube_t* je_graphic_texture_cube_create(
 
     constexpr size_t CUBE_FACE_COUNT = 6;
 
-    if ((format & JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK) == 0)
-    {
-        const size_t pixel_size =
-            (size_t)(format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
-        texture_instance->m_pixels =
-            (je_gl_texture_pixel_data_t*)malloc(
-                CUBE_FACE_COUNT * width * height * pixel_size);
-
-        assert(texture_instance->m_pixels != nullptr);
-        memset(
-            texture_instance->m_pixels, 0,
-            CUBE_FACE_COUNT * width * height * pixel_size);
-    }
-    else
-        texture_instance->m_pixels = nullptr;
+    texture_instance->m_initial_pixels = _jegl_copy_texture_initial_pixels(
+        format, initial_pixels, CUBE_FACE_COUNT * width * height);
 
     texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_CUBE;
     texture_instance->m_width = width;
@@ -2392,7 +2345,7 @@ je_gl_texture_msaa_t* je_graphic_texture_msaa_create(
         samples = 1;
 
     // MSAA 纹理只存在于 GPU 侧，不持有 CPU 像素数据
-    texture_instance->m_pixels = nullptr;
+    texture_instance->m_initial_pixels = nullptr;
 
     texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_MSAA;
     texture_instance->m_width = width;
@@ -2575,7 +2528,7 @@ static bool _jegl_read_image_texture_cache(
     je_gl_texture_2d_t* texture_instance =
         static_cast<je_gl_texture_2d_t*>(malloc(sizeof(je_gl_texture_2d_t)));
 
-    texture_instance->m_pixels = pixels;
+    texture_instance->m_initial_pixels = pixels;
     texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_2D;
     texture_instance->m_width = width;
     texture_instance->m_height = height;
@@ -2638,12 +2591,12 @@ je_gl_vertex_t* _jegl_create_vertex_impl(
 
     void* data_buffer = (void*)malloc(data_length);
     memcpy(data_buffer, datas, data_length);
-    vertex->m_vertexs = data_buffer;
+    vertex->m_initial_vertexs = data_buffer;
     vertex->m_vertex_length = data_length;
 
     uint32_t* index_buffer = (uint32_t*)malloc(index_count * sizeof(uint32_t));
     memcpy(index_buffer, indices, index_count * sizeof(uint32_t));
-    vertex->m_indices = index_buffer;
+    vertex->m_initial_indices = index_buffer;
     vertex->m_index_count = index_count;
     vertex->m_index_capacity = index_count;
 
@@ -2976,44 +2929,6 @@ je_gl_vertex_t* _jegl_create_vertex_impl(
     return vertex;
 }
 
-void je_graphic_vertex_buffer_update(
-    je_gl_vertex_t* vertex,
-    /* OPTIONAL */ const void* vertex_data,
-    size_t vertex_length,
-    size_t active_index_count)
-{
-    assert(vertex != nullptr);
-
-    if (active_index_count > vertex->m_index_capacity)
-        active_index_count = vertex->m_index_capacity;
-    // 激活数量保持至少 1：0 长度的绘制调用与 0 字节的缓冲区分配在
-    // 部分后端（D3D11/Vulkan/Metal）上非法；1 个索引的 TRIANGLES
-    // 绘制不产生任何图元，视觉上等价于不绘制
-    if (active_index_count == 0)
-        active_index_count = 1;
-
-    if (vertex_data != nullptr && vertex_length != 0)
-    {
-        if (vertex_length > vertex->m_vertex_length)
-        {
-            debug::logerr(
-                "Failed to update vertex(%p): data size %zu is bigger than the vertex buffer size %zu.",
-                vertex, vertex_length, vertex->m_vertex_length);
-            return;
-        }
-
-        memcpy(const_cast<void*>(vertex->m_vertexs), vertex_data, vertex_length);
-        vertex->m_handle.m_modified = true;
-    }
-    else if (active_index_count != vertex->m_index_count)
-    {
-        // 只收缩绘制数量也走一次后端刷新，让已初始化的后端同步激活数量
-        vertex->m_handle.m_modified = true;
-    }
-
-    vertex->m_index_count = active_index_count;
-}
-
 /* OPTIONAL: If size or color_attachment_count is zero */ je_gl_frame_buffer_t* je_graphic_framebuf_create(
     size_t width,
     size_t height,
@@ -3075,44 +2990,11 @@ je_gl_uniform_buffer_t* je_graphic_uniformbuf_create(
         static_cast<je_gl_uniform_buffer_t*>(
             malloc(sizeof(je_gl_uniform_buffer_t)));
 
-    uniformbuf->m_buffer = (uint8_t*)malloc(length);
+    // 创建期内容为全 0；运行时内容由 je_graphic_cmd_update_uniform_buffer 按帧录制
+    uniformbuf->m_initial_buffer = (uint8_t*)calloc(length, 1);
     uniformbuf->m_buffer_size = length;
     uniformbuf->m_buffer_binding_place = binding_place;
 
-    uniformbuf->m_update_begin_offset = 0;
-    uniformbuf->m_update_length = 0;
-
     init_resource_handle(&uniformbuf->m_handle, nullptr);
     return uniformbuf;
-}
-
-void je_graphic_uniformbuf_update(
-    je_gl_uniform_buffer_t* uniformbuf,
-    /* OPTIONAL: If update_length == 0 */ const void* buf,
-    size_t update_offset,
-    size_t update_length)
-{
-    if (update_length != 0)
-    {
-        memcpy(uniformbuf->m_buffer + update_offset, buf, update_length);
-        if (!uniformbuf->m_handle.m_modified)
-        {
-            uniformbuf->m_handle.m_modified = true;
-
-            uniformbuf->m_update_begin_offset = update_offset;
-            uniformbuf->m_update_length = update_length;
-        }
-        else
-        {
-            assert(uniformbuf->m_update_length != 0);
-
-            size_t new_begin = min(uniformbuf->m_update_begin_offset, update_offset);
-            size_t new_end = max(
-                uniformbuf->m_update_begin_offset + uniformbuf->m_update_length,
-                update_offset + update_length);
-
-            uniformbuf->m_update_begin_offset = new_begin;
-            uniformbuf->m_update_length = new_end - new_begin;
-        }
-    }
 }

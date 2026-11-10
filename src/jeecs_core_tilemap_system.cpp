@@ -897,11 +897,26 @@ namespace jeecs::tilemap
             }
         }
 
-        je_gl_vertex_t* raw = shape->vertex->get()->resource();
-        shape->vertex->get()->update_buffer(
+        // 分片内容变化时用新的创建期数据重建顶点资源：顶点缓冲是静态内容，
+        // 运行时不再支持原地改写（动态内容需按帧录制更新命令）
+        auto rebuilt = graphic::vertex::create(
+            JE_GL_VERTEX_TYPE_TRIANGLES,
             _m_staging.data(),
             _m_staging.size() * sizeof(float),
-            used_cells * 4 * 6);
+            shared_indices(),
+            {
+                { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3 }, // pos
+                { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3 }, // uv (u, v, array layer)
+                { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 3 }, // normal
+                { JE_GL_VERTEX_DATA_TYPE_FLOAT32, 1 }, // bottom（块底边局部 Y，PerBlockSelfShadow 用）
+            });
+        assert(rebuilt.has_value());
+        shape->vertex = rebuilt;
+
+        // 未使用的格子保持全 0（退化三角形），不影响绘制
+        (void)used_cells;
+
+        je_gl_vertex_t* raw = shape->vertex->get()->resource();
 
         // 分块包围盒（局部空间：1 格 = 1 单位，向 +x 与 -y 展开）
         raw->m_x_min = (float)bx;

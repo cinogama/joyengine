@@ -59,7 +59,6 @@ namespace jeecs::graphic::api::gl3
         GLuint m_vbo;
         GLuint m_ebo;
         GLenum m_method;
-        GLsizei m_pointcount;
 
         jegl3_vertex_data() = default;
         ~jegl3_vertex_data()
@@ -1216,7 +1215,7 @@ namespace jeecs::graphic::api::gl3
                 (GLsizei)resource->m_height,
                 0, texture_src_format,
                 is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
-                resource->m_pixels);
+                resource->m_initial_pixels);
         }
 
         resource->m_handle.m_ptr = new jegl_gl3_texture(
@@ -1251,7 +1250,7 @@ namespace jeecs::graphic::api::gl3
             (GLsizei)resource->m_depth,
             0, texture_src_format,
             is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
-            resource->m_pixels);
+            resource->m_initial_pixels);
 
         resource->m_handle.m_ptr = new jegl_gl3_texture(
             texture, GL_TEXTURE_3D, resource->m_format, resource->m_width, resource->m_height);
@@ -1285,7 +1284,7 @@ namespace jeecs::graphic::api::gl3
             (GLsizei)resource->m_layers,
             0, texture_src_format,
             is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
-            resource->m_pixels);
+            resource->m_initial_pixels);
 
         resource->m_handle.m_ptr = new jegl_gl3_texture(
             texture, GL_TEXTURE_2D_ARRAY, resource->m_format, resource->m_width, resource->m_height);
@@ -1316,8 +1315,8 @@ namespace jeecs::graphic::api::gl3
 
         for (size_t face_idx = 0; face_idx < 6; ++face_idx)
         {
-            const void* face_data = resource->m_pixels != nullptr
-                ? resource->m_pixels + face_idx * face_pixels
+            const void* face_data = resource->m_initial_pixels != nullptr
+                ? resource->m_initial_pixels + face_idx * face_pixels
                 : nullptr;
 
             if (is_depth)
@@ -1395,20 +1394,14 @@ namespace jeecs::graphic::api::gl3
 #endif
     }
 
-    void texture_2d_update(
+    void texture_2d_upload(
         je_graphic_impl_context_t,
-        je_gl_texture_2d_t* resource)
+        je_gl_texture_2d_t* resource,
+        size_t x, size_t y, size_t width, size_t height,
+        const je_gl_texture_pixel_data_t* pixels)
     {
         jegl_gl3_texture* texture_instance =
             static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
-
-        // Update texture's pixels, only normal pixel data will be updated.
-        // NOTE: 深度纹理不支持更新
-        if (0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH))
-        {
-            jeecs::debug::logerr("Depth texture update is not supported.");
-            return;
-        }
 
         glBindTexture(GL_TEXTURE_2D, texture_instance->m_texture_id);
 
@@ -1416,58 +1409,33 @@ namespace jeecs::graphic::api::gl3
         GLint texture_aim_format = GL_RGBA;
         GLint texture_src_format = GL_RGBA;
 
-        if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
-            return;
+        const bool format_ready =
+            _gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format);
+        assert(format_ready);
+        (void)format_ready;
 
-        const bool same_size =
-            texture_instance->m_width == resource->m_width &&
-            texture_instance->m_height == resource->m_height;
-
-        if (same_size)
-        {
-            // 原地更新，避免重新分配纹理存储
-            glTexSubImage2D(
-                GL_TEXTURE_2D,
-                0,
-                0,
-                0,
-                (GLsizei)resource->m_width,
-                (GLsizei)resource->m_height,
-                texture_src_format,
-                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
-                resource->m_pixels);
-        }
-        else
-        {
-            // 尺寸发生变化，需要重新分配纹理存储
-            glTexImage2D(
-                GL_TEXTURE_2D,
-                0,
-                texture_aim_format,
-                (GLsizei)resource->m_width,
-                (GLsizei)resource->m_height,
-                0,
-                texture_src_format,
-                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
-                resource->m_pixels);
-
-            texture_instance->m_width = resource->m_width;
-            texture_instance->m_height = resource->m_height;
-        }
+        glTexSubImage2D(
+            GL_TEXTURE_2D,
+            0,
+            (GLint)x,
+            (GLint)y,
+            (GLsizei)width,
+            (GLsizei)height,
+            texture_src_format,
+            is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+            pixels);
     }
 
     template<typename TexT>
-    static void _gl3_update_texture_3d_like(
-        TexT* resource, GLint target, GLsizei depth_or_layers)
+    static void _gl3_upload_texture_3d_like(
+        TexT* resource,
+        GLint target,
+        GLint x, GLint y, GLint z,
+        GLsizei width, GLsizei height, GLsizei depth,
+        const je_gl_texture_pixel_data_t* pixels)
     {
         jegl_gl3_texture* texture_instance =
             static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
-
-        if (0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH))
-        {
-            jeecs::debug::logerr("Depth texture update is not supported.");
-            return;
-        }
 
         glBindTexture(target, texture_instance->m_texture_id);
 
@@ -1475,75 +1443,82 @@ namespace jeecs::graphic::api::gl3
         GLint texture_aim_format = GL_RGBA;
         GLint texture_src_format = GL_RGBA;
 
-        if (!_gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format))
-            return;
+        const bool format_ready =
+            _gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format);
+        assert(format_ready);
+        (void)format_ready;
 
-        const bool same_size =
-            texture_instance->m_width == resource->m_width &&
-            texture_instance->m_height == resource->m_height;
-
-        if (same_size)
-        {
-            glTexSubImage3D(
-                target,
-                0,
-                0, 0, 0,
-                (GLsizei)resource->m_width,
-                (GLsizei)resource->m_height,
-                depth_or_layers,
-                texture_src_format,
-                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
-                resource->m_pixels);
-        }
-        else
-        {
-            glTexImage3D(
-                target,
-                0,
-                texture_aim_format,
-                (GLsizei)resource->m_width,
-                (GLsizei)resource->m_height,
-                depth_or_layers,
-                0,
-                texture_src_format,
-                is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
-                resource->m_pixels);
-
-            texture_instance->m_width = resource->m_width;
-            texture_instance->m_height = resource->m_height;
-        }
+        glTexSubImage3D(
+            target,
+            0,
+            x, y, z,
+            width, height, depth,
+            texture_src_format,
+            is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+            pixels);
     }
 
-    void texture_3d_update(
+    void texture_3d_upload(
         je_graphic_impl_context_t,
-        je_gl_texture_3d_t* resource)
+        je_gl_texture_3d_t* resource,
+        size_t x, size_t y, size_t z,
+        size_t width, size_t height, size_t depth,
+        const je_gl_texture_pixel_data_t* pixels)
     {
-        _gl3_update_texture_3d_like(resource, GL_TEXTURE_3D, (GLsizei)resource->m_depth);
+        _gl3_upload_texture_3d_like(
+            resource, GL_TEXTURE_3D,
+            (GLint)x, (GLint)y, (GLint)z,
+            (GLsizei)width, (GLsizei)height, (GLsizei)depth,
+            pixels);
     }
 
-    void texture_array_update(
+    void texture_array_upload(
         je_graphic_impl_context_t,
-        je_gl_texture_array_t* resource)
+        je_gl_texture_array_t* resource,
+        size_t x, size_t y, size_t layer,
+        size_t width, size_t height, size_t layers,
+        const je_gl_texture_pixel_data_t* pixels)
     {
-        _gl3_update_texture_3d_like(resource, GL_TEXTURE_2D_ARRAY, (GLsizei)resource->m_layers);
+        _gl3_upload_texture_3d_like(
+            resource, GL_TEXTURE_2D_ARRAY,
+            (GLint)x, (GLint)y, (GLint)layer,
+            (GLsizei)width, (GLsizei)height, (GLsizei)layers,
+            pixels);
     }
 
-    void texture_cube_update(
+    void texture_cube_upload(
         je_graphic_impl_context_t,
-        je_gl_texture_cube_t* resource)
+        je_gl_texture_cube_t* resource,
+        size_t face,
+        size_t x, size_t y, size_t width, size_t height,
+        const je_gl_texture_pixel_data_t* pixels)
     {
-        (void)resource;
-        // NOTE: Cube 纹理不支持更新
-        jeecs::debug::logerr("Cube texture update is not supported.");
-    }
+        assert(face < 6);
 
-    void texture_msaa_update(
-        je_graphic_impl_context_t,
-        je_gl_texture_msaa_t* resource)
-    {
-        (void)resource;
-        // NOTE: MSAA 纹理只存在于 GPU 侧，不支持 CPU 侧像素更新
-        jeecs::debug::logerr("MSAA texture update is not supported.");
+        jegl_gl3_texture* texture_instance =
+            static_cast<jegl_gl3_texture*>(resource->m_handle.m_ptr);
+
+        glBindTexture(GL_TEXTURE_CUBE_MAP, texture_instance->m_texture_id);
+
+        const bool is_16bit = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
+        GLint texture_aim_format = GL_RGBA;
+        GLint texture_src_format = GL_RGBA;
+
+        const bool format_ready =
+            _gl3_pick_color_formats(resource->m_format, is_16bit, texture_src_format, texture_aim_format);
+        assert(format_ready);
+        (void)format_ready;
+
+        glTexSubImage2D(
+            GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)face,
+            0,
+            (GLint)x,
+            (GLint)y,
+            (GLsizei)width,
+            (GLsizei)height,
+            texture_src_format,
+            is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
+            pixels);
     }
 
     template<typename TexT>
@@ -1568,16 +1543,14 @@ namespace jeecs::graphic::api::gl3
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         glBufferData(GL_ARRAY_BUFFER,
             resource->m_vertex_length,
-            resource->m_vertexs,
+            resource->m_initial_vertexs,
             GL_STATIC_DRAW);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-        // 索引缓冲按分配容量上传（m_index_count 可能被
-        // je_graphic_vertex_buffer_update 收缩为激活数量，绘制数量另存于
-        // m_pointcount）
+        // 索引缓冲按分配容量上传（索引内容创建后不变）
         glBufferData(GL_ELEMENT_ARRAY_BUFFER,
             resource->m_index_capacity * sizeof(uint32_t),
-            resource->m_indices,
+            resource->m_initial_indices,
             GL_STATIC_DRAW);
 
         size_t offset = 0;
@@ -1622,29 +1595,34 @@ namespace jeecs::graphic::api::gl3
         vertex_data->m_vbo = vbo;
         vertex_data->m_ebo = ebo;
         vertex_data->m_method = DRAW_METHODS[(size_t)resource->m_type];
-        vertex_data->m_pointcount = (GLsizei)resource->m_index_count;
 
         resource->m_handle.m_ptr = vertex_data;
     }
     void vertex_update(
         je_graphic_impl_context_t,
-        je_gl_vertex_t* resource)
+        je_gl_vertex_t* resource,
+        const void* vertices, size_t vertex_length)
     {
         jegl3_vertex_data* vertex_data =
             static_cast<jegl3_vertex_data*>(resource->m_handle.m_ptr);
 
-        // 整体重传顶点数据（索引缓冲内容不变），并同步激活索引数量。
-        // 每次 glBufferData 重指定：首次将 STATIC 升级为 DYNAMIC 用途（对齐
-        // DX11 后端的 IMMUTABLE→DYNAMIC 懒升级）；之后每次重指定同时孤儿化
-        // 旧数据存储，等价于 Map(WRITE_DISCARD)，避免 GPU 仍在读取旧数据时
-        // glBufferSubData 阻塞图形线程
+        assert(vertex_length <= resource->m_vertex_length);
+
+        // 以容量重新指定存储（孤儿化旧数据，等价 Map(WRITE_DISCARD)：
+        // 避免 GPU 仍在读取旧数据时 glBufferSubData 阻塞图形线程），
+        // 再写入本帧内容。索引缓冲内容不变。
         glBindBuffer(GL_ARRAY_BUFFER, vertex_data->m_vbo);
         glBufferData(GL_ARRAY_BUFFER,
             resource->m_vertex_length,
-            resource->m_vertexs,
+            nullptr,
             GL_DYNAMIC_DRAW);
 
-        vertex_data->m_pointcount = (GLsizei)resource->m_index_count;
+        if (vertex_length != 0)
+        {
+            assert(vertices != nullptr);
+            glBufferSubData(
+                GL_ARRAY_BUFFER, 0, (GLsizeiptr)vertex_length, vertices);
+        }
     }
     void vertex_close(
         je_graphic_impl_context_t,
@@ -1661,20 +1639,23 @@ namespace jeecs::graphic::api::gl3
     }
     void ubuffer_update(
         je_graphic_impl_context_t,
-        je_gl_uniform_buffer_t* resource)
+        je_gl_uniform_buffer_t* resource,
+        const void* data, size_t data_length)
     {
         jegl_gl3_uniformbuf* ubuf =
             static_cast<jegl_gl3_uniformbuf*>(resource->m_handle.m_ptr);
 
-        assert(resource->m_update_length != 0);
+        assert(data != nullptr);
+        assert(data_length == resource->m_buffer_size);
 
         glBindBuffer(GL_UNIFORM_BUFFER, ubuf->m_uniform_buffer_object);
 
-        assert(resource->m_update_length != 0);
-        glBufferSubData(GL_UNIFORM_BUFFER,
-            resource->m_update_begin_offset,
-            resource->m_update_length,
-            resource->m_buffer + resource->m_update_begin_offset);
+        // 整块重指定存储（孤儿化旧数据），写入本帧完整内容
+        glBufferData(
+            GL_UNIFORM_BUFFER,
+            (GLsizeiptr)data_length,
+            data,
+            GL_DYNAMIC_DRAW);
     }
     void ubuffer_close(
         je_graphic_impl_context_t,
@@ -2417,11 +2398,10 @@ void je_graphic_using_opengl3_apis(je_gl_graphic_api_t* write_to_apis)
     write_to_apis->ubuffer_init = ubuffer_init;
 
     write_to_apis->shader_update = shader_update;
-    write_to_apis->texture_2d_update = texture_2d_update;
-    write_to_apis->texture_3d_update = texture_3d_update;
-    write_to_apis->texture_array_update = texture_array_update;
-    write_to_apis->texture_cube_update = texture_cube_update;
-    write_to_apis->texture_msaa_update = texture_msaa_update;
+    write_to_apis->texture_2d_upload = texture_2d_upload;
+    write_to_apis->texture_3d_upload = texture_3d_upload;
+    write_to_apis->texture_array_upload = texture_array_upload;
+    write_to_apis->texture_cube_upload = texture_cube_upload;
     write_to_apis->vertex_update = vertex_update;
     write_to_apis->framebuffer_update = framebuffer_update;
     write_to_apis->ubuffer_update = ubuffer_update;

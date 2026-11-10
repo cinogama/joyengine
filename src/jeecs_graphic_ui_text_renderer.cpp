@@ -15,9 +15,47 @@
 
 namespace jeecs::graphic::ui
 {
+    void TextRenderer::_drop_all_pages_and_glyphs() noexcept
+    {
+        m_fonts.clear();
+        m_total_pages = 0;
+    }
+
     void TextRenderer::begin_frame() noexcept
     {
         ++m_frame;
+
+        // 图形线程版本变化（reboot）后，页纹理被从创建期快照重建，
+        // 图集内容不再有效：丢弃全部缓存，字形会在后续帧重新光栅化
+        for (auto& [font, entry] : m_fonts)
+        {
+            (void)font;
+
+            bool rebooted = false;
+            for (auto& page : entry.m_pages)
+            {
+                const je_version_t version =
+                    page.m_texture->resource()->m_handle.m_graphic_thread_version;
+
+                if (version == 0)
+                    continue;
+
+                if (page.m_graphic_thread_version != 0
+                    && page.m_graphic_thread_version != version)
+                {
+                    rebooted = true;
+                    break;
+                }
+
+                page.m_graphic_thread_version = version;
+            }
+
+            if (rebooted)
+            {
+                _drop_all_pages_and_glyphs();
+                break;
+            }
+        }
 
         // 闲置字体整组释放（含字形、页与字体引用）。
         for (auto it = m_fonts.begin(); it != m_fonts.end();)
@@ -45,9 +83,11 @@ namespace jeecs::graphic::ui
 
     const TextRenderer::glyph_slot* TextRenderer::resolve(
         const basic::resource<graphic::font>& font,
-        int raster_px, char32_t cp)
+        int raster_px, char32_t cp,
+        je_gl_command_buffer_t* update_cmd)
     {
         assert(raster_px > 0);
+        assert(update_cmd != nullptr);
 
         auto& entry = m_fonts[font->resource()];
         if (!entry.m_font.has_value() || entry.m_font.value().get() != font.get())
@@ -62,7 +102,7 @@ namespace jeecs::graphic::ui
                 fnd->second.page->m_last_used_frame = m_frame;
             return &fnd->second;
         }
-        return &_create_glyph(entry, raster_px, cp, key);
+        return &_create_glyph(entry, raster_px, cp, key, update_cmd);
     }
 
     TextRenderer::font_metrics_t TextRenderer::font_metrics(
@@ -122,7 +162,8 @@ namespace jeecs::graphic::ui
         UserInterface::Text& text,
         const UserInterface::Element& elem,
         const UserInterface::WorldLayout& world,
-        float win_w, float win_h)
+        float win_w, float win_h,
+        je_gl_command_buffer_t* update_cmd)
     {
         using Element = UserInterface::Element;
         auto& cache = text.runtime_layout;
@@ -182,7 +223,7 @@ namespace jeecs::graphic::ui
             raster_px[i] = std::clamp(
                 (int)std::lround((float)font_px * chars[i].scale),
                 1, MAX_RASTER_PX);
-            slots[i] = resolve(font_res, raster_px[i], chars[i].cp);
+            slots[i] = resolve(font_res, raster_px[i], chars[i].cp, update_cmd);
             advance[i] = slots[i]->advance_x;
         }
 
@@ -319,7 +360,8 @@ namespace jeecs::graphic::ui
     }
 
     TextRenderer::glyph_slot& TextRenderer::_create_glyph(
-        font_atlas_t& entry, int raster_px, char32_t cp, uint64_t key)
+        font_atlas_t& entry, int raster_px, char32_t cp, uint64_t key,
+        je_gl_command_buffer_t* update_cmd)
     {
         const auto* ch = entry.m_font.value()->get_character(
             (float)raster_px, cp);
@@ -337,7 +379,7 @@ namespace jeecs::graphic::ui
                 && (size_t)slot.w + 2 * PAGE_GUTTER <= PAGE_SIZE
                 && (size_t)slot.h + 2 * PAGE_GUTTER <= PAGE_SIZE)
             {
-                _pack_glyph(entry, slot, *ch->m_texture.get());
+                _pack_glyph(entry, slot, *ch, update_cmd);
             }
         }
         return entry.m_glyphs.emplace(key, slot).first->second;
@@ -346,7 +388,8 @@ namespace jeecs::graphic::ui
     // 行式装箱：当前行放不下则换行，页满则开新页。页只增不减，
     // 因此无需重排、已有字形 UV 永不失效。
     void TextRenderer::_pack_glyph(
-        font_atlas_t& entry, glyph_slot& slot, graphic::texture2d& src)
+        font_atlas_t& entry, glyph_slot& slot, const graphic::character& src,
+        je_gl_command_buffer_t* update_cmd)
     {
         for (;;)
         {
@@ -362,7 +405,7 @@ namespace jeecs::graphic::ui
                 }
                 if (page.m_cursor_y + (size_t)slot.h <= PAGE_SIZE - PAGE_GUTTER)
                 {
-                    _blit_glyph(page, slot, src);
+                    _blit_glyph(page, slot, src, update_cmd);
                     return;
                 }
             }
@@ -371,29 +414,18 @@ namespace jeecs::graphic::ui
     }
 
     void TextRenderer::_blit_glyph(
-        page_t& page, glyph_slot& slot, graphic::texture2d& src)
+        page_t& page, glyph_slot& slot, const graphic::character& src,
+        je_gl_command_buffer_t* update_cmd)
     {
         const size_t gw = (size_t)slot.w, gh = (size_t)slot.h;
         const size_t px = page.m_cursor_x, py = page.m_cursor_y;
 
-        auto* dst_res = page.m_texture->resource();
-        const auto* src_res = src.resource();
+        assert(src.m_bitmap != nullptr);
 
-        // 源为 je_font_char_get 生成的 RGBA 字形纹理（白色 + 覆盖度
-        // alpha，自底向上行序）；图集页同序，逐行拷贝 alpha、RGB 写白。
-        for (size_t row = 0; row < gh; ++row)
-        {
-            uint8_t* dst = dst_res->m_pixels + ((py + row) * PAGE_SIZE + px) * 4;
-            const uint8_t* s = src_res->m_pixels + row * gw * 4;
-            for (size_t col = 0; col < gw; ++col, dst += 4, s += 4)
-            {
-                dst[0] = dst[1] = dst[2] = 0xFF;
-                dst[3] = s[3];
-            }
-        }
-        // 后端按整纹理重传（m_modified 范围字段仅为建议），因此新字形
-        // 出现时该页整体上传一次，其余时间零纹理上传。
-        dst_res->m_handle.m_modified = true;
+        // 字形位图已经是 RGBA（白 + 覆盖度 alpha，自底向上行序），
+        // 与图集页的行序一致：直接把区段录进更新命令，提交时写入图集页。
+        page.m_texture->upload(
+            update_cmd, px, py, gw, gh, src.m_bitmap);
 
         // UV 半像素内缩（逐轴，1px 字形不内缩）：避免相邻字形 / 页边缘
         // 经线性采样渗色。
@@ -418,10 +450,9 @@ namespace jeecs::graphic::ui
                 break;
         }
 
+        // 空图集页：不创建像素快照，内容完全由后续区段上传填充
         auto texture = graphic::texture2d::create(
             PAGE_SIZE, PAGE_SIZE, JE_GL_TEXTURE_FORMAT_RGBA);
-        std::memset(
-            texture->resource()->m_pixels, 0, PAGE_SIZE * PAGE_SIZE * 4);
 
         entry.m_pages.emplace_back(std::move(texture));
         ++m_total_pages;

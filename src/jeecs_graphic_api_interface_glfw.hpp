@@ -478,7 +478,7 @@ namespace jeecs::graphic
                 icon_data.width = (int)icon_texture->width();
                 icon_data.height = (int)icon_texture->height();
                 // Here need a y-direct flip.
-                auto* image_pixels = icon_texture->resource()->m_pixels;
+                auto* image_pixels = icon_texture->resource()->m_initial_pixels;
                 icon_data.pixels = (unsigned char*)malloc((size_t)icon_data.width * (size_t)icon_data.height * 4);
                 assert(icon_data.pixels != nullptr);
 

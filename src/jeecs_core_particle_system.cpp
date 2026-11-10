@@ -204,7 +204,18 @@ namespace jeecs::particle
 
     ParticleSystem::ParticleSystem(game_world w)
         : game_system(w)
+        , _m_graphic_host(nullptr)
+        , _m_update_branch(nullptr)
+        , _m_update_command(nullptr)
     {
+    }
+    ParticleSystem::~ParticleSystem()
+    {
+        if (_m_update_branch != nullptr)
+        {
+            assert(_m_graphic_host != nullptr);
+            je_graphic_uhost_free_branch(_m_graphic_host, _m_update_branch);
+        }
     }
 
     void ParticleSystem::particle_pool::reset()
@@ -230,6 +241,20 @@ namespace jeecs::particle
 
     void ParticleSystem::GraphicUpdate()
     {
+        // 顶点内容随更新命令按帧录制：申请最低优先级的更新链，
+        // 保证先于本帧所有绘制链提交
+        if (_m_update_branch == nullptr)
+        {
+            _m_graphic_host = je_graphic_uhost_get_or_create_for_universe(
+                get_world().get_universe().handle(), nullptr);
+            _m_update_branch = je_graphic_uhost_alloc_branch(_m_graphic_host);
+        }
+
+        je_graphic_branch_new_frame(
+            _m_update_branch, jeecs::graphic::GRAPHIC_UPDATE_BRANCH_QUEUE);
+        _m_update_command =
+            je_graphic_branch_new_update_command(_m_update_branch);
+
         const float dt = deltatime();
         _m_alive_emitter_ids.clear();
 
@@ -388,7 +413,20 @@ namespace jeecs::particle
             }
 
             if (!pool.dirty)
+            {
+                // 内容只在录制它的帧生效：即使本帧没重建网格，也要把
+                // staging 的当前内容重新录一次
+                if (pool.alive_count > 0)
+                {
+                    je_graphic_cmd_update_vertex(
+                        _m_update_command,
+                        pool.gpu_vertex->get()->resource(),
+                        pool.staging.data(),
+                        pool.staging.size() * sizeof(float),
+                        pool.alive_count * 6);
+                }
                 continue;
+            }
 
             // ===== 构建公告板网格（局部坐标顶点数据） =====
             je_gl_vertex_t* raw_vertex = pool.gpu_vertex->get()->resource();
@@ -510,7 +548,9 @@ namespace jeecs::particle
                 raw_vertex->m_x_max = raw_vertex->m_y_max = raw_vertex->m_z_max = 0.01f;
             }
 
-            pool.gpu_vertex->get()->update_buffer(
+            je_graphic_cmd_update_vertex(
+                _m_update_command,
+                raw_vertex,
                 pool.staging.data(),
                 pool.staging.size() * sizeof(float),
                 pool.alive_count * 6);

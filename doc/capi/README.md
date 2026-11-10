@@ -67,6 +67,7 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 - `je_graphic_thread_start` / `je_graphic_thread_terminate` - 图形线程
 - `je_graphic_texture_*` / `je_graphic_shader_*` / `je_graphic_vertex_*` / `je_graphic_framebuf_*` / `je_graphic_uniformbuf_*` - 资源管理
 - `je_graphic_cmd_*` / `je_graphic_pipeline_*` / `je_graphic_sampler_*` - 新渲染 API（命令缓冲区/pipeline/采样器），见 [render_api_v2.md](graphic/render_api_v2.md)
+- `je_graphic_cmd_update_*` / `je_graphic_cmd_upload_texture_*` / `je_graphic_branch_new_update_command` - 资源更新（本帧内容 + 持久纹理上传），见 [render_api_v2.md](graphic/render_api_v2.md)
 - `je_graphic_branch_*` / `je_graphic_uhost_*` / `je_graphic_sync_*` - 绘制组、图形上下文与同步
 - `je_graphic_using_*_apis` - 图形 API 选择
 - `je_image_texture_*` - 图片纹理缓存（颜色空间 + 解码后的像素）

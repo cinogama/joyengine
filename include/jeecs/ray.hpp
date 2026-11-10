@@ -250,27 +250,27 @@ namespace jeecs
                     // 带索引的网格（模型文件加载产物）必须按索引缓冲取三角形，
                     // 否则顶点顺序与索引数量不匹配，结果不可靠且可能越界读取。
                     // 无索引时按顶点数组顺序遍历，上界为顶点数（字节数/每顶点大小）。
-                    const bool use_indices = raw_vertex_data->m_indices != nullptr;
+                    const bool use_indices = raw_vertex_data->m_initial_indices != nullptr;
                     const size_t ref_count = use_indices
                         ? raw_vertex_data->m_index_count
                         : raw_vertex_data->m_vertex_length / raw_vertex_data->m_data_size_per_point;
 
                     auto vertex_ref = [raw_vertex_data, use_indices](size_t i) -> size_t
                     {
-                        return use_indices ? raw_vertex_data->m_indices[i] : i;
+                        return use_indices ? raw_vertex_data->m_initial_indices[i] : i;
                     };
 
                     for (size_t i = 0; i + 2 < ref_count; i += 3)
                     {
                         const float* point_0 =
                             reinterpret_cast<const float*>(
-                                static_cast<const char*>(raw_vertex_data->m_vertexs) + raw_vertex_data->m_data_size_per_point * vertex_ref(i));
+                                static_cast<const char*>(raw_vertex_data->m_initial_vertexs) + raw_vertex_data->m_data_size_per_point * vertex_ref(i));
                         const float* point_1 =
                             reinterpret_cast<const float*>(
-                                static_cast<const char*>(raw_vertex_data->m_vertexs) + raw_vertex_data->m_data_size_per_point * vertex_ref(i + 1));
+                                static_cast<const char*>(raw_vertex_data->m_initial_vertexs) + raw_vertex_data->m_data_size_per_point * vertex_ref(i + 1));
                         const float* point_2 =
                             reinterpret_cast<const float*>(
-                                static_cast<const char*>(raw_vertex_data->m_vertexs) + raw_vertex_data->m_data_size_per_point * vertex_ref(i + 2));
+                                static_cast<const char*>(raw_vertex_data->m_initial_vertexs) + raw_vertex_data->m_data_size_per_point * vertex_ref(i + 2));
 
                         vec3 triangle_point[3] = {
                             {point_0[0], point_0[1], point_0[2]},
@@ -289,22 +289,22 @@ namespace jeecs
                 }
                 case JE_GL_VERTEX_TYPE_TRIANGLESTRIP:
                 {
-                    const bool use_indices = raw_vertex_data->m_indices != nullptr;
+                    const bool use_indices = raw_vertex_data->m_initial_indices != nullptr;
                     const size_t ref_count = use_indices
                         ? raw_vertex_data->m_index_count
                         : raw_vertex_data->m_vertex_length / raw_vertex_data->m_data_size_per_point;
 
                     auto vertex_ref = [raw_vertex_data, use_indices](size_t i) -> size_t
                     {
-                        return use_indices ? raw_vertex_data->m_indices[i] : i;
+                        return use_indices ? raw_vertex_data->m_initial_indices[i] : i;
                     };
 
                     const float* point_0 =
                         reinterpret_cast<const float*>(
-                            static_cast<const char*>(raw_vertex_data->m_vertexs) + raw_vertex_data->m_data_size_per_point * vertex_ref(0));
+                            static_cast<const char*>(raw_vertex_data->m_initial_vertexs) + raw_vertex_data->m_data_size_per_point * vertex_ref(0));
                     const float* point_1 =
                         reinterpret_cast<const float*>(
-                            static_cast<const char*>(raw_vertex_data->m_vertexs) + raw_vertex_data->m_data_size_per_point * vertex_ref(1));
+                            static_cast<const char*>(raw_vertex_data->m_initial_vertexs) + raw_vertex_data->m_data_size_per_point * vertex_ref(1));
 
                     vec3 triangle_point[3] = {
                         {point_0[0], point_0[1], point_0[2]},
@@ -315,7 +315,7 @@ namespace jeecs
                     for (size_t i = 2; i < ref_count; ++i)
                     {
                         const float* point = reinterpret_cast<const float*>(
-                            static_cast<const char*>(raw_vertex_data->m_vertexs) + raw_vertex_data->m_data_size_per_point * vertex_ref(i));
+                            static_cast<const char*>(raw_vertex_data->m_initial_vertexs) + raw_vertex_data->m_data_size_per_point * vertex_ref(i));
 
                         triangle_point[i % 3] = { point[0], point[1], point[2] };
 

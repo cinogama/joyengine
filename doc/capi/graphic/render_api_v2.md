@@ -53,6 +53,23 @@
    `je_graphic_cmd_end_pass`。
 6. commit 后命令缓冲区保留已录制内容；复用前调用 `je_graphic_cmd_reset`。
 
+### 资源更新
+
+资源内容分两类：
+
+- **静态内容**：创建期快照（纹理像素 / 顶点数据 / UBO 初始内容）。后端在资源
+  首次使用时上传；创建后快照只读。
+- **本帧内容**：`je_graphic_cmd_update_vertex` / `je_graphic_cmd_update_uniform_buffer`
+  把数据录制进命令缓冲，提交时落实到本帧的瞬态存储。更新**只对包含该命令的帧生效**；
+  没有录制更新的帧绑定创建期内容。带动态内容的资源应当在绘制它的每一帧都录制一次。
+- **持久上传**：`je_graphic_cmd_upload_texture_*` 写入纹理自身的存储，提交后对后续帧
+  持续可见（资产语义）。后端负责与在飞帧同步，属于稀有路径。
+
+更新不需要处于 pass 内。推荐把更新录制在
+`je_graphic_branch_new_update_command` 返回的**更新命令缓冲**中，并以最低优先级
+（`INT32_MIN`）调用 `je_graphic_branch_new_frame`：宿主按优先级提交，更新先于本帧
+所有绘制链落实。更新命令缓冲不开启 pass，窗口被跳过的帧中也会被提交（只跳过绘制）。
+
 ## 空安全约定
 
 ```cpp
@@ -125,6 +142,7 @@ je_graphic_cmd_reset(cmd);    // 复用
 |---|---|
 | 显式 pipeline | GL 状态缓存；DX11 输入布局/状态对象；VK/Metal 按目标缓存 PSO |
 | per-draw uniform | 每帧 UBO ring + `glBindBufferRange`（WebGL2 用 `bufferSubData`） |
+| 本帧顶点/UBO 内容 | 每帧瞬态 ring（Vulkan/Metal）或驱动丢弃语义（DX11 `WRITE_DISCARD` / GL orphan） |
 | 独立 sampler | `glGenSamplers` / `glBindSampler` |
 | instanced draw | `glDrawElementsInstanced` / `glDrawArraysInstanced` |
 | MRT | `glDrawBuffers` |
@@ -138,9 +156,12 @@ persistent mapping、无绑定纹理、顶点阶段纹理采样（v1 与 Metal �
 
 - `jegl_rchain_*`、立即模式绘制 API（`jegl_bind_*` / `jegl_draw_vertex` /
   `jegl_rend_to_framebuffer` / `jegl_set_uniform_value`）及其 Woolang 绑定已删除。
-- 资源加载/更新/关闭接口（`je_graphic_texture_*` / `je_graphic_shader_*` /
+- 资源加载/关闭接口（`je_graphic_texture_*` / `je_graphic_shader_*` /
   `je_graphic_vertex_*` / `je_graphic_framebuf_*` / `je_graphic_uniformbuf_*`）保留，
   作为新渲染 API 的资源层。
+- 旧的“改 CPU 缓冲 + `m_modified` 懒上传”接口已删除：`je_graphic_vertex_buffer_update`、
+  `je_graphic_uniformbuf_update`、纹理的 `clip` / `pix` / `pixel` / `mark_modified` /
+  快照接口全部移除。修改资源只能通过命令化的更新/上传接口。
 - 分支类型重命名为 `je_render_branch_t`，只承载 command buffer。
 
 ## 当前实现状态
@@ -160,9 +181,12 @@ persistent mapping、无绑定纹理、顶点阶段纹理采样（v1 与 Metal �
   `begin_pass` / `end_pass` 不再触发 queue submit。
 - per-draw uniform：每帧一个持久映射的 HOST_VISIBLE|HOST_COHERENT ring，set 0 使用
   `VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC` 和 dynamic offset；不再按 draw 分配 UBO。
-- 顶点缓冲整体更新：按帧槽位环形重命名，对齐 DX11 `WRITE_DISCARD` / OpenGL
-  重指定的孤儿化语义——更新写新槽位，在飞旧帧继续读各自绑定的旧槽位；
-  额外槽位在首次整体更新时懒分配，从不更新的静态网格不占额外内存。
+- 本帧内容（顶点 / 用户 UBO）：同一个每帧瞬态 ring（16MB，按帧槽位独占、槽位复用
+  前等待 fence）线性分配。更新写 ring 切片并记录帧序号，绑定阶段按序号改绑
+  ring+offset；创建期内容保留在资源自己的持久缓冲里，供静态资源和未录制更新的帧使用。
+  ring 按帧槽位隔离，在飞帧永远不会读到别的帧写入的数据。
+- 持久纹理上传：像素经 ring 暂存后在帧命令缓冲里 `vkCmdCopyBufferToImage`；提交前
+  先等待另一个在飞帧槽位完成（稀有路径）。初始化上传走一次临时提交并等待完成。
 - 固定功能状态：PSO 按 `(pipeline, framebuffer, topology, stride, sample count)` 缓存，
   状态来自 `je_gl_pipeline_t::m_state`（深度/混合/剔除/绕序/颜色写掩码），并受
   `VK_EXT_`/设备 feature 支持情况约束。

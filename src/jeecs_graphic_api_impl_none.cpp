@@ -116,28 +116,40 @@ namespace jeecs::graphic::api::none
     void update_shader(je_graphic_impl_context_t, je_gl_shader_t*)
     {
     }
-    void update_texture_2d(je_graphic_impl_context_t, je_gl_texture_2d_t*)
+    void upload_texture_2d(
+        je_graphic_impl_context_t, je_gl_texture_2d_t*,
+        size_t, size_t, size_t, size_t, const je_gl_texture_pixel_data_t*)
     {
     }
-    void update_texture_3d(je_graphic_impl_context_t, je_gl_texture_3d_t*)
+    void upload_texture_3d(
+        je_graphic_impl_context_t, je_gl_texture_3d_t*,
+        size_t, size_t, size_t, size_t, size_t, size_t,
+        const je_gl_texture_pixel_data_t*)
     {
     }
-    void update_texture_array(je_graphic_impl_context_t, je_gl_texture_array_t*)
+    void upload_texture_array(
+        je_graphic_impl_context_t, je_gl_texture_array_t*,
+        size_t, size_t, size_t, size_t, size_t, size_t,
+        const je_gl_texture_pixel_data_t*)
     {
     }
-    void update_texture_cube(je_graphic_impl_context_t, je_gl_texture_cube_t*)
+    void upload_texture_cube(
+        je_graphic_impl_context_t, je_gl_texture_cube_t*,
+        size_t, size_t, size_t, size_t, size_t,
+        const je_gl_texture_pixel_data_t*)
     {
     }
-    void update_texture_msaa(je_graphic_impl_context_t, je_gl_texture_msaa_t*)
-    {
-    }
-    void update_vertex(je_graphic_impl_context_t, je_gl_vertex_t*)
+    void update_vertex(
+        je_graphic_impl_context_t, je_gl_vertex_t*,
+        const void*, size_t)
     {
     }
     void update_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t*)
     {
     }
-    void update_ubuffer(je_graphic_impl_context_t, je_gl_uniform_buffer_t*)
+    void update_ubuffer(
+        je_graphic_impl_context_t, je_gl_uniform_buffer_t*,
+        const void*, size_t)
     {
     }
 
@@ -273,11 +285,10 @@ void je_graphic_using_none_apis(je_gl_graphic_api_t* write_to_apis)
     write_to_apis->ubuffer_init = init_ubuffer;
 
     write_to_apis->shader_update = update_shader;
-    write_to_apis->texture_2d_update = update_texture_2d;
-    write_to_apis->texture_3d_update = update_texture_3d;
-    write_to_apis->texture_array_update = update_texture_array;
-    write_to_apis->texture_cube_update = update_texture_cube;
-    write_to_apis->texture_msaa_update = update_texture_msaa;
+    write_to_apis->texture_2d_upload = upload_texture_2d;
+    write_to_apis->texture_3d_upload = upload_texture_3d;
+    write_to_apis->texture_array_upload = upload_texture_array;
+    write_to_apis->texture_cube_upload = upload_texture_cube;
     write_to_apis->vertex_update = update_vertex;
     write_to_apis->framebuffer_update = update_framebuffer;
     write_to_apis->ubuffer_update = update_ubuffer;
