@@ -249,7 +249,7 @@ world.set_enable(true);                             // 一切就绪后启用
 
 ### towoo 脚本系统的包装
 
-每个 Woolang `system!` 声明都会在类型系统里注册一个 `ToWooBaseSystem` 类型的系统（`je_typing_register` + `je_typing_system_updater_register` 挂满全部更新器槽位），脚本函数按声明宏分组存入 `m_preworks` / `m_works` / `m_lateworks`，分别由 pre_update / update / late_update 槽位驱动——这就是脚本侧只见三个阶段的实现原因。
+每个系统脚本文件（`<名字>.je4system.wo`，文件名即系统类型名）都会在类型系统里注册一个 `ToWooBaseSystem` 类型的系统（`je_typing_register` + `je_typing_system_updater_register` 挂满全部更新器槽位）；文件内用 `system!` / `work!` 声明的工作按声明宏分组存入 `m_preworks` / `m_works` / `m_lateworks`，分别由 pre_update / update / late_update 槽位驱动——这就是脚本侧只见三个阶段的实现原因。
 
 `_set_current_job_type` 强制注册顺序沿 PRE → UPDATE → LATE 单调递增，倒序声明会 panic。`work!` 声明的工作没有切片需求（`is_single_work`），不参与上述分组。
 
@@ -296,6 +296,6 @@ world.set_enable(true);                             // 一切就绪后启用
 | Universe / World / CommandBuffer / ArchManager / ArchType | `src/jeecs_basic_arch_system.cpp` |
 | 系统更新 job、帧循环步骤 | 同上（`default_job_for_execute_sys_update_for_worlds_in_universe`、`update_universe_action_and_worlds`） |
 | towoo 系统包装与 job 注册 | `src/jeecs_woolang_towoo_script_basic.cpp` |
-| C ABI 与行为注释 | `include/jeecs/ecs.hpp`（逐项函数说明见 [doc/capi/ecs](../capi/ecs/README.md)） |
+| C ABI 与行为注释 | `include/jeecs/ecs.hpp`（逐项函数说明见 [doc/capi](../capi/README.md) 的 ecs 分节） |
 | Woolang 绑定 | `je/ecs.wo` |
 | 编辑器暂停/恢复世界的实践参考 | `builtin/editor/Editor/DebugRun.wo` |
