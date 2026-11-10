@@ -76,7 +76,10 @@ uint64_t je_file_crc64(const char* filepath, uint64_t crc64_continue)
         // 2. Check crc64 of current file;
         if (virtual_crc64 == ~(uint64_t)0)
         {
-            // Origin file missing, it's Okay.
+            // Ignore crc check, but the crc64 field is always part of the
+            // cache layout — skip it to keep the read position correct.
+            uint64_t cache_crc64 = 0;
+            je_file_read(&cache_crc64, sizeof(uint64_t), 1, cache_file);
         }
         else
         {
