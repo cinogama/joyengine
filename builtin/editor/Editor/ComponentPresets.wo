@@ -67,8 +67,11 @@ namespace JEEditor::Editor::ComponentPresets
         "Physics2D::Scene",
     ];
 
+    // 粒子模拟查询要求 Renderer::Shape（写入公告板网格），渲染还需
+    // Shaders / Textures2D（粒子纹理绑在 Textures2D 的 pass 0）
     public let PARTICLE_EMITTER_COMPONENTS = [
-        "Particle::Emitter",
+        "Particle::Emitter", "Renderer::Shape", "Renderer::Shaders",
+        "Renderer::Textures2D",
     ];
 
     // 常用组件组合表：(分组标题, [(组合名, [组件类型全名...])...])
@@ -79,12 +82,13 @@ namespace JEEditor::Editor::ComponentPresets
         ]),
         ("渲染", [
             ("基本渲染", BASE_RENDERER_COMPONENTS),
-            // 文本由 UI 管线逐字直接绘制（内置文本着色器），无需任何
-            // Renderer 渲染组件；可选挂 Renderer::Shaders 以自定义着色器
-            // 绘制文本特效，可选挂 Renderer::Color 作整段色调
+            // 文本由 UI 管线逐字直接绘制，但 UI 渲染查询把 Renderer::Shaders
+            // 列为必需组件（缺 Shaders 的文本实体不会被绘制）；这里一并挂上
+            //（着色器内容随后由用户在材质面板指定，如 UIText.shader），
+            // 可选挂 Renderer::Color 作整段色调
             ("UI文本", [
                 "UserInterface::Element", "UserInterface::WorldLayout",
-                "UserInterface::Text"]),
+                "UserInterface::Text", "Renderer::Shaders"]),
             ("动画播放器", ["Animation::Animator"]),
             ("粒子发射器", PARTICLE_EMITTER_COMPONENTS),
         ]),

@@ -365,10 +365,11 @@ namespace JEEditor::Editor::WorldEditorViewport
             let mouse = GetMousePos() as vec2;
             let mouse_local = (mouse - rmin) / rsize;
             let mouse_ndc = (mouse_local - (0.5, 0.5) as vec2) * 2.;
+            // 与渲染系统一致：挂 OrthoProjection 即按正交处理
             let mouse_ray = towoo::ray::from(
                 camera_trans, camera_proj,
                 (mouse_ndc[0], -mouse_ndc[1]) as vec2,
-                camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none);
+                !(camera_entity->towoo::get_component:<Camera::OrthoProjection>->is_none));
 
             // 拖拽进行中：按当前鼠标射线应用编辑
             if (self.m_collider_dragging)

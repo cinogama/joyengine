@@ -234,20 +234,21 @@ namespace JEEditor::Editor::WorldEditorViewport
         gizmo_pos: vec3,
         rect_size: vec2)=> real
     {
-        match (camera_entity->towoo::get_component:<Camera::PerspectiveProjection>())
+        // 与渲染系统一致：挂 OrthoProjection 即按正交处理（双投影组件并存时正交优先）
+        match (camera_entity->towoo::get_component:<Camera::OrthoProjection>())
         {
-            value(persp)?
-            {
-                let dist = (gizmo_pos - camera_trans->get_global_pos)->length;
-                let half_fov_rad = persp.angle->get * 0.5 * mathf::DEG2RAD;
-                return 2. * dist * mathf::tan(half_fov_rad) / mathf::abs(rect_size[1]);
-            }
+            value(ortho)?
+                // 正交投影纵向可视半高为 ORTHO_PROJECTION_RATIO / scale（取 5.0）
+                return 10. / ortho.scale->get / mathf::abs(rect_size[1]);
             none?
-                match (camera_entity->towoo::get_component:<Camera::OrthoProjection>())
+                match (camera_entity->towoo::get_component:<Camera::PerspectiveProjection>())
                 {
-                    value(ortho)?
-                        // 正交投影纵向可视半高为 ORTHO_PROJECTION_RATIO / scale（取 5.0）
-                        return 10. / ortho.scale->get / mathf::abs(rect_size[1]);
+                    value(persp)?
+                    {
+                        let dist = (gizmo_pos - camera_trans->get_global_pos)->length;
+                        let half_fov_rad = persp.angle->get * 0.5 * mathf::DEG2RAD;
+                        return 2. * dist * mathf::tan(half_fov_rad) / mathf::abs(rect_size[1]);
+                    }
                     none?;
                 }
         }

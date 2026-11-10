@@ -371,7 +371,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                                     let picked_euid = self->pickEntityForContextMenu(
                                         towoo::ray::from(
                                             trans, proj, ndc,
-                                            camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none));
+                                            // 与渲染系统一致：挂 OrthoProjection 即按正交处理
+                                            !(camera_entity->towoo::get_component:<Camera::OrthoProjection>->is_none)));
 
                                     match (picked_euid)
                                     {

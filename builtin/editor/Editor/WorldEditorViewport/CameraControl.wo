@@ -340,7 +340,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                                             trans,
                                             proj,
                                             ndc,
-                                            perspectiveProjection->is_none));
+                                            isDebugCamera2DMode(cam)));
                                 }
                             }
                         }
@@ -353,15 +353,16 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 内图像与 gizmo 使用同一份缩放状态；摄像机控制的滚轮/中键在
         // UI 编辑模式下让位（见 control*Camera 内卫语句）
 
-        match (perspectiveProjection)
+        // 与渲染系统一致：挂 OrthoProjection 即按正交处理（双投影组件并存时正交优先）
+        match (cam->towoo::get_component:<Camera::OrthoProjection>)
         {
-            value(_)?
-                self->controlPerspectiveCamera(pos, rot, dt, hovered);
+            value(ortho)?
+                self->controlOrthoCamera(pos, rot, ortho, dt, hovered, viewport_rect);
             none?
-                match (cam->towoo::get_component:<Camera::OrthoProjection>)
+                match (perspectiveProjection)
                 {
-                    value(ortho)?
-                        self->controlOrthoCamera(pos, rot, ortho, dt, hovered, viewport_rect);
+                    value(_)?
+                        self->controlPerspectiveCamera(pos, rot, dt, hovered);
                     none?;
                 }
         }
