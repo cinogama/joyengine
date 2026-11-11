@@ -12,7 +12,9 @@
 //   APPLY_RESOLUTION     设置初始窗口尺寸
 //   APPLY_TITLE          设置窗口标题
 //   LOAD_WORLD_INSTANCE  加载启动世界
+
 import pkg::std;
+import pkg::crashhandler;
 
 import je;
 import je::ecs;
@@ -25,12 +27,16 @@ import je::internal;
 // 都声明在 je.wo 中，只 import je 即可。
 
 import builtin::gaming::Loading::World;
+import builtin::editor::Editor::PanicBox;
 
 using std;
 using je;
 
 func main()
 {
+    // 注册脚本 panic 回调提示窗口
+    JEEditor::Editor::PanicBox::register();
+
     // 原生模块的句柄必须保持存活到进程退出；defer 在 main 返回时统一释放。
     let loaded_modules = []mut: vec<handle>;
     defer {
@@ -43,7 +49,7 @@ $$LOAD_DYLIB_MODULES$$
 
     // ---------- ToWoo 组件与系统 ----------
     // update_api 必须在注册 ToWoo 类型之前调用，与编辑器打开项目时的顺序一致。
-    je::towoo::update_api();
+    towoo::update_api();
 
 $$LOAD_TOWOO_COMPONENT$$
 
@@ -62,7 +68,7 @@ $$APPLY_TITLE$$
 
     // 引擎的图形宿主默认跳过所有绘制（je_graphic_uhost_t::m_skip_all_draw），
     // 这里开启该宇宙的图形管线。函数名中的 editor 是历史遗留，导出游戏同样需要调用。
-    je::internal::init_graphic_pipeline_for_editor(u);
+    internal::init_graphic_pipeline_for_editor(u);
 
 $$LOAD_WORLD_INSTANCE$$
 
