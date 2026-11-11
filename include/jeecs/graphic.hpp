@@ -266,6 +266,9 @@ struct je_gl_texture_2d_t : public je_gl_texture_common_t
 #if defined(__clang__)
 #   pragma clang diagnostic push
 #   pragma clang diagnostic ignored "-Winvalid-offsetof"
+#elif defined(__GNUC__)
+#   pragma GCC diagnostic push
+#   pragma GCC diagnostic ignored "-Winvalid-offsetof"
 #endif
 static_assert(
     std::is_trivial_v<je_gl_texture_2d_t> && 0 == offsetof(je_gl_texture_2d_t, m_handle));
@@ -323,6 +326,8 @@ static_assert(
     std::is_trivial_v<je_gl_texture_msaa_t> && 0 == offsetof(je_gl_texture_msaa_t, m_handle));
 #if defined(__clang__)
 #   pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#   pragma GCC diagnostic pop
 #endif
 
 /*
