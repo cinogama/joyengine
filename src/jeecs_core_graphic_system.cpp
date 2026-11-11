@@ -189,11 +189,19 @@ namespace jeecs::graphic
                 return std::nullopt;
             framebuffer = camera.rendToFramebuffer->framebuffer->get();
         }
-        return camera_target{
-            framebuffer,
-            framebuffer != nullptr ? framebuffer->width() : m_window_width,
-            framebuffer != nullptr ? framebuffer->height() : m_window_height,
-        };
+
+        const size_t target_width =
+            framebuffer != nullptr ? framebuffer->width() : m_window_width;
+        const size_t target_height =
+            framebuffer != nullptr ? framebuffer->height() : m_window_height;
+
+        // 目标尺寸为 0（窗口最小化）时没有可绘制区域：本帧跳过该相机。
+        // 渲染线程在同样情况下（update_result::PAUSE）也会丢弃以屏幕为
+        // 目标的绘制命令，游戏线程侧因此不必录制。
+        if (target_width == 0 || target_height == 0)
+            return std::nullopt;
+
+        return camera_target{ framebuffer, target_width, target_height };
     }
 
     je_gl_command_buffer_t* GraphicPipelineBase::begin_camera_pass(
@@ -218,6 +226,8 @@ namespace jeecs::graphic
         graphic::framebuffer* rend_aim_buffer,
         size_t buffer_w, size_t buffer_h)
     {
+        // 目标尺寸恒为正：窗口最小化（尺寸为 0）的相机已由
+        // resolve_camera_target 返回 nullopt 提前跳过。
         assert(buffer_w > 0 && buffer_h > 0);
 
         je_gl_frame_buffer_t* fb =
@@ -450,19 +460,6 @@ namespace jeecs::graphic
             )
         >())
         {
-            float mat_inv_rotation[4][4];
-            translation.world_rotation.create_inv_matrix(mat_inv_rotation);
-
-            float mat_inv_position[4][4] = {};
-            mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
-            mat_inv_position[3][0] = -translation.world_position.x;
-            mat_inv_position[3][1] = -translation.world_position.y;
-            mat_inv_position[3][2] = -translation.world_position.z;
-
-            // TODO: Optmize
-            math::mat4xmat4(projection.view, mat_inv_rotation, mat_inv_position);
-
-            assert(ortho || perspec);
             graphic::framebuffer* rend_aim_buffer =
                 rendbuf && rendbuf->framebuffer.has_value()
                 ? rendbuf->framebuffer.value().get()
@@ -478,6 +475,25 @@ namespace jeecs::graphic
                     (viewport ? viewport->viewport.w : 1.0f) *
                     (rend_aim_buffer ? rend_aim_buffer->height() : m_window_height));
 
+            // 目标尺寸为 0（窗口最小化）：投影矩阵会退化为 NaN，视锥平面
+            // 也无意义。本帧不会为该相机录制 pass（见 resolve_camera_target），
+            // 矩阵组整体保留上一帧结果。
+            if (RENDAIMBUFFER_WIDTH == 0 || RENDAIMBUFFER_HEIGHT == 0)
+                continue;
+
+            float mat_inv_rotation[4][4];
+            translation.world_rotation.create_inv_matrix(mat_inv_rotation);
+
+            float mat_inv_position[4][4] = {};
+            mat_inv_position[0][0] = mat_inv_position[1][1] = mat_inv_position[2][2] = mat_inv_position[3][3] = 1.0f;
+            mat_inv_position[3][0] = -translation.world_position.x;
+            mat_inv_position[3][1] = -translation.world_position.y;
+            mat_inv_position[3][2] = -translation.world_position.z;
+
+            // TODO: Optmize
+            math::mat4xmat4(projection.view, mat_inv_rotation, mat_inv_position);
+
+            assert(ortho || perspec);
             if (ortho)
             {
                 graphic::ortho_projection(projection.projection,

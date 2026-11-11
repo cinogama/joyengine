@@ -237,14 +237,16 @@ namespace jeecs::graphic
                     ? rendbuf->framebuffer->get()
                     : nullptr;
 
+                // 目标尺寸为 0（窗口最小化）时保持现有 post 目标不动：
+                // 本帧没有可绘制区域，重建为 1×1 再重建回来纯属浪费。
                 const size_t RENDAIMBUFFER_WIDTH =
-                    std::max((size_t)1, (size_t)llround(
+                    (size_t)llround(
                         (cameraviewport ? cameraviewport->viewport.z : 1.0f) *
-                        (rend_aim_buffer ? rend_aim_buffer->width() : m_window_width)));
+                        (rend_aim_buffer ? rend_aim_buffer->width() : m_window_width));
                 const size_t RENDAIMBUFFER_HEIGHT =
-                    std::max((size_t)1, (size_t)llround(
+                    (size_t)llround(
                         (cameraviewport ? cameraviewport->viewport.w : 1.0f) *
-                        (rend_aim_buffer ? rend_aim_buffer->height() : m_window_height)));
+                        (rend_aim_buffer ? rend_aim_buffer->height() : m_window_height));
 
                 const size_t LIGHT_BUFFER_WIDTH =
                     scaled_buffer_size(RENDAIMBUFFER_WIDTH, light2dpostpass->light_rend_ratio);

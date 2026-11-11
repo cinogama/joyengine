@@ -168,8 +168,8 @@ namespace jeecs::graphic
         // rend_queue 排序。
         void collect_cameras(std::vector<camera_arch>& cameras);
 
-        // 解析相机的渲染目标；RendToFramebuffer 的帧缓冲尚未就绪时返回
-        // nullopt，本帧跳过该相机。
+        // 解析相机的渲染目标；RendToFramebuffer 的帧缓冲尚未就绪，或
+        // 目标尺寸为 0（窗口最小化）时返回 nullopt，本帧跳过该相机。
         std::optional<camera_target> resolve_camera_target(
             const camera_arch& camera) const;
 
@@ -230,6 +230,7 @@ namespace jeecs::graphic
         /* ---------------- 内部步骤 ---------------- */
 
         // begin_frame 的相机矩阵更新：视图、投影（按目标尺寸）与视锥平面。
+        // 目标尺寸为 0（窗口最小化）的相机保留上一帧的矩阵组。
         void update_camera_matrices();
         je_gl_context_t* graphic_context() const;
     };
