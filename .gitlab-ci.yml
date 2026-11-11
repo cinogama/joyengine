@@ -2,13 +2,13 @@
 build_linux_opengl:
   stage: build
   script:
+    - git submodule sync --recursive
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
     - rm -f CMakeCache.txt
     - cmake ..
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
-      -DJE4_COPYING_BUILTIN_FILES=OFF
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=ON
@@ -31,13 +31,13 @@ build_linux_opengl:
 build_linux_a64_opengl:
   stage: build
   script:
+    - git submodule sync --recursive
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
     - rm -f CMakeCache.txt
     - cmake ..
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
-      -DJE4_COPYING_BUILTIN_FILES=OFF
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
       -DJE4_BUILD_SHARED_CORE=ON
       -DJE4_ENABLE_DX11_GAPI=OFF
@@ -61,13 +61,13 @@ build_linux_a64_opengl:
 build_linux_a64_opengl_static:
   stage: build
   script:
+    - git submodule sync --recursive
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
     - rm -f CMakeCache.txt
     - cmake ..
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
-      -DJE4_COPYING_BUILTIN_FILES=OFF
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
       -DJE4_BUILD_SHARED_CORE=OFF
       -DJE4_ENABLE_DX11_GAPI=OFF
@@ -92,13 +92,13 @@ build_linux_a64_opengl_static:
 build_linux_opengles:
   stage: build
   script:
+    - git submodule sync --recursive
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
     - rm -f CMakeCache.txt
     - cmake ..
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
-      -DJE4_COPYING_BUILTIN_FILES=OFF
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
       -DJE4_BUILD_SHARED_CORE=ON
       -DJE4_ENABLE_DX11_GAPI=OFF
@@ -124,6 +124,7 @@ build_linux_opengles:
 build_win64_dx11_opengl_vk:
   stage: build
   script:
+    - git submodule sync --recursive
     - git submodule update --init --recursive --force
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
@@ -131,7 +132,6 @@ build_win64_dx11_opengl_vk:
     - cmake ..
       -A x64
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
-      -DJE4_COPYING_BUILTIN_FILES=ON
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
       -DJE4_BUILD_SHARED_CORE=ON
       -DJE4_ENABLE_DX11_GAPI=ON
@@ -169,6 +169,7 @@ build_win64_dx11_opengl_vk:
 build_win64_dx11_opengles_vk:
   stage: build
   script:
+    - git submodule sync --recursive
     - git submodule update --init --recursive --force
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
@@ -176,7 +177,6 @@ build_win64_dx11_opengles_vk:
     - cmake ..
       -A x64
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
-      -DJE4_COPYING_BUILTIN_FILES=ON
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
       -DJE4_BUILD_SHARED_CORE=ON
       -DJE4_ENABLE_DX11_GAPI=ON
@@ -192,6 +192,7 @@ build_win64_dx11_opengles_vk:
 build_win64_dx11_opengles_vk_static:
   stage: build
   script:
+    - git submodule sync --recursive
     - git submodule update --init --recursive --force
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
@@ -199,7 +200,6 @@ build_win64_dx11_opengles_vk_static:
     - cmake ..
       -A x64
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
-      -DJE4_COPYING_BUILTIN_FILES=ON
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
       -DJE4_BUILD_SHARED_CORE=OFF
       -DJE4_ENABLE_DX11_GAPI=ON
@@ -215,13 +215,13 @@ build_win64_dx11_opengles_vk_static:
 build_macos_metal_opengl_vk:
   stage: build
   script:
+    - git submodule sync --recursive
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
     - rm -f CMakeCache.txt
     - cmake ..
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
-      -DJE4_COPYING_BUILTIN_FILES=OFF
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=ON

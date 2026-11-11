@@ -76,5 +76,4 @@
 [submodule "3rd/miniz"]
 	path = 3rd/miniz
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/miniz.git
-	branch = master
-	tag = 3.1.2
+	branch = master_3.1.2_fix
