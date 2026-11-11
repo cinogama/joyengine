@@ -328,14 +328,15 @@ namespace jeecs::graphic::ui
                 const glyph_slot* slot = slots[j];
                 if (slot->w > 0 && slot->h > 0)
                 {
-                    // 字形盒左下角 = 笔位 + 基线偏移 + offset 标记
-                    //（offset 单位为基准字号倍数，y 向上）。取整保证
-                    // 1:1 像素映射下字形锐利；基线 y 已在整数网格上。
+                    // 字形盒左下角 = 行首对齐偏移 + 笔位 + 基线偏移 +
+                    // offset 标记（offset 单位为基准字号倍数，y 向上）。
+                    // 取整保证 1:1 像素映射下字形锐利；基线 y 已在整数
+                    // 网格上。
                     UserInterface::Text::runtime_layout_t::glyph_t glyph;
                     glyph.cp = chars[j].cp;
                     glyph.raster_px = raster_px[j];
                     glyph.x = std::round(
-                        pen_x + (float)slot->baseline_offset_x
+                        x0 + pen_x + (float)slot->baseline_offset_x
                         + chars[j].offx * (float)font_px);
                     glyph.y = std::round(
                         baseline_y + (float)slot->baseline_offset_y
