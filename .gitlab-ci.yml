@@ -2,6 +2,19 @@ stages:
   - build
   - package
 
+# Build directories are cached so incremental builds survive between pipelines.
+# CMake stores absolute paths (CMAKE_CACHEFILE_DIR / CMAKE_HOME_DIRECTORY) inside
+# CMakeCache.txt, so a cached build tree can only be restored into the very same
+# path it was created in. GitLab Runner checks out into
+#   <builds_dir>/<short-token>/<concurrent-project-id>/<namespace>/<project>
+# and a job may land in any free concurrency slot of the runner, so the project
+# dir changes between pipelines. Keying the cache on $CI_JOB_NAME alone therefore
+# restores slot 0's cache into slot 1 and CMake aborts with
+#   "The current CMakeCache.txt directory ... is different than the directory
+#    ... where CMakeCache.txt was created"
+# $CI_CONCURRENT_PROJECT_ID is exactly the path segment above, so including it in
+# the key pins every cache archive to one fixed build path.
+
 # Linux x64/arm64 OpenGL
 build_linux_opengl:
   stage: build
@@ -25,7 +38,7 @@ build_linux_opengl:
     - cd ..
   cache:
     when: on_success
-    key: $CI_JOB_NAME
+    key: $CI_JOB_NAME-$CI_CONCURRENT_PROJECT_ID
     paths:
         - "build/*"
   tags:
@@ -54,7 +67,7 @@ build_linux_a64_opengl:
     - cd ..
   cache:
     when: on_success
-    key: $CI_JOB_NAME
+    key: $CI_JOB_NAME-$CI_CONCURRENT_PROJECT_ID
     paths:
         - "build/*"
   tags:
@@ -83,7 +96,7 @@ build_linux_a64_opengl_static:
     - cd ..
   cache:
     when: on_success
-    key: $CI_JOB_NAME
+    key: $CI_JOB_NAME-$CI_CONCURRENT_PROJECT_ID
     paths:
         - "build/*"
   tags:
@@ -113,7 +126,7 @@ build_linux_opengles:
     - cd ..
   cache:
     when: on_success
-    key: $CI_JOB_NAME
+    key: $CI_JOB_NAME-$CI_CONCURRENT_PROJECT_ID
     paths:
         - "build/*"
   tags:
@@ -165,7 +178,7 @@ build_win64_dx11_opengl_vk:
     expire_in: 1 day
   cache:
     when: on_success
-    key: $CI_JOB_NAME
+    key: $CI_JOB_NAME-$CI_CONCURRENT_PROJECT_ID
     paths:
         - "cmakebuild/*"
   tags:
@@ -230,7 +243,7 @@ build_win64_dx11_opengles_vk:
     - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
   cache:
     when: on_success
-    key: $CI_JOB_NAME
+    key: $CI_JOB_NAME-$CI_CONCURRENT_PROJECT_ID
     paths:
         - "cmakebuild/*"
   tags:
@@ -257,7 +270,7 @@ build_win64_dx11_opengles_vk_static:
     - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
   cache:
     when: on_success
-    key: $CI_JOB_NAME
+    key: $CI_JOB_NAME-$CI_CONCURRENT_PROJECT_ID
     paths:
         - "cmakebuild/*"
   tags:
@@ -285,7 +298,7 @@ build_macos_metal_opengl_vk:
     - cd ..
   cache:
     when: on_success
-    key: $CI_JOB_NAME
+    key: $CI_JOB_NAME-$CI_CONCURRENT_PROJECT_ID
     paths:
         - "build/*"
   tags:
