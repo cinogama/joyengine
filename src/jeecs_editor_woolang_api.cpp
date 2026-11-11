@@ -119,7 +119,7 @@ static void _je_dynamic_parser_refresh(woort_value tmp)
             {
                 p->m_script_parser = script_parser;
                 _je_dynamic_parser_global_context._je_dynamic_parser_impls.emplace(
-                    (*cur_type)->m_id, move(p));
+                    (*cur_type)->m_id, std::move(p));
             }
         }
 

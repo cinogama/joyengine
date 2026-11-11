@@ -498,7 +498,7 @@ namespace jeecs::animation
                     }
                 }
 
-                out_track->m_keys.push_back(move(temp_key));
+                out_track->m_keys.push_back(std::move(temp_key));
             }
 
             // 关键帧按时间升序排列，保证采样时可以定位区段
@@ -709,7 +709,7 @@ namespace jeecs::animation
                             continue;
                         }
 
-                        temp_action.m_tracks.push_back(move(temp_track));
+                        temp_action.m_tracks.push_back(std::move(temp_track));
                     }
                 }
 
@@ -739,11 +739,11 @@ namespace jeecs::animation
                             continue;
                         }
 
-                        temp_action.m_events.push_back(move(temp_event));
+                        temp_action.m_events.push_back(std::move(temp_event));
                     }
                 }
 
-                out_actions->push_back(move(temp_action));
+                out_actions->push_back(std::move(temp_action));
             }
 
             je_file_close(cache_file);

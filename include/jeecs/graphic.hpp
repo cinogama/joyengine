@@ -259,6 +259,14 @@ struct je_gl_texture_2d_t : public je_gl_texture_common_t
 {
     static constexpr je_gl_texture_kind_t KIND = je_gl_texture_kind_t::TEXTURE_2D;
 };
+// The asserts below intentionally use offsetof on non-standard-layout types
+// (a derived texture adding members makes the layout non-standard). offsetof
+// there is conditionally-supported; the asserts verify the documented
+// m_handle-at-offset-0 contract on the compilers we support.
+#if defined(__clang__)
+#   pragma clang diagnostic push
+#   pragma clang diagnostic ignored "-Winvalid-offsetof"
+#endif
 static_assert(
     std::is_trivial_v<je_gl_texture_2d_t> && 0 == offsetof(je_gl_texture_2d_t, m_handle));
 
@@ -313,6 +321,9 @@ struct je_gl_texture_msaa_t : public je_gl_texture_common_t
 };
 static_assert(
     std::is_trivial_v<je_gl_texture_msaa_t> && 0 == offsetof(je_gl_texture_msaa_t, m_handle));
+#if defined(__clang__)
+#   pragma clang diagnostic pop
+#endif
 
 /*
 je_gl_vertex_type_t [枚举]

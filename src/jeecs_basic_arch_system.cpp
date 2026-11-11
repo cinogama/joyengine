@@ -1394,7 +1394,7 @@ namespace jeecs::ecs
                     new _world_command_buffer::append_slice_query_cache{
                         system_instance,
                         hash,
-                        move(collection),
+                        std::move(collection),
                     });
             }
 
@@ -1545,7 +1545,7 @@ namespace jeecs::ecs
                 {
                     auto& slice_caches = fnd->second;
 
-                    if (slice_caches.emplace(hash, move(collection)).second)
+                    if (slice_caches.emplace(hash, std::move(collection)).second)
                         return;
 
                     // Else, already exist, do nothing.
@@ -1694,7 +1694,7 @@ namespace jeecs::ecs
                 get_command_buffer().add_system_query_cache(
                     system_instance,
                     hash,
-                    move(created_collection));
+                    std::move(created_collection));
 
                 return false;
             }
@@ -2036,7 +2036,7 @@ namespace jeecs::ecs
                         _m_world->append_slice_cache_for_system_instance(
                             cur_append_query_caches->m_system_instance_may_not_exist,
                             cur_append_query_caches->m_query_slice_typehash,
-                            move(cur_append_query_caches->m_created_collection));
+                            std::move(cur_append_query_caches->m_created_collection));
 
                         delete cur_append_query_caches;
                     }
@@ -2984,6 +2984,11 @@ je_collected_requirements_t* je_ecs_requirements_collect(
         }
     }
     return new_collected;
+}
+
+void je_ecs_requirements_free(je_collected_requirements_t* requirements)
+{
+    delete requirements;
 }
 
 void je_ecs_world_collection_update(

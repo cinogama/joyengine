@@ -398,6 +398,14 @@ JE_API je_collected_requirements_t* je_ecs_requirements_collect(
     size_t other_requiremnts_count);
 
 /*
+je_ecs_requirements_free [基本接口]
+释放由 je_ecs_requirements_collect 生成的需求对象
+请参见：
+    je_ecs_requirements_collect
+*/
+JE_API void je_ecs_requirements_free(je_collected_requirements_t* requirements);
+
+/*
 je_ecs_world_collection_update [基本接口]
 按世界当前的 arch-type 状态刷新需求集合的切片查询缓存
     * 通常配合 je_ecs_world_arch_change_version_get 判断是否需要刷新

@@ -796,7 +796,7 @@ namespace jeecs::audio
                     current_device_name += strlen(current_device_name) + 1;
                 }
 
-                update_enumed_play_devices(move(new_opened_devices));
+                update_enumed_play_devices(std::move(new_opened_devices));
 
                 if (m_enumed_play_devices.empty())
                     debug::logwarn("No play devices found.");

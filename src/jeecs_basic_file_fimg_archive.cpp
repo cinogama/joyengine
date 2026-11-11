@@ -115,7 +115,7 @@ namespace jeecs::file::fimg
                     extension.erase(extension.begin());
 
                 if (!extension.empty())
-                    result.insert(to_lower(move(extension)));
+                    result.insert(to_lower(std::move(extension)));
             }
 
             return result;
@@ -175,7 +175,7 @@ namespace jeecs::file::fimg
     }
 
     Archive::Archive(string root, uint64_t shard_size)
-        : m_root(move(root))
+        : m_root(std::move(root))
         , m_shard_size(shard_size)
     {
     }
@@ -405,7 +405,7 @@ namespace jeecs::file::fimg
             }
             sum_stored_size += ent.stored_size;
 
-            auto insert_result = result->m_entries.emplace(move(entry_path), ent);
+            auto insert_result = result->m_entries.emplace(std::move(entry_path), ent);
             if (!insert_result.second)
                 debug::logwarn(
                     "fimg manifest '%s' contains a duplicate path, keeping the first entry: '%s'.",
@@ -438,7 +438,7 @@ namespace jeecs::file::fimg
     }
 
     File::File(shared_ptr<const Archive> owner, const Entry& ent)
-        : m_owner(move(owner))
+        : m_owner(std::move(owner))
         , m_entry(ent)
         , m_position(0)
         , m_open_shard(0)
@@ -860,7 +860,7 @@ namespace jeecs::file::fimg
     }
 
     Writer::Writer(string root, uint64_t shard_size, WriterOptions options)
-        : m_root(move(root))
+        : m_root(std::move(root))
         , m_shard_size(shard_size)
         , m_shard_count(0)
         , m_shard_offset(0)
@@ -892,7 +892,7 @@ namespace jeecs::file::fimg
             shard_size = DEFAULT_SHARD_SIZE;
 
         return unique_ptr<Writer>(new Writer(
-            move(root), shard_size, move(options)));
+            std::move(root), shard_size, std::move(options)));
     }
 
     bool Writer::open_next_shard()
@@ -1167,7 +1167,7 @@ namespace jeecs::file::fimg
             ent.stored_size = static_cast<uint64_t>(len);
         }
 
-        m_entries.emplace(move(archive_path), ent);
+        m_entries.emplace(std::move(archive_path), ent);
         return true;
     }
 
@@ -1269,7 +1269,7 @@ namespace jeecs::file::fimg
             ent.stored_size = copied;
         }
 
-        m_entries.emplace(move(archive_path), ent);
+        m_entries.emplace(std::move(archive_path), ent);
         return true;
     }
 

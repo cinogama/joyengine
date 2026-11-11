@@ -391,7 +391,7 @@ struct wo_entity_selector_state
 
     ~wo_entity_selector_state()
     {
-        delete collection.m_collected_requirement;
+        je_ecs_requirements_free(collection.m_collected_requirement);
     }
 };
 

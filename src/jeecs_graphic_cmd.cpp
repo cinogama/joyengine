@@ -104,11 +104,7 @@ namespace
         return (reinterpret_cast<uintptr_t>(ptr) >> 4);
     }
 
-    inline uint32_t _jegl_align_up(uint32_t value, uint32_t alignment)
-    {
-        return (value + alignment - 1) / alignment * alignment;
-    }
-
+#ifndef NDEBUG
     bool _jegl_topology_of_vertex(
         const je_gl_vertex_t* vertex, je_gl_topology_t* out_topology)
     {
@@ -188,6 +184,7 @@ namespace
         }
         return true;
     }
+#endif
 }
 
 struct je_gl_command_buffer_t
@@ -453,10 +450,12 @@ struct je_gl_command_buffer_t
         assert(m_has_vertex);
 
         const auto* shader = m_pipeline->m_shader;
+#ifndef NDEBUG
         je_gl_topology_t topology;
         assert(_jegl_topology_of_vertex(m_vertex, &topology));
         assert(topology == m_pipeline->m_state.m_topology);
         assert(_jegl_vertex_layout_matches(m_vertex, shader));
+#endif
 
         for (size_t i = 0; i < m_texture_binding_count; ++i)
         {

@@ -162,7 +162,7 @@ const char* je_file_runtime_path_get()
 
     auto* file = new je_file_t;
     file->m_image_file_handle
-        = make_unique<fimg::File>(move(archive), *entry);
+        = make_unique<fimg::File>(std::move(archive), *entry);
     file->m_file_length = static_cast<size_t>(entry->size);
     return file;
 }
@@ -234,8 +234,8 @@ bool je_fimg_default_archive_set(const char* root)
     shared_ptr<const fimg::Archive> old_archive;
     {
         unique_lock<shared_mutex> lock(_g_default_archive_mutex);
-        old_archive = move(_g_default_archive);
-        _g_default_archive = move(archive);
+        old_archive = std::move(_g_default_archive);
+        _g_default_archive = std::move(archive);
     }
 
     return loaded;
@@ -250,7 +250,7 @@ je_fimg_archive_t* je_fimg_archive_open(const char* root)
         return nullptr;
 
     auto* archive = new je_fimg_archive_t;
-    archive->impl = move(impl);
+    archive->impl = std::move(impl);
     return archive;
 }
 
@@ -300,10 +300,10 @@ je_fimg_writer_t* je_fimg_writer_create(
         resolved.skip_extensions = fimg::default_skip_extensions();
     }
 
-    auto impl = fimg::Writer::create(root, shard_size, move(resolved));
+    auto impl = fimg::Writer::create(root, shard_size, std::move(resolved));
 
     auto* writer = new je_fimg_writer_t;
-    writer->impl = move(impl);
+    writer->impl = std::move(impl);
     return writer;
 }
 
