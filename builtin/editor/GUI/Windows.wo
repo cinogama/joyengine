@@ -68,8 +68,7 @@ namespace JEEditor::GUI::Windows
         }
         // 沉浸模式（见 setImmersiveMode）下本窗口是否应当被隐藏。
         // 默认：模态弹窗不隐藏（进度框/错误框等在调试运行期间仍需可见），
-        // 常规窗口全部隐藏；个别关键的非模态窗口（如 PanicBox）可覆写为
-        // 永不隐藏。
+        // 常规窗口全部隐藏；个别关键的非模态窗口可覆写为永不隐藏。
         public func isHiddenInImmersiveMode(self)=> bool
         {
             do self;
