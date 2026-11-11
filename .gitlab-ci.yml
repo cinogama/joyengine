@@ -1,3 +1,7 @@
+stages:
+  - build
+  - package
+
 # Linux x64/arm64 OpenGL
 build_linux_opengl:
   stage: build
@@ -145,6 +149,36 @@ build_win64_dx11_opengl_vk:
     - cd build
     - copy RELWITHDEBINFO\*
     - cd ..
+  # Raw output, used only as transit artifacts for the packaging jobs below.
+  artifacts:
+    name: jeecs-win32-raw-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
+    paths:
+      - build/jedriver.exe
+      - build/OpenAL32.dll
+      - build/libjoyecs.dll
+      - build/libwoo.dll
+      - build/libwoort.dll
+      - build/libjoyecs.lib
+      - build/jedriver.pdb
+      - build/libjoyecs.pdb
+      - build/libwoo.pdb
+      - build/libwoort.pdb
+      - build/pkg/*
+      - build/builtin/*
+      - build/licenses/*
+      - build/je/*
+    expire_in: 1 day
+  tags:
+    - winserver22
+
+# Package the win64 build into two separate artifact archives:
+# one without pdb files, and one containing pdb files only.
+package_win64_release:
+  stage: package
+  needs:
+    - build_win64_dx11_opengl_vk
+  script:
+    - if exist build\*.pdb ( del build\*.pdb )
   artifacts:
     name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
     paths:
@@ -154,15 +188,24 @@ build_win64_dx11_opengl_vk:
       - build/libwoo.dll
       - build/libwoort.dll
       - build/libjoyecs.lib
-      - build/libwoo.lib
-      - build/libwoort.lib
-      - build/libjoyecs.pdb
-      - build/libwoo.pdb
-      - build/libwoort.pdb
       - build/pkg/*
       - build/builtin/*
       - build/licenses/*
       - build/je/*
+  tags:
+    - winserver22
+
+package_win64_pdb:
+  stage: package
+  needs:
+    - build_win64_dx11_opengl_vk
+  script:
+    - if not exist pdb ( mkdir pdb )
+    - if exist build\*.pdb ( move build\*.pdb pdb\ )
+  artifacts:
+    name: jeecs-win32-pdb-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
+    paths:
+      - pdb/*
   tags:
     - winserver22
 
