@@ -10,7 +10,6 @@ build_linux_opengl:
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
-    - rm -f CMakeCache.txt
     - cmake ..
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
@@ -26,7 +25,7 @@ build_linux_opengl:
     - cd ..
   cache:
     when: on_success
-    key: jeecs-build-release-$CI_COMMIT_REF_SLUG
+    key: $CI_JOB_NAME
     paths:
         - "build/*"
   tags:
@@ -39,7 +38,6 @@ build_linux_a64_opengl:
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
-    - rm -f CMakeCache.txt
     - cmake ..
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
@@ -56,7 +54,7 @@ build_linux_a64_opengl:
     - cd ..
   cache:
     when: on_success
-    key: jeecs-build-release-$CI_COMMIT_REF_SLUG
+    key: $CI_JOB_NAME
     paths:
         - "build/*"
   tags:
@@ -69,7 +67,6 @@ build_linux_a64_opengl_static:
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
-    - rm -f CMakeCache.txt
     - cmake ..
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
@@ -86,7 +83,7 @@ build_linux_a64_opengl_static:
     - cd ..
   cache:
     when: on_success
-    key: jeecs-build-release-$CI_COMMIT_REF_SLUG
+    key: $CI_JOB_NAME
     paths:
         - "build/*"
   tags:
@@ -100,7 +97,6 @@ build_linux_opengles:
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
-    - rm -f CMakeCache.txt
     - cmake ..
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
@@ -117,7 +113,7 @@ build_linux_opengles:
     - cd ..
   cache:
     when: on_success
-    key: jeecs-build-release-$CI_COMMIT_REF_SLUG
+    key: $CI_JOB_NAME
     paths:
         - "build/*"
   tags:
@@ -132,7 +128,6 @@ build_win64_dx11_opengl_vk:
     - git submodule update --init --recursive --force
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
-    - del CMakeCache.txt
     - cmake ..
       -A x64
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
@@ -168,6 +163,11 @@ build_win64_dx11_opengl_vk:
       - build/licenses/*
       - build/je/*
     expire_in: 1 day
+  cache:
+    when: on_success
+    key: $CI_JOB_NAME
+    paths:
+        - "cmakebuild/*"
   tags:
     - winserver22
 
@@ -216,7 +216,6 @@ build_win64_dx11_opengles_vk:
     - git submodule update --init --recursive --force
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
-    - del CMakeCache.txt
     - cmake ..
       -A x64
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
@@ -229,6 +228,11 @@ build_win64_dx11_opengles_vk:
       -DJE4_ENABLE_METAL_GAPI=OFF
       -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
     - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
+  cache:
+    when: on_success
+    key: $CI_JOB_NAME
+    paths:
+        - "cmakebuild/*"
   tags:
     - winserver22
 
@@ -239,7 +243,6 @@ build_win64_dx11_opengles_vk_static:
     - git submodule update --init --recursive --force
     - if not exist cmakebuild ( mkdir cmakebuild )
     - cd cmakebuild
-    - del CMakeCache.txt
     - cmake ..
       -A x64
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
@@ -252,6 +255,11 @@ build_win64_dx11_opengles_vk_static:
       -DJE4_ENABLE_METAL_GAPI=OFF
       -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
     - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
+  cache:
+    when: on_success
+    key: $CI_JOB_NAME
+    paths:
+        - "cmakebuild/*"
   tags:
     - winserver22
 
@@ -262,7 +270,6 @@ build_macos_metal_opengl_vk:
     - git submodule update --init --recursive --force
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
-    - rm -f CMakeCache.txt
     - cmake ..
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
@@ -278,7 +285,7 @@ build_macos_metal_opengl_vk:
     - cd ..
   cache:
     when: on_success
-    key: jeecs-build-release-$CI_COMMIT_REF_SLUG
+    key: $CI_JOB_NAME
     paths:
         - "build/*"
   tags:
