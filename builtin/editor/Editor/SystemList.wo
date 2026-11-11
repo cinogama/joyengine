@@ -34,9 +34,11 @@ namespace JEEditor::Editor
     //   调试时：保存在 WorldEditorViewport 中，仅在开始调试运行
     //   （Editor::DebugRun）或导出（Editor::ExportProject）时才会
     //   add_system。
-    // 组的含义通过悬浮分组标题的气泡提示展示。增删与两组之间的转换
-    // 均通过 doAction 发布，支持撤销/重做并参与未保存判定；
-    // 向“运行时”添加、以及从“运行时”移除会先弹窗确认。
+    // 系统条目按全名排序（同一命名空间的系统自然相邻），行内以强调色
+    // 显示命名空间前缀、主题文字色显示短名，便于按功能类别检索。组的
+    // 含义通过悬浮分组标题的气泡提示展示。增删与两组之间的转换均通过
+    // doAction 发布，支持撤销/重做并参与未保存判定；向“运行时”添加、
+    // 以及从“运行时”移除会先弹窗确认。
     using SystemList = struct{
         m_close: mut bool,
     }
@@ -153,27 +155,53 @@ namespace JEEditor::Editor
 
         // 一行系统条目：与检视面板组件块同款的分区标题栏样式整行
         //（叶子节点、无折叠箭头）+ 行尾 × 移除按钮（平时与背景融为
-        // 一体，悬停红色提示危险操作）+ 右键上下文菜单。行内只显示
-        // 短名（悬停提示完整类型名）。
+        // 一体，悬停红色提示危险操作）+ 右键上下文菜单。行内文本为
+        // 两段：命名空间前缀用所在组的强调色、短名用主题文字色，便于
+        // 按功能类别扫读；悬停提示完整类型名。
         func showSystemEntryRow(
-            wctx: WorldEditorViewport, tag: string, systype: typeinfo, is_world_system: bool)=> void
+            wctx: WorldEditorViewport, tag: string, systype: typeinfo,
+            is_world_system: bool, accent: (real, real, real, real))=> void
         {
-            let (_, short_name) = splitTypeName(systype->name);
+            let (ns, short_name) = splitTypeName(systype->name);
             let row_label = F"{short_name}##{tag}";
+            let (row_x, row_y) = GetCursorScreenPos();
 
             // 标题栏样式与检视面板的组件块一致（见
             // Widgets::pushSectionHeaderStyle）。AllowItemOverlap 允许
             // 后绘制的行尾 × 按钮抢占重叠区域的悬停与点击；SpanAvailWidth
-            // 让整行的命中区横跨面板剩余宽度
+            // 让整行的命中区横跨面板剩余宽度。标签仍用完整短名参与排版
+            // 与 ID 生成，但以透明文字色绘制，下面再手绘双色文本
             pushSectionHeaderStyle();
+            PushStyleColor(ImGuiCol::ImGuiCol_Text, (0, 0, 0, 0));
             do TreeNodeEx(row_label,
                 TreeNodeAttribute::ImGuiTreeNodeFlags_Leaf
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_Framed
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_SpanAvailWidth
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_NoTreePushOnOpen
                     + TreeNodeAttribute::ImGuiTreeNodeFlags_AllowItemOverlap);
+            PopStyleColor(1);
             if (IsItemHovered())
                 do SetTooltip(systype->name);
+
+            // 手绘行文本：pushSectionHeaderStyle 的 FramePadding 为
+            // (6, 5)，叶子 Framed 节点的文本起点即 cursor + FramePadding；
+            // 文本在行尾 × 之前截断，避免压到按钮
+            let (_, row_max) = GetItemRect();
+            let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+            let text_pos = (row_x + 6., row_y + 5.);
+            let draw = GetWindowDrawList();
+            let mut text_x = text_pos.0;
+            PushClipRect(text_pos, (row_max.0 - 34., row_max.1));
+            if (ns != "")
+            {
+                let ns_prefix = F"{ns}::";
+                draw->AddText((text_x, text_pos.1),
+                    mixStyleColor(text_c, accent, 0.75, 255), ns_prefix);
+                text_x += CalcTextSize(ns_prefix).0;
+            }
+            draw->AddText((text_x, text_pos.1),
+                mixStyleColor(text_c, text_c, 0., 255), short_name);
+            PopClipRect();
 
             // 右键系统项弹出菜单；显式绑定到行的标签上，且紧跟行项调用
             // （悬停检测基于最后绘制的项，此处行项即最后绘制的项）
@@ -210,27 +238,28 @@ namespace JEEditor::Editor
             Spacing();
         }
 
-        // 分组标题：填充色带 + 左侧强调竖条 + 标题与系统数，与检视面板
-        // 的命名空间分组标题同款（见 Inspector::showGroupHeader），
-        // 悬停显示组的含义。颜色由主题文字色向该组的强调色混合得出，
+        // 分组标题：深色强调色带 + 左侧亮色粗竖条 + 近白的标题与系统数。
+        // 色带比系统条目更深、竖条更亮，让“组”与“条目”一眼区分；悬停
+        // 显示组的含义。颜色由主题背景色/文字色向该组强调色混合得出，
         // 明暗主题都保持可读
         func showGroupHeader(
             title: string, count: int, description: string,
             accent: (real, real, real, real))
         {
             let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+            let bg_c = GetStyleColor(ImGuiCol::ImGuiCol_WindowBg);
             let (x, y) = GetCursorScreenPos();
             let width = GetContentRegionAvail().0;
-            let height = GetFrameHeight();
+            let height = GetFrameHeight() + 2.;
             let draw = GetWindowDrawList();
 
             draw->AddRectFilled((x, y), (x + width, y + height),
-                mixStyleColor(text_c, accent, 0.12, 42));
-            draw->AddRectFilled((x, y), (x + 3., y + height),
-                mixStyleColor(text_c, accent, 0.75, 220));
+                mixStyleColor(bg_c, accent, 0.30, 255));
+            draw->AddRectFilled((x, y), (x + 4., y + height),
+                mixStyleColor(text_c, accent, 0.90, 255));
             draw->AddText(
-                (x + 10., y + (height - GetTextLineHeight()) * 0.5),
-                mixStyleColor(text_c, accent, 0.55, 255),
+                (x + 12., y + (height - GetTextLineHeight()) * 0.5),
+                mixStyleColor(text_c, accent, 0.25, 255),
                 F"{title} · {count}");
 
             // 全宽占位让整个色带成为悬停命中区，用于展示组的含义
@@ -240,8 +269,9 @@ namespace JEEditor::Editor
             Spacing();
         }
 
-        // 绘制一组系统：分组标题 + 条目列表。组的含义通过悬浮标题的
-        // 气泡提示展示；系统不按命名空间分小节，仅区分两组。
+        // 绘制一组系统：组标题 + 条目列表。系统按全名排序，同一命名
+        // 空间的系统自然相邻，条目自身以强调色标出命名空间前缀。组的
+        // 含义通过悬浮标题的气泡提示展示。
         func showSystemGroup(
             wctx: WorldEditorViewport,
             systems: array<typeinfo>,
@@ -259,7 +289,8 @@ namespace JEEditor::Editor
             showGroupHeader(title, visible->len, description, accent);
 
             for (let systype : visible)
-                showSystemEntryRow(wctx, F"{tag_prefix}_{systype->name}", systype, is_world_system);
+                showSystemEntryRow(wctx, F"{tag_prefix}_{systype->name}",
+                    systype, is_world_system, accent);
 
             if (visible->len == 0)
             {
@@ -269,10 +300,29 @@ namespace JEEditor::Editor
             }
         }
 
+        // “添加系统”候选行：点击后按上方所选组发布添加；弹窗保持打开，
+        // 便于连续添加；已在任意一组中的系统自下一帧起从候选中消失
+        func showAddSystemCandidate(wctx: WorldEditorViewport, stype: typeinfo)=> void
+        {
+            let name = stype->name;
+            let (_, short_name) = splitTypeName(name);
+
+            if (Selectable(F"{short_name}##add_{name}"))
+            {
+                if (s_add_system_immediate)
+                    requestAddWorldSystem(wctx, stype);
+                else
+                    wctx->doAction(AddRuntimeSystem::create(stype));
+            }
+            if (IsItemHovered())
+                do SetTooltip(name);
+        }
+
         // “添加系统”选择弹窗：先选择添加到哪一组，再搜索过滤 +
-        // 候选列表（悬停提示完整类型名）。选中一项后，添加到“调试时”
-        // 立即发布添加操作，添加到“运行时”则先弹窗确认；弹窗保持打开，
-        // 便于连续添加；已在任意一组中的系统自下一帧起从候选中消失。
+        // 候选列表（按命名空间分小节，悬停提示完整类型名）。选中一项
+        // 后，添加到“调试时”立即发布添加操作，添加到“运行时”则先弹窗
+        // 确认；弹窗保持打开，便于连续添加；已在任意一组中的系统自下一
+        // 帧起从候选中消失。
         func showAddSystemPicker(wctx: WorldEditorViewport)=> void
         {
             // 弹窗大小由内容自适应；若控件用 -1 占满宽度，弹窗自身没有
@@ -322,20 +372,31 @@ namespace JEEditor::Editor
             if (BeginListBox("##add_system_candidates", picker_width,
                     GetFrameHeightWithSpacing() * 8.))
             {
+                // 与上方系统列表一致的命名空间分组小标题；类型名不含
+                // "::" 的系统没有命名空间，单独成组放在最前，避免它们
+                // 按名字散落在命名空间小节之间、被误认作相邻小节的一
+                // 部分
+                let unnamed = candidates->forall(
+                    \stype = stype->name->find("::")->is_none;);
+                if (unnamed->len > 0)
+                {
+                    SeparatorText("无命名空间");
+                    for (let stype : unnamed)
+                        showAddSystemCandidate(wctx, stype);
+                }
+
+                let mut last_namespace = "";
                 for (let stype : candidates)
                 {
-                    let name = stype->name;
-                    let (_, short_name) = splitTypeName(name);
-
-                    if (Selectable(F"{short_name}##add_{name}"))
+                    let (ns, _) = splitTypeName(stype->name);
+                    if (ns == "")
+                        continue;
+                    if (ns != last_namespace)
                     {
-                        if (s_add_system_immediate)
-                            requestAddWorldSystem(wctx, stype);
-                        else
-                            wctx->doAction(AddRuntimeSystem::create(stype));
+                        SeparatorText(ns);
+                        last_namespace = ns;
                     }
-                    if (IsItemHovered())
-                        do SetTooltip(name);
+                    showAddSystemCandidate(wctx, stype);
                 }
                 if (candidates->len == 0)
                     TextDisabled("（没有匹配的系统）");
@@ -367,7 +428,23 @@ namespace JEEditor::Editor
                 DEBUG_GROUP_ACCENT);
 
             Spacing();
-            if (ButtonSize("添加系统", (-1., 0.)))
+            // “添加系统”是动作而非条目：透明底 + 细边框 + “+”前缀，
+            // 与上方的蓝色系统条目区分开；悬停时填充淡强调色
+            let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+            PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered,
+                mixStyleColor(text_c, RUNTIME_GROUP_ACCENT, 0.18, 60));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive,
+                mixStyleColor(text_c, RUNTIME_GROUP_ACCENT, 0.28, 90));
+            PushStyleColor(ImGuiCol::ImGuiCol_Border,
+                mixStyleColor(text_c, text_c, 0., 60));
+            PushStyleColor(ImGuiCol::ImGuiCol_Text,
+                mixStyleColor(text_c, text_c, 0., 200));
+            PushStyleReal(StyleVar::ImGuiStyleVar_FrameBorderSize, 1.);
+            let add_clicked = ButtonSize("+ 添加系统", (-1., 0.));
+            PopStyleVar(1);
+            PopStyleColor(5);
+            if (add_clicked)
             {
                 // 每次打开弹窗都复位搜索词，并将焦点设到搜索框
                 s_add_system_filter = "";
