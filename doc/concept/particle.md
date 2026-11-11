@@ -138,7 +138,7 @@ void FxSystem::Update()
 
 ### 每帧流程
 
-`ParticleSystem` 声明的是 `GraphicUpdate()`，即每个世界内的最后一个更新阶段（`m_graphic_update`），与各渲染管线系统同阶段。查询为 `Particle::Emitter&` + `Translation*` + `Shape&`，对每个发射器：
+`ParticleSystem` 声明的是 `CommitUpdate()`（`m_commit_update`）。之所以不与渲染管线系统同处 `GraphicUpdate`：同相位系统经 `par_unseq` 并行运行、无先后保证，若与管线同相位，管线在录制 draw 时捕获的激活索引数量（`m_index_count`）可能与本帧上传的顶点前缀错位——多画的索引会读到顶点缓冲中前缀之外的未定义内容（各后端对动态缓冲按帧整体丢弃），表现为随机位置的幽灵粒子闪烁。`CommitUpdate` 时 `world_position` / `world_rotation` 已在 `TransformUpdate` 定型；与 `TranslationUpdatingSystem` 同处该相位但字段不相交（它只读 `Translation`、写 `object2world`），并行无冲突，且仍先于 `GraphicUpdate` 的所有管线把激活索引数、包围盒与 `Shape::vertex` 定型。查询为 `Particle::Emitter&` + `Translation*` + `Shape&`，对每个发射器：
 
 1. **池准备**：取该发射器的 `particle_pool`（SoA 数组：位置、速度、年龄、寿命、尺寸、自转、颜色、粒子 ID）。容量 = `max_particles` 钳制到 [1, 65536]；容量变化或尚无 GPU 网格时重建池，并一次性创建容量大小的顶点缓冲——索引按每四边形 `0,1,2, 2,1,3` 静态生成——随后把它写进 `Shape::vertex`；
 2. **清空**：`m_clear_particles` 为真时重置池（存活数、发射累加器、爆发计时器）并复位标记；
@@ -163,7 +163,7 @@ void FxSystem::Update()
 
 实现要点（以代码为准）：
 
-* 系统声明与注册的运行相位是 `GraphicUpdate`；
+* 系统声明与注册的运行相位是 `CommitUpdate`——必须先于 GraphicUpdate 相位的各绘制管线定型 CPU 侧状态（激活索引数、包围盒、`Shape::vertex`），同相位并行录制会与管线产生「绘制数量 vs 顶点前缀」的错位竞态；
 * 查询中 `Translation` 为可选：发射器不带变换组件时 `emit_one` 按 `m_direction` 原值解释方向（世界空间模拟还按世界原点发射）；
 * `emit_one` 在两种模拟空间下都先用发射器的世界旋转变换 `direction`，而局部空间的粒子随后还会经模型矩阵绘制，发射器带旋转时发射方向相对发射器局部坐标被旋转**两次**（既有行为，头文件注释已按此描述）；
 * 粒子池以「chunk 指针 + chunk 内槽位号」为键（不同 chunk 对象地址差 ≥ `sizeof(arch_chunk)` > 槽位上限，相加不会重叠），跨 chunk 的发射器不会共用粒子池。

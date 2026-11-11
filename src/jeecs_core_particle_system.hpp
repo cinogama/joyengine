@@ -27,13 +27,19 @@ namespace jeecs::particle
       * 公告板朝向在粒子着色器中用视图矩阵展开（顶点属性携带中心
         位置/颜色/已自转缩放的角点/粒子 ID），CPU 只做模拟，因此多
         摄像机自动正确；
-      * 模拟空间：世界空间下粒子位置存于世界坐标，构建网格时经发射器
-        逆变换转回局部（发射器移动不携带已发射粒子）；局部空间下粒子
-        直接存于发射器局部坐标（整体随发射器刚体运动），gravity 按发射
-        器局部坐标系解释；direction 始终先按发射器朝向旋转一次，局部
-        空间下渲染时随实体变换再应用一次（即相对发射器局部坐标被旋转
-        两次，为既有行为）。
-    运行相位：GraphicUpdate。
+          * 模拟空间：世界空间下粒子位置存于世界坐标，构建网格时经发射器
+            逆变换转回局部（发射器移动不携带已发射粒子）；局部空间下粒子
+            直接存于发射器局部坐标（整体随发射器刚体运动），gravity 按发射
+            器局部坐标系解释；direction 始终先按发射器朝向旋转一次，局部
+            空间下渲染时随实体变换再应用一次（即相对发射器局部坐标被旋转
+            两次，为既有行为）。
+    运行相位：CommitUpdate。必须在绘制它的管线系统（GraphicUpdate 相位）之前
+    运行：同相位系统经 par_unseq 并行、无先后保证，若与管线同相位，管线在
+    录制期捕获的激活索引数量（m_index_count）可能与本帧上传的顶点前缀错位，
+    多画的索引会读到缓冲中未定义的尾部内容（各后端整体丢弃语义），表现为
+    随机位置的幽灵粒子闪烁。CommitUpdate 时 world_position/world_rotation 已
+    在 TransformUpdate 定型；与 TranslationUpdatingSystem 同相位但字段不相交
+    （它只读 Translation、写 object2world），二者并行无冲突。
     */
     struct ParticleSystem : public game_system
     {
@@ -91,6 +97,9 @@ namespace jeecs::particle
         ParticleSystem(game_world w);
         ~ParticleSystem();
 
-        void GraphicUpdate();
+        // 在 CommitUpdate 相位定型 CPU 侧状态（激活索引数/包围盒/Shape::vertex）
+        // 并录制顶点更新命令；GraphicUpdate 的各绘制管线随后录制 draw，
+        // 相位屏障保证两者顺序（见类注释）
+        void CommitUpdate();
     };
 }

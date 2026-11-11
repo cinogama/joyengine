@@ -239,10 +239,13 @@ namespace jeecs::particle
         reset();
     }
 
-    void ParticleSystem::GraphicUpdate()
+    void ParticleSystem::CommitUpdate()
     {
         // 顶点内容随更新命令按帧录制：申请最低优先级的更新链，
-        // 保证先于本帧所有绘制链提交
+        // 保证先于本帧所有绘制链提交；本系统运行在 CommitUpdate 相位，
+        // 在 GraphicUpdate 的各绘制管线录制 draw 之前定型激活索引数
+        //（m_index_count）、包围盒与 Shape::vertex——同相位并行录制会让
+        // 管线捕获到上一帧的激活数量，与本帧上传的顶点前缀错位
         if (_m_update_branch == nullptr)
         {
             _m_graphic_host = je_graphic_uhost_get_or_create_for_universe(
