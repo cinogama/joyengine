@@ -1176,7 +1176,7 @@ void je_towoo_api_update()
                     lock_guard ug1(
                         ToWooBaseSystem::_registered_towoo_base_systems_mx);
                     ToWooBaseSystem::_registered_towoo_base_systems
-                        [created_system_type_info] = move(systinfo);
+                        [created_system_type_info] = std::move(systinfo);
                 }
 
                 _init_system_with_vm(vmm, created_system_type_info,

@@ -144,6 +144,28 @@ namespace jeecs
         }
 
         // ==================== 文档数据模型 ====================
+        // 图集源纹理的附加层级：pass 为绑定通道 id（>= 1；主纹理固定
+        // 占通道 0，与图层样式"槽 0 保留给图集源纹理"约定一致）。
+        // 必须定义在 SourceTexture 之前——其后者的 vector<SourceExtra>
+        // 成员要求此类型完整（libc++ 在头文件内实例化 vector 析构）
+        struct SourceExtra
+        {
+            int32_t pass;
+            std::string path;   // 运行时路径（@/ 或 !/）
+            // 纹理像素尺寸（添加时测量，cell 尺寸由此与主纹理网格推得）
+            std::optional<int32_t> tex_w, tex_h;
+            // 运行期：与主纹理同层号对齐的数组纹理（build_extra_array
+            // 构建；不参与序列化）。nullopt = 尚未构建
+            std::optional<basic::resource<graphic::texture_array>> array;
+            // 运行期：构建失败标记（同 SourceTexture::array_failed）
+            bool array_failed;
+
+            SourceExtra()
+                : pass(1)
+                , array_failed(false)
+            {
+            }
+        };
         struct SourceTexture
         {
             std::string path;   // 运行时路径（@/ 或 !/）
@@ -168,32 +190,12 @@ namespace jeecs
 
             // 附加层级纹理（如法线图集）：与主纹理共用同一瓦片网格
             //（xcount/ycount/tile 索引），按各自 pass 展开为独立数组纹理
-            std::vector<struct SourceExtra> extras;
+            std::vector<SourceExtra> extras;
 
             SourceTexture()
                 : tile_px(32)
                 , xcount(1)
                 , ycount(1)
-                , array_failed(false)
-            {
-            }
-        };
-        // 图集源纹理的附加层级：pass 为绑定通道 id（>= 1；主纹理固定
-        // 占通道 0，与图层样式"槽 0 保留给图集源纹理"约定一致）
-        struct SourceExtra
-        {
-            int32_t pass;
-            std::string path;   // 运行时路径（@/ 或 !/）
-            // 纹理像素尺寸（添加时测量，cell 尺寸由此与主纹理网格推得）
-            std::optional<int32_t> tex_w, tex_h;
-            // 运行期：与主纹理同层号对齐的数组纹理（build_extra_array
-            // 构建；不参与序列化）。nullopt = 尚未构建
-            std::optional<basic::resource<graphic::texture_array>> array;
-            // 运行期：构建失败标记（同 SourceTexture::array_failed）
-            bool array_failed;
-
-            SourceExtra()
-                : pass(1)
                 , array_failed(false)
             {
             }

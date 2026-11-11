@@ -28,14 +28,14 @@ namespace jeecs
 
         ;;
 
-    static void bootup(int argc, char** argv)
+    [[maybe_unused]] static void bootup(int argc, char** argv)
     {
 #define JE_MODULE_MACRO(m) m::bootup(argc, argv);
         MODULE_LIST
 #undef JE_MODULE_MACRO
     }
 
-    static void shutdown()
+    [[maybe_unused]] static void shutdown()
     {
         using callback_t = void(*)(void);
         const callback_t callbacks[] = {

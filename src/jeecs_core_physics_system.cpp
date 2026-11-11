@@ -38,8 +38,6 @@ namespace jeecs::physics::physics2d_detail
         // ============================================================
         inline uint64_t b2_body_to_u64(b2BodyId v) noexcept { return b2StoreBodyId(v); }
         inline uint64_t b2_shape_to_u64(b2ShapeId v) noexcept { return b2StoreShapeId(v); }
-        inline b2BodyId  u64_to_b2_body(uint64_t v)  noexcept { return b2LoadBodyId(v); }
-        inline b2ShapeId u64_to_b2_shape(uint64_t v) noexcept { return b2LoadShapeId(v); }
 
         struct B2ShapeKeyHash
         {

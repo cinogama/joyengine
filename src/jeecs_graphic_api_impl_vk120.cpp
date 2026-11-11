@@ -5243,6 +5243,8 @@ namespace jeecs::graphic::api::vk120
                 break;
             default:
                 jeecs::debug::logfatal("Unsupported vertex type.");
+                vk_topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+                break;
             }
 
             const auto& state = pipeline->m_state;
