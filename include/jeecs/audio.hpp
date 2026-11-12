@@ -411,7 +411,8 @@ JE_API /* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sa
 /*
 je_audio_buffer_load [基本接口]
 加载一个音频文件（按其 <音频路径>.je4cache 缓存，缓存缺失或失效时经
-pkg::audio 解码源文件并生成，流式播放配置取自可选的 <音频路径>.je4audio）
+pkg::audio 解码源文件并生成；流式播放配置与缓存格式取自可选的
+<音频路径>.je4audio，PCM 一律转换为缓存格式存储，缺省 8 位整数）
     * path 是音频文件的引擎路径（@/ 或 !/）
     * 返回值是一个指向音频缓冲区的指针
     * 相同路径的重复加载共享同一个缓冲区（引用计数递增）
@@ -428,11 +429,14 @@ JE_API /* OPTIONAL: If audio file or its cache failed to load */ const je_audio_
 je_audio_cache_open_or_create [基本接口]
 打开音频文件的二进制缓存 <音频路径>.je4cache：缓存有效时直接返回，
 缺失或失效时调用内置生成脚本（pkg::audio 解码 + 可选的
-<音频路径>.je4audio 流式播放配置）重新生成
+<音频路径>.je4audio 流式播放与缓存格式配置）重新生成
     * path 是音频文件的引擎路径（@/ 或 !/）
+    * 仅支持单声道/立体声源（OpenAL 缓冲格式约束），生成期校验
+    * 缓存格式 format = "i8"（缺省）/"i16"/"f32"，PCM 经 pkg::audio
+      转换后存储（任何源编码都可落成 OpenAL 可用的缓存）
 缓存文档结构（je_cache_binary_*）：
     channels / samplerate / bits -> INT32，is_float / streaming -> BOOL，
-    pcm -> BUFFER（原始交织 PCM）
+    pcm -> BUFFER（转换后的交织 PCM）
 返回值是缓存文件的只读句柄（用毕 je_file_close 关闭），失败返回 nullptr
 参见：
     je_audio_buffer_load

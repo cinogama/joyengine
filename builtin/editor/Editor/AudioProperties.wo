@@ -26,16 +26,20 @@ using JEEditor::Editor::ResourcePath;
 
 namespace JEEditor::Editor
 {
-    // 音频属性窗口：编辑音频的播放方式，写入 <音频路径>.je4audio（TOML）。
-    // 引擎加载音频时按音频文件与该源文件生成/复用音频缓存
-    // <音频路径>.je4cache（解码信息 + PCM 波形 + 流式播放配置）：
+    // 音频属性窗口：编辑音频的播放方式与缓存格式，写入 <音频路径>.je4audio
+    //（TOML）。引擎加载音频时按音频文件与该源文件生成/复用音频缓存
+    // <音频路径>.je4cache（解码信息 + 转换后的 PCM 波形 + 配置）：
     //   流式播放 —— 按需分块读取波形数据，适用于时长较长的音频
     //              （如背景音乐）；
-    //   整段载入 —— 一次性解码进内存，适用于短促的音效（默认）。
+    //   整段载入 —— 一次性解码进内存，适用于短促的音效（默认）；
+    //   缓存格式 —— 波形数据在缓存中的编码（8/16位整数或32位浮点，
+    //              默认 8 位整数；源音频先解码再转换，任何编码的
+    //              WAV 都能落成 OpenAL 可用的缓存）。
     using AudioProperties = struct{
         m_path: path_t,
         m_runtime_path: string,
         m_streaming: mut bool,
+        m_format: mut int,
         m_info: mut option<je::audio::buffer::buffer_data_t>,
         m_status: mut string,
     }
@@ -57,6 +61,7 @@ namespace JEEditor::Editor
                 m_path = path,
                 m_runtime_path = runtime_path,
                 m_streaming = mut loadStreaming(path),
+                m_format = mut loadFormat(path),
                 m_info = mut info,
                 m_status = mut "",
             };
@@ -82,6 +87,44 @@ namespace JEEditor::Editor
                 }
             }
             return false;
+        }
+        // 读取 <音频路径>.je4audio 中保存的缓存格式（0 = i8，1 = i16，
+        // 2 = f32）：属性源文件不存在、键缺失或取值未知时按默认的 i8 处理。
+        // 保存时会把当前选择写回，未知的取值随之被规范化。
+        func loadFormat(path: path_t)=> int
+        {
+            let settings_path = normalize(path->to_string + ".je4audio");
+            if (exist(settings_path))
+            {
+                match (toml::load(settings_path))
+                {
+                    ok(root)?
+                    {
+                        match (root["format"]->as_string)
+                        {
+                            value(name)?
+                            {
+                                if (name->lower == "i16")
+                                    return 1;
+                                if (name->lower == "f32")
+                                    return 2;
+                            }
+                            none?;
+                        }
+                    }
+                    err(_)?;
+                }
+            }
+            return 0;
+        }
+        // 缓存格式选项（下标）对应的 TOML 取值。
+        func formatNameOf(index: int)=> string
+        {
+            if (index == 1)
+                return "i16";
+            if (index == 2)
+                return "f32";
+            return "i8";
         }
         public func showAudioProperties(path: path_t)
         {
@@ -124,6 +167,7 @@ namespace JEEditor::Editor
                 }
             }
             root->set("streaming", self.m_streaming);
+            root->set("format", formatNameOf(self.m_format));
 
             match (toml::save(root, settings_path))
             {
@@ -167,6 +211,24 @@ namespace JEEditor::Editor
                 do SetTooltip(
                     "流式播放：按需分块读取波形数据，适用于时长较长的音频（如背景音乐）；关闭时整段解码进内存，适用于短促的音效。");
         }
+        func drawFormat(self: AudioProperties)=> void
+        {
+            Text("缓存格式");
+            let labels = [
+                "8位整数（默认，体积最小）",
+                "16位整数",
+                "32位浮点（精度最高）",
+            ];
+            match (Combo("##audio_cache_format", labels,
+                    option::value(self.m_format)))
+            {
+                none?;
+                value(index)? self.m_format = index;
+            }
+            if (IsItemHovered())
+                do SetTooltip(
+                    "波形数据写入缓存与载入显存时的编码。源音频任何编码（含24位/整数32位/64位浮点）都会先解码再转换到该格式；8位体积最小，16位为常见音效规格，32位浮点精度最高。");
+        }
         public func run(self: AudioProperties)=> bool
         {
             Text(F"文件: {filename(self.m_path)}");
@@ -180,6 +242,9 @@ namespace JEEditor::Editor
             Separator();
 
             self->drawStreaming();
+            Separator();
+
+            self->drawFormat();
             Separator();
 
             if (Button("保存"))

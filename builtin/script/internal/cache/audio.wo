@@ -1,6 +1,6 @@
-// 音频缓存生成器：把音频文件解码后的 PCM 波形数据与 <音频路径>.je4audio
-// 属性源文件（TOML，可选）中的流式播放配置，一同写入引擎可直接使用的
-// 二进制缓存文档（je_cache_binary_* 格式）。
+// 音频缓存生成器：把音频文件解码后的 PCM 波形数据转换为 .je4audio 指定的
+// 缓存格式（缺省 8 位整数），与流式播放配置一同写入引擎可直接使用的二进制
+// 缓存文档（je_cache_binary_* 格式）。
 //
 // 由引擎在 <音频路径>.je4cache 缺失或失效时加载，调用 generate：
 //   cache  —— C 侧创建好的缓存写入器（文件头已写入，校验码为音频文件与
@@ -8,18 +8,20 @@
 //   source —— 音频的引擎路径（@/ 或 !/）
 //
 // 音频经 je::file::readall 读取字节、pkg::audio 解码
-//（audio::frombuffer，保持 @/!/fimg 的引擎路径解析），PCM 用 wav::pcm
-// 取出（data 块原始字节，多声道按原文件顺序交织），经
-// binary_writer::append_buffer 写入。
+//（audio::frombuffer，保持 @/!/fimg 的引擎路径解析），再按配置经
+// wav::pcm_as 转换为目标编码（声道数与帧数不变，样本值钳制到 [-1, 1]），
+// 经 binary_writer::append_buffer 写入。仅支持单声道/立体声（OpenAL 的
+// 缓冲格式约束）；其它声道数在生成期报错，不写缓存。
 //
-// 文档结构与 src/jeecs_audio_impl_openal.cpp 的读取逻辑一一对应：
+// 文档结构与 src/jeecs_audio_impl_openal.cpp 的读取逻辑一一对应
+//（bits / is_float 描述转换后实际存储的 PCM）：
 //   DOCUMENT
 //     "channels"   -> INT32
 //     "samplerate" -> INT32
-//     "bits"       -> INT32
-//     "is_float"   -> BOOL（true = IEEE 浮点编码，false = 整数 PCM）
+//     "bits"       -> INT32（存储位数：8/16 整数或 32）
+//     "is_float"   -> BOOL（true = 32位 IEEE 浮点）
 //     "streaming"  -> BOOL（true = 应以流式方式播放）
-//     "pcm"        -> BUFFER（原始交织 PCM，帧数 = len / (channels * bits/8)）
+//     "pcm"        -> BUFFER（转换后的交织 PCM，帧数 = len / (channels * bits/8)）
 
 import pkg::std;
 import pkg::buffer;
@@ -33,11 +35,18 @@ using std;
 using buffer;
 using toml;
 
-// 读取 <音频路径>.je4audio 中的流式播放配置。属性源文件是可选的：文件
-// 不存在或键缺失时按默认的非流式处理；文件存在但无法解析时返回 none。
-func load_streaming(source: string)=> option<bool>
+// 读取 <音频路径>.je4audio 的配置：
+//   streaming —— 流式播放（bool，缺省 false）
+//   format    —— 缓存格式 "i8" / "i16" / "f32"（缺省 "i8"，优先 8 位音频）
+// 属性源文件是可选的：文件不存在或键缺失时用默认值；文件无法解析或
+// format 取值未知时返回 none（配置错误应中止生成，而不是悄悄降级）。
+func load_settings(source: string)=> option<(bool, int, bool)>
 {
     let settings_path = source + ".je4audio";
+
+    let mut streaming = false;
+    let mut bits = 8;
+    let mut is_float = false;
 
     match (je::file::readall(settings_path))
     {
@@ -49,8 +58,30 @@ func load_streaming(source: string)=> option<bool>
                 {
                     match (root["streaming"]->as_bool)
                     {
-                        value(streaming)? return option::value(streaming);
-                        none? return option::value(false);
+                        value(flag)? streaming = flag;
+                        none?;
+                    }
+
+                    match (root["format"]->as_string)
+                    {
+                        value(name)?
+                        {
+                            if (name->lower == "i16")
+                            {
+                                bits = 16;
+                            }
+                            else if (name->lower == "f32")
+                            {
+                                bits = 32;
+                                is_float = true;
+                            }
+                            else if (name->lower != "i8")
+                            {
+                                je::logerr(F"未知的音频缓存格式 {name}（{settings_path}，应为 i8/i16/f32）");
+                                return option::none;
+                            }
+                        }
+                        none?;
                     }
                 }
                 err(msg)?
@@ -62,7 +93,7 @@ func load_streaming(source: string)=> option<bool>
         }
         none?;
     }
-    return option::value(false);
+    return option::value((streaming, bits, is_float));
 }
 
 extern func generate(
@@ -94,10 +125,24 @@ extern func generate(
     }
     let wav = decoded->unwrap;
 
-    let mut streaming = false;
-    match (load_streaming(source))
+    if (wav->channels != 1 && wav->channels != 2)
     {
-        value(flag)? streaming = flag;
+        je::logerr(F"不支持的音频声道数 {wav->channels}（{source}，仅支持单声道/立体声）");
+        return false;
+    }
+
+    let mut streaming = false;
+    let mut bits = 8;
+    let mut is_float = false;
+    match (load_settings(source))
+    {
+        value(settings)?
+        {
+            let (setting_streaming, setting_bits, setting_is_float) = settings;
+            streaming = setting_streaming;
+            bits = setting_bits;
+            is_float = setting_is_float;
+        }
         none? return false;
     }
 
@@ -107,13 +152,13 @@ extern func generate(
         return false;
     if (!cache->append_string("samplerate") || !cache->append_int32(wav->samplerate))
         return false;
-    if (!cache->append_string("bits") || !cache->append_int32(wav->bits))
+    if (!cache->append_string("bits") || !cache->append_int32(bits))
         return false;
-    if (!cache->append_string("is_float") || !cache->append_bool(wav->isfloat))
+    if (!cache->append_string("is_float") || !cache->append_bool(is_float))
         return false;
     if (!cache->append_string("streaming") || !cache->append_bool(streaming))
         return false;
-    if (!cache->append_string("pcm") || !cache->append_buffer(wav->pcm))
+    if (!cache->append_string("pcm") || !cache->append_buffer(wav->pcm_as(bits, is_float)))
         return false;
     return cache->append_end();
 }
