@@ -1130,6 +1130,8 @@ namespace jeecs
             using count_t = size_t;
             using free_func_t = void (*)(T*);
 
+            static_assert(std::atomic<count_t>::is_always_lock_free);
+
             static void _default_free_func(T* ptr)
             {
                 delete ptr;
