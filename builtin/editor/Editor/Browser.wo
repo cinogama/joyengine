@@ -1910,7 +1910,7 @@ namespace JEEditor::Editor
                                             on_renamed(sel, new_path);
                                     }
                                     
-                                    do move(sel, new_path);
+                                    moveWithSatellites(sel, new_path);
                                     self.m_fs_dirty->set(true);
                                 })
                             ;
@@ -1924,7 +1924,7 @@ namespace JEEditor::Editor
                         let target = sel;
                         do AskBox::show("删除", F"确认删除 \"{sel_name}\" 吗？")
                             ->onYes(func() {
-                                    do remove(target);
+                                    removeWithSatellites(target);
                                     self.m_fs_dirty->set(true);
                                 })
                             ;
@@ -2008,6 +2008,93 @@ namespace JEEditor::Editor
             };
             
             return ext_rename_map->get(string::lower(extension(path)));
+        }
+        
+        // 带缓存资源的伴生文件后缀：引擎按 <源路径>.je4cache 生成/复用缓存，
+        // 纹理图片另有可选的属性源文件 <源路径>.je4texture（颜色空间，见
+        // TextureProperties）。源文件的移动/重命名/删除必须同时处理这些伴生
+        // 文件：否则旧缓存残留在原处、新位置无谓地重新生成，删除时还会留下
+        // 孤立缓存，甚至丢掉仍在使用的纹理颜色空间属性。
+        func satelliteSuffixes()=> array<string>
+        {
+            return [".je4cache", ".je4texture"];
+        }
+        
+        // 移动伴生文件：缓存/属性文件可能在引擎尚未加载过该资源时不存在，
+        // 此时跳过。目标位置已有同名伴生文件时保留原文件——缓存会因源 CRC
+        // 不匹配而重新生成，属性文件则由移动失败的错误日志提示出来。
+        func moveSatelliteFiles(src: fsys::path_t, dst: fsys::path_t)=> void
+        {
+            for (let suffix : satelliteSuffixes())
+            {
+                let satellite = normalize(src->to_string() + suffix);
+                if (!exist(satellite))
+                    continue;
+                    
+                let dst_satellite = normalize(dst->to_string() + suffix);
+                match (move(satellite, dst_satellite))
+                {
+                    ok(_)?;
+                    err(e)?
+                        logerr(F"移动伴生文件 \"{satellite->to_string()}\" 失败：{e}");
+                }
+            }
+        }
+        
+        // 移动 src 到 dst 并同步移动其伴生文件（见 satelliteSuffixes）。先移
+        // 动源：源移动失败时伴生文件保持原位，避免源文件不变而缓存/属性被
+        // 搬走。目录没有伴生文件，其内部的缓存随目录递归移动。
+        func moveWithSatellites(src: fsys::path_t, dst: fsys::path_t)=> void
+        {
+            match (move(src, dst))
+            {
+                ok(_)?;
+                err(e)?
+                {
+                    logerr(F"移动 \"{src->to_string()}\" 失败：{e}");
+                    return;
+                }
+            }
+            
+            if (isdir(dst))
+                return;
+                
+            moveSatelliteFiles(src, dst);
+        }
+        
+        // 删除 path 及其伴生文件（见 satelliteSuffixes）。先删源：源删除失
+        // 败（如权限不足）时伴生文件保持原样，避免只删掉缓存/颜色空间属性
+        // 而源文件仍在。目录的伴生文件随目录递归删除。
+        func removeWithSatellites(path: fsys::path_t)=> void
+        {
+            let is_dir = isdir(path);
+            
+            match (remove(path))
+            {
+                ok(_)?;
+                err(e)?
+                {
+                    logerr(F"删除 \"{path->to_string()}\" 失败：{e}");
+                    return;
+                }
+            }
+            
+            if (is_dir)
+                return;
+                
+            for (let suffix : satelliteSuffixes())
+            {
+                let satellite = normalize(path->to_string() + suffix);
+                if (!exist(satellite))
+                    continue;
+                    
+                match (remove(satellite))
+                {
+                    ok(_)?;
+                    err(e)?
+                        logerr(F"删除伴生文件 \"{satellite->to_string()}\" 失败：{e}");
+                }
+            }
         }
         
         // 在系统文件管理器中展示指定路径：Windows 用 explorer /select 选中该项，
@@ -2293,7 +2380,7 @@ namespace JEEditor::Editor
             
             do AskBox::show("移动", F"确认将 \"{src_name}\" 移动到 \"{target_name}\" 吗？")
                 ->onYes(func() {
-                        do move(src, dst);
+                        moveWithSatellites(src, dst);
                         dirty->set(true);
                     })
                 ;
