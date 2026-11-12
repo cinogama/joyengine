@@ -4,7 +4,6 @@
 
 #define JE_IMPL
 #define JE_ENABLE_DEBUG_API
-#include "jeecs/atomic.hpp"
 #include "jeecs/basic.hpp"
 #include "jeecs/core.hpp"
 #include "jeecs/debug.hpp"
@@ -571,60 +570,3 @@ const je_type_info_t** je_debug_types_registered_get_all(void)
 
     return result;
 }
-
-#define JE_DECL_ATOMIC_OPERATOR_API(TYPE)                                                                 \
-    TYPE je_atomic_exchange_##TYPE(TYPE *aim, TYPE value)                                                 \
-    {                                                                                                     \
-        using _atomic_t = atomic<TYPE>;                                                              \
-        static_assert(sizeof(_atomic_t) == sizeof(TYPE));                                                 \
-        static_assert(_atomic_t::is_always_lock_free);                                                    \
-        return launder(reinterpret_cast<_atomic_t *>(aim))->exchange(value);                         \
-    }                                                                                                     \
-    bool je_atomic_cas_##TYPE(TYPE *aim, TYPE *comparer, TYPE value)                                      \
-    {                                                                                                     \
-        using _atomic_t = atomic<TYPE>;                                                              \
-        static_assert(sizeof(_atomic_t) == sizeof(TYPE));                                                 \
-        static_assert(_atomic_t::is_always_lock_free);                                                    \
-        return launder(reinterpret_cast<_atomic_t *>(aim))->compare_exchange_weak(*comparer, value); \
-    }                                                                                                     \
-    TYPE je_atomic_fetch_add_##TYPE(TYPE *aim, TYPE value)                                                \
-    {                                                                                                     \
-        using _atomic_t = atomic<TYPE>;                                                              \
-        static_assert(sizeof(_atomic_t) == sizeof(TYPE));                                                 \
-        static_assert(_atomic_t::is_always_lock_free);                                                    \
-        return launder(reinterpret_cast<_atomic_t *>(aim))->fetch_add(value);                        \
-    }                                                                                                     \
-    TYPE je_atomic_fetch_sub_##TYPE(TYPE *aim, TYPE value)                                                \
-    {                                                                                                     \
-        using _atomic_t = atomic<TYPE>;                                                              \
-        static_assert(sizeof(_atomic_t) == sizeof(TYPE));                                                 \
-        static_assert(_atomic_t::is_always_lock_free);                                                    \
-        return launder(reinterpret_cast<_atomic_t *>(aim))->fetch_sub(value);                        \
-    }                                                                                                     \
-    TYPE je_atomic_fetch_##TYPE(TYPE *aim)                                                                \
-    {                                                                                                     \
-        using _atomic_t = atomic<TYPE>;                                                              \
-        static_assert(sizeof(_atomic_t) == sizeof(TYPE));                                                 \
-        static_assert(_atomic_t::is_always_lock_free);                                                    \
-        return launder(reinterpret_cast<_atomic_t *>(aim))->load();                                  \
-    }                                                                                                     \
-    void je_atomic_store_##TYPE(TYPE *aim, TYPE value)                                                    \
-    {                                                                                                     \
-        using _atomic_t = atomic<TYPE>;                                                              \
-        static_assert(sizeof(_atomic_t) == sizeof(TYPE));                                                 \
-        static_assert(_atomic_t::is_always_lock_free);                                                    \
-        launder(reinterpret_cast<_atomic_t *>(aim))->store(value);                                   \
-    }
-
-JE_DECL_ATOMIC_OPERATOR_API(int8_t);
-JE_DECL_ATOMIC_OPERATOR_API(uint8_t);
-JE_DECL_ATOMIC_OPERATOR_API(int16_t);
-JE_DECL_ATOMIC_OPERATOR_API(uint16_t);
-JE_DECL_ATOMIC_OPERATOR_API(int32_t);
-JE_DECL_ATOMIC_OPERATOR_API(uint32_t);
-JE_DECL_ATOMIC_OPERATOR_API(int64_t);
-JE_DECL_ATOMIC_OPERATOR_API(uint64_t);
-JE_DECL_ATOMIC_OPERATOR_API(size_t);
-JE_DECL_ATOMIC_OPERATOR_API(intptr_t);
-
-#undef JE_DECL_ATOMIC_OPERATOR_API

@@ -6,7 +6,6 @@
 
 #include "jeecs/prefix.hpp"
 #include "jeecs/core.hpp"
-#include "jeecs/atomic.hpp"
 #include "jeecs/logging.hpp"
 
 #ifdef __cplusplus
@@ -1121,7 +1120,9 @@ namespace jeecs
 
         /*
         jeecs::basic::shared_pointer [类型]
-        线程安全的共享智能指针类型
+        无锁引用计数的共享智能指针
+        不同实例之间可跨线程并发复制/移动/析构；
+        对同一实例的并发读写需外部同步（与 std::shared_ptr 契约一致）
         */
         template <typename T>
         class shared_pointer
@@ -1135,82 +1136,45 @@ namespace jeecs
             }
 
             T* m_resource;
-            mutable count_t* m_count;
+            std::atomic<count_t>* m_count;
             free_func_t m_freer;
 
-            inline const static count_t* _COUNT_USING_SPIN_LOCK_MARK = (count_t*)SIZE_MAX;
-
-            static count_t* _alloc_counter()
+            static std::atomic<count_t>* _alloc_counter()
             {
-                return create_new<count_t>(1);
+                return create_new<std::atomic<count_t>>(1);
             }
-            static void _free_counter(count_t* p)
+            static void _free_counter(std::atomic<count_t>* p)
             {
                 destroy_free(p);
             }
 
-            count_t* _spin_lock() const
+            void _release() noexcept
             {
-                count_t* result;
-                do
+                if (m_count != nullptr)
                 {
-                    result = (count_t*)je_atomic_exchange_intptr_t(
-                        (intptr_t*)&m_count, (intptr_t)_COUNT_USING_SPIN_LOCK_MARK);
-                } while (result == _COUNT_USING_SPIN_LOCK_MARK);
-
-                return result;
-            }
-            void _spin_unlock(count_t* p) const
-            {
-                je_atomic_exchange_intptr_t(
-                    (intptr_t*)&m_count, (intptr_t)p);
-            }
-
-            static count_t* _release_nolock_impl(T** ref_resource, free_func_t _freer, count_t* count)
-            {
-                if (count != nullptr)
-                {
-                    if (1 == je_atomic_fetch_sub_size_t(count, 1))
+                    if (1 == m_count->fetch_sub(1))
                     {
-                        _freer(*ref_resource);
-                        _free_counter(count);
-                        *ref_resource = nullptr;
-                        count = nullptr;
+                        m_freer(m_resource);
+                        _free_counter(m_count);
                     }
                 }
-                return count;
-            }
-
-            // This function not lock!
-            count_t* _release_nolock(count_t* count)
-            {
-                return _release_nolock_impl(&m_resource, m_freer, count);
-            }
-            count_t* _move_nolock(count_t* count, shared_pointer* out_ptr)
-            {
-                out_ptr->m_resource = m_resource;
-                out_ptr->m_freer = m_freer;
-                m_resource = nullptr;
-                return nullptr;
-            }
-            count_t* _borrow_nolocks(count_t* count, shared_pointer* out_ptr) const
-            {
-                out_ptr->m_resource = m_resource;
-                out_ptr->m_freer = m_freer;
-                if (count != nullptr)
-                    je_atomic_fetch_add_size_t(count, 1);
-
-                return count;
             }
 
         public:
             ~shared_pointer()
             {
-                _release_nolock((count_t*)je_atomic_fetch_intptr_t((intptr_t*)&m_count));
+                _release();
             }
 
             shared_pointer() = delete;
-            explicit shared_pointer(T* v, void (*f)(T*) = &_default_free_func)
+            explicit shared_pointer(T* v)
+                : m_resource(v)
+                , m_count(_alloc_counter())
+                , m_freer(&_default_free_func)
+            {
+                assert(m_resource != nullptr);
+            }
+            explicit shared_pointer(T* v, free_func_t f)
                 : m_resource(v)
                 , m_count(_alloc_counter())
                 , m_freer(f)
@@ -1218,30 +1182,33 @@ namespace jeecs
                 assert(m_resource != nullptr);
             }
             shared_pointer(const shared_pointer& v) noexcept
+                : m_resource(v.m_resource)
+                , m_count(v.m_count)
+                , m_freer(v.m_freer)
             {
-                auto* counter = v._spin_lock();
-                auto* unlocker = v._borrow_nolocks(counter, this);
-                je_atomic_store_intptr_t((intptr_t*)&m_count, (intptr_t)counter);
-                v._spin_unlock(unlocker);
+                if (m_count != nullptr)
+                    m_count->fetch_add(1);
             }
             shared_pointer(shared_pointer&& v) noexcept
+                : m_resource(v.m_resource)
+                , m_count(v.m_count)
+                , m_freer(v.m_freer)
             {
-                auto* counter = v._spin_lock();
-                auto* unlocker = v._move_nolock(counter, this);
-                je_atomic_store_intptr_t((intptr_t*)&m_count, (intptr_t)counter);
-                v._spin_unlock(unlocker);
+                v.m_resource = nullptr;
+                v.m_count = nullptr;
             }
             shared_pointer& operator=(const shared_pointer& v) noexcept
             {
                 if (this != &v)
                 {
-                    _release_nolock(_spin_lock());
-                    auto* counter = v._spin_lock();
+                    if (v.m_count != nullptr)
+                        v.m_count->fetch_add(1);
 
-                    auto* unlocker = v._borrow_nolocks(counter, this);
+                    _release();
 
-                    _spin_unlock(counter);
-                    v._spin_unlock(unlocker);
+                    m_resource = v.m_resource;
+                    m_count = v.m_count;
+                    m_freer = v.m_freer;
                 }
                 return *this;
             }
@@ -1249,13 +1216,14 @@ namespace jeecs
             {
                 if (this != &v)
                 {
-                    _release_nolock(_spin_lock());
-                    auto* counter = v._spin_lock();
+                    _release();
 
-                    auto* unlocker = v._move_nolock(counter, this);
+                    m_resource = v.m_resource;
+                    m_count = v.m_count;
+                    m_freer = v.m_freer;
 
-                    _spin_unlock(counter);
-                    v._spin_unlock(unlocker);
+                    v.m_resource = nullptr;
+                    v.m_count = nullptr;
                 }
                 return *this;
             }

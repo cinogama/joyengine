@@ -107,9 +107,6 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 
 - `je_module_load` / `je_module_func` / `je_module_unload`
 
-### [atomic/](atomic/) - 原子操作
-原子类型与操作（通过宏生成）。
-
 ## 使用说明
 
 所有 C-API 函数均以 `JE_API` 宏导出，按领域声明在 `include/jeecs/` 目录下的各头文件中（如 `ecs/` 文档对应 `include/jeecs/ecs.hpp`）；`include/jeecs.hpp` 仅是迁移提示存根。

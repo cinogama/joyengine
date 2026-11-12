@@ -9,7 +9,7 @@ Consumers include the specific header(s) they need — do **not** re-unify them 
 
 **C API**（`JE_API` / `extern "C"` 声明全部在此层）：
 
-`version` `prefix` `core` `logging` `typing` `ecs` `clock` `file` `cache` `animation` `atomic` `module` `debug` `graphic` `gui` `io` `audio` `tilemap`
+`version` `prefix` `core` `logging` `typing` `ecs` `clock` `file` `cache` `animation` `module` `debug` `graphic` `gui` `io` `audio` `tilemap`
 
 **C++ 层**（对 C API 的包装）：
 

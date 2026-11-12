@@ -5,7 +5,7 @@ JoyEngineECS (JoyECS) — an ECS-architecture game engine: C++20 core (`joyecs` 
 ## Layout
 
 - `src/` — engine core C++ (`jeecs_*.cpp/.hpp`); graphic API impls `jeecs_graphic_api_impl_{dx11,opengl3,vk120,metal,none}.cpp` with matching imgui backends; core systems in `jeecs_core_*_system.hpp`.
-- `include/jeecs/` — per-domain public headers (`version/prefix/core/logging/typing/ecs/clock/file/cache/animation/atomic/module/debug/graphic/gui/io/audio/tilemap` for the C API, `basic/game/math/graphic/components/ray/entry/input/engine` for the C++ layer; `graphic.hpp` holds both the C API and the C++ wrappers of the graphic domain). All C-API (`JE_API`, `extern "C"`) declarations live there; `include/jeecs.hpp` is only an `#error` migration stub. Consumers include the specific headers they need — do not re-unify them into one umbrella header.
+- `include/jeecs/` — per-domain public headers (`version/prefix/core/logging/typing/ecs/clock/file/cache/animation/module/debug/graphic/gui/io/audio/tilemap` for the C API, `basic/game/math/graphic/components/ray/entry/input/engine` for the C++ layer; `graphic.hpp` holds both the C API and the C++ wrappers of the graphic domain). All C-API (`JE_API`, `extern "C"`) declarations live there; `include/jeecs.hpp` is only an `#error` migration stub. Consumers include the specific headers they need — do not re-unify them into one umbrella header.
 - `driver/` — `jedriver` executable entry (`main.cpp` → `jeecs::game_engine_context::loop()`).
 - `je/` — engine-side Woolang runtime scripts (typeinfo/ECS/gui/towoo bindings; `extern("libjoyecs", "func")` binds C-API into Woolang).
 - `builtin/` — built-in Woolang content shipped with the engine, including the whole editor (`builtin/editor/main.wo`).
