@@ -114,11 +114,15 @@ void je_gui_backend_init(
         // Default font
         latin_ttf_file = je_file_open("!/builtin/font/JetBrainsMono_Regular.ttf");
 
+    auto* emoji_ttf_file = je_file_open("!/builtin/font/NotoEmoji_Regular.ttf");
+
     if (general_ttf_file)
     {
         const size_t general_ttf_size = je_file_size(general_ttf_file);
         const size_t latin_ttf_size
             = latin_ttf_file != nullptr ? je_file_size(latin_ttf_file) : 0;
+        const size_t emoji_ttf_size
+            = emoji_ttf_file != nullptr ? je_file_size(emoji_ttf_file) : 0;
 
         void* file_buf = malloc(general_ttf_size);
         je_file_read(file_buf, sizeof(char), general_ttf_size, general_ttf_file);
@@ -128,6 +132,13 @@ void je_gui_backend_init(
         {
             latin_file_buf = malloc(latin_ttf_size);
             je_file_read(latin_file_buf, sizeof(char), latin_ttf_size, latin_ttf_file);
+        }
+
+        void* emoji_file_buf = nullptr;
+        if (emoji_ttf_file != nullptr)
+        {
+            emoji_file_buf = malloc(emoji_ttf_size);
+            je_file_read(emoji_file_buf, sizeof(char), emoji_ttf_size, emoji_ttf_file);
         }
 
         if (latin_file_buf != nullptr)
@@ -155,6 +166,8 @@ void je_gui_backend_init(
                 0x206F, // General Punctuation
                 0x2460,
                 0x24FF, // Enclosed Alphanumerics (① ② ...)
+                0x2600,
+                0x26FF, // Misc Symbols (★ ☆ ...; emoji font fills the rest)
                 0x3000,
                 0x30FF, // CJK Symbols and Punctuations, Hiragana, Katakana
                 0x31F0,
@@ -185,6 +198,40 @@ void je_gui_backend_init(
                 &merge_config,
                 ranges);
 
+            // Emoji 字体（单色轮廓）：stb_truetype 不支持彩色字形表，
+            // 因此只能用 Noto Emoji 这类单色字体；未列出的码位仍回退 '?'
+            if (emoji_file_buf != nullptr)
+            {
+                static const ImWchar emoji_ranges[] =
+                {
+                    0x200D,
+                    0x200D, // Zero Width Joiner (零宽)
+                    0x2600,
+                    0x26FF, // Misc Symbols (☀ ⚠ ...)
+                    0x2700,
+                    0x27BF, // Dingbats (✅ ✈ ...)
+                    0x2B00,
+                    0x2BFF, // Misc Symbols and Arrows (⭐ ⭕ ...)
+                    0x1F1E6,
+                    0x1F1FF, // Regional Indicators (旗帜)
+                    0x1F300,
+                    0x1FAFF, // Emoji (😀 🚀 ...)
+                    0xFE0F,
+                    0xFE0F, // Variation Selector-16 (零宽)
+                    0,
+                };
+
+                ImFontConfig emoji_config;
+                emoji_config.MergeMode = true;
+
+                io.Fonts->AddFontFromMemoryTTF(
+                    emoji_file_buf,
+                    (int)emoji_ttf_size,
+                    (float)_je_gui_static_ctx._jegui_specify_font_size,
+                    &emoji_config,
+                    emoji_ranges);
+            }
+
             io.Fonts->Build();
         }
         else
@@ -197,6 +244,9 @@ void je_gui_backend_init(
 
         // free(file_buf); // No need to free.
         je_file_close(general_ttf_file);
+
+        if (emoji_ttf_file != nullptr)
+            je_file_close(emoji_ttf_file);
     }
 }
 

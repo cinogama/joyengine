@@ -277,6 +277,10 @@ endif()
 set_target_properties(joyecs PROPERTIES OUTPUT_NAME libjoyecs)
 set_target_properties(joyecs PROPERTIES PREFIX "")
 
+# Emoji live outside the BMP, so the decoded-character type used by ImGui
+# must be 32-bit (see the emoji font merge in je_gui_backend_init).
+target_compile_definitions(joyecs PRIVATE -DIMGUI_USE_WCHAR32)
+
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set_target_properties(joyecs PROPERTIES RELEASE_POSTFIX "")
     set_target_properties(joyecs PROPERTIES DEBUG_POSTFIX "_debug")
