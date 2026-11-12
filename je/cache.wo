@@ -44,6 +44,12 @@ namespace je::cache
         // 重复扫描。
         extern("libjoyecs", "wojeapi_cache_binary_append_buffer")
             public func append_buffer(self: binary_writer, buf: buffer)=> bool;
+
+        // 无类型标记的裸字节区（写入 uint64 长度与内容），用于文档之前的
+        // 裸数据区（如音频 PCM）。读取方可以直接按偏移访问，便于流式读取；
+        // 只能写在 append_document 之前。
+        extern("libjoyecs", "wojeapi_cache_binary_append_raw_buffer")
+            public func append_raw_buffer(self: binary_writer, buf: buffer)=> bool;
     }
 
     // 确保 path 指向的 .je4animation TOML 已有可用的 .je4cache；缺失或
@@ -66,9 +72,10 @@ namespace je::cache
     extern("libjoyecs", "wojeapi_image_texture_cache_ensure")
         public func generate_texture_cache(path: string)=> bool;
 
-    // 确保 path 指向的音频已有可用的缓存 <path>.je4cache（解码信息 + PCM +
-    // 可选的 <path>.je4audio 流式播放配置）；缓存按音频文件与属性源文件
-    // 校验，缺失或失效时调用 builtin/script/internal/cache/audio.wo 生成。
+    // 确保 path 指向的音频已有可用的缓存 <path>.je4cache（裸 PCM 区 +
+    // 解码信息文档 + 可选的 <path>.je4audio 流式播放配置）；缓存按音频
+    // 文件与属性源文件校验，缺失或失效时调用
+    // builtin/script/internal/cache/audio.wo 生成。
     // 引擎加载音频时走同一流程，这里提供给导出流程预生成缓存。
     extern("libjoyecs", "wojeapi_audio_cache_ensure")
         public func generate_audio_cache(path: string)=> bool;

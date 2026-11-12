@@ -1,6 +1,6 @@
 // 音频缓存生成器：把音频文件解码后的 PCM 波形数据转换为 .je4audio 指定的
-// 缓存格式（缺省 8 位整数），与流式播放配置一同写入引擎可直接使用的二进制
-// 缓存文档（je_cache_binary_* 格式）。
+// 缓存格式（缺省 8 位整数），与流式播放配置一同写入引擎可直接使用的缓存
+// 文件（文件头之后为裸 PCM 区 + je_cache_binary_* 二进制文档）。
 //
 // 由引擎在 <音频路径>.je4cache 缺失或失效时加载，调用 generate：
 //   cache  —— C 侧创建好的缓存写入器（文件头已写入，校验码为音频文件与
@@ -10,18 +10,20 @@
 // 音频经 je::file::readall 读取字节、pkg::audio 解码
 //（audio::frombuffer，保持 @/!/fimg 的引擎路径解析），再按配置经
 // wav::pcm_as 转换为目标编码（声道数与帧数不变，样本值钳制到 [-1, 1]），
-// 经 binary_writer::append_buffer 写入。仅支持单声道/立体声（OpenAL 的
+// 经 binary_writer::append_raw_buffer 写入。仅支持单声道/立体声（OpenAL 的
 // 缓冲格式约束）；其它声道数在生成期报错，不写缓存。
 //
-// 文档结构与 src/jeecs_audio_impl_openal.cpp 的读取逻辑一一对应
-//（bits / is_float 描述转换后实际存储的 PCM）：
-//   DOCUMENT
+// 缓存布局（文件头之后），与 src/jeecs_audio_impl_openal.cpp 的读取逻辑
+// 一一对应：
+//   [uint64 PCM 长度][PCM 字节]   —— 裸数据区，不套 je_cache_binary_* 标记，
+//                                    读取方可以直接按偏移访问（流式播放）
+//   DOCUMENT                      —— 解码信息（bits / is_float 描述转换后
+//                                    实际存储的 PCM）
 //     "channels"   -> INT32
 //     "samplerate" -> INT32
 //     "bits"       -> INT32（存储位数：8/16 整数或 32）
 //     "is_float"   -> BOOL（true = 32位 IEEE 浮点）
 //     "streaming"  -> BOOL（true = 应以流式方式播放）
-//     "pcm"        -> BUFFER（转换后的交织 PCM，帧数 = len / (channels * bits/8)）
 
 import pkg::std;
 import pkg::buffer;
@@ -146,6 +148,11 @@ extern func generate(
         none? return false;
     }
 
+    // 先写裸 PCM 区（uint64 长度 + 波形），再写描述解码信息的文档。
+    let pcm = wav->pcm_as(bits, is_float);
+    if (!cache->append_raw_buffer(pcm))
+        return false;
+
     if (!cache->append_document())
         return false;
     if (!cache->append_string("channels") || !cache->append_int32(wav->channels))
@@ -157,8 +164,6 @@ extern func generate(
     if (!cache->append_string("is_float") || !cache->append_bool(is_float))
         return false;
     if (!cache->append_string("streaming") || !cache->append_bool(streaming))
-        return false;
-    if (!cache->append_string("pcm") || !cache->append_buffer(wav->pcm_as(bits, is_float)))
         return false;
     return cache->append_end();
 }

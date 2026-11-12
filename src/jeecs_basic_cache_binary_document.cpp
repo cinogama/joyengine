@@ -573,6 +573,15 @@ bool je_cache_binary_append_buffer(
         && buflen == je_cache_file_write(buf, 1, buflen, file);
 }
 
+bool je_cache_binary_append_raw_buffer(
+    je_writing_cache_file_t* file, const void* buf, size_t buflen)
+{
+    const uint64_t len = (uint64_t)buflen;
+
+    return 1 == je_cache_file_write(&len, sizeof(len), 1, file)
+        && buflen == je_cache_file_write(buf, 1, buflen, file);
+}
+
 bool je_cache_binary_append_bool(je_writing_cache_file_t* file, bool val)
 {
     const uint8_t tag = (uint8_t)JE_CACHE_BINARY_VALUE_BOOL;

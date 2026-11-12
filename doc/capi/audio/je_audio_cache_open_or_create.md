@@ -23,12 +23,15 @@ JE_API je_file_t* je_audio_cache_open_or_create(const char* path);
 仅支持单声道/立体声源（OpenAL 缓冲格式约束），生成期校验并报错。
 
 缓存键为音频文件与 `.je4audio` 属性源文件内容连续计算的 CRC64，任一文件
-变化都会使缓存失效。缓存文档结构（`je_cache_binary_*` 格式，`bits` /
-`is_float` 描述转换后实际存储的 PCM）：
+变化都会使缓存失效。缓存布局（文件头之后）：
 
-- `channels` / `samplerate` / `bits` -> INT32
-- `is_float` / `streaming` -> BOOL
-- `pcm` -> BUFFER（转换后的交织 PCM，帧数 = len / (channels * bits/8)）
+- `[uint64 pcm_size][pcm 字节]` —— 裸数据区，不套 `je_cache_binary_*`
+  值标记，可直接按偏移访问（供流式播放使用）
+- `DOCUMENT` —— 解码信息（`bits` / `is_float` 描述转换后实际存储的 PCM）：
+  - `channels` / `samplerate` / `bits` -> INT32
+  - `is_float` / `streaming` -> BOOL
+
+PCM 为交织数据，帧数 = pcm_size / (channels * bits/8)。
 
 与纹理缓存一致：调用方仅在源文件存在时调用本接口触发生成；导出的运行时
 只携带缓存，直接用 `je_cache_file_load` 读取。

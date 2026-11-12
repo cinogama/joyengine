@@ -434,9 +434,10 @@ je_audio_cache_open_or_create [基本接口]
     * 仅支持单声道/立体声源（OpenAL 缓冲格式约束），生成期校验
     * 缓存格式 format = "i8"（缺省）/"i16"/"f32"，PCM 经 pkg::audio
       转换后存储（任何源编码都可落成 OpenAL 可用的缓存）
-缓存文档结构（je_cache_binary_*）：
-    channels / samplerate / bits -> INT32，is_float / streaming -> BOOL，
-    pcm -> BUFFER（转换后的交织 PCM）
+缓存布局（文件头之后）：
+    [uint64 pcm_size][pcm 字节] —— 裸数据区，不套 je_cache_binary_* 值标记，
+                                  可直接按偏移访问（流式播放用）
+    DOCUMENT channels / samplerate / bits -> INT32，is_float / streaming -> BOOL
 返回值是缓存文件的只读句柄（用毕 je_file_close 关闭），失败返回 nullptr
 参见：
     je_audio_buffer_load

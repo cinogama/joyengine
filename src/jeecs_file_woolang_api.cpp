@@ -161,6 +161,17 @@ WOORT_API woort_api wojeapi_cache_binary_append_buffer(void)
     return woort_ret_bool(je_cache_binary_append_buffer(file, buf, buflen));
 }
 
+// 无类型标记的裸字节区（文档之前的裸数据，如音频 PCM）。
+WOORT_API woort_api wojeapi_cache_binary_append_raw_buffer(void)
+{
+    auto* file = static_cast<je_writing_cache_file_t*>(woort_pointer(0));
+
+    size_t buflen = 0;
+    const void* buf = woort_buffer(1, &buflen);
+
+    return woort_ret_bool(je_cache_binary_append_raw_buffer(file, buf, buflen));
+}
+
 // FIMG resource-pack writer
 WOORT_API woort_api wojeapi_fimg_writer_create(void)
 {

@@ -111,8 +111,9 @@ namespace jeecs::audio
         }
 
         // The payload of an audio cache, as written by
-        // builtin/script/internal/cache/audio.wo. m_pcm is malloc'ed and
-        // owned by the caller.
+        // builtin/script/internal/cache/audio.wo: a raw PCM region followed
+        // by the decode metadata document. m_pcm is malloc'ed and owned by the
+        // caller.
         struct audio_cache_content_t
         {
             int32_t m_channels;
@@ -124,13 +125,38 @@ namespace jeecs::audio
             size_t m_pcm_size;
         };
 
-        // Reads the binary cache document of an audio file. *out is written
+        // Reads the payload of an audio cache: a raw [uint64 pcm_size][pcm
+        // bytes] region followed by the binary cache document with the decode
+        // metadata. The raw region carries no value tag, so it can later be
+        // accessed by offset without parsing the document. *out is written
         // only on success.
-        static bool read_audio_cache_document(
+        static bool read_audio_cache_content(
             je_file_t* cache, audio_cache_content_t* out)
         {
+            uint64_t pcm_size = 0;
+            if (1 != je_file_read(&pcm_size, sizeof(pcm_size), 1, cache))
+                return false;
+
+            const size_t pcm_offset = je_file_tell(cache);
+            const size_t file_size = je_file_size(cache);
+            if (pcm_offset > file_size
+                || pcm_size > (uint64_t)(file_size - pcm_offset))
+                return false;
+
+            // Keep a valid allocation even for an empty region; the format
+            // checks below decide whether such a cache is usable.
+            void* const pcm_data = malloc(pcm_size > 0 ? (size_t)pcm_size : 1);
+            if (pcm_data == nullptr)
+                return false;
+
+            if ((size_t)pcm_size != je_file_read(
+                    pcm_data, sizeof(uint8_t), (size_t)pcm_size, cache))
+            {
+                free(pcm_data);
+                return false;
+            }
+
             je_cache_binary_document_t root;
-            je_cache_binary_buffer_t pcm;
             audio_cache_content_t content;
 
             if (!je_cache_binary_document_open(cache, &root)
@@ -143,30 +169,23 @@ namespace jeecs::audio
                 || !je_cache_binary_document_index(
                     &root, "is_float", JE_CACHE_BINARY_VALUE_BOOL, &content.m_is_float)
                 || !je_cache_binary_document_index(
-                    &root, "streaming", JE_CACHE_BINARY_VALUE_BOOL, &content.m_streaming)
-                || !je_cache_binary_document_index(
-                    &root, "pcm", JE_CACHE_BINARY_VALUE_BUFFER, &pcm))
+                    &root, "streaming", JE_CACHE_BINARY_VALUE_BOOL, &content.m_streaming))
+            {
+                free(pcm_data);
                 return false;
+            }
 
             if (content.m_channels <= 0
                 || content.m_samplerate <= 0
                 || content.m_bits <= 0
                 || content.m_bits % 8 != 0)
-                return false;
-
-            size_t pcm_size = 0;
-            if (!je_cache_binary_buffer_read(nullptr, &pcm_size, &pcm))
-                return false;
-
-            void* const pcm_data = malloc(pcm_size);
-            if (!je_cache_binary_buffer_read(pcm_data, &pcm_size, &pcm))
             {
                 free(pcm_data);
                 return false;
             }
 
             content.m_pcm = pcm_data;
-            content.m_pcm_size = pcm_size;
+            content.m_pcm_size = (size_t)pcm_size;
             *out = content;
             return true;
         }
@@ -1922,7 +1941,7 @@ namespace jeecs::audio
                 }
 
                 audio_cache_content_t content;
-                if (!read_audio_cache_document(cache_file, &content))
+                if (!read_audio_cache_content(cache_file, &content))
                 {
                     debug::logerr("Invalid audio cache of '%s'.", path);
                     je_file_close(cache_file);

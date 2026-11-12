@@ -398,6 +398,24 @@ JE_API bool je_cache_binary_append_buffer(
     size_t buflen);
 
 /*
+je_cache_binary_append_raw_buffer [基本接口]
+向缓存文件追加一段没有类型标记的裸字节区
+    * 写入 uint64 长度和 buflen 个字节，布局与 BUFFER 值相同但不写类型标记
+    * 用于二进制文档之前的裸数据区（例如音频交织 PCM），读取方可以直接
+      按偏移访问，不必完整解析文档
+    * 裸字节区只能写在文档之前：先调用本接口，再调用
+      je_cache_binary_append_document
+    * 写入失败返回 false
+请参见：
+    je_cache_binary_append_document
+    je_cache_binary_append_buffer
+*/
+JE_API bool je_cache_binary_append_raw_buffer(
+    je_writing_cache_file_t* file,
+    const void* buf,
+    size_t buflen);
+
+/*
 je_cache_binary_append_bool [基本接口]
 向缓存文件追加一个 bool 值
     * 固定写入 1 字节，true 写为 1，false 写为 0
