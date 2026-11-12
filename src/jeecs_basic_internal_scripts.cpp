@@ -1,5 +1,6 @@
 #define JE_IMPL
 #include "jeecs/animation.hpp"
+#include "jeecs/audio.hpp"
 #include "jeecs/cache.hpp"
 #include "jeecs/file.hpp"
 #include "jeecs/graphic.hpp"
@@ -196,6 +197,7 @@ namespace jeecs::internal_script
         optional<woort_CodeEnv*> cache_builder_of_tilemap = nullopt;
         optional<woort_CodeEnv*> cache_builder_of_tileset = nullopt;
         optional<woort_CodeEnv*> cache_builder_of_image_texture = nullopt;
+        optional<woort_CodeEnv*> cache_builder_of_audio = nullopt;
 
         // usecrc64 follows je_cache_file_create: 0 derives the key from path's bytes,
         // any other value is the key itself (used both to create and to reload).
@@ -295,6 +297,9 @@ namespace jeecs::internal_script
         cache_builder_of_image_texture =
             try_load_internal_script_with_cache_and_bootup(
                 "!/builtin/script/internal/cache/texture.wo");
+        cache_builder_of_audio =
+            try_load_internal_script_with_cache_and_bootup(
+                "!/builtin/script/internal/cache/audio.wo");
     }
     void shutdown()
     {
@@ -317,6 +322,11 @@ namespace jeecs::internal_script
         {
             woort_codeenv_drop(cache_builder_of_image_texture.value());
             cache_builder_of_image_texture.reset();
+        }
+        if (cache_builder_of_audio.has_value())
+        {
+            woort_codeenv_drop(cache_builder_of_audio.value());
+            cache_builder_of_audio.reset();
         }
     }
 }
@@ -381,6 +391,28 @@ namespace jeecs::internal_script
             path,
             IMAGE_TEXTURE_CACHE_VERSION,
             cache_builder_of_image_texture.value(),
+            crc64_key);
+    return nullptr;
+}
+
+/* OPTIONAL */ je_file_t* je_audio_cache_open_or_create(const char* path)
+{
+    // The cache carries both the decoded PCM and the streaming flag from the
+    // optional <path>.je4audio source, so the key chains both files: a change
+    // to either invalidates it. With neither file present (exported runtimes
+    // ship only the cache) the key is 0 and validation is skipped.
+    const uint64_t crc64_key = je_file_crc64(
+        (string(path) + ".je4audio").c_str(),
+        je_file_crc64(path, 0));
+
+    if (je_file_t* file = je_cache_file_load(path, AUDIO_CACHE_VERSION, crc64_key))
+        return file;
+
+    if (cache_builder_of_audio.has_value())
+        return generate_cache(
+            path,
+            AUDIO_CACHE_VERSION,
+            cache_builder_of_audio.value(),
             crc64_key);
     return nullptr;
 }

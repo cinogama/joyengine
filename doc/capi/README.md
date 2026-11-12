@@ -91,6 +91,8 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 
 - `je_audio_source_*` - 音频源管理
 - `je_audio_buffer_*` - 音频数据
+- `je_audio_cache_open_or_create` - 打开或生成音频缓存
+- `je_audio_shared_buffer_mark_outdated` - 失效内存共享的音频缓冲
 - `je_audio_effect_*` - 音频效果
 - `je_audio_filter_*` - 音频滤波器
 - `je_audio_listener_*` - 监听者

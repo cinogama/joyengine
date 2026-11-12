@@ -65,4 +65,11 @@ namespace je::cache
     // 引擎加载纹理时走同一流程，这里提供给导出流程预生成缓存。
     extern("libjoyecs", "wojeapi_image_texture_cache_ensure")
         public func generate_texture_cache(path: string)=> bool;
+
+    // 确保 path 指向的音频已有可用的缓存 <path>.je4cache（解码信息 + PCM +
+    // 可选的 <path>.je4audio 流式播放配置）；缓存按音频文件与属性源文件
+    // 校验，缺失或失效时调用 builtin/script/internal/cache/audio.wo 生成。
+    // 引擎加载音频时走同一流程，这里提供给导出流程预生成缓存。
+    extern("libjoyecs", "wojeapi_audio_cache_ensure")
+        public func generate_audio_cache(path: string)=> bool;
 }

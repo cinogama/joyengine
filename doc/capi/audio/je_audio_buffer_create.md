@@ -75,4 +75,4 @@ je_audio_buffer_close(buffer);
 ## 相关接口
 
 - [je_audio_buffer_close](je_audio_buffer_close.md) - 释放音频缓冲区
-- [je_audio_buffer_load_wav](je_audio_buffer_load_wav.md) - 从 WAV 文件加载缓冲区
+- [je_audio_buffer_load](je_audio_buffer_load.md) - 从音频文件加载缓冲区（缓存管线）

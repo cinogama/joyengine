@@ -24,7 +24,7 @@ JE_API void je_audio_source_play(je_audio_source_t* source);
 
 ```cpp
 je_audio_source_t* source = je_audio_source_create();
-const je_audio_buffer_t* buffer = je_audio_buffer_load_wav("@/sounds/effect.wav");
+const je_audio_buffer_t* buffer = je_audio_buffer_load("@/sounds/effect.wav");
 
 je_audio_source_buffer_set(source, buffer);
 je_audio_source_play(source);

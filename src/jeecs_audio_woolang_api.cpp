@@ -2,6 +2,7 @@
 #define JE_ENABLE_DEBUG_API
 #include "jeecs/audio.hpp"
 #include "jeecs/basic.hpp"
+#include "jeecs/file.hpp"
 #include "jeecs/prefix.hpp"
 
 #include "wo.h"
@@ -36,7 +37,7 @@ WOORT_API woort_api wojeapi_audio_buffer_info(void)
     basic::resource<audio::buffer>* buffer =
         static_cast<basic::resource<audio::buffer> *>(woort_gcpointer(0));
 
-    woort_set_struct(WOORT_RETURN_SLOT, 5);
+    woort_set_struct(WOORT_RETURN_SLOT, 6);
     auto* buffer_instance = (*buffer)->handle();
 
     woort_struct_set(WOORT_RETURN_SLOT, 0, (woort_Int)buffer_instance->m_size);
@@ -44,8 +45,32 @@ WOORT_API woort_api wojeapi_audio_buffer_info(void)
     woort_struct_set(WOORT_RETURN_SLOT, 2, (woort_Int)buffer_instance->m_sample_size);
     woort_struct_set(WOORT_RETURN_SLOT, 3, (woort_Int)buffer_instance->m_byte_rate);
     woort_struct_set(WOORT_RETURN_SLOT, 4, (woort_Int)buffer_instance->m_format);
+    woort_struct_set(WOORT_RETURN_SLOT, 5, buffer_instance->m_streaming);
 
     return woort_ret();
+}
+
+WOORT_API woort_api wojeapi_audio_shared_buffer_mark_outdated(void)
+{
+    je_audio_shared_buffer_mark_outdated(woort_string(0));
+    return woort_ret_void();
+}
+
+// 确保 path 指向的音频已有可用的缓存 <path>.je4cache（解码信息 + PCM +
+// 可选 <path>.je4audio 的流式播放配置）；供导出流程预生成缓存使用，
+// 引擎加载音频时走同一流程。
+WOORT_API woort_api wojeapi_audio_cache_ensure(void)
+{
+    const string path = woort_string(0);
+
+    je_file_t* cache = je_audio_cache_open_or_create(path.c_str());
+    if (cache != nullptr)
+    {
+        je_file_close(cache);
+        return woort_ret_bool(true);
+    }
+
+    return woort_ret_bool(false);
 }
 
 /*

@@ -1,0 +1,64 @@
+# je_audio_buffer_load
+
+## 函数签名
+
+```cpp
+JE_API const je_audio_buffer_t* je_audio_buffer_load(const char* path);
+```
+
+## 描述
+
+加载一个音频文件（当前支持 WAV）。加载走纹理同款的缓存管线：优先读取
+`<音频路径>.je4cache` 二进制缓存，缓存缺失或失效时由内置生成脚本
+（pkg::audio 解码 + 可选的 `<音频路径>.je4audio` 流式播放配置）重新生成；
+导出的运行时只携带缓存，此时源文件不存在也不会触发生成。
+
+相同路径的重复加载共享同一个底层缓冲区（内部维护路径 -> 缓冲区的共享缓存，
+每次加载使引用计数递增）。
+
+## 参数
+
+| 参数名 | 类型 | 描述 |
+|--------|------|------|
+| path | const char* | 音频文件的引擎路径（`@/` 或 `!/`） |
+
+## 返回值
+
+| 类型 | 描述 |
+|------|------|
+| const je_audio_buffer_t* | 指向音频缓冲区的指针，加载失败（文件/缓存不可用或格式不支持）则返回 nullptr |
+
+## 用法示例
+
+```cpp
+// 加载音频文件
+const je_audio_buffer_t* buffer = je_audio_buffer_load("@/sounds/effect.wav");
+
+if (buffer != nullptr) {
+    // 创建音频源并设置缓冲区
+    je_audio_source_t* source = je_audio_source_create();
+    je_audio_source_buffer_set(source, buffer);
+
+    // 播放
+    je_audio_source_play(source);
+
+    // 清理
+    je_audio_source_close(source);
+    je_audio_buffer_close(buffer);
+}
+```
+
+## 注意事项
+
+- 使用完毕后需要调用 `je_audio_buffer_close` 释放资源
+- 如果加载失败，返回值为 nullptr
+- 缓冲区的 `m_streaming` 字段来自可选的 `<音频路径>.je4audio` 配置
+- 仅接受可直接映射到 OpenAL 的布局（单/双声道的 8/16 位整数与 32 位浮点
+  PCM）；24 位整数、32 位整数、64 位浮点与多声道布局会加载失败并记录日志
+
+## 相关接口
+
+- [je_audio_buffer_close](je_audio_buffer_close.md) - 释放音频缓冲区
+- [je_audio_buffer_create](je_audio_buffer_create.md) - 从原始数据创建缓冲区
+- [je_audio_cache_open_or_create](je_audio_cache_open_or_create.md) - 打开/生成音频缓存
+- [je_audio_shared_buffer_mark_outdated](je_audio_shared_buffer_mark_outdated.md) - 失效内存共享缓存

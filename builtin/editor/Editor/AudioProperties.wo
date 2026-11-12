@@ -1,0 +1,217 @@
+import pkg::std;
+
+import je;
+import je::gui;
+import je::audio;
+
+import pkg::fsys;
+import pkg::interface;
+import pkg::toml;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Forms::MsgBox;
+
+import ResourcePath;
+
+using std;
+using je;
+using je::gui;
+using fsys;
+using toml;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Forms;
+using JEEditor::GUI::Windows;
+using JEEditor::Editor::ResourcePath;
+
+namespace JEEditor::Editor
+{
+    // 音频属性窗口：编辑音频的播放方式，写入 <音频路径>.je4audio（TOML）。
+    // 引擎加载音频时按音频文件与该源文件生成/复用音频缓存
+    // <音频路径>.je4cache（解码信息 + PCM 波形 + 流式播放配置）：
+    //   流式播放 —— 按需分块读取波形数据，适用于时长较长的音频
+    //              （如背景音乐）；
+    //   整段载入 —— 一次性解码进内存，适用于短促的音效（默认）。
+    using AudioProperties = struct{
+        m_path: path_t,
+        m_runtime_path: string,
+        m_streaming: mut bool,
+        m_info: mut option<je::audio::buffer::buffer_data_t>,
+        m_status: mut string,
+    }
+    {
+        public func create(path: path_t)=> AudioProperties
+            where require!(AudioProperties: Windows::IWindows);
+        {
+            let runtime_path = ResourcePath::toRuntimeResourcePath(path);
+
+            // 加载音频取解码信息，顺带触发/校验缓存生成管线。
+            let mut info = option::none: option<je::audio::buffer::buffer_data_t>;
+            match (je::audio::buffer::load(runtime_path))
+            {
+                value(buf)? info = option::value(buf->info());
+                none?;
+            }
+
+            return AudioProperties{
+                m_path = path,
+                m_runtime_path = runtime_path,
+                m_streaming = mut loadStreaming(path),
+                m_info = mut info,
+                m_status = mut "",
+            };
+        }
+        // 读取 <音频路径>.je4audio 中保存的流式播放配置：属性源文件不存在、
+        // 无法解析、键缺失或取值未知时按默认的整段载入处理（与引擎一致）。
+        func loadStreaming(path: path_t)=> bool
+        {
+            let settings_path = normalize(path->to_string + ".je4audio");
+            if (exist(settings_path))
+            {
+                match (toml::load(settings_path))
+                {
+                    ok(root)?
+                    {
+                        match (root["streaming"]->as_bool)
+                        {
+                            value(flag)? return flag;
+                            none?;
+                        }
+                    }
+                    err(_)?;
+                }
+            }
+            return false;
+        }
+        public func showAudioProperties(path: path_t)
+        {
+            do Windows::show(create(path));
+        }
+        public func getTitle(self: AudioProperties)=> string
+        {
+            // $ID 让多个音频的属性窗口可以同时打开（见 Windows::show）。
+            return F"音频属性: {filename(self.m_path)} $ID";
+        }
+        public func getAttrib(_: AudioProperties)=> WindowsAttribute
+        {
+            return WindowsAttribute::ImGuiWindowFlags_NoDocking
+                + WindowsAttribute::ImGuiWindowFlags_NoCollapse
+                + WindowsAttribute::ImGuiWindowFlags_NoSavedSettings
+                ;
+        }
+        public func getSizeConstraints(_: AudioProperties)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((420., 240.), (960., 720.)));
+        }
+        // 把当前播放方式写入 <音频路径>.je4audio；属性源文件是唯一真相，
+        // 校验码随之改变，引擎会在下次加载时重建音频缓存。失败时弹窗并
+        // 返回 false。
+        func saveSettings(self: AudioProperties)=> bool
+        {
+            let settings_path = normalize(self.m_path->to_string + ".je4audio");
+            let mut root = toml::new_table();
+            if (exist(settings_path))
+            {
+                match (toml::load(settings_path))
+                {
+                    ok(loaded)? root = loaded;
+                    err(msg)?
+                    {
+                        do MsgBox::err("保存失败",
+                            F"无法读取音频属性文件：{msg}");
+                        return false;
+                    }
+                }
+            }
+            root->set("streaming", self.m_streaming);
+
+            match (toml::save(root, settings_path))
+            {
+                ok(_)? return true;
+                err(msg)?
+                {
+                    do MsgBox::err("保存失败",
+                        F"无法写入音频属性文件：{msg}");
+                    return false;
+                }
+            }
+        }
+        func drawInfo(self: AudioProperties)=> void
+        {
+            match (self.m_info)
+            {
+                none?
+                    TextDisabled("无法加载音频（文件缺失、缓存不可用或格式不支持）");
+                value(info)?
+                {
+                    Text(F"格式: {formatName(info.format)}    采样率: {info.sample_rate} Hz");
+                    if (info.byte_rate > 0)
+                    {
+                        // 整数运算算到百分位秒，避免浮点显示精度问题。
+                        let seconds = info.size / info.byte_rate;
+                        let centis = (info.size % info.byte_rate) * 100 / info.byte_rate;
+                        Text(F"时长: {seconds}.{centis} 秒    大小: {info.size} 字节");
+                    }
+                }
+            }
+        }
+        func drawStreaming(self: AudioProperties)=> void
+        {
+            Text("播放方式");
+            match (CheckBox("流式播放", self.m_streaming))
+            {
+                none?;
+                value(checked)? self.m_streaming = checked;
+            }
+            if (IsItemHovered())
+                do SetTooltip(
+                    "流式播放：按需分块读取波形数据，适用于时长较长的音频（如背景音乐）；关闭时整段解码进内存，适用于短促的音效。");
+        }
+        public func run(self: AudioProperties)=> bool
+        {
+            Text(F"文件: {filename(self.m_path)}");
+            TextDisabled(self.m_path->to_string);
+            if (IsItemHovered())
+                do SetTooltip(self.m_path->to_string);
+
+            Separator();
+
+            self->drawInfo();
+            Separator();
+
+            self->drawStreaming();
+            Separator();
+
+            if (Button("保存"))
+            {
+                if (self->saveSettings())
+                {
+                    // 失效内存共享缓存；磁盘缓存按校验码在下次加载时自动重建。
+                    do je::audio::mark_shared_buffer_outdated(self.m_runtime_path);
+                    self.m_status = "已保存。已加载的音频需重新加载后生效。";
+                }
+            }
+
+            if (self.m_status->len > 0)
+                TextDisabled(self.m_status);
+
+            return true;
+        }
+    }
+
+    // 音频格式枚举的显示名（与 je::audio::buffer::format 一一对应）。
+    func formatName(format: je::audio::buffer::format)=> string
+    {
+        if (format == je::audio::buffer::format::MONO8)
+            return "8位单声道";
+        if (format == je::audio::buffer::format::MONO16)
+            return "16位单声道";
+        if (format == je::audio::buffer::format::MONO32F)
+            return "32位浮点单声道";
+        if (format == je::audio::buffer::format::STEREO8)
+            return "8位立体声";
+        if (format == je::audio::buffer::format::STEREO16)
+            return "16位立体声";
+        return "32位浮点立体声";
+    }
+}

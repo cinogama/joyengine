@@ -105,4 +105,8 @@ src = "3rd/pkg"
 path = "pkg"
 src = "3rd/pkg"
 
+[dependence.audio]
+path = "pkg"
+src = "3rd/pkg"
+
 [test_dependence]

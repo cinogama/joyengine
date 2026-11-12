@@ -1,0 +1,119 @@
+// 音频缓存生成器：把音频文件解码后的 PCM 波形数据与 <音频路径>.je4audio
+// 属性源文件（TOML，可选）中的流式播放配置，一同写入引擎可直接使用的
+// 二进制缓存文档（je_cache_binary_* 格式）。
+//
+// 由引擎在 <音频路径>.je4cache 缺失或失效时加载，调用 generate：
+//   cache  —— C 侧创建好的缓存写入器（文件头已写入，校验码为音频文件与
+//             属性源文件内容连续计算的 CRC64）
+//   source —— 音频的引擎路径（@/ 或 !/）
+//
+// 音频经 je::file::readall 读取字节、pkg::audio 解码
+//（audio::frombuffer，保持 @/!/fimg 的引擎路径解析），PCM 用 wav::pcm
+// 取出（data 块原始字节，多声道按原文件顺序交织），经
+// binary_writer::append_buffer 写入。
+//
+// 文档结构与 src/jeecs_audio_impl_openal.cpp 的读取逻辑一一对应：
+//   DOCUMENT
+//     "channels"   -> INT32
+//     "samplerate" -> INT32
+//     "bits"       -> INT32
+//     "is_float"   -> BOOL（true = IEEE 浮点编码，false = 整数 PCM）
+//     "streaming"  -> BOOL（true = 应以流式方式播放）
+//     "pcm"        -> BUFFER（原始交织 PCM，帧数 = len / (channels * bits/8)）
+
+import pkg::std;
+import pkg::buffer;
+import pkg::audio;
+import pkg::toml;
+
+import je;
+import je::cache;
+
+using std;
+using buffer;
+using toml;
+
+// 读取 <音频路径>.je4audio 中的流式播放配置。属性源文件是可选的：文件
+// 不存在或键缺失时按默认的非流式处理；文件存在但无法解析时返回 none。
+func load_streaming(source: string)=> option<bool>
+{
+    let settings_path = source + ".je4audio";
+
+    match (je::file::readall(settings_path))
+    {
+        value(text)?
+        {
+            match (toml::parse(text))
+            {
+                ok(root)?
+                {
+                    match (root["streaming"]->as_bool)
+                    {
+                        value(streaming)? return option::value(streaming);
+                        none? return option::value(false);
+                    }
+                }
+                err(msg)?
+                {
+                    je::logerr(F"无法解析音频属性 TOML 文件 {settings_path}：{msg}");
+                    return option::none;
+                }
+            }
+        }
+        none?;
+    }
+    return option::value(false);
+}
+
+extern func generate(
+    cache: je::cache::binary_writer, source: string)=> bool
+{
+    let mut content = option::none: option<string>;
+    match (je::file::readall(source))
+    {
+        value(data)? content = option::value(data);
+        none?
+        {
+            je::logerr(F"无法读取音频文件 {source}");
+            return false;
+        }
+    }
+
+    // readall 返回 string（字节内容），frombuffer 需要 buffer 类型。
+    let filedata = buffer::builder::fromstring(content->unwrap);
+
+    let mut decoded = option::none: option<audio::wav>;
+    match (audio::frombuffer(filedata->peekbuffer(0, filedata->len)))
+    {
+        ok(wav)? decoded = option::value(wav);
+        err(errno)?
+        {
+            je::logerr(F"无法解码音频文件 {source}（错误码 {errno as int}）");
+            return false;
+        }
+    }
+    let wav = decoded->unwrap;
+
+    let mut streaming = false;
+    match (load_streaming(source))
+    {
+        value(flag)? streaming = flag;
+        none? return false;
+    }
+
+    if (!cache->append_document())
+        return false;
+    if (!cache->append_string("channels") || !cache->append_int32(wav->channels))
+        return false;
+    if (!cache->append_string("samplerate") || !cache->append_int32(wav->samplerate))
+        return false;
+    if (!cache->append_string("bits") || !cache->append_int32(wav->bits))
+        return false;
+    if (!cache->append_string("is_float") || !cache->append_bool(wav->isfloat))
+        return false;
+    if (!cache->append_string("streaming") || !cache->append_bool(streaming))
+        return false;
+    if (!cache->append_string("pcm") || !cache->append_buffer(wav->pcm))
+        return false;
+    return cache->append_end();
+}

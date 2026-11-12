@@ -23,7 +23,7 @@ JE_API void je_audio_buffer_close(const je_audio_buffer_t* buffer);
 ## 用法示例
 
 ```cpp
-const je_audio_buffer_t* buffer = je_audio_buffer_load_wav("@/sounds/effect.wav");
+const je_audio_buffer_t* buffer = je_audio_buffer_load("@/sounds/effect.wav");
 
 // 使用缓冲区...
 
@@ -37,4 +37,4 @@ je_audio_buffer_close(buffer);
 ## 相关接口
 
 - [je_audio_buffer_create](je_audio_buffer_create.md) - 创建音频缓冲区
-- [je_audio_buffer_load_wav](je_audio_buffer_load_wav.md) - 从 WAV 文件加载缓冲区
+- [je_audio_buffer_load](je_audio_buffer_load.md) - 从音频文件加载缓冲区（缓存管线）

@@ -27,6 +27,8 @@
 
 音频缓冲从 **WAV** 文件加载，支持 8/16 位整数 PCM 与 32 位浮点、单声道或立体声；C++ 侧也可以由原始采样数据直接创建。
 
+加载走与纹理相同的缓存管线：引擎按 `<音频路径>.je4cache` 二进制缓存加载（缓存内为解码信息 + PCM 波形 + 流式播放配置），缓存缺失或失效时经 **pkg::audio** 解码源文件并生成；可选的 `<音频路径>.je4audio`（TOML，编辑器“音频属性”窗口编辑）中的 `streaming` 配置指示该音频应当被流式播放，会随缓存一并记录并体现在缓冲区的 `streaming` 属性上。相同路径的重复加载共享同一个底层缓冲区。
+
 ### 把声音挂到实体上
 
 给实体添加 `Audio::Source` 与 `Audio::Playing`（编辑器“添加组件→音频→音源”预设），再配合 `Transform::Translation` 提供位置：
@@ -208,7 +210,8 @@ src->bind_effect_slot(0, slot, std::nullopt);             // 第 0 路发送，�
 | --- | --- |
 | 音频组件 | `include/jeecs/components.hpp`（`namespace Audio`） |
 | C ABI、效果器参数与默认值、C++ 封装 | `include/jeecs/audio.hpp`（逐函数说明见 [doc/capi/audio](../capi/audio/)） |
-| OpenAL 后端（设备、热插拔、EFX、WAV 解析） | `src/jeecs_audio_impl_openal.cpp` |
+| OpenAL 后端（设备、热插拔、EFX、缓存加载） | `src/jeecs_audio_impl_openal.cpp` |
+| 缓存生成器脚本（pkg::audio 解码） | `builtin/script/internal/cache/audio.wo` |
 | 组件同步与播放状态机 | `src/jeecs_core_audio_system.cpp` |
 | Woolang 绑定 | `je/audio.wo`、`src/jeecs_audio_woolang_api.cpp` |
 | 组件辅助函数（towoo） | `je/towoo/towoo.wo`、`src/jeecs_woolang_towoo_script_basic.cpp` |

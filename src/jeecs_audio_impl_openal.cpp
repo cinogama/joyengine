@@ -1,14 +1,17 @@
 #define JE_IMPL
 #include "jeecs/audio.hpp"
+#include "jeecs/cache.hpp"
 #include "jeecs/file.hpp"
 #include "jeecs/logging.hpp"
 #include "jeecs/prefix.hpp"
 #include "jeecs_basic_bootup.hpp"
+#include "jeecs_basic_cache_version.hpp"
 
 #include <AL/al.h>
 #include <AL/alc.h>
 #include <AL/alext.h>
 
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 #include <mutex>
@@ -60,6 +63,113 @@ namespace jeecs::audio
         static_assert(sizeof(EffectHead) % alignof(je_audio_effect_compressor_t) == 0);
         static_assert(sizeof(EffectHead) % alignof(je_audio_effect_equalizer_t) == 0);
         static_assert(sizeof(EffectHead) % alignof(je_audio_effect_eax_reverb_t) == 0);
+
+        // Maps the decoded audio properties to the OpenAL buffer format with a
+        // direct representation. Returns false for layouts OpenAL cannot take
+        // as-is (24-bit PCM, 32-bit integer PCM, 64-bit float, > 2 channels);
+        // those need sample conversion first.
+        static bool je_audio_buffer_format_of(
+            int32_t channels, int32_t bits, bool is_float, je_audio_format_t* out_format)
+        {
+            if (channels == 1)
+            {
+                if (!is_float && bits == 8)
+                {
+                    *out_format = JE_AUDIO_FORMAT_MONO8;
+                    return true;
+                }
+                if (!is_float && bits == 16)
+                {
+                    *out_format = JE_AUDIO_FORMAT_MONO16;
+                    return true;
+                }
+                if (is_float && bits == 32)
+                {
+                    *out_format = JE_AUDIO_FORMAT_MONO32F;
+                    return true;
+                }
+            }
+            else if (channels == 2)
+            {
+                if (!is_float && bits == 8)
+                {
+                    *out_format = JE_AUDIO_FORMAT_STEREO8;
+                    return true;
+                }
+                if (!is_float && bits == 16)
+                {
+                    *out_format = JE_AUDIO_FORMAT_STEREO16;
+                    return true;
+                }
+                if (is_float && bits == 32)
+                {
+                    *out_format = JE_AUDIO_FORMAT_STEREO32F;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // The payload of an audio cache, as written by
+        // builtin/script/internal/cache/audio.wo. m_pcm is malloc'ed and
+        // owned by the caller.
+        struct audio_cache_content_t
+        {
+            int32_t m_channels;
+            int32_t m_samplerate;
+            int32_t m_bits;
+            bool m_is_float;
+            bool m_streaming;
+            void* m_pcm;
+            size_t m_pcm_size;
+        };
+
+        // Reads the binary cache document of an audio file. *out is written
+        // only on success.
+        static bool read_audio_cache_document(
+            je_file_t* cache, audio_cache_content_t* out)
+        {
+            je_cache_binary_document_t root;
+            je_cache_binary_buffer_t pcm;
+            audio_cache_content_t content;
+
+            if (!je_cache_binary_document_open(cache, &root)
+                || !je_cache_binary_document_index(
+                    &root, "channels", JE_CACHE_BINARY_VALUE_INT32, &content.m_channels)
+                || !je_cache_binary_document_index(
+                    &root, "samplerate", JE_CACHE_BINARY_VALUE_INT32, &content.m_samplerate)
+                || !je_cache_binary_document_index(
+                    &root, "bits", JE_CACHE_BINARY_VALUE_INT32, &content.m_bits)
+                || !je_cache_binary_document_index(
+                    &root, "is_float", JE_CACHE_BINARY_VALUE_BOOL, &content.m_is_float)
+                || !je_cache_binary_document_index(
+                    &root, "streaming", JE_CACHE_BINARY_VALUE_BOOL, &content.m_streaming)
+                || !je_cache_binary_document_index(
+                    &root, "pcm", JE_CACHE_BINARY_VALUE_BUFFER, &pcm))
+                return false;
+
+            if (content.m_channels <= 0
+                || content.m_samplerate <= 0
+                || content.m_bits <= 0
+                || content.m_bits % 8 != 0)
+                return false;
+
+            size_t pcm_size = 0;
+            if (!je_cache_binary_buffer_read(nullptr, &pcm_size, &pcm))
+                return false;
+
+            void* const pcm_data = malloc(pcm_size);
+            if (!je_cache_binary_buffer_read(pcm_data, &pcm_size, &pcm))
+            {
+                free(pcm_data);
+                return false;
+            }
+
+            content.m_pcm = pcm_data;
+            content.m_pcm_size = pcm_size;
+            *out = content;
+            return true;
+        }
 
         class ContextHelper
         {
@@ -257,6 +367,8 @@ namespace jeecs::audio
             unordered_set<je_audio_source_t*> m_sources;
             mutex m_buffers_mx; // g2
             unordered_set<je_audio_buffer_t*> m_buffers;
+            // 已加载音频的路径 -> 共享缓冲区（持有一份引用），受 g2 保护
+            unordered_map<string, const je_audio_buffer_t*> m_shared_buffers;
             mutex m_effects_mx; // g3
             unordered_set<EffectHead*> m_effects;
             mutex m_effect_slots_mx; // g4
@@ -869,7 +981,8 @@ namespace jeecs::audio
                 const void* new_allocated_buffer_data,
                 size_t buffer_data_len,
                 size_t sample_rate,
-                je_audio_format_t format)
+                je_audio_format_t format,
+                bool streaming)
             {
                 size_t byte_per_sample;
                 auto al_format = je_al_format(format, &byte_per_sample);
@@ -895,6 +1008,7 @@ namespace jeecs::audio
                 audio_buffer->m_sample_rate = sample_rate;
                 audio_buffer->m_sample_size = byte_per_sample;
                 audio_buffer->m_format = format;
+                audio_buffer->m_streaming = streaming;
                 audio_buffer->m_byte_rate = byte_per_sample * audio_buffer->m_sample_rate;
 
                 m_buffers.emplace(audio_buffer);
@@ -1141,6 +1255,14 @@ namespace jeecs::audio
             {
                 auto* rw_buffer = const_cast<je_audio_buffer_t*>(buffer);
 
+                for (auto it = m_shared_buffers.begin(); it != m_shared_buffers.end(); ++it)
+                {
+                    if (it->second == rw_buffer)
+                    {
+                        m_shared_buffers.erase(it);
+                        break;
+                    }
+                }
                 m_buffers.erase(rw_buffer);
                 shutdown_buffer(rw_buffer);
             }
@@ -1764,193 +1886,92 @@ namespace jeecs::audio
                     buffer_data,
                     buffer_data_len,
                     sample_rate,
-                    format);
+                    format,
+                    false);
             }
-            const je_audio_buffer_t* load_buffer_wav(const char* path)
+            const je_audio_buffer_t* load_buffer(const char* path)
             {
-                // Wav文件数据体模块
-                struct WAVE_Data
+                // 相同路径的重复加载共享同一个缓冲区。
                 {
-                    char subChunkID[4];    // should contain the word data
-                    int32_t subChunk2Size; // Stores the size of the data block
-                };
-                // wav文件数据参数类型
-                struct WAVE_Format
-                {
-                    char subChunkID[4];
-                    int32_t subChunkSize;
-                    int16_t audioFormat;
-                    int16_t numChannels;
-                    int32_t sampleRate;
-                    int32_t byteRate;
-                    int16_t blockAlign;
-                    int16_t bitsPerSample;
-                };
-                // RIFF块标准模型
-                struct RIFF_Header
-                {
-                    char chunkID[4];
-                    int32_t chunkSize; // size not including chunkSize or chunkID
-                    char format[4];
-                };
+                    lock_guard g2(m_buffers_mx); // g2
 
-                WAVE_Format wave_format;
-                RIFF_Header riff_header;
-                WAVE_Data wave_data;
-
-                je_file_t* wav_file = je_file_open(path);
-                if (wav_file == nullptr)
-                {
-                    debug::logerr("Failed to open file: '%s', unable to create audio buffer.", path);
-                    return nullptr;
+                    auto fnd = m_shared_buffers.find(path);
+                    if (fnd != m_shared_buffers.end())
+                    {
+                        ContextHelper::increase_ref(fnd->second);
+                        return fnd->second;
+                    }
                 }
-                // Read in the first chunk into the struct
 
-                je_file_read(&riff_header, sizeof(RIFF_Header), 1, wav_file);
-
-                // check for RIFF and WAVE tag in memeory
-                if ((riff_header.chunkID[0] != 'R' ||
-                    riff_header.chunkID[1] != 'I' ||
-                    riff_header.chunkID[2] != 'F' ||
-                    riff_header.chunkID[3] != 'F') ||
-                    (riff_header.format[0] != 'W' ||
-                        riff_header.format[1] != 'A' ||
-                        riff_header.format[2] != 'V' ||
-                        riff_header.format[3] != 'E'))
+                // 缓存仅在音频源文件存在时（重新）生成；源文件不存在时只读取
+                // 已有的缓存：导出的运行时只携带缓存（与纹理缓存加载一致）。
+                je_file_t* cache_file = nullptr;
+                if (je_file_t* source = je_file_open(path))
                 {
-                    debug::logerr("Invalid wav file: '%s', bad format tag.", path);
-                    je_file_close(wav_file);
+                    je_file_close(source);
+                    cache_file = je_audio_cache_open_or_create(path);
+                }
+                else
+                    cache_file = je_cache_file_load(path, AUDIO_CACHE_VERSION, 0);
+
+                if (cache_file == nullptr)
+                {
+                    debug::logerr(
+                        "Failed to open audio cache of '%s', unable to create audio buffer.", path);
                     return nullptr;
                 }
 
-                // Read in the 2nd chunk for the wave info
-                je_file_read(&wave_format, sizeof(WAVE_Format), 1, wav_file);
-                // check for fmt tag in memory
-                if (wave_format.subChunkID[0] != 'f' ||
-                    wave_format.subChunkID[1] != 'm' ||
-                    wave_format.subChunkID[2] != 't' ||
-                    wave_format.subChunkID[3] != ' ')
+                audio_cache_content_t content;
+                if (!read_audio_cache_document(cache_file, &content))
                 {
-                    debug::logerr("Invalid wav file: '%s', bad format head.", path);
-                    je_file_close(wav_file);
+                    debug::logerr("Invalid audio cache of '%s'.", path);
+                    je_file_close(cache_file);
                     return nullptr;
                 }
+                je_file_close(cache_file);
 
-                // check for extra parameters;
-                if (wave_format.subChunkSize > 16)
+                je_audio_format_t format;
+                if (!je_audio_buffer_format_of(
+                    content.m_channels, content.m_bits, content.m_is_float, &format))
                 {
-                    je_file_seek(
-                        wav_file,
-                        wave_format.subChunkSize - 16,
-                        je_file_seek_mode_t::JE_READ_FILE_SEEK_CURRENT);
-                }
-
-                do
-                {
-                    // Read in the the last byte of data before the sound file
-                    if (0 == je_file_read(&wave_data, sizeof(WAVE_Data), 1, wav_file))
-                    {
-                        debug::logerr("Invalid wav file: '%s', bad data head.", path);
-                        je_file_close(wav_file);
-                        return nullptr;
-                    }
-
-                    // check for data tag in memory
-                    if (wave_data.subChunkID[0] == 'd' &&
-                        wave_data.subChunkID[1] == 'a' &&
-                        wave_data.subChunkID[2] == 't' &&
-                        wave_data.subChunkID[3] == 'a')
-                    {
-                        // data chunk found.
-                        break;
-                    }
-                    else
-                    {
-                        // Skip the chunk data we don't care about
-                        je_file_seek(wav_file, wave_data.subChunk2Size, JE_READ_FILE_SEEK_CURRENT);
-                    }
-
-                } while (true);
-
-                // Allocate memory for data
-                void* data = malloc(wave_data.subChunk2Size);
-
-                // Read in the sound data into the soundData variable
-                if (!je_file_read(data, wave_data.subChunk2Size, 1, wav_file))
-                {
-                    debug::logerr("Invalid wav file: '%s', bad data size.", path);
-                    free(data);
-                    je_file_close(wav_file);
-                    return nullptr;
-                }
-
-                je_file_close(wav_file);
-
-                if ((wave_format.byteRate !=
-                    wave_format.numChannels * wave_format.bitsPerSample * wave_format.sampleRate / 8) ||
-                    (wave_format.blockAlign !=
-                        wave_format.numChannels * wave_format.bitsPerSample / 8))
-                {
-                    debug::logerr("Invalid wav file: '%s', bad data format.", path);
-                    free(data);
-                    return nullptr;
-                }
-
-                je_audio_format_t wav_format = JE_AUDIO_FORMAT_MONO8;
-
-                // The format is worked out by looking at the number of
-                // channels and the bits per sample.
-                switch (wave_format.bitsPerSample)
-                {
-                case 8:
-                    if (wave_format.numChannels == 1)
-                    {
-                        wav_format = JE_AUDIO_FORMAT_MONO8;
-                        break;
-                    }
-                    else if (wave_format.numChannels == 2)
-                    {
-                        wav_format = JE_AUDIO_FORMAT_STEREO8;
-                        break;
-                    }
-                    [[fallthrough]];
-                case 16:
-                    if (wave_format.numChannels == 1)
-                    {
-                        wav_format = JE_AUDIO_FORMAT_MONO16;
-                        break;
-                    }
-                    else if (wave_format.numChannels == 2)
-                    {
-                        wav_format = JE_AUDIO_FORMAT_STEREO16;
-                        break;
-                    }
-                    [[fallthrough]];
-                case 32:
-                    if (wave_format.numChannels == 1)
-                    {
-                        wav_format = JE_AUDIO_FORMAT_MONO32F;
-                        break;
-                    }
-                    else if (wave_format.numChannels == 2)
-                    {
-                        wav_format = JE_AUDIO_FORMAT_STEREO32F;
-                        break;
-                    }
-                    [[fallthrough]];
-                default:
-                    debug::logerr("Invalid wav file: '%s', bad data format.", path);
-                    free(data);
+                    debug::logerr(
+                        "Unsupported audio layout of '%s': %d channels, %d-bit%s PCM.",
+                        path,
+                        (int)content.m_channels,
+                        (int)content.m_bits,
+                        content.m_is_float ? " float" : "");
+                    free(content.m_pcm);
                     return nullptr;
                 }
 
                 lock_guard g2(m_buffers_mx);  // g2
                 shared_lock g0(m_context_mx); // g0
-                return instance_buffer(
-                    data,
-                    wave_data.subChunk2Size,
-                    wave_format.sampleRate,
-                    wav_format);
+
+                // 并发加载同一路径时后完成的一方让位：保留已共享的缓冲区，
+                // 丢弃自己解码出的数据。
+                auto fnd = m_shared_buffers.find(path);
+                if (fnd != m_shared_buffers.end())
+                {
+                    ContextHelper::increase_ref(fnd->second);
+                    free(content.m_pcm);
+                    return fnd->second;
+                }
+
+                const je_audio_buffer_t* buffer = instance_buffer(
+                    content.m_pcm,
+                    content.m_pcm_size,
+                    (size_t)content.m_samplerate,
+                    format,
+                    content.m_streaming);
+
+                if (buffer == nullptr)
+                {
+                    free(content.m_pcm);
+                    return nullptr;
+                }
+
+                m_shared_buffers.emplace(string(path), buffer);
+                return buffer;
             }
             void close_buffer(const je_audio_buffer_t* buffer)
             {
@@ -1958,6 +1979,20 @@ namespace jeecs::audio
                 shared_lock g0(m_context_mx); // g0
 
                 ContextHelper::decrease_ref(buffer);
+            }
+            void mark_shared_buffer_outdated(const char* path)
+            {
+                lock_guard g2(m_buffers_mx);  // g2
+                shared_lock g0(m_context_mx); // g0
+
+                auto fnd = m_shared_buffers.find(path);
+                if (fnd != m_shared_buffers.end())
+                {
+                    // 释放共享缓存持有的引用；已分发的句柄由引用计数保持存活
+                    const je_audio_buffer_t* buffer = fnd->second;
+                    m_shared_buffers.erase(fnd);
+                    ContextHelper::decrease_ref(buffer);
+                }
             }
 
             je_audio_source_t* create_source()
@@ -2863,17 +2898,23 @@ namespace jeecs::audio
     return g_engine_audio_context->create_buffer(
         data, buffer_data_len, sample_rate, format);
 }
-/* OPTIONAL: If wav file failed to load */ const je_audio_buffer_t* je_audio_buffer_load_wav(const char* path)
+/* OPTIONAL: If audio file or its cache failed to load */ const je_audio_buffer_t* je_audio_buffer_load(const char* path)
 {
     assert(g_engine_audio_context != nullptr);
 
-    return g_engine_audio_context->load_buffer_wav(path);
+    return g_engine_audio_context->load_buffer(path);
 }
 void je_audio_buffer_close(const je_audio_buffer_t* buffer)
 {
     assert(g_engine_audio_context != nullptr);
 
     g_engine_audio_context->close_buffer(buffer);
+}
+void je_audio_shared_buffer_mark_outdated(const char* path)
+{
+    assert(g_engine_audio_context != nullptr);
+
+    g_engine_audio_context->mark_shared_buffer_outdated(path);
 }
 je_audio_source_t* je_audio_source_create()
 {

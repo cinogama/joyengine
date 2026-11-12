@@ -27,7 +27,7 @@ JE_API bool je_audio_source_buffer_set(je_audio_source_t* source, const je_audio
 
 ```cpp
 je_audio_source_t* source = je_audio_source_create();
-const je_audio_buffer_t* buffer = je_audio_buffer_load_wav("@/sounds/bgm.wav");
+const je_audio_buffer_t* buffer = je_audio_buffer_load("@/sounds/bgm.wav");
 
 // 设置音频缓冲区
 bool changed = je_audio_source_buffer_set(source, buffer);

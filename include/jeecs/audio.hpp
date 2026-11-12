@@ -5,6 +5,7 @@
 // =============================================================================
 
 #include "jeecs/prefix.hpp"
+#include "jeecs/file.hpp"
 #include "jeecs/basic.hpp"
 
 JE_FORCE_CAPI
@@ -61,6 +62,7 @@ typedef struct je_audio_buffer_t
     size_t m_sample_size;
     size_t m_byte_rate;
     je_audio_format_t m_format;
+    bool m_streaming; // 来自 <音频路径>.je4audio 的流式播放配置，默认为 false
 } je_audio_buffer_t;
 
 typedef struct je_audio_native_source_instance_t je_audio_native_source_instance_t;
@@ -407,16 +409,48 @@ JE_API /* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sa
     je_audio_format_t format);
 
 /*
-je_audio_buffer_load_wav [基本接口]
-加载一个WAV格式的音频文件
-    * path 是音频文件的路径
+je_audio_buffer_load [基本接口]
+加载一个音频文件（按其 <音频路径>.je4cache 缓存，缓存缺失或失效时经
+pkg::audio 解码源文件并生成，流式播放配置取自可选的 <音频路径>.je4audio）
+    * path 是音频文件的引擎路径（@/ 或 !/）
     * 返回值是一个指向音频缓冲区的指针
-    使用完毕后需要调用 je_audio_buffer_close 释放资源
-    如果加载失败，返回值为 nullptr
+    * 相同路径的重复加载共享同一个缓冲区（引用计数递增）
+使用完毕后需要调用 je_audio_buffer_close 释放资源
+如果加载失败（文件/缓存不可用或格式不支持），返回值为 nullptr
 参见：
     je_audio_buffer_close
+    je_audio_cache_open_or_create
+    je_audio_shared_buffer_mark_outdated
 */
-JE_API /* OPTIONAL: If wav file failed to load */ const je_audio_buffer_t* je_audio_buffer_load_wav(const char* path);
+JE_API /* OPTIONAL: If audio file or its cache failed to load */ const je_audio_buffer_t* je_audio_buffer_load(const char* path);
+
+/*
+je_audio_cache_open_or_create [基本接口]
+打开音频文件的二进制缓存 <音频路径>.je4cache：缓存有效时直接返回，
+缺失或失效时调用内置生成脚本（pkg::audio 解码 + 可选的
+<音频路径>.je4audio 流式播放配置）重新生成
+    * path 是音频文件的引擎路径（@/ 或 !/）
+缓存文档结构（je_cache_binary_*）：
+    channels / samplerate / bits -> INT32，is_float / streaming -> BOOL，
+    pcm -> BUFFER（原始交织 PCM）
+返回值是缓存文件的只读句柄（用毕 je_file_close 关闭），失败返回 nullptr
+参见：
+    je_audio_buffer_load
+    je_cache_file_load
+*/
+JE_API /* OPTIONAL */ je_file_t* je_audio_cache_open_or_create(const char* path);
+
+/*
+je_audio_shared_buffer_mark_outdated [基本接口]
+把 path 从音频缓冲区的内存共享缓存中移除：后续 je_audio_buffer_load 会
+重新读取（必要时重新生成）<音频路径>.je4cache，已分发的旧缓冲区句柄
+不受影响（由引用计数保持存活）
+    * path 是音频文件的引擎路径（@/ 或 !/）
+无返回值。用于编辑器修改 <音频路径>.je4audio 之后使新配置生效
+参见：
+    je_audio_buffer_load
+*/
+JE_API void je_audio_shared_buffer_mark_outdated(const char* path);
 
 /*
 je_audio_buffer_close [基本接口]
@@ -454,19 +488,19 @@ typedef struct je_audio_filter_t
 je_audio_filter_create [基本接口]
 创建一个低通滤波器
 */
-je_audio_filter_t* je_audio_filter_create();
+JE_API je_audio_filter_t* je_audio_filter_create();
 
 /*
 je_audio_filter_update [基本接口]
 将对 je_audio_filter_t 的参数修改应用到实际的滤波器上
 */
-void je_audio_filter_update(je_audio_filter_t* filter);
+JE_API void je_audio_filter_update(je_audio_filter_t* filter);
 
 /*
 je_audio_filter_close [基本接口]
 关闭一个滤波器
 */
-void je_audio_filter_close(je_audio_filter_t* filter);
+JE_API void je_audio_filter_close(je_audio_filter_t* filter);
 
 /*
 je_audio_source_create [基本接口]
@@ -934,7 +968,7 @@ namespace jeecs
             }
             inline static std::optional<basic::resource<buffer>> load(const std::string& path)
             {
-                auto* buf = je_audio_buffer_load_wav(path.c_str());
+                auto* buf = je_audio_buffer_load(path.c_str());
                 if (buf != nullptr)
                     return basic::resource<buffer>(new buffer(buf));
                 return std::nullopt;
