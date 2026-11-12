@@ -11,6 +11,7 @@ import pkg::worst;
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Forms::AskBox;
 import builtin::editor::GUI::Widgets;
+import builtin::editor::GUI::Theme;
 
 import WorldEditorViewport;
 import Action::AddWorldSystem;
@@ -22,6 +23,7 @@ import Action::SwitchSystemGroup;
 using std;
 using je;
 using je::gui;
+using JEEditor::GUI;
 using JEEditor::GUI::Windows;
 using JEEditor::GUI::Forms;
 using JEEditor::GUI::Widgets;
@@ -229,8 +231,8 @@ namespace JEEditor::Editor
             let (avail_width, _) = GetContentRegionAvail();
             SetCursorPos((cursor_x + avail_width - 28., cursor_y));
             PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
-            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, (140, 40, 40, 255));
-            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, (190, 55, 55, 255));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, Theme::DANGER);
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, Theme::DANGER_ACTIVE);
             if (ButtonSize(F"×##{tag}_remove", (24., 0.)))
                 requestRemoveSystem(wctx, systype, is_world_system);
             PopStyleColor(3);
@@ -295,7 +297,7 @@ namespace JEEditor::Editor
             if (visible->len == 0)
             {
                 Indent(8.);
-                TextDisabled("（空）");
+                Theme::emptyState("暂无系统", "可从下方“＋ 添加系统”补充。");
                 Unindent(8.);
             }
         }
@@ -428,23 +430,9 @@ namespace JEEditor::Editor
                 DEBUG_GROUP_ACCENT);
 
             Spacing();
-            // “添加系统”是动作而非条目：透明底 + 细边框 + “+”前缀，
-            // 与上方的蓝色系统条目区分开；悬停时填充淡强调色
-            let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
-            PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
-            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered,
-                mixStyleColor(text_c, RUNTIME_GROUP_ACCENT, 0.18, 60));
-            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive,
-                mixStyleColor(text_c, RUNTIME_GROUP_ACCENT, 0.28, 90));
-            PushStyleColor(ImGuiCol::ImGuiCol_Border,
-                mixStyleColor(text_c, text_c, 0., 60));
-            PushStyleColor(ImGuiCol::ImGuiCol_Text,
-                mixStyleColor(text_c, text_c, 0., 200));
-            PushStyleReal(StyleVar::ImGuiStyleVar_FrameBorderSize, 1.);
-            let add_clicked = ButtonSize("+ 添加系统", (-1., 0.));
-            PopStyleVar(1);
-            PopStyleColor(5);
-            if (add_clicked)
+            // “添加系统”是面板的主操作：用品牌橙主按钮拉到视觉焦点，
+            // 与上方的系统条目明确区分
+            if (Theme::primaryButton("＋ 添加系统", (-1., 0.)))
             {
                 // 每次打开弹窗都复位搜索词，并将焦点设到搜索框
                 s_add_system_filter = "";
@@ -464,7 +452,8 @@ namespace JEEditor::Editor
             match (WorldEditorViewport::getLastFocused())
             {
                 none?
-                    TextDisabled("（没有待编辑的世界）");
+                    Theme::emptyState("没有待编辑的世界",
+                        "打开或新建一个世界后，这里会显示系统列表。");
                 value(wctx)?
                 {
                     showWorldSystems(wctx);

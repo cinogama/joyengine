@@ -7,10 +7,12 @@ import je::internal;
 import pkg::interface;
 
 import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Theme;
 
 using std;
 using je;
 using je::gui;
+using JEEditor::GUI;
 using JEEditor::GUI::Windows;
 
 namespace JEEditor::Editor
@@ -177,13 +179,13 @@ namespace JEEditor::Editor
         func levelColor(lvl: internal::loglevel)=> Color32RGBA
         {
             if (lvl == internal::loglevel::NORMAL)
-                return (200, 200, 200, 255);
+                return Theme::TEXT;
             if (lvl == internal::loglevel::INFO)
-                return (120, 180, 255, 255);
+                return Theme::INFO;
             if (lvl == internal::loglevel::WARNING)
-                return (240, 200, 80, 255);
+                return Theme::WARNING;
             if (lvl == internal::loglevel::ERROR)
-                return (240, 110, 110, 255);
+                return Theme::DANGER;
             return (255, 70, 70, 255);
         }
         
@@ -246,13 +248,15 @@ namespace JEEditor::Editor
         
         func drawToolbar(self: LogBrowser, total: int, shown: int)=> void
         {
-            if (Button("清除"))
+            // 第一行：视图操作 + 自动滚动 + 统计。破坏性的“清除”用
+            // 幽灵按钮，避免和常用操作抢注意力。
+            if (Theme::ghostButton("清除", (0., 0.)))
             {
                 self.m_logs->clear();
                 self.m_count_dirty = true;
             }
             SameLine();
-            if (Button("复制全部"))
+            if (Theme::ghostButton("复制全部", (0., 0.)))
                 self->copyVisible();
             SameLine();
             match (CheckBox("自动滚动##lb_autoscroll", self.m_auto_scroll))
@@ -262,66 +266,55 @@ namespace JEEditor::Editor
                     self.m_auto_scroll = v;
             }
             
-            SameLine();
-            Separator();
-            SameLine();
+            Theme::toolbarSeparator();
+            Theme::statText(F"共 {total} 条 / 显示 {shown} 条");
             
-            match (CheckBox("正常##lb_n", self.m_show_normal))
+            // 第二行：等级筛选芯片（颜色即语义）+ 文本搜索。芯片激活时
+            // 用等级色浅底，一眼能看出当前过滤了哪些等级。
+            let mut changed = false;
+            if (Theme::levelChip("正常##lb_n", self.m_show_normal,
+                    levelColor(internal::loglevel::NORMAL)))
             {
-                none?;
-                value(v)?
-                {
-                    self.m_show_normal = v;
-                    self.m_count_dirty = true;
-                }
+                self.m_show_normal = !self.m_show_normal;
+                changed = true;
             }
             SameLine();
-            match (CheckBox("信息##lb_i", self.m_show_info))
+            if (Theme::levelChip("信息##lb_i", self.m_show_info,
+                    levelColor(internal::loglevel::INFO)))
             {
-                none?;
-                value(v)?
-                {
-                    self.m_show_info = v;
-                    self.m_count_dirty = true;
-                }
+                self.m_show_info = !self.m_show_info;
+                changed = true;
             }
             SameLine();
-            match (CheckBox("警告##lb_w", self.m_show_warning))
+            if (Theme::levelChip("警告##lb_w", self.m_show_warning,
+                    levelColor(internal::loglevel::WARNING)))
             {
-                none?;
-                value(v)?
-                {
-                    self.m_show_warning = v;
-                    self.m_count_dirty = true;
-                }
+                self.m_show_warning = !self.m_show_warning;
+                changed = true;
             }
             SameLine();
-            match (CheckBox("错误##lb_e", self.m_show_error))
+            if (Theme::levelChip("错误##lb_e", self.m_show_error,
+                    levelColor(internal::loglevel::ERROR)))
             {
-                none?;
-                value(v)?
-                {
-                    self.m_show_error = v;
-                    self.m_count_dirty = true;
-                }
+                self.m_show_error = !self.m_show_error;
+                changed = true;
             }
             SameLine();
-            match (CheckBox("致命##lb_f", self.m_show_fatal))
+            if (Theme::levelChip("致命##lb_f", self.m_show_fatal,
+                    levelColor(internal::loglevel::FATAL)))
             {
-                none?;
-                value(v)?
-                {
-                    self.m_show_fatal = v;
-                    self.m_count_dirty = true;
-                }
+                self.m_show_fatal = !self.m_show_fatal;
+                changed = true;
             }
+            if (changed)
+                self.m_count_dirty = true;
             
-            SameLine();
-            Separator();
-            SameLine();
+            // 第三行：搜索单独成行，保证面板收窄到 420px 时等级芯片
+            // 与输入框不会互相挤压
+            Spacing();
             Text("搜索:");
             SameLine();
-            PushItemWidth(140.);
+            PushItemWidth(220.);
             match (InputText("##LogFilter", self.m_filter))
             {
                 none?;
@@ -332,9 +325,6 @@ namespace JEEditor::Editor
                 }
             }
             PopItemWidth();
-            
-            SameLine();
-            TextDisabled(F"共 {total} 条 / 显示 {shown} 条");
         }
         
         func drawLogs(self: LogBrowser)=> void
@@ -353,7 +343,8 @@ namespace JEEditor::Editor
             }
             
             if (!drew_any)
-                TextDisabled("(没有日志)");
+                Theme::emptyState("暂无匹配的日志",
+                    "引擎输出、警告与错误会实时出现在这里。");
                 
             // 自动滚动：当有新日志到达时，将视图钉在底部
             let cur_count = self.m_logs->len;

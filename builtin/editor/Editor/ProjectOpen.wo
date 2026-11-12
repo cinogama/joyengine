@@ -21,6 +21,7 @@ import builtin::editor::GUI::Icons;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::AskBox;
 import builtin::editor::GUI::Forms::InputBox;
+import builtin::editor::GUI::Theme;
 
 import builtin::editor::Singleton;
 import builtin::editor::Singleton::Universe;
@@ -134,12 +135,13 @@ namespace JEEditor::Editor
         let s_joy_logo = texture2d::load(option::none, "!/builtin/icon/Joy.png");
         
         // 主题色（取自 Joy 的暖橙色系）
-        let k_title_color = (242, 176, 109, 255);
-        let k_panel_bg_color = (37, 37, 42, 255);
-        let k_primary_btn_color = (219, 134, 63, 255);
-        let k_primary_btn_hover_color = (241, 157, 89, 255);
-        let k_primary_btn_active_color = (190, 113, 50, 255);
-        let k_error_text_color = (255, 128, 128, 255);
+        // 主题色统一取自 GUI::Theme，与编辑器其余窗口保持一致
+        let k_title_color = Theme::ACCENT_TEXT;
+        let k_panel_bg_color = Theme::PANEL_BG;
+        let k_primary_btn_color = Theme::ACCENT;
+        let k_primary_btn_hover_color = Theme::ACCENT_HOVER;
+        let k_primary_btn_active_color = Theme::ACCENT_ACTIVE;
+        let k_error_text_color = Theme::DANGER;
         
         // 项目目录的标志文件：目录内必须存在 Project::PROJECT_FILE_NAME 文件才会被当作项目打开，
         // 「在此处新建」负责在新目录内创建它（TOML 文档，暂无内容）。
@@ -573,12 +575,13 @@ namespace JEEditor::Editor
             PushStyleColor(ImGuiCol::ImGuiCol_Button, k_primary_btn_color);
             PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, k_primary_btn_hover_color);
             PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, k_primary_btn_active_color);
+            PushStyleColor(ImGuiCol::ImGuiCol_Text, Theme::TEXT_ON_ACCENT);
             if (ButtonSize("在此处新建", (avail.0 / 2. - 5., 34.)))
                 self->askToCreateProjectHere();
             SameLine();
             if (ButtonSize("打开项目", (avail.0 / 2. - 5., 34.)))
                 self->confirmOpen();
-            PopStyleColor(3);
+            PopStyleColor(4);
         }
     }
 }

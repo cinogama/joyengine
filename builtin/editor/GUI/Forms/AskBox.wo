@@ -7,6 +7,7 @@ import pkg::interface;
 import builtin::editor::GUI::Icons;
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Shortcut;
+import builtin::editor::GUI::Theme;
 
 using std;
 using je::gui;
@@ -81,21 +82,28 @@ namespace JEEditor::GUI::Forms
                 }
             }
             
+            PushTextWrapPos(0.);
             Text(self.m_text);
+            PopTextWrapPos();
             
-            if (Button("是"))
-                self->onEnter();
+            Spacing();
+            PushStyleColor(ImGuiCol::ImGuiCol_Separator, Theme::SEPARATOR);
+            Separator();
+            PopStyleColor(1);
+
+            if (Theme::ghostButton("取消", (0., 0.)))
+                self.m_close = true;
                 
             SameLine();
-            if (Button("否"))
+            if (Theme::ghostButton("否", (0., 0.)))
             {
                 self.m_close = true;
                 do self.m_on_no->> \callback = callback();;
             }
             SameLine();
-            
-            if (Button("取消"))
-                self.m_close = true;
+            // “是”是主操作：品牌橙实心按钮，和两个次要选择明确分层
+            if (Theme::primaryButton("是", (0., 0.)))
+                self->onEnter();
                 
             return !self.m_close;
         }

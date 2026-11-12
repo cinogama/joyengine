@@ -8,6 +8,7 @@ import pkg::try;
 import pkg::async;
 
 import Windows;
+import Theme;
 
 using std;
 using je;
@@ -31,6 +32,9 @@ namespace JEEditor::GUI::Statebar
     
     async! func stateBarLoop()
     {
+        // 状态栏协程同样在 GUI 循环内恢复：在首帧、绘制状态栏之前应用
+        // 全局主题（ensureApplied 内部有幂等保护）
+        Theme::ensureApplied();
         for(;;)
         {
             while (s_state_showing_queue->len >= 2)
@@ -63,11 +67,13 @@ namespace JEEditor::GUI::Statebar
                     if ((immut bar_height) > max_bar_height)
                         bar_height = max_bar_height;
                         
+                    Theme::pushStatusBarStyle();
                     let show = BeginViewportSideBar(
                             "EditorStatebar",
                             Direction::ImGuiDir_Down,
                             bar_height,
                             WindowsAttribute::ImGuiWindowFlags_None);
+                    Theme::popStatusBarStyle();
                     began->set(true);
                     if (show)
                     {

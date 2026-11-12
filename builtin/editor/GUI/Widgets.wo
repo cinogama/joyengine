@@ -6,6 +6,8 @@ import je::towoo;
 import je::towoo::types;
 import je::typeinfo;
 
+import Theme;
+
 using std;
 using je;
 using je::gui;
@@ -36,13 +38,14 @@ namespace JEEditor::GUI::Widgets
                 (center.0 + mathf::cos(angle) * radius,
                     center.1 + mathf::sin(angle) * radius),
                 1.1 + 1.9 * fade,
-                (120, 190, 255, (70. + 185. * fade * fade) as int));
+                (Theme::INFO.0, Theme::INFO.1, Theme::INFO.2,
+                    (70. + 185. * fade * fade) as int));
         }
 
         // 占位动画区域后，把提示文本排到动画右侧
         Dummy(((radius + 2.) * 2., text_size.1));
         SameLine();
-        TextColored((120, 190, 255, 255), label);
+        TextColored(Theme::INFO, label);
     }
 
     // ============================================================
@@ -239,16 +242,17 @@ namespace JEEditor::GUI::Widgets
     // 成员之间的淡色分界线
     public func memberSeparator()=> void
     {
-        PushStyleColor(ImGuiCol::ImGuiCol_Separator, (140, 140, 140, 36));
+        PushStyleColor(ImGuiCol::ImGuiCol_Separator, Theme::SEPARATOR);
         Separator();
         PopStyleColor(1);
     }
 
     // 区块标题栏样式（检视面板的组件块与材质面板的分区共用）：
-    // 不透明的主题 Header 混色填充、加厚内边距、微圆角，悬停/按下向
-    // 文字色轻微混合反馈。与 popSectionHeaderStyle 成对使用，其间提交
-    // CollapsingHeaderFlags 等标题内容（标题之后、pop 之前提交的行尾
-    // 按钮会同高，且 Button/MenuItem 配色不受影响）。
+    // 不透明的主题 Header 混色填充、加厚内边距、微圆角与细边框，悬停
+    // 向文字色轻微混合、按下向品牌橙混合作为反馈。与
+    // popSectionHeaderStyle 成对使用，其间提交 CollapsingHeaderFlags 等
+    // 标题内容（标题之后、pop 之前提交的行尾按钮会同高，且 Button/
+    // MenuItem 配色不受影响）。
     public func pushSectionHeaderStyle()=> void
     {
         let header_c = GetStyleColor(ImGuiCol::ImGuiCol_Header);
@@ -260,14 +264,16 @@ namespace JEEditor::GUI::Widgets
         PushStyleColor(ImGuiCol::ImGuiCol_HeaderHovered,
             mixStyleColor(base_c, text_c, 0.12, 255));
         PushStyleColor(ImGuiCol::ImGuiCol_HeaderActive,
-            mixStyleColor(base_c, text_c, 0.22, 255));
-        PushStyleVec2(StyleVar::ImGuiStyleVar_FramePadding, (6., 5.));
-        PushStyleReal(StyleVar::ImGuiStyleVar_FrameRounding, 3.);
+            Theme::ACCENT_SOFT_ACTIVE);
+        PushStyleColor(ImGuiCol::ImGuiCol_Border, Theme::BORDER);
+        PushStyleVec2(StyleVar::ImGuiStyleVar_FramePadding, (7., 5.));
+        PushStyleReal(StyleVar::ImGuiStyleVar_FrameRounding, 4.);
+        PushStyleReal(StyleVar::ImGuiStyleVar_FrameBorderSize, 1.);
     }
     public func popSectionHeaderStyle()=> void
     {
-        PopStyleColor(3);
-        PopStyleVar(2);
+        PopStyleColor(4);
+        PopStyleVar(3);
     }
 
     // 卡片行（材质面板的模型行/纹理通道行）：绘制淡色底与悬停描边，
@@ -283,18 +289,20 @@ namespace JEEditor::GUI::Widgets
         let width = GetContentRegionAvail().0;
         let (sx, sy) = GetCursorScreenPos();
         let draw = GetWindowDrawList();
-        let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
 
         draw->AddRectFilled((sx, sy), (sx + width, sy + height),
-            ((text_c.0 * 255.) as int, (text_c.1 * 255.) as int,
-                (text_c.2 * 255.) as int, 14));
+            Theme::CARD_BG);
 
         do SetNextItemAllowOverlap();
         do InvisibleButton(tag, (width, height));
         if (IsItemHovered())
+        {
+            // 悬停时提亮卡片并描一圈橙色细边（绘制在内容之前，文字不受影响）
+            draw->AddRectFilled((sx, sy), (sx + width, sy + height),
+                Theme::CARD_BG_HOVER);
             draw->AddRect((sx, sy), (sx + width, sy + height),
-                ((text_c.0 * 255.) as int, (text_c.1 * 255.) as int,
-                    (text_c.2 * 255.) as int, 60), 1.);
+                Theme::ACCENT_SOFT_ACTIVE, 1.);
+        }
 
         return ((start_x, start_y), start_x + 8.);
     }

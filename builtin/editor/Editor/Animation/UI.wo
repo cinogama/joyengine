@@ -27,6 +27,7 @@ import builtin::editor::GUI::Forms::AskBox;
 import builtin::editor::GUI::Statebar;
 import builtin::editor::GUI::FileDrop;
 import builtin::editor::GUI::Widgets;
+import builtin::editor::GUI::Theme;
 
 import builtin::editor::Editor::ResourcePath;
 
@@ -276,10 +277,12 @@ namespace JEEditor::Editor::Animation
         }
         SameLine();
 
-        // 播放控制
+        // 播放控制：播放/暂停是主操作，用品牌橙实心按钮；
+        // 停止是次要操作，用幽灵按钮
         let has_action = action->map(\a = a->duration > 0.;)->or(false);
         do BeginDisabled(!has_action);
-        if (Button(state.m_playing ? "暂停##play" | "播放##play"))
+        if (Theme::primaryButton(
+                state.m_playing ? "暂停##play" | "播放##play", (0., 0.)))
         {
             state.m_playing = !state.m_playing;
             state.m_last_tick = 0.;
@@ -287,7 +290,7 @@ namespace JEEditor::Editor::Animation
         if (IsItemHovered())
             do SetTooltip(state.m_playing ? "暂停预览" | "从头播放预览");
         SameLine();
-        if (Button("停止##stop"))
+        if (Theme::ghostButton("停止##stop", (0., 0.)))
         {
             state.m_playing = false;
             state.m_play_time = 0.;
@@ -328,7 +331,7 @@ namespace JEEditor::Editor::Animation
             let pad = GetContentRegionAvail()[0] - w;
             if (pad > 8.)
                 SetCursorPos((cx + pad - 4., cy));
-            TextColored((240, 200, 80, 255), "未保存");
+            TextColored(Theme::WARNING, "未保存");
         }
     }
 
@@ -383,10 +386,10 @@ namespace JEEditor::Editor::Animation
     public func _render_action_panel(state: EditorState) => void
     {
         let ctx = state.m_context;
-        SeparatorText(F"动作（{ctx.m_actions->len}）");
+        Theme::sectionLabel(F"动作（{ctx.m_actions->len}）");
 
         let full_w = GetContentRegionAvail()[0];
-        if (ButtonSize("+ 新建动作", (full_w, 0.)))
+        if (Theme::primaryButton("＋ 新建动作", (full_w, 0.)))
             do ask_new_action(state);
 
         Spacing();
@@ -401,7 +404,19 @@ namespace JEEditor::Editor::Animation
             for (let name : keys->to_array)
             {
                 let selected = ctx.m_selected_action == name;
-                if (SelectableSelected(name, selected))
+                if (selected)
+                {
+                    PushStyleColor(ImGuiCol::ImGuiCol_Header,
+                        Theme::ACCENT_SOFT);
+                    PushStyleColor(ImGuiCol::ImGuiCol_HeaderHovered,
+                        Theme::ACCENT_SOFT_HOVER);
+                    PushStyleColor(ImGuiCol::ImGuiCol_HeaderActive,
+                        Theme::ACCENT_SOFT_ACTIVE);
+                }
+                let clicked = SelectableSelected(name, selected);
+                if (selected)
+                    PopStyleColor(3);
+                if (clicked)
                 {
                     if (!selected)
                         do state->select_action(name);
@@ -615,7 +630,7 @@ namespace JEEditor::Editor::Animation
         TextDisabled(hint);
         SetCursorPos((math::max(8., (avail[0] - 120.) * 0.5),
             y + GetFrameHeightWithSpacing() * 1.5));
-        if (ButtonSize("+ 新建动作##empty", (120., 0.)))
+        if (Theme::primaryButton("＋ 新建动作##empty", (120., 0.)))
             do ask_new_action(state);
     }
 

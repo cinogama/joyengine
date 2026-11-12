@@ -19,6 +19,7 @@ import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Drag;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Widgets;
+import builtin::editor::GUI::Theme;
 
 import ResourcePath;
 import Browser;
@@ -148,7 +149,7 @@ namespace JEEditor::Editor
             let cname = ctype->name;
             let (_, short_name) = splitTypeName(cname);
 
-            if (Button(F"添加 {short_name} 组件"))
+            if (Theme::primaryButton(F"＋ 添加 {short_name} 组件", (0., 0.)))
             {
                 // 先结束可能进行中的编辑手势，再发布添加组件的操作
                 EditSession::commit();
@@ -755,7 +756,8 @@ namespace JEEditor::Editor
                 defer Unindent(8.);
 
                 if (shaders->len == 0)
-                    TextDisabled("（没有着色器）");
+                    Theme::emptyState("还没有着色器",
+                        "点击下方“＋ 添加着色器”，或把 .shader 文件拖到列表末尾。");
 
                 for (let (idx, sinst) : shaders->iter |> enumerate)
                 {
@@ -793,7 +795,7 @@ namespace JEEditor::Editor
 
                     if (shader_opened)
                     {
-                        SeparatorText("Uniform 变量");
+                        Theme::sectionLabel("Uniform 变量");
                         showShaderUniformsEdit(wctx, eid, sinst, idx);
                         TreePop();
                     }
@@ -884,7 +886,7 @@ namespace JEEditor::Editor
         func showTextureChannelsEdit(
             wctx: WorldEditorViewport, e: entity)=> void
         {
-            SeparatorText("纹理通道");
+            Theme::sectionLabel("纹理通道");
             if (IsItemHovered())
                 do SetTooltip("采样通道由着色器的 uniform 声明");
 
@@ -903,7 +905,8 @@ namespace JEEditor::Editor
             passes = passes |> sort(\l, r = l < r;);
 
             if (passes->len == 0)
-                TextDisabled("（没有着色器声明需要采样的纹理通道）");
+                Theme::emptyState("没有需要采样的纹理通道",
+                    "该实体当前使用的着色器未声明纹理采样。");
 
             for (let pass : passes)
             {
@@ -1089,17 +1092,19 @@ namespace JEEditor::Editor
             match (selection)
             {
                 none?
-                    TextDisabled("（没有待编辑的实体）");
+                    Theme::emptyState("没有待编辑的实体",
+                        "在实体列表或视口中选中一个实体，即可编辑其材质。");
                 value((wctx, selected_entity_id))?
                 {
                     match (findSelectedEntity(wctx, selected_entity_id))
                     {
                         none?
-                            TextDisabled("（没有待编辑的实体）");
+                            Theme::emptyState("没有待编辑的实体",
+                                "在实体列表或视口中选中一个实体，即可编辑其材质。");
                         value(e)?
                         {
                             do beginMemberRow("名称",
-                                option::none: option<Color32RGBA>, 0.);
+                                option::value(Theme::ACCENT_TEXT), 0.);
                             Text(e->internal::name);
 
                             showShapeEdit(wctx, e);

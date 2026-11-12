@@ -13,6 +13,7 @@ import je::towoo::types;
 import je::towoo::components;
 
 import builtin::editor::Editor::Practice;
+import builtin::editor::GUI::Theme;
 
 import Definition;
 import CameraControl;
@@ -23,6 +24,7 @@ using std;
 
 using je;
 using je::gui;
+using JEEditor::GUI;
 
 namespace JEEditor::Editor::WorldEditorViewport
 {
@@ -34,6 +36,11 @@ namespace JEEditor::Editor::WorldEditorViewport
         rect_min: ImVec2,
         rect_max: ImVec2)=> bool
     {
+        // 悬浮控件统一压在画面上：深色半透明底让复选框/单选框在
+        // 明亮或杂乱的场景上依然可读，激活项用品牌橙显示
+        Theme::pushOverlayControlStyle();
+        defer Theme::popOverlayControlStyle();
+
         // UI 编辑模式（选中 UI 元素）：隐藏变换游标工具栏，保持视口干净
         //（移动/旋转/缩放选项对 UI 手柄无意义，2D 模式等视口开关亦
         // 不在 UI 编辑中显示），仅保留“锁定编辑”开关与视口缩放控件
@@ -342,7 +349,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             ((dot_rect_min.0 + dot_rect_max.0) * 0.5,
                 (dot_rect_min.1 + dot_rect_max.1) * 0.5),
             line_h * 0.22,
-            (240, 200, 80, 255));
+            Theme::WARNING);
 
         return hovered;
     }

@@ -14,6 +14,7 @@ import builtin::editor::Singleton;
 
 import Menu;
 import Shortcut;
+import Theme;
 
 using std;
 using je;
@@ -343,6 +344,11 @@ namespace JEEditor::GUI::Windows
         {
             let attrib = _make_window_attrib(i, state, menu);
             
+            // 统一窗口内边距/间距/圆角；与 End 之后弹栈，作用域覆盖窗口内
+            // 所有子窗口与弹窗
+            Theme::pushWindowStyle();
+            defer Theme::popWindowStyle();
+
             let (show, open) = BeginAttrOpen(title, attrib);
             defer End();
             
@@ -356,6 +362,9 @@ namespace JEEditor::GUI::Windows
             menu: option<Menu>, shortcut: option<Shortcut>,
             first_frame: mutable<bool>)=> bool
         {
+            Theme::pushWindowStyle();
+            defer Theme::popWindowStyle();
+
             do BeginAttrOpen(s_modal_carrier_title, s_modal_carrier_attrib);
             defer End();
             
@@ -383,6 +392,10 @@ namespace JEEditor::GUI::Windows
         
         async! func _show(i: IWindows, state: WindowsState)
         {
+            // 本协程由 GUI 循环在 ImGui::NewFrame() 之后恢复，此时上下文
+            // 一定存在；首帧在这里应用全局主题，避免 main 里过早调用崩溃
+            Theme::ensureApplied();
+
             let title = state.m_is_unique
                 ? state.m_title
                 | state.m_title->replace("$ID", F"##{JobID()}")
@@ -512,6 +525,7 @@ namespace JEEditor::GUI::Windows
     public func start()
     {
         func mainCoroutineJob(){
+            Theme::ensureApplied();
             for (;;)
             {
                 for (let job: internal::getAndDupPreWindowsJob())

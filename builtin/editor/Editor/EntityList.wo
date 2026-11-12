@@ -15,6 +15,7 @@ import pkg::worst;
 
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Drag;
+import builtin::editor::GUI::Theme;
 
 import WorldEditorViewport;
 import ComponentPresets;
@@ -190,20 +191,48 @@ namespace JEEditor::Editor
                     label_id = F"{eid}";
             }
 
+            // 选中项用品牌橙浅底强调（全局 Header 是中性色，避免所有
+            // 折叠头都染橙）；预置体实例的文字用信息蓝区分
+            if (is_selected)
+            {
+                PushStyleColor(ImGuiCol::ImGuiCol_Header, Theme::ACCENT_SOFT);
+                PushStyleColor(ImGuiCol::ImGuiCol_HeaderHovered,
+                    Theme::ACCENT_SOFT_HOVER);
+                PushStyleColor(ImGuiCol::ImGuiCol_HeaderActive,
+                    Theme::ACCENT_SOFT_ACTIVE);
+            }
             if (is_prefab_instance)
-                PushStyleColor(
-                    ImGuiCol::ImGuiCol_Text, (100, 160, 230, 255));
+                PushStyleColor(ImGuiCol::ImGuiCol_Text, Theme::INFO);
 
             let node_open = TreeNodeEx(
                 F"{entity_name}##{label_id}", node_flags);
 
             if (is_prefab_instance)
                 PopStyleColor(1);
+            if (is_selected)
+                PopStyleColor(3);
+
+            // 预置体实例在行尾绘制“预设”小标签（不占布局、不影响命中区）
+            if (is_prefab_instance)
+            {
+                let (rect_min, rect_max) = GetItemRect();
+                let badge = "预设";
+                let badge_w = CalcTextSize(badge).0;
+                GetWindowDrawList()->AddText(
+                    (rect_max.0 - badge_w - 10.,
+                        rect_min.1
+                            + (GetFrameHeight() - GetTextLineHeight()) * 0.5),
+                    Theme::INFO, badge);
+            }
 
             // 紧随 TreeNodeEx 采样悬停状态：此时最后一个 item 仍是
             // 本实体项（后面的 DragPayload 不得插在两者之间）
             if (IsItemHovered())
+            {
                 any_hovered = true;
+                if (is_prefab_instance)
+                    do SetTooltip(F"预置体实例\n{prefab_path->unwrap}");
+            }
 
             // 点击名字区域选中（IsItemToggledOpen 为真表示这次点击
             // 作用在箭头上，只切展开不改选中）
@@ -300,12 +329,21 @@ namespace JEEditor::Editor
                 }
             }
         }
-        // 返回值：本帧鼠标是否悬停在任一实体项上（供 run 里空白右键
-        // 菜单的判定使用）。实体按父子层级显示：根级与各级子项均按
-        // EUID 升序；父实体不在可见范围（编辑器内部实体/锚点缺失）的
-        // 子实体按根显示；父链成环的坏数据由 rendering 防御并兜底
-        // 平铺，保证列表始终显示全部实体。
-        func showEntitiesInWorld(world_view: WorldEditorViewport)=> bool
+        // 可见实体数（排除编辑器内部标记的 Invisible 实体），用于面板
+        // 标题计数；遍历成本远低于一次列表绘制。
+        func countVisibleEntities(world_view: WorldEditorViewport)=> int
+        {
+            return world_view->getEntitySelector->iter
+                |> filter(\e = e->towoo::get_component:<Editor::Invisible>->is_none;)
+                |> count;
+        }
+        // 返回值：(本帧鼠标是否悬停在任一实体项上, 可见实体总数)。
+        // 前者供 run 里空白右键菜单的判定使用；后者用于面板标题的计数。
+        // 实体按父子层级显示：根级与各级子项均按 EUID 升序；父实体不在
+        // 可见范围（编辑器内部实体/锚点缺失）的子实体按根显示；父链成
+        // 环的坏数据由 rendering 防御并兜底平铺，保证列表始终显示全部
+        // 实体。
+        func showEntitiesInWorld(world_view: WorldEditorViewport)=> (bool, int)
         {
             let mut any_item_hovered = false;
             let entity_selector = world_view->getEntitySelector();
@@ -405,7 +443,7 @@ namespace JEEditor::Editor
                 }
             }
 
-            return any_item_hovered;
+            return (any_item_hovered, entities->len);
         }
         // 将 "Transform::LocalPosition" 拆为 ("Transform", "LocalPosition")，
         // 不带命名空间的类型名返回 ("", 原名)。
@@ -599,13 +637,22 @@ namespace JEEditor::Editor
             match (WorldEditorViewport::getLastFocused())
             {
                 none?
-                    TextDisabled("（没有待编辑的世界）");
+                    Theme::emptyState("没有待编辑的世界",
+                        "打开或新建一个世界后，这里会显示实体层级。");
                 value(wctx)?
                 {
-                    let mut item_hovered = showEntitiesInWorld(wctx);
+                    Theme::panelHeader("实体",
+                        F"{countVisibleEntities(wctx)} 个");
+
+                    let (mut item_hovered, entity_count) =
+                        showEntitiesInWorld(wctx);
+
+                    if (entity_count == 0)
+                        Theme::emptyState("世界中还没有实体",
+                            "点击下方“新建实体”开始搭建，或从资源管理器拖入实体预设。");
 
                     Spacing();
-                    if (ButtonSize("新建实体", (-1., 0.)))
+                    if (Theme::primaryButton("＋ 新建实体", (-1., 0.)))
                     {
                         // 每次打开弹窗都复位搜索词与勾选，并将焦点设到搜索框
                         s_new_entity_filter = "";

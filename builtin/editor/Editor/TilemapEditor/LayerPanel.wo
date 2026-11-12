@@ -21,6 +21,7 @@ import builtin::editor::GUI::Forms::AskBox;
 import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Widgets;
+import builtin::editor::GUI::Theme;
 
 import DataModel;
 import EditorState;
@@ -31,6 +32,7 @@ using je::graphic;
 using je::gui;
 using je::tilemap;
 using fsys;
+using JEEditor::GUI;
 using JEEditor::GUI::Forms;
 using JEEditor::GUI::Widgets;
 using JEEditor::Editor::TilemapEditor;
@@ -362,10 +364,11 @@ namespace JEEditor::Editor::TilemapEditor
         let map = ctx.m_map;
         let (_, _, _, layer_count) = map->size();
 
-        SeparatorText("图层");
+        Theme::sectionLabel("图层");
 
-        // 操作按钮行（标签取短档，保证 340px 右列内单行放下）
-        if (Button("+ 新建"))
+        // 操作按钮行（标签取短档，保证 340px 右列内单行放下）；
+        // 新建是主操作，其余为幽灵按钮
+        if (Theme::primaryButton("＋ 新建", (0., 0.)))
         {
             do InputBox::show("新建图层", "请输入图层名称：", F"图层 {layer_count + 1}")
                 ->then(func(name)
@@ -393,16 +396,16 @@ namespace JEEditor::Editor::TilemapEditor
                     });
         }
         SameLine();
-        if (Button("- 删除"))
+        if (Theme::ghostButton("－ 删除", (0., 0.)))
             do delete_layer(state, ctx, state.m_layer);
         SameLine();
-        if (Button("上移"))
+        if (Theme::ghostButton("上移", (0., 0.)))
             do shift_layer(state, ctx, state.m_layer, 1);
         SameLine();
-        if (Button("下移"))
+        if (Theme::ghostButton("下移", (0., 0.)))
             do shift_layer(state, ctx, state.m_layer, -1);
         SameLine();
-        if (Button("重命名"))
+        if (Theme::ghostButton("重命名", (0., 0.)))
             do rename_layer(state, ctx, state.m_layer);
 
         // 图层列表（顶 = 最上层，与渲染顺序一致）

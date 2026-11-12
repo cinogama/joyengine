@@ -30,6 +30,7 @@ import builtin::editor::GUI::Forms::InputBox;
 import builtin::editor::GUI::Forms::AskBox;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Statebar;
+import builtin::editor::GUI::Theme;
 
 import builtin::editor::Editor::WorldEditorViewport;
 import builtin::editor::Editor::Saving::Entity;
@@ -1314,30 +1315,38 @@ namespace JEEditor::Editor
 
         func drawToolbar(self: Browser)=> void
         {
+            // 先给“我在哪”的答案（位置），再给操作，避免一排按钮抢走
+            // 对当前目录的注意力。长路径自动换行。
+            TextDisabled("位置");
+            SameLine();
+            PushTextWrapPos(0.);
+            TextColored(Theme::TEXT, self->currentPathDisplay());
+            PopTextWrapPos();
+
+            Spacing();
+
+            // 导航与新建用幽灵按钮：工具栏保持轻量，只有悬停/按下才
+            // 出现品牌橙反馈
             BeginDisabled(self.m_history->len == 0);
-            if (Button("返回"))
+            if (Theme::ghostButton("← 返回", (0., 0.)))
                 self->navigateBack();
             EndDisabled();
             
             SameLine();
             
             BeginDisabled(self.m_forward->len == 0);
-            if (Button("前进"))
+            if (Theme::ghostButton("前进 →", (0., 0.)))
                 self->navigateForward();
             EndDisabled();
             
             SameLine();
             
-            if (Button("向上"))
+            if (Theme::ghostButton("向上", (0., 0.)))
                 self->navigateUp();
                 
             SameLine();
             
-            TextDisabled(self->currentPathDisplay());
-            
-            SameLine();
-            
-            if (Button("刷新"))
+            if (Theme::ghostButton("刷新", (0., 0.)))
             {
                 self.m_selected = option::none;
                 // 文件系统可能在编辑器外被改动：清空树/列表缓存重新扫描
@@ -1346,7 +1355,7 @@ namespace JEEditor::Editor
                 
             SameLine();
             
-            if (Button("新建文件夹"))
+            if (Theme::ghostButton("＋ 新建文件夹", (0., 0.)))
             {
                 self->askToCreateNewFolder(self.m_current);
             }
@@ -1356,7 +1365,7 @@ namespace JEEditor::Editor
             Text("搜索:");
             SameLine();
             
-            PushItemWidth(150.);
+            PushItemWidth(140.);
             match (InputText("##BrowserFilter", self.m_filter))
             {
                 none?;
@@ -1644,7 +1653,7 @@ namespace JEEditor::Editor
             
             let visible_count = self->visibleEntryCount(dirs) + self->visibleEntryCount(files);
             if (visible_count == 0)
-                TextDisabled("(空目录)");
+                Theme::emptyState("空目录", "右键空白处可新建文件夹或资源。");
                 
             // 每行的交互区是一个占满整行的隐形 Selectable（"##" 空标签），
             // 图标与名称在 Selectable 之后叠绘（ImGui 推荐做法）：Image/Text
@@ -1661,8 +1670,20 @@ namespace JEEditor::Editor
                         && selected_str == d->to_string();
                         
                     let line_pos = GetCursorScreenPos();
+                    // 选中行用品牌橙浅底强调；未选中行沿用中性 Hover
+                    if (is_selected)
+                    {
+                        PushStyleColor(ImGuiCol::ImGuiCol_Header,
+                            Theme::ACCENT_SOFT);
+                        PushStyleColor(ImGuiCol::ImGuiCol_HeaderHovered,
+                            Theme::ACCENT_SOFT_HOVER);
+                        PushStyleColor(ImGuiCol::ImGuiCol_HeaderActive,
+                            Theme::ACCENT_SOFT_ACTIVE);
+                    }
                     let clicked = SelectableSelected(
                         F"##{d->to_string()}", is_selected);
+                    if (is_selected)
+                        PopStyleColor(3);
                         
                     Drag::DragPayload(FilePayload::create(d));
                     
@@ -1687,8 +1708,19 @@ namespace JEEditor::Editor
                         && selected_str == f->to_string();
                         
                     let line_pos = GetCursorScreenPos();
+                    if (is_selected)
+                    {
+                        PushStyleColor(ImGuiCol::ImGuiCol_Header,
+                            Theme::ACCENT_SOFT);
+                        PushStyleColor(ImGuiCol::ImGuiCol_HeaderHovered,
+                            Theme::ACCENT_SOFT_HOVER);
+                        PushStyleColor(ImGuiCol::ImGuiCol_HeaderActive,
+                            Theme::ACCENT_SOFT_ACTIVE);
+                    }
                     let clicked = SelectableSelected(
                         F"##{f->to_string()}", is_selected);
+                    if (is_selected)
+                        PopStyleColor(3);
                         
                     Drag::DragPayload(FilePayload::create(f));
                     

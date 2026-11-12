@@ -22,6 +22,7 @@ import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::AskBox;
 import builtin::editor::GUI::Widgets;
+import builtin::editor::GUI::Theme;
 import builtin::editor::Editor::Saving::Entity;
 
 import Browser;
@@ -43,6 +44,7 @@ import Action::RemoveRendererTextures;
 using std;
 using je;
 using je::gui;
+using JEEditor::GUI;
 using je::towoo;
 using JEEditor::GUI::Windows;
 using JEEditor::GUI::Forms;
@@ -290,23 +292,24 @@ namespace JEEditor::Editor
             return false;
         }
         // 命名空间分组标题：填充色带 + 左侧强调竖条 + 命名空间名与组件数，
-        // 比 SeparatorText 更醒目。颜色由主题文字色向强调蓝混合得出，
-        // 明暗主题都保持可读
+        // 比 SeparatorText 更醒目。色带从面板背景向强调蓝混合（而非从
+        // 文字色混合），保证是深色蓝带而不是抢眼的浅灰条。
         func showGroupHeader(title: string, count: int)
         {
             let text_c = GetStyleColor(ImGuiCol::ImGuiCol_Text);
+            let bg_c = GetStyleColor(ImGuiCol::ImGuiCol_WindowBg);
             let (x, y) = GetCursorScreenPos();
             let width = GetContentRegionAvail().0;
             let height = GetFrameHeight();
             let draw = GetWindowDrawList();
             
             draw->AddRectFilled((x, y), (x + width, y + height),
-                mixStyleColor(text_c, GROUP_ACCENT, 0.12, 42));
+                mixStyleColor(bg_c, GROUP_ACCENT, 0.32, 255));
             draw->AddRectFilled((x, y), (x + 3., y + height),
-                mixStyleColor(text_c, GROUP_ACCENT, 0.75, 220));
+                mixStyleColor(bg_c, GROUP_ACCENT, 0.92, 255));
             draw->AddText(
                 (x + 10., y + (height - GetTextLineHeight()) * 0.5),
-                mixStyleColor(text_c, GROUP_ACCENT, 0.55, 255),
+                mixStyleColor(text_c, GROUP_ACCENT, 0.35, 255),
                 F"{title} · {count}");
                 
             Dummy((0., height));
@@ -345,8 +348,10 @@ namespace JEEditor::Editor
             }
             else
             {
+                // 实体名是检视面板的主信息：用品牌橙标签把它从一排弱化
+                // 字段名里提出来
                 do beginMemberRow("名称",
-                    option::none: option<Color32RGBA>, 0.);
+                    option::value(Theme::ACCENT_TEXT), 0.);
             }
             
             let NAME_EDIT_TAG = "##entity_name";
@@ -1058,7 +1063,7 @@ namespace JEEditor::Editor
                 }
             }
             
-            SeparatorText("组件");
+            Theme::sectionLabel("组件");
             
             // 组件按全名排序后同一命名空间的组件自然相邻：按命名空间
             // 分组，组头（色带 + 组件数）醒目标出组别。类型名不含 "::"
@@ -1098,10 +1103,11 @@ namespace JEEditor::Editor
                 group_begin = group_end;
             }
             if (visibles->len == 0)
-                TextDisabled("（没有可显示的组件）");
+                Theme::emptyState("没有可显示的组件",
+                    "使用下方“＋ 添加组件”为实体挂载组件。");
                 
             Spacing();
-            if (ButtonSize("添加组件", (-1., 0.)))
+            if (Theme::primaryButton("＋ 添加组件", (-1., 0.)))
             {
                 // 每次打开弹窗都复位搜索词，并将焦点设到搜索框
                 s_add_component_filter = "";
@@ -1155,7 +1161,8 @@ namespace JEEditor::Editor
             }
             
             if (!has_entity)
-                TextDisabled("（没有待编辑的实体）");
+                Theme::emptyState("没有待编辑的实体",
+                    "在实体列表或视口中选中一个实体，即可在这里编辑组件。");
                 
             return !self.m_close;
         }

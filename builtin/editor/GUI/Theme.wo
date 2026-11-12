@@ -1,0 +1,403 @@
+import pkg::std;
+
+import je;
+import je::gui;
+
+using std;
+using je;
+using je::gui;
+
+// 编辑器统一视觉主题。
+//
+// 设计原则（与“花哨”保持距离）：
+//   * 品牌橙只用于“可操作 / 已激活 / 当前选中”的元素，不用作装饰；
+//   * 正文用中性浅灰，次要信息逐级变暗，形成“标题 > 区块 > 字段 > 提示”
+//     的可读层级；
+//   * 蓝色只承担信息类强调（命名空间、分组），与橙色的操作语义区分；
+//   * 圆角、内边距、控件高度在全局统一，各面板不再各写一套。
+//
+// 新面板优先使用本模块的 primaryButton/ghostButton/panelHeader/emptyState
+// 等通用件，避免再次散落硬编码颜色。
+namespace JEEditor::GUI::Theme
+{
+    // ---- 语义色（RGBA 0..255，可直接用于 TextColored / PushStyleColor）----
+
+    // 品牌橙：主操作、当前选中、激活模式
+    public let ACCENT = (219, 134, 63, 255);
+    public let ACCENT_HOVER = (241, 157, 89, 255);
+    public let ACCENT_ACTIVE = (190, 113, 50, 255);
+    public let ACCENT_TEXT = (242, 176, 109, 255);
+    public let ACCENT_SOFT = (219, 134, 63, 44);
+    public let ACCENT_SOFT_HOVER = (219, 134, 63, 72);
+    public let ACCENT_SOFT_ACTIVE = (219, 134, 63, 104);
+
+    // 信息蓝：命名空间、分组标题等“说明性”强调
+    public let INFO = (100, 160, 230, 255);
+    public let INFO_SOFT = (100, 160, 230, 44);
+
+    // 状态色
+    public let SUCCESS = (110, 200, 130, 255);
+    public let WARNING = (240, 200, 80, 255);
+    public let DANGER = (235, 95, 95, 255);
+    public let DANGER_HOVER = (250, 120, 120, 255);
+    public let DANGER_ACTIVE = (200, 70, 70, 255);
+
+    // 文本层级
+    public let TEXT = (220, 221, 225, 255);
+    public let TEXT_MUTED = (150, 152, 158, 255);
+    public let TEXT_FAINT = (108, 110, 116, 255);
+    public let TEXT_ON_ACCENT = (28, 22, 16, 255);
+    public let TEXT_ON_DANGER = (255, 245, 245, 255);
+
+    // 面板与卡片
+    public let PANEL_BG = (27, 28, 32, 255);
+    public let SURFACE_BG = (32, 33, 38, 255);
+    public let CARD_BG = (38, 40, 45, 255);
+    public let CARD_BG_HOVER = (47, 50, 56, 255);
+    public let SEPARATOR = (150, 152, 158, 44);
+    public let BORDER = (255, 255, 255, 26);
+    public let BORDER_STRONG = (255, 255, 255, 48);
+
+    // ---- 颜色工具 ----
+
+    // RGBA 0..255 -> ImGui 风格浮点色
+    public func asStyleColor(c: Color32RGBA)=> (real, real, real, real)
+    {
+        return (
+            c.0 as real / 255.,
+            c.1 as real / 255.,
+            c.2 as real / 255.,
+            c.3 as real / 255.);
+    }
+
+    // 按 t 在两个颜色间线性混合，alpha 由调用方指定（0..255）
+    public func mixColor(
+        c0: Color32RGBA, c1: Color32RGBA, t: real, alpha: int)=> Color32RGBA
+    {
+        return (
+            (c0.0 as real + (c1.0 as real - c0.0 as real) * t) as int,
+            (c0.1 as real + (c1.1 as real - c0.1 as real) * t) as int,
+            (c0.2 as real + (c1.2 as real - c0.2 as real) * t) as int,
+            alpha);
+    }
+
+    // 在面板背景上叠加一层强调色（用于选中行、激活按钮底色）
+    public func tintOnPanel(color: Color32RGBA, t: real, alpha: int)=> Color32RGBA
+    {
+        return mixColor(PANEL_BG, color, t, alpha);
+    }
+
+    // ---- 全局样式 ----
+
+    // 在 ImGui 上下文创建之后调用。ImGui 上下文由 GUI 后端在第一帧
+    // 的 je_gui_backend_update 内创建/激活，main 里直接调用 apply 时
+    // GetStyle() 还没有上下文会崩溃；因此编辑器入口只调用
+    // ensureApplied，由 GUI 协程（Windows / Statebar）在首帧内触发。
+    let mut s_applied = false;
+    public func ensureApplied()
+    {
+        if (s_applied)
+            return;
+        s_applied = true;
+        apply();
+    }
+
+    // 只设置颜色；圆角/间距等 StyleVar 由 pushWindowStyle 按窗口作用域
+    // 压栈，避免影响引擎内嵌的其他 ImGui 使用方。
+    public func apply()
+    {
+        SetStyleColor(ImGuiCol::ImGuiCol_Text, asStyleColor(TEXT));
+        SetStyleColor(ImGuiCol::ImGuiCol_TextDisabled, asStyleColor(TEXT_MUTED));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_WindowBg, asStyleColor(PANEL_BG));
+        SetStyleColor(ImGuiCol::ImGuiCol_ChildBg, asStyleColor((22, 23, 27, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_PopupBg, asStyleColor((33, 34, 39, 250)));
+        SetStyleColor(ImGuiCol::ImGuiCol_Border, asStyleColor(BORDER));
+        SetStyleColor(ImGuiCol::ImGuiCol_BorderShadow, (0., 0., 0., 0.));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_FrameBg, asStyleColor((42, 44, 50, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_FrameBgHovered, asStyleColor((52, 55, 62, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_FrameBgActive, asStyleColor((62, 65, 73, 255)));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_TitleBg, asStyleColor((20, 21, 25, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_TitleBgActive, asStyleColor((38, 40, 46, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_TitleBgCollapsed, asStyleColor((20, 21, 25, 210)));
+        SetStyleColor(ImGuiCol::ImGuiCol_MenuBarBg, asStyleColor((20, 21, 25, 255)));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_ScrollbarBg, asStyleColor((0, 0, 0, 40)));
+        SetStyleColor(ImGuiCol::ImGuiCol_ScrollbarGrab, asStyleColor((92, 95, 104, 190)));
+        SetStyleColor(ImGuiCol::ImGuiCol_ScrollbarGrabHovered, asStyleColor((120, 124, 134, 210)));
+        SetStyleColor(ImGuiCol::ImGuiCol_ScrollbarGrabActive, asStyleColor(ACCENT));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_CheckMark, asStyleColor(ACCENT));
+        SetStyleColor(ImGuiCol::ImGuiCol_SliderGrab, asStyleColor(ACCENT));
+        SetStyleColor(ImGuiCol::ImGuiCol_SliderGrabActive, asStyleColor(ACCENT_HOVER));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_Button, asStyleColor((46, 48, 55, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, asStyleColor((60, 63, 72, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_ButtonActive, asStyleColor((74, 78, 88, 255)));
+
+        // Header 同时用于折叠头、树节点与 Selectable：中性底 + 橙色选中语义
+        SetStyleColor(ImGuiCol::ImGuiCol_Header, asStyleColor((56, 59, 67, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_HeaderHovered, asStyleColor((70, 74, 84, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_HeaderActive, asStyleColor(ACCENT_SOFT_ACTIVE));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_Separator, asStyleColor(SEPARATOR));
+        SetStyleColor(ImGuiCol::ImGuiCol_SeparatorHovered, asStyleColor(ACCENT));
+        SetStyleColor(ImGuiCol::ImGuiCol_SeparatorActive, asStyleColor(ACCENT_HOVER));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_ResizeGrip, asStyleColor((255, 255, 255, 26)));
+        SetStyleColor(ImGuiCol::ImGuiCol_ResizeGripHovered, asStyleColor(ACCENT_SOFT_HOVER));
+        SetStyleColor(ImGuiCol::ImGuiCol_ResizeGripActive, asStyleColor(ACCENT_SOFT_ACTIVE));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_Tab, asStyleColor((33, 35, 40, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_TabHovered, asStyleColor((54, 57, 65, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_TabActive, asStyleColor((46, 49, 56, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_TabUnfocused, asStyleColor((28, 29, 34, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_TabUnfocusedActive, asStyleColor((38, 40, 46, 255)));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_DockingPreview, asStyleColor(ACCENT_SOFT_ACTIVE));
+        SetStyleColor(ImGuiCol::ImGuiCol_DockingEmptyBg, asStyleColor((18, 19, 22, 255)));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_PlotLines, asStyleColor(INFO));
+        SetStyleColor(ImGuiCol::ImGuiCol_PlotLinesHovered, asStyleColor(ACCENT_HOVER));
+        SetStyleColor(ImGuiCol::ImGuiCol_PlotHistogram, asStyleColor(ACCENT));
+        SetStyleColor(ImGuiCol::ImGuiCol_PlotHistogramHovered, asStyleColor(ACCENT_HOVER));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_TableHeaderBg, asStyleColor((33, 35, 40, 255)));
+        SetStyleColor(ImGuiCol::ImGuiCol_TableBorderStrong, asStyleColor(BORDER_STRONG));
+        SetStyleColor(ImGuiCol::ImGuiCol_TableBorderLight, asStyleColor(BORDER));
+        SetStyleColor(ImGuiCol::ImGuiCol_TableRowBg, (0., 0., 0., 0.));
+        SetStyleColor(ImGuiCol::ImGuiCol_TableRowBgAlt, asStyleColor((255, 255, 255, 8)));
+
+        SetStyleColor(ImGuiCol::ImGuiCol_TextSelectedBg, asStyleColor(ACCENT_SOFT_ACTIVE));
+        SetStyleColor(ImGuiCol::ImGuiCol_DragDropTarget, asStyleColor(ACCENT_HOVER));
+        SetStyleColor(ImGuiCol::ImGuiCol_NavHighlight, asStyleColor(ACCENT_HOVER));
+        SetStyleColor(ImGuiCol::ImGuiCol_NavWindowingHighlight, asStyleColor(ACCENT_HOVER));
+        SetStyleColor(ImGuiCol::ImGuiCol_NavWindowingDimBg, asStyleColor((0, 0, 0, 140)));
+        SetStyleColor(ImGuiCol::ImGuiCol_ModalWindowDimBg, asStyleColor((0, 0, 0, 165)));
+    }
+
+    // ---- 窗口级样式 ----
+
+    // 底部状态栏：比常规窗口更深、更贴近屏幕边缘，弱化存在感但仍可读。
+    public func pushStatusBarStyle()
+    {
+        PushStyleColor(ImGuiCol::ImGuiCol_WindowBg, (22, 23, 27, 245));
+        PushStyleColor(ImGuiCol::ImGuiCol_Border, SEPARATOR);
+    }
+    public func popStatusBarStyle()
+    {
+        PopStyleColor(2);
+    }
+
+    // 打开窗口前压栈、窗口 End 后弹栈：统一内边距、控件间距与圆角。
+    public func pushWindowStyle()
+    {
+        PushStyleVec2(StyleVar::ImGuiStyleVar_WindowPadding, (10., 10.));
+        PushStyleVec2(StyleVar::ImGuiStyleVar_ItemSpacing, (8., 6.));
+        PushStyleReal(StyleVar::ImGuiStyleVar_WindowRounding, 6.);
+        PushStyleReal(StyleVar::ImGuiStyleVar_ChildRounding, 5.);
+        PushStyleReal(StyleVar::ImGuiStyleVar_PopupRounding, 5.);
+        PushStyleReal(StyleVar::ImGuiStyleVar_FrameRounding, 4.);
+        PushStyleReal(StyleVar::ImGuiStyleVar_GrabRounding, 4.);
+        PushStyleReal(StyleVar::ImGuiStyleVar_TabRounding, 4.);
+        PushStyleReal(StyleVar::ImGuiStyleVar_ScrollbarRounding, 8.);
+        PushStyleReal(StyleVar::ImGuiStyleVar_ScrollbarSize, 12.);
+    }
+    public func popWindowStyle()
+    {
+        PopStyleVar(10);
+    }
+
+    // ---- 按钮 ----
+
+    public func pushPrimaryButtonStyle()
+    {
+        PushStyleColor(ImGuiCol::ImGuiCol_Button, ACCENT);
+        PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, ACCENT_HOVER);
+        PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, ACCENT_ACTIVE);
+        PushStyleColor(ImGuiCol::ImGuiCol_Text, TEXT_ON_ACCENT);
+    }
+    public func popPrimaryButtonStyle()
+    {
+        PopStyleColor(4);
+    }
+    public func primaryButton(label: string, size: ImVec2)=> bool
+    {
+        pushPrimaryButtonStyle();
+        let clicked = ButtonSize(label, size);
+        popPrimaryButtonStyle();
+        return clicked;
+    }
+
+    public func pushGhostButtonStyle()
+    {
+        PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
+        PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, ACCENT_SOFT_HOVER);
+        PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, ACCENT_SOFT_ACTIVE);
+        PushStyleColor(ImGuiCol::ImGuiCol_Border, BORDER_STRONG);
+        PushStyleColor(ImGuiCol::ImGuiCol_Text, TEXT);
+        PushStyleReal(StyleVar::ImGuiStyleVar_FrameBorderSize, 1.);
+    }
+    public func popGhostButtonStyle()
+    {
+        PopStyleColor(5);
+        PopStyleVar(1);
+    }
+    public func ghostButton(label: string, size: ImVec2)=> bool
+    {
+        pushGhostButtonStyle();
+        let clicked = ButtonSize(label, size);
+        popGhostButtonStyle();
+        return clicked;
+    }
+
+    public func pushDangerButtonStyle()
+    {
+        PushStyleColor(ImGuiCol::ImGuiCol_Button, DANGER);
+        PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, DANGER_HOVER);
+        PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, DANGER_ACTIVE);
+        PushStyleColor(ImGuiCol::ImGuiCol_Text, TEXT_ON_DANGER);
+    }
+    public func popDangerButtonStyle()
+    {
+        PopStyleColor(4);
+    }
+
+    // 工具栏/分段控件按钮：激活项用橙色浅底 + 橙字，未激活项融入背景。
+    // 与 pushToolbarToggleStyle 成对使用。
+    public func pushToolbarToggleStyle(active: bool)
+    {
+        if (active)
+        {
+            PushStyleColor(ImGuiCol::ImGuiCol_Button, ACCENT_SOFT);
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, ACCENT_SOFT_HOVER);
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, ACCENT_SOFT_ACTIVE);
+            PushStyleColor(ImGuiCol::ImGuiCol_Text, ACCENT_TEXT);
+            PushStyleColor(ImGuiCol::ImGuiCol_Border, ACCENT_SOFT_ACTIVE);
+            PushStyleReal(StyleVar::ImGuiStyleVar_FrameBorderSize, 1.);
+        }
+        else
+        {
+            PushStyleColor(ImGuiCol::ImGuiCol_Button, (0, 0, 0, 0));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered, (255, 255, 255, 14));
+            PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive, (255, 255, 255, 26));
+            PushStyleColor(ImGuiCol::ImGuiCol_Text, TEXT_MUTED);
+            PushStyleColor(ImGuiCol::ImGuiCol_Border, (0, 0, 0, 0));
+            PushStyleReal(StyleVar::ImGuiStyleVar_FrameBorderSize, 0.);
+        }
+    }
+    public func popToolbarToggleStyle()
+    {
+        PopStyleColor(5);
+        PopStyleVar(1);
+    }
+    public func toolbarToggle(label: string, active: bool)=> bool
+    {
+        pushToolbarToggleStyle(active);
+        let clicked = ButtonSize(label, (0., 0.));
+        popToolbarToggleStyle();
+        return clicked;
+    }
+
+    // 日志等级筛选芯片：彩色圆点 + 文本，激活时用等级色浅底。
+    public func levelChip(label: string, active: bool, color: Color32RGBA)=> bool
+    {
+        PushStyleColor(ImGuiCol::ImGuiCol_Button,
+            active ? mixColor(PANEL_BG, color, 0.30, 255) | (0, 0, 0, 0));
+        PushStyleColor(ImGuiCol::ImGuiCol_ButtonHovered,
+            active ? mixColor(PANEL_BG, color, 0.40, 255) | (255, 255, 255, 18));
+        PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive,
+            active ? mixColor(PANEL_BG, color, 0.50, 255) | (255, 255, 255, 30));
+        PushStyleColor(ImGuiCol::ImGuiCol_Text,
+            active ? color | TEXT_FAINT);
+        PushStyleColor(ImGuiCol::ImGuiCol_Border,
+            active ? mixColor(color, color, 0., 120) | (0, 0, 0, 0));
+
+        PushStyleReal(StyleVar::ImGuiStyleVar_FrameBorderSize, 1.);
+        let clicked = ButtonSize(label, (0., 0.));
+        PopStyleVar(1);
+        PopStyleColor(5);
+        return clicked;
+    }
+
+    // 视口悬浮控件（复选框/单选框）：压在明亮的 3D 画面上也能读出
+    // 控件边界；激活态用品牌橙，和编辑器的选中语义一致。
+    public func pushOverlayControlStyle()
+    {
+        PushStyleColor(ImGuiCol::ImGuiCol_FrameBg, (18, 19, 23, 175));
+        PushStyleColor(ImGuiCol::ImGuiCol_FrameBgHovered, (42, 45, 52, 225));
+        PushStyleColor(ImGuiCol::ImGuiCol_FrameBgActive, ACCENT_SOFT_ACTIVE);
+        PushStyleColor(ImGuiCol::ImGuiCol_CheckMark, ACCENT_TEXT);
+        PushStyleColor(ImGuiCol::ImGuiCol_Text, (238, 238, 242, 255));
+    }
+    public func popOverlayControlStyle()
+    {
+        PopStyleColor(5);
+    }
+
+    // ---- 标题 / 分组 / 空状态 ----
+
+    // 面板标题：橙色主标题 + 右侧弱化说明，底部一条橙色细线。
+    public func panelHeader(title: string, detail: string)=> void
+    {
+        TextColored(ACCENT_TEXT, title);
+        if (detail->len > 0)
+        {
+            SameLine();
+            TextDisabled(detail);
+        }
+        PushStyleColor(ImGuiCol::ImGuiCol_Separator, ACCENT_SOFT_ACTIVE);
+        Separator();
+        PopStyleColor(1);
+        Spacing();
+    }
+
+    // 小节标题：统一 SeparatorText 的字色与分隔线强度。
+    public func sectionLabel(label: string)=> void
+    {
+        PushStyleColor(ImGuiCol::ImGuiCol_Text, TEXT_MUTED);
+        PushStyleColor(ImGuiCol::ImGuiCol_Separator, SEPARATOR);
+        PushStyleReal(StyleVar::ImGuiStyleVar_SeparatorTextBorderSize, 1.);
+        SeparatorText(label);
+        PopStyleVar(1);
+        PopStyleColor(2);
+    }
+
+    // 空状态：标题 + 一句可执行的提示，整体略缩进，避免与真实内容混淆。
+    public func emptyState(title: string, hint: string)=> void
+    {
+        Spacing();
+        Indent(10.);
+        TextColored(TEXT_MUTED, title);
+        if (hint->len > 0)
+        {
+            TextDisabled(hint);
+        }
+        Unindent(10.);
+        Spacing();
+    }
+
+    // 弱化的辅助统计文本（如 “12 个实体 / 3 个可见”）
+    public func statText(text: string)=> void
+    {
+        TextColored(TEXT_MUTED, text);
+    }
+
+    // 高亮的计数徽标（橙色文字，用于主按钮旁的即时反馈）
+    public func countBadge(count: int, unit: string)=> void
+    {
+        TextColored(ACCENT_TEXT, F"{count} {unit}");
+    }
+
+    // 一行工具栏的分隔竖线（前后自动留出间距）
+    public func toolbarSeparator()=> void
+    {
+        SameLine();
+        PushStyleColor(ImGuiCol::ImGuiCol_Separator, BORDER_STRONG);
+        Separator();
+        PopStyleColor(1);
+        SameLine();
+    }
+}

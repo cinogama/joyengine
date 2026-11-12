@@ -14,6 +14,7 @@ import pkg::fsys;
 import pkg::math;
 
 import builtin::editor::GUI::Widgets;
+import builtin::editor::GUI::Theme;
 
 import DataModel;
 import EditorState;
@@ -29,6 +30,7 @@ using je::gui;
 using je::tilemap;
 using fsys;
 using math;
+using JEEditor::GUI;
 using JEEditor::GUI::Widgets;
 using JEEditor::Editor::TilemapEditor;
 
@@ -93,16 +95,10 @@ namespace JEEditor::Editor::TilemapEditor
 
     func toolbar_button(state: EditorState, t: tool)=> void
     {
-        let pressed = Button(F"{tool::name(t)}##tool{t as int}");
+        // 当前工具用品牌橙浅底 + 橙字，与普通工具按钮形成明确层级
+        let pressed = Theme::toolbarToggle(tool::name(t), state.m_tool == t);
         if (IsItemHovered())
             do SetTooltip(tool_tip(t));
-        if (state.m_tool == t)
-        {
-            // 当前工具：画个下划线指示
-            let (rmin, rmax) = GetItemRect();
-            do GetWindowDrawList()->AddRect(
-                rmin, (rmax[0], rmax[1] + 2.), (110, 200, 255, 255), 2.);
-        }
         if (pressed)
             state.m_tool = t;
         SameLine();
@@ -115,16 +111,18 @@ namespace JEEditor::Editor::TilemapEditor
         do toolbar_button(state, tool::FILL);
         do toolbar_button(state, tool::EYEDROPPER);
 
-        if (Button("撤销"))
+        if (Theme::ghostButton("撤销", (0., 0.)))
             do state->undo();
         SameLine();
-        if (Button("重做"))
+        if (Theme::ghostButton("重做", (0., 0.)))
             do state->redo();
         SameLine();
-        if (Button("适应窗口"))
+        if (Theme::ghostButton("适应窗口", (0., 0.)))
             do reset_view(state);
         SameLine();
-        if (Button(state.m_dim_other_layers ? "突出选中层：开" | "突出选中层：关"))
+        if (Theme::toolbarToggle(
+                state.m_dim_other_layers ? "突出选中层：开" | "突出选中层：关",
+                state.m_dim_other_layers))
             state.m_dim_other_layers = !state.m_dim_other_layers;
         if (IsItemHovered())
             do SetTooltip("开启后其余图层在画布上半透明绘制，突出当前编辑的图层");
@@ -133,7 +131,7 @@ namespace JEEditor::Editor::TilemapEditor
         SameLine();
         let (w, h, tile_px, layer_count) = ctx.m_map->size();
         let (lname, _, _) = ctx.m_map->get_layer(state.m_layer);
-        if (Button("调整尺寸"))
+        if (Theme::ghostButton("调整尺寸", (0., 0.)))
         {
             // 打开弹窗时以当前尺寸初始化输入框
             state.m_resize_w = w;

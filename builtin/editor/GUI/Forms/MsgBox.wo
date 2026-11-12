@@ -8,6 +8,7 @@ import pkg::interface;
 import builtin::editor::GUI::Icons;
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Shortcut;
+import builtin::editor::GUI::Theme;
 
 using std;
 using je::gui;
@@ -72,9 +73,16 @@ namespace JEEditor::GUI::Forms
                     SameLine();
                 }
             }
+            PushTextWrapPos(0.);
             Text(self.m_text);
+            PopTextWrapPos();
             
-            if (Button("确认"))
+            Spacing();
+            PushStyleColor(ImGuiCol::ImGuiCol_Separator, Theme::SEPARATOR);
+            Separator();
+            PopStyleColor(1);
+
+            if (Theme::primaryButton("确认", (0., 0.)))
                 self.m_closed = true;
                 
             return !self.m_closed;

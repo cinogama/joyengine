@@ -21,6 +21,7 @@ import builtin::editor::GUI::Menu;
 import builtin::editor::GUI::Shortcut;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::GUI::Forms::AskBox;
+import builtin::editor::GUI::Theme;
 
 import DataModel;
 import EditorState;
@@ -226,7 +227,7 @@ namespace JEEditor::Editor::Animation
             let body_h = avail[1];
 
             // 左：动作
-            do PushStyleColor(ImGuiCol::ImGuiCol_ChildBg, (30, 30, 34, 255));
+            do PushStyleColor(ImGuiCol::ImGuiCol_ChildBg, Theme::SURFACE_BG);
             if (BeginChildSizeFlags("##left", left_w, body_h,
                     WindowsAttribute::ImGuiWindowFlags_AlwaysUseWindowPadding))
                 do _render_action_panel(state);
@@ -235,7 +236,7 @@ namespace JEEditor::Editor::Animation
             SameLine();
 
             // 中：预览 + 时间轴
-            do PushStyleColor(ImGuiCol::ImGuiCol_ChildBg, (30, 30, 34, 255));
+            do PushStyleColor(ImGuiCol::ImGuiCol_ChildBg, Theme::SURFACE_BG);
             if (BeginChildSizeFlags("##center", center_w, body_h,
                     WindowsAttribute::ImGuiWindowFlags_AlwaysUseWindowPadding))
             {
@@ -250,7 +251,7 @@ namespace JEEditor::Editor::Animation
             SameLine();
 
             // 右：属性
-            do PushStyleColor(ImGuiCol::ImGuiCol_ChildBg, (30, 30, 34, 255));
+            do PushStyleColor(ImGuiCol::ImGuiCol_ChildBg, Theme::SURFACE_BG);
             if (BeginChildSizeFlags("##right", right_w, body_h,
                     WindowsAttribute::ImGuiWindowFlags_AlwaysUseWindowPadding))
             {

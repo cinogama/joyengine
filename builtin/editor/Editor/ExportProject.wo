@@ -43,6 +43,7 @@ import builtin::editor::Editor::ResourcePath;
 import builtin::editor::Editor::WorldEditorViewport;
 
 import builtin::editor::Singleton;
+import builtin::editor::GUI::Theme;
 
 using std;
 using fsys;
@@ -52,6 +53,7 @@ using je::graphic;
 using je::gui;
 using dumpling;
 using toml;
+using JEEditor::GUI;
 using JEEditor::GUI::Windows;
 using JEEditor::Singleton;
 
@@ -174,13 +176,13 @@ namespace JEEditor::Editor
     {
         // 视觉主题：与「项目」「关于」窗口共用一套暖橙色系，保持编辑器风格统一。
         let s_joy_logo = texture2d::load(option::none, "!/builtin/icon/Joy.png");
-        let k_title_color = (242, 176, 109, 255);
-        let k_panel_bg_color = (37, 37, 42, 255);
-        let k_primary_btn_color = (219, 134, 63, 255);
-        let k_primary_btn_hover_color = (241, 157, 89, 255);
-        let k_primary_btn_active_color = (190, 113, 50, 255);
-        let k_warning_color = (255, 184, 92, 255);
-        let k_danger_color = (255, 128, 128, 255);
+        let k_title_color = Theme::ACCENT_TEXT;
+        let k_panel_bg_color = Theme::PANEL_BG;
+        let k_primary_btn_color = Theme::ACCENT;
+        let k_primary_btn_hover_color = Theme::ACCENT_HOVER;
+        let k_primary_btn_active_color = Theme::ACCENT_ACTIVE;
+        let k_warning_color = Theme::WARNING;
+        let k_danger_color = Theme::DANGER;
 
         // 向导内容固定尺寸：模态窗口为 AutoSize，固定宽度可避免切换步骤时
         // 窗口尺寸随内容抖动。
@@ -580,7 +582,7 @@ namespace JEEditor::Editor
             let y0 = sy + (area_height - h) * 0.5;
             let draw = GetWindowDrawList();
 
-            draw->AddRectFilled((x0, y0), (x0 + w, y0 + h), (26, 26, 31, 255));
+            draw->AddRectFilled((x0, y0), (x0 + w, y0 + h), Theme::PANEL_BG);
             draw->AddRect((x0, y0), (x0 + w, y0 + h),
                 (242, 176, 109, 150), 1.5);
 
@@ -769,12 +771,13 @@ namespace JEEditor::Editor
                 k_primary_btn_hover_color);
             PushStyleColor(ImGuiCol::ImGuiCol_ButtonActive,
                 k_primary_btn_active_color);
+            PushStyleColor(ImGuiCol::ImGuiCol_Text, Theme::TEXT_ON_ACCENT);
             PushStyleReal(StyleVar::ImGuiStyleVar_FrameRounding, 5.);
 
             let clicked = ButtonSize(label, btn_size);
 
             PopStyleVar(1);
-            PopStyleColor(3);
+            PopStyleColor(4);
             return clicked;
         }
 
