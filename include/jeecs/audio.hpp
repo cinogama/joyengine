@@ -415,13 +415,11 @@ pkg::audio 解码源文件并生成；流式播放配置与缓存格式取自可
 <音频路径>.je4audio，PCM 一律转换为缓存格式存储，缺省 8 位整数）
     * path 是音频文件的引擎路径（@/ 或 !/）
     * 返回值是一个指向音频缓冲区的指针
-    * 相同路径的重复加载共享同一个缓冲区（引用计数递增）
 使用完毕后需要调用 je_audio_buffer_close 释放资源
 如果加载失败（文件/缓存不可用或格式不支持），返回值为 nullptr
 参见：
     je_audio_buffer_close
     je_audio_cache_open_or_create
-    je_audio_shared_buffer_mark_outdated
 */
 JE_API /* OPTIONAL: If audio file or its cache failed to load */ const je_audio_buffer_t* je_audio_buffer_load(const char* path);
 
@@ -444,18 +442,6 @@ je_audio_cache_open_or_create [基本接口]
     je_cache_file_load
 */
 JE_API /* OPTIONAL */ je_file_t* je_audio_cache_open_or_create(const char* path);
-
-/*
-je_audio_shared_buffer_mark_outdated [基本接口]
-把 path 从音频缓冲区的内存共享缓存中移除：后续 je_audio_buffer_load 会
-重新读取（必要时重新生成）<音频路径>.je4cache，已分发的旧缓冲区句柄
-不受影响（由引用计数保持存活）
-    * path 是音频文件的引擎路径（@/ 或 !/）
-无返回值。用于编辑器修改 <音频路径>.je4audio 之后使新配置生效
-参见：
-    je_audio_buffer_load
-*/
-JE_API void je_audio_shared_buffer_mark_outdated(const char* path);
 
 /*
 je_audio_buffer_close [基本接口]

@@ -386,8 +386,6 @@ namespace jeecs::audio
             unordered_set<je_audio_source_t*> m_sources;
             mutex m_buffers_mx; // g2
             unordered_set<je_audio_buffer_t*> m_buffers;
-            // 已加载音频的路径 -> 共享缓冲区（持有一份引用），受 g2 保护
-            unordered_map<string, const je_audio_buffer_t*> m_shared_buffers;
             mutex m_effects_mx; // g3
             unordered_set<EffectHead*> m_effects;
             mutex m_effect_slots_mx; // g4
@@ -1274,14 +1272,6 @@ namespace jeecs::audio
             {
                 auto* rw_buffer = const_cast<je_audio_buffer_t*>(buffer);
 
-                for (auto it = m_shared_buffers.begin(); it != m_shared_buffers.end(); ++it)
-                {
-                    if (it->second == rw_buffer)
-                    {
-                        m_shared_buffers.erase(it);
-                        break;
-                    }
-                }
                 m_buffers.erase(rw_buffer);
                 shutdown_buffer(rw_buffer);
             }
@@ -1910,18 +1900,6 @@ namespace jeecs::audio
             }
             const je_audio_buffer_t* load_buffer(const char* path)
             {
-                // 相同路径的重复加载共享同一个缓冲区。
-                {
-                    lock_guard g2(m_buffers_mx); // g2
-
-                    auto fnd = m_shared_buffers.find(path);
-                    if (fnd != m_shared_buffers.end())
-                    {
-                        ContextHelper::increase_ref(fnd->second);
-                        return fnd->second;
-                    }
-                }
-
                 // 缓存仅在音频源文件存在时（重新）生成；源文件不存在时只读取
                 // 已有的缓存：导出的运行时只携带缓存（与纹理缓存加载一致）。
                 je_file_t* cache_file = nullptr;
@@ -1966,16 +1944,6 @@ namespace jeecs::audio
                 lock_guard g2(m_buffers_mx);  // g2
                 shared_lock g0(m_context_mx); // g0
 
-                // 并发加载同一路径时后完成的一方让位：保留已共享的缓冲区，
-                // 丢弃自己解码出的数据。
-                auto fnd = m_shared_buffers.find(path);
-                if (fnd != m_shared_buffers.end())
-                {
-                    ContextHelper::increase_ref(fnd->second);
-                    free(content.m_pcm);
-                    return fnd->second;
-                }
-
                 const je_audio_buffer_t* buffer = instance_buffer(
                     content.m_pcm,
                     content.m_pcm_size,
@@ -1988,8 +1956,6 @@ namespace jeecs::audio
                     free(content.m_pcm);
                     return nullptr;
                 }
-
-                m_shared_buffers.emplace(string(path), buffer);
                 return buffer;
             }
             void close_buffer(const je_audio_buffer_t* buffer)
@@ -1998,20 +1964,6 @@ namespace jeecs::audio
                 shared_lock g0(m_context_mx); // g0
 
                 ContextHelper::decrease_ref(buffer);
-            }
-            void mark_shared_buffer_outdated(const char* path)
-            {
-                lock_guard g2(m_buffers_mx);  // g2
-                shared_lock g0(m_context_mx); // g0
-
-                auto fnd = m_shared_buffers.find(path);
-                if (fnd != m_shared_buffers.end())
-                {
-                    // 释放共享缓存持有的引用；已分发的句柄由引用计数保持存活
-                    const je_audio_buffer_t* buffer = fnd->second;
-                    m_shared_buffers.erase(fnd);
-                    ContextHelper::decrease_ref(buffer);
-                }
             }
 
             je_audio_source_t* create_source()
@@ -2936,12 +2888,6 @@ void je_audio_buffer_close(const je_audio_buffer_t* buffer)
     assert(g_engine_audio_context != nullptr);
 
     g_engine_audio_context->close_buffer(buffer);
-}
-void je_audio_shared_buffer_mark_outdated(const char* path)
-{
-    assert(g_engine_audio_context != nullptr);
-
-    g_engine_audio_context->mark_shared_buffer_outdated(path);
 }
 je_audio_source_t* je_audio_source_create()
 {

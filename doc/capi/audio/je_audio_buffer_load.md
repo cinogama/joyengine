@@ -14,8 +14,7 @@ JE_API const je_audio_buffer_t* je_audio_buffer_load(const char* path);
 与缓存格式配置）重新生成；导出的运行时只携带缓存，此时源文件不存在也不会
 触发生成。
 
-相同路径的重复加载共享同一个底层缓冲区（内部维护路径 -> 缓冲区的共享缓存，
-每次加载使引用计数递增）。
+相同路径的重复加载会各自创建独立的缓冲区（音频数据不共享）。
 
 ## 参数
 
@@ -63,4 +62,3 @@ if (buffer != nullptr) {
 - [je_audio_buffer_close](je_audio_buffer_close.md) - 释放音频缓冲区
 - [je_audio_buffer_create](je_audio_buffer_create.md) - 从原始数据创建缓冲区
 - [je_audio_cache_open_or_create](je_audio_cache_open_or_create.md) - 打开/生成音频缓存
-- [je_audio_shared_buffer_mark_outdated](je_audio_shared_buffer_mark_outdated.md) - 失效内存共享缓存

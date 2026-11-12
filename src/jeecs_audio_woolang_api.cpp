@@ -50,12 +50,6 @@ WOORT_API woort_api wojeapi_audio_buffer_info(void)
     return woort_ret();
 }
 
-WOORT_API woort_api wojeapi_audio_shared_buffer_mark_outdated(void)
-{
-    je_audio_shared_buffer_mark_outdated(woort_string(0));
-    return woort_ret_void();
-}
-
 // 确保 path 指向的音频已有可用的缓存 <path>.je4cache（裸 PCM 区 +
 // 解码信息文档 + 可选 <path>.je4audio 的流式播放配置）；供导出流程
 // 预生成缓存使用，引擎加载音频时走同一流程。

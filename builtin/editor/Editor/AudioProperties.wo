@@ -251,8 +251,7 @@ namespace JEEditor::Editor
             {
                 if (self->saveSettings())
                 {
-                    // 失效内存共享缓存；磁盘缓存按校验码在下次加载时自动重建。
-                    do je::audio::mark_shared_buffer_outdated(self.m_runtime_path);
+                    // 磁盘缓存按校验码在下次加载时自动重建。
                     self.m_status = "已保存。已加载的音频需重新加载后生效。";
                 }
             }

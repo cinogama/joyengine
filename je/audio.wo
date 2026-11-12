@@ -295,8 +295,7 @@ namespace je
             }
 
             // 加载音频文件（按其 .je4cache 缓存，缓存缺失或失效时经 pkg::audio
-            // 解码源文件并生成，流式播放配置取自可选的 <路径>.je4audio）；
-            // 相同路径的重复加载共享同一个底层缓冲区
+            // 解码源文件并生成，流式播放配置取自可选的 <路径>.je4audio）
             extern("libjoyecs", "wojeapi_audio_buffer_load")
                 public func load(path: string)=> option<buffer>;
 
@@ -304,12 +303,6 @@ namespace je
                 public func info(self: buffer)=> buffer_data_t;
         }
 
-        // 把 path 从音频缓冲区的内存共享缓存中移除：后续 buffer::load 会重新
-        // 读取（必要时重新生成）缓存，已分发的旧缓冲区句柄不受影响。用于
-        // 编辑器修改 <路径>.je4audio 之后使新配置生效
-        extern("libjoyecs", "wojeapi_audio_shared_buffer_mark_outdated")
-            public func mark_shared_buffer_outdated(path: string)=> void;
-        
         using filter = gchandle
         {
             public enum type
