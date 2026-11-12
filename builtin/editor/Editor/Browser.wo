@@ -1922,9 +1922,10 @@ namespace JEEditor::Editor
                     if (MenuItemEnabled("删除", !is_module_dir))
                     {
                         let target = sel;
-                        do AskBox::show("删除", F"确认删除 \"{sel_name}\" 吗？文件将移入回收站。")
+                        do AskBox::show("删除", F"确认删除 \"{sel_name}\" 吗？")
                             ->onYes(func() {
-                                    trashDeleting(target, self.m_fs_dirty);
+                                    removeWithSatellites(target);
+                                    self.m_fs_dirty->set(true);
                                 })
                             ;
                     }
@@ -2061,85 +2062,38 @@ namespace JEEditor::Editor
             moveSatelliteFiles(src, dst);
         }
         
-        // 删除改为把源文件移入系统回收站/废纸篓，返回对应平台的命令；
-        // 编辑器不支持回收站的平台返回 none。命令统一在后台线程经
-        // platform::shell 执行（见 trashDeleting）。
-        func trashCommand(path: fsys::path_t, is_dir: bool)=> option<string>
-        {
-            let target = path->to_string();
-            let current_os = platform::get_os();
-            
-            if (current_os == platform::Os::WINDOWS)
-            {
-                // 经 cmd 传递时整条 PowerShell 命令作为一个双引号参数；路径
-                // 放进 PowerShell 单引号字面量，内部的 ' 需写成 ''。UI 只
-                // 显示错误对话框，不弹删除确认。
-                let win_path = target->replace("/", "\\");
-                let literal = win_path->replace("'", "''");
-                let method = is_dir ? "DeleteDirectory" | "DeleteFile";
-                
-                return option::value(
-                    F"powershell -NoProfile -NonInteractive -Command \"Add-Type -AssemblyName Microsoft.VisualBasic;[Microsoft.VisualBasic.FileIO.FileSystem]::{method}('{literal}','OnlyErrorDialogs','SendToRecycleBin')\"");
-            }
-            if (current_os == platform::Os::MACOS)
-            {
-                // Finder 的 delete 走系统废纸篓（外接卷使用该卷的
-                // .Trashes），并保留“放回原处”信息。路径先按 AppleScript
-                // 字符串转义，再按 sh 单引号转义。
-                let literal = target
-                    ->replace("\\", "\\\\")
-                    ->replace("\"", "\\\"")
-                    ->replace("'", "'\\''");
-                    
-                return option::value(
-                    F"osascript -e 'tell application \"Finder\" to delete POSIX file \"{literal}\"'");
-            }
-            if (current_os == platform::Os::LINUX
-                || current_os == platform::Os::FREEBSD)
-            {
-                // gio 按 XDG 回收站规范移动（含外接卷的挂载点回收站）；
-                // 未安装 glib 工具时退回 trash-cli。
-                let literal = target->replace("'", "'\\''");
-                return option::value(
-                    F"gio trash -- '{literal}' || trash-put -- '{literal}'");
-            }
-            return option::none;
-        }
-        
-        // 删除 path：源文件移入系统回收站/废纸篓，成功后永久删除伴生缓存/
-        // 属性文件（见 satelliteSuffixes；它们可由源文件重建，无需占用回收
-        // 站、也不值得“还原”）。整条链路在后台线程执行：Windows 的
-        // PowerShell 冷启动可达数秒，阻塞 UI 协程会卡住编辑器。完成后置位
-        // dirty 刷新文件列表；失败只记录日志，文件保持原样。
-        func trashDeleting(path: fsys::path_t, dirty: mutable<bool>)=> void
+        // 删除 path 及其伴生文件（见 satelliteSuffixes）。先删源：源删除失
+        // 败（如权限不足）时伴生文件保持原样，避免只删掉缓存/颜色空间属性
+        // 而源文件仍在。目录的伴生文件随目录递归删除。
+        func removeWithSatellites(path: fsys::path_t)=> void
         {
             let is_dir = isdir(path);
             
-            match (trashCommand(path, is_dir))
+            match (remove(path))
             {
-                none?
-                    logerr(F"当前平台不支持回收站，无法删除 \"{path->to_string()}\"");
-                value(cmd)?
-                    do thread::create(func(){
-                            if (platform::shell(cmd) != 0)
-                            {
-                                logerr(F"移入回收站失败：\"{path->to_string()}\"");
-                                return;
-                            }
-                            
-                            // 目录的缓存随目录一起进入回收站，无需单独处理
-                            if (!is_dir)
-                            {
-                                for (let suffix : satelliteSuffixes())
-                                {
-                                    let satellite = normalize(path->to_string() + suffix);
-                                    if (exist(satellite))
-                                        do remove(satellite);
-                                }
-                            }
-                            
-                            dirty->set(true);
-                        });
+                ok(_)?;
+                err(e)?
+                {
+                    logerr(F"删除 \"{path->to_string()}\" 失败：{e}");
+                    return;
+                }
+            }
+            
+            if (is_dir)
+                return;
+                
+            for (let suffix : satelliteSuffixes())
+            {
+                let satellite = normalize(path->to_string() + suffix);
+                if (!exist(satellite))
+                    continue;
+                    
+                match (remove(satellite))
+                {
+                    ok(_)?;
+                    err(e)?
+                        logerr(F"删除伴生文件 \"{satellite->to_string()}\" 失败：{e}");
+                }
             }
         }
         
