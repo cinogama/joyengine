@@ -40,12 +40,12 @@ WOORT_API woort_api wojeapi_audio_buffer_info(void)
     woort_set_struct(WOORT_RETURN_SLOT, 6);
     auto* buffer_instance = (*buffer)->handle();
 
-    woort_struct_set(WOORT_RETURN_SLOT, 0, (woort_Int)buffer_instance->m_size);
-    woort_struct_set(WOORT_RETURN_SLOT, 1, (woort_Int)buffer_instance->m_sample_rate);
-    woort_struct_set(WOORT_RETURN_SLOT, 2, (woort_Int)buffer_instance->m_sample_size);
-    woort_struct_set(WOORT_RETURN_SLOT, 3, (woort_Int)buffer_instance->m_byte_rate);
-    woort_struct_set(WOORT_RETURN_SLOT, 4, (woort_Int)buffer_instance->m_format);
-    woort_struct_set(WOORT_RETURN_SLOT, 5, buffer_instance->m_streaming);
+    woort_struct_set_int(WOORT_RETURN_SLOT, 0, (woort_Int)buffer_instance->m_size);
+    woort_struct_set_int(WOORT_RETURN_SLOT, 1, (woort_Int)buffer_instance->m_sample_rate);
+    woort_struct_set_int(WOORT_RETURN_SLOT, 2, (woort_Int)buffer_instance->m_sample_size);
+    woort_struct_set_int(WOORT_RETURN_SLOT, 3, (woort_Int)buffer_instance->m_byte_rate);
+    woort_struct_set_int(WOORT_RETURN_SLOT, 4, (woort_Int)buffer_instance->m_format);
+    woort_struct_set_bool(WOORT_RETURN_SLOT, 5, buffer_instance->m_streaming);
 
     return woort_ret();
 }
