@@ -132,12 +132,29 @@ void je_gui_backend_init(
 
         if (latin_file_buf != nullptr)
         {
+            // Latin 字体（西文与符号）：默认范围只有 Latin-1，箭头、
+            // 数学运算符、勾叉等符号块必须显式列出，否则界面显示方框
+            static const ImWchar latin_ranges[] =
+            {
+                0x0020,
+                0x00FF, // Basic Latin + Latin Supplement
+                0x2190,
+                0x21FF, // Arrows (→ ← ↑ ↓ ↔ ...)
+                0x2200,
+                0x22FF, // Mathematical Operators (√ ≤ ≥ ≈ ...)
+                0x2700,
+                0x27BF, // Dingbats (✓ ✗ ...)
+                0,
+            };
+
             // Non latin characters
             static const ImWchar ranges[] =
             {
                 // 0x0020, 0x00FF, // Basic Latin + Latin Supplement
                 0x2000,
                 0x206F, // General Punctuation
+                0x2460,
+                0x24FF, // Enclosed Alphanumerics (① ② ...)
                 0x3000,
                 0x30FF, // CJK Symbols and Punctuations, Hiragana, Katakana
                 0x31F0,
@@ -156,7 +173,7 @@ void je_gui_backend_init(
                 (int)latin_ttf_size,
                 (float)_je_gui_static_ctx._jegui_specify_font_size,
                 nullptr,
-                io.Fonts->GetGlyphRangesDefault());
+                latin_ranges);
 
             ImFontConfig merge_config;
             merge_config.MergeMode = true;
