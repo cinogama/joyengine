@@ -8,6 +8,7 @@ import builtin::editor::GUI::Icons;
 import builtin::editor::GUI::Windows;
 import builtin::editor::GUI::Shortcut;
 import builtin::editor::GUI::Theme;
+import builtin::editor::GUI::Widgets;
 
 using std;
 using je::gui;
@@ -67,10 +68,8 @@ namespace JEEditor::GUI::Forms
         }
         public func run(self: InputBox)=> bool
         {
-            PushTextWrapPos(0.);
-            Text(self.m_text);
-            PopTextWrapPos();
-            
+            Widgets::drawMessageBoxText(self.m_text);
+
             match (InputText(F"##Input_1", self.m_content))
             {
                 none?;

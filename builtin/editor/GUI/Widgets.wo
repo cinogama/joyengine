@@ -48,6 +48,24 @@ namespace JEEditor::GUI::Widgets
         TextColored(Theme::INFO, label);
     }
 
+    // 消息框家族（MsgBox/AskBox/InputBox）的说明文本：自然宽度不超过
+    // wrap_max 时单行展示，超过后按 wrap_max 折行。
+    // 不能用 PushTextWrapPos(0.)（按窗口宽度折行）：模态弹窗宽度由
+    // AlwaysAutoResize 依内容自适应，而折行宽度又取决于窗口宽度，互相
+    // 依赖会把弹窗收缩成一行两三个字的窄条。
+    public func drawMessageBoxText(text: string)=> void
+    {
+        let wrap_max = 380.;
+        let text_width = CalcTextSize(text).0;
+        let wrap_width = text_width < wrap_max ? text_width | wrap_max;
+
+        // 折行点是窗口本地坐标：从当前光标（图标右侧）起量，
+        // 保证文本的有效行宽恰好是 wrap_width
+        PushTextWrapPos(GetCursorPos().0 + wrap_width);
+        Text(text);
+        PopTextWrapPos();
+    }
+
     // ============================================================
     // 检视面板成员编辑的两列布局辅助
     // （JEEditor::Editor::Inspector.wo 与 builtin/script/editor.wo 共用）
