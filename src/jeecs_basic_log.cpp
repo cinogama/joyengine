@@ -183,6 +183,18 @@ namespace jeecs::log
         // Flush messages that raced in while the worker was exiting.
         dispatch_pending();
     }
+
+    // woolang 运行时（含 GC 终结器）关闭之后执行（log 是 post 列表的最
+    // 后一项）：注销全部回调——注册它们的模块此刻都已 shutdown，此后
+    // 迟到的日志只走控制台同步输出——并最终清空队列。
+    void post_shutdown()
+    {
+        {
+            lock_guard callbacks_guard(g_callbacks_mx);
+            g_callbacks.clear();
+        }
+        dispatch_pending();
+    }
 }
 
 je_log_regid_t je_log_callback_register(je_log_callback_t callback, /* OPTIONAL */ void* userdata)

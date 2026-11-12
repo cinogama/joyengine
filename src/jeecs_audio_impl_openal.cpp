@@ -2879,7 +2879,15 @@ namespace jeecs::audio
         assert(g_engine_audio_context == nullptr);
         g_engine_audio_context = new Context;
     }
+    // woolang GC 的句柄终结器要到 woolang_runtime 的 shutdown（逆序最后
+    // 一个模块）才运行，晚于本模块；Context 必须存活到 post_shutdown，
+    // 期间承接迟到的 close，因此这里不做任何事情。
     void shutdown()
+    {
+    }
+    // woolang 运行时（含全部 GC 终结器）关闭之后执行：销毁 Context（设备
+    // 关闭的日志此时经 log 的同步派发路径输出）。
+    void post_shutdown()
     {
         assert(g_engine_audio_context != nullptr);
         delete g_engine_audio_context;
