@@ -26,7 +26,8 @@ JE_API je_file_t* je_audio_cache_open_or_create(const char* path);
 变化都会使缓存失效。缓存布局（文件头之后）：
 
 - `[uint64 pcm_size][pcm 字节]` —— 裸数据区，不套 `je_cache_binary_*`
-  值标记，可直接按偏移访问（供流式播放使用）
+  值标记，可直接按偏移访问；`streaming` 为 true 的音频由声源按约 0.25 秒
+  一块直接从该区读取播放，整段 PCM 不会载入内存
 - `DOCUMENT` —— 解码信息（`bits` / `is_float` 描述转换后实际存储的 PCM）：
   - `channels` / `samplerate` / `bits` -> INT32
   - `is_float` / `streaming` -> BOOL

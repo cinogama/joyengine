@@ -49,20 +49,24 @@ enum je_audio_format_t
 };
 
 typedef struct je_audio_native_buffer_instance_t je_audio_native_buffer_instance_t;
+typedef struct je_audio_native_stream_instance_t je_audio_native_stream_instance_t;
 typedef struct je_audio_buffer_t
 {
     je_audio_native_buffer_instance_t*
         m_buffer_instance;
 
+    je_audio_native_stream_instance_t*
+        m_stream_instance; // 流式缓冲区的缓存数据源；非流式时为 nullptr
+
     mutable size_t m_references; // 引用计数
 
-    const void* m_data;
-    size_t m_size;
+    const void* m_data; // PCM 数据；流式缓冲区为 nullptr（按需从缓存文件读取）
+    size_t m_size;      // PCM 总字节数（流式缓冲区同样反映完整时长）
     size_t m_sample_rate;
     size_t m_sample_size;
     size_t m_byte_rate;
     je_audio_format_t m_format;
-    bool m_streaming; // 来自 <音频路径>.je4audio 的流式播放配置，默认为 false
+    bool m_streaming; // 是否流式播放（来自 <音频路径>.je4audio，缺省 false）；true 时 PCM 不驻留内存
 } je_audio_buffer_t;
 
 typedef struct je_audio_native_source_instance_t je_audio_native_source_instance_t;
@@ -414,6 +418,9 @@ je_audio_buffer_load [基本接口]
 pkg::audio 解码源文件并生成；流式播放配置与缓存格式取自可选的
 <音频路径>.je4audio，PCM 一律转换为缓存格式存储，缺省 8 位整数）
     * path 是音频文件的引擎路径（@/ 或 !/）
+    * 流式播放配置为 true 时 PCM 不驻留内存：缓存文件在缓冲区生命周期内
+      保持打开，声源播放时按块读取（m_data 为 nullptr，m_size 仍为 PCM
+      总字节数），调用 je_audio_buffer_close 时关闭
     * 返回值是一个指向音频缓冲区的指针
 使用完毕后需要调用 je_audio_buffer_close 释放资源
 如果加载失败（文件/缓存不可用或格式不支持），返回值为 nullptr
@@ -434,7 +441,7 @@ je_audio_cache_open_or_create [基本接口]
       转换后存储（任何源编码都可落成 OpenAL 可用的缓存）
 缓存布局（文件头之后）：
     [uint64 pcm_size][pcm 字节] —— 裸数据区，不套 je_cache_binary_* 值标记，
-                                  可直接按偏移访问（流式播放用）
+                                  可直接按偏移访问（流式播放按块读取）
     DOCUMENT channels / samplerate / bits -> INT32，is_float / streaming -> BOOL
 返回值是缓存文件的只读句柄（用毕 je_file_close 关闭），失败返回 nullptr
 参见：
@@ -446,6 +453,7 @@ JE_API /* OPTIONAL */ je_file_t* je_audio_cache_open_or_create(const char* path)
 /*
 je_audio_buffer_close [基本接口]
 释放一个音频缓冲区
+    * 流式缓冲区会一并关闭其保持打开的缓存文件
 */
 JE_API void je_audio_buffer_close(const je_audio_buffer_t* buffer);
 
@@ -747,6 +755,7 @@ typedef je_audio_play_device_t je_AudioPlayDevice;
 typedef je_audio_state_t je_AudioState;
 typedef je_audio_format_t je_AudioFormat;
 typedef je_audio_native_buffer_instance_t je_AudioNativeBufferInstance;
+typedef je_audio_native_stream_instance_t je_AudioNativeStreamInstance;
 typedef je_audio_buffer_t je_AudioBuffer;
 typedef je_audio_native_source_instance_t je_AudioNativeSourceInstance;
 typedef je_audio_source_t je_AudioSource;
