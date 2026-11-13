@@ -206,6 +206,26 @@ namespace jeecs::audio
             return true;
         }
 
+        // 读取缓存头中的 crc64（文件头布局：主版本、格式版本、crc64），并把
+        // 读位置恢复到内容区开头。crc64 标识缓存对应的源文件内容（wav 与
+        // .je4audio），缓存重建后随之改变，因此可用作共享缓冲区的版本键。
+        static bool read_audio_cache_crc64(je_file_t* cache, uint64_t* out_crc64)
+        {
+            const size_t content_offset = je_file_tell(cache);
+            if (content_offset < sizeof(uint64_t))
+                return false;
+
+            if (!je_file_seek(
+                    cache,
+                    (int64_t)(content_offset - sizeof(uint64_t)),
+                    JE_READ_FILE_SEEK_SET)
+                || 1 != je_file_read(out_crc64, sizeof(*out_crc64), 1, cache))
+                return false;
+
+            return je_file_seek(
+                cache, (int64_t)content_offset, JE_READ_FILE_SEEK_SET);
+        }
+
         class ContextHelper
         {
         public:
@@ -417,6 +437,18 @@ namespace jeecs::audio
             unordered_set<je_audio_source_t*> m_sources;
             mutex m_buffers_mx; // g2
             unordered_set<je_audio_buffer_t*> m_buffers;
+
+            // 共享缓冲区缓存条目：路径 + 缓存版本（缓存头的 crc64）
+            struct cached_buffer_t
+            {
+                uint64_t m_cache_crc64;
+                const je_audio_buffer_t* m_buffer;
+            };
+
+            // 路径 -> 缓冲区（弱引用缓存）：路径与缓存版本都相同的重复加载
+            // 共享同一个缓冲区实例。缓存不持有引用计数，最后一份引用释放时
+            // 条目随之移除，因此不会让音频常驻内存。受 g2 保护。
+            unordered_map<string, cached_buffer_t> m_buffer_cache;
             mutex m_effects_mx; // g3
             unordered_set<EffectHead*> m_effects;
             mutex m_effect_slots_mx; // g4
@@ -1609,6 +1641,16 @@ namespace jeecs::audio
             {
                 auto* rw_buffer = const_cast<je_audio_buffer_t*>(buffer);
 
+                // 移除弱引用缓存中指向该缓冲区的条目
+                for (auto it = m_buffer_cache.begin(); it != m_buffer_cache.end(); ++it)
+                {
+                    if (it->second.m_buffer == rw_buffer)
+                    {
+                        m_buffer_cache.erase(it);
+                        break;
+                    }
+                }
+
                 m_buffers.erase(rw_buffer);
                 shutdown_buffer(rw_buffer);
             }
@@ -2256,6 +2298,30 @@ namespace jeecs::audio
                     return nullptr;
                 }
 
+                // 缓存头里的 crc64 标识 wav 与 .je4audio 的内容版本：路径与
+                // 版本都相同的重复加载共享同一个缓冲区实例。命中时不必读取
+                // 缓存文档和解码 PCM，直接为本次加载增加一份引用。
+                uint64_t cache_crc64;
+                if (!read_audio_cache_crc64(cache_file, &cache_crc64))
+                {
+                    debug::logerr("Invalid audio cache of '%s'.", path);
+                    je_file_close(cache_file);
+                    return nullptr;
+                }
+
+                {
+                    lock_guard g2(m_buffers_mx); // g2
+
+                    auto fnd = m_buffer_cache.find(path);
+                    if (fnd != m_buffer_cache.end()
+                        && fnd->second.m_cache_crc64 == cache_crc64)
+                    {
+                        ContextHelper::increase_ref(fnd->second.m_buffer);
+                        je_file_close(cache_file);
+                        return fnd->second.m_buffer;
+                    }
+                }
+
                 audio_cache_content_t content;
                 if (!read_audio_cache_content(cache_file, &content))
                 {
@@ -2282,6 +2348,18 @@ namespace jeecs::audio
                 lock_guard g2(m_buffers_mx);  // g2
                 shared_lock g0(m_context_mx); // g0
 
+                // 并发加载同一路径时后完成的一方让位：共享先到的缓冲区，
+                // 丢弃本轮解码出的数据（流式缓冲区尚未接管缓存文件，一并关闭）。
+                auto fnd = m_buffer_cache.find(path);
+                if (fnd != m_buffer_cache.end()
+                    && fnd->second.m_cache_crc64 == cache_crc64)
+                {
+                    ContextHelper::increase_ref(fnd->second.m_buffer);
+                    free(content.m_pcm);
+                    je_file_close(cache_file);
+                    return fnd->second.m_buffer;
+                }
+
                 // 流式缓冲区接管缓存文件句柄，在缓冲区生命周期内保持打开。
                 const je_audio_buffer_t* buffer = instance_buffer(
                     content.m_pcm,
@@ -2300,6 +2378,9 @@ namespace jeecs::audio
 
                 if (!content.m_streaming)
                     je_file_close(cache_file);
+
+                m_buffer_cache.insert_or_assign(
+                    string(path), cached_buffer_t{ cache_crc64, buffer });
 
                 return buffer;
             }

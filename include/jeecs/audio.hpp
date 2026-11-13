@@ -418,6 +418,10 @@ je_audio_buffer_load [基本接口]
 pkg::audio 解码源文件并生成；流式播放配置与缓存格式取自可选的
 <音频路径>.je4audio，PCM 一律转换为缓存格式存储，缺省 8 位整数）
     * path 是音频文件的引擎路径（@/ 或 !/）
+    * 相同路径、且缓存版本（缓存头的 crc64，随 wav 与 .je4audio 内容变化）
+      相同的重复加载共享同一个缓冲区实例：每次加载持有该实例的一份引用，
+      je_audio_buffer_close 只释放本次加载持有的引用，最后一份引用释放时
+      缓冲区才真正关闭（缓存条目随之移除，再次加载会重新解码）
     * 流式播放配置为 true 时 PCM 不驻留内存：缓存文件在缓冲区生命周期内
       保持打开，声源播放时按块读取（m_data 为 nullptr，m_size 仍为 PCM
       总字节数），调用 je_audio_buffer_close 时关闭
@@ -453,7 +457,9 @@ JE_API /* OPTIONAL */ je_file_t* je_audio_cache_open_or_create(const char* path)
 /*
 je_audio_buffer_close [基本接口]
 释放一个音频缓冲区
-    * 流式缓冲区会一并关闭其保持打开的缓存文件
+    * 缓冲区按引用计数管理：此处释放调用方持有的一份引用，仍有其它引用
+      （声源或同路径的重复加载）时缓冲区保持存活
+    * 流式缓冲区在最后一份引用释放时一并关闭其保持打开的缓存文件
 */
 JE_API void je_audio_buffer_close(const je_audio_buffer_t* buffer);
 
