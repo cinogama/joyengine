@@ -2416,86 +2416,125 @@ namespace jeecs
     }
     namespace Audio
     {
+        /*
+        Audio::Source [组件]
+        实体音源：一个实体对应一个持久声部，持有音频缓冲区、播放控制与
+        空间衰减参数。循环的环境声/BGM 用它；一次性的角色事件音用
+        je::audio::play_once_* 或 Audio::Source::play_oneshot 播放。
+
+        buffer 为空时声源不播放；play 为 false 时暂停，循环播放自然结束
+        时 play 会自动置为 false。spatial 为 false 或实体没有 Transform
+        时按相对听众（UI/环境声）处理，不做距离衰减与左右声像。
+        */
         struct Source
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Source);
-
-            basic::resource<audio::source> source;
-
-            float pitch;
-            float volume;
-
-            math::vec3 last_position;
-
-            Source() noexcept
-                : source(audio::source::create()), pitch(1.0f), volume(1.0f)
-
-            {
-            }
-            Source(const Source& another) noexcept
-                : Source()
-            {
-                pitch = another.pitch;
-                volume = another.volume;
-                last_position = another.last_position;
-            }
-            Source(Source&& another) noexcept
-                : source(std::move(another.source))
-                , pitch(another.pitch)
-                , volume(another.volume)
-                , last_position(another.last_position)
-            {
-            }
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &Source::pitch, "pitch");
-                typing::register_member(guard, &Source::volume, "volume");
-            }
-        };
-        struct Listener
-        {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Listener);
-            JECS_DEFAULT_CONSTRUCTOR(Listener);
-
-            float volume = 1.0f;
-            math::vec3 face = { 0, 0, 1 };
-            math::vec3 up = { 0, 1, 0 };
-
-            math::vec3 last_position = {};
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &Listener::volume, "volume");
-                typing::register_member(guard, &Listener::face, "face");
-                typing::register_member(guard, &Listener::up, "up");
-            }
-        };
-        struct Playing
-        {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Playing);
 
             enum class play_state
             {
                 STOPPED,
                 PLAYING,
-                LOOPED_PLAYING,
             };
-            play_state state = play_state::STOPPED;
+
             basic::file_resource<audio::buffer> buffer;
+            basic::resource<audio::source> source;
 
-            bool play = true;
-            bool loop = true;
+            float volume;
+            float pitch;
+            bool play;
+            bool loop;
+            bool spatial;
+            basic::string bus;
+            float reference_distance;
+            float max_distance;
+            float rolloff;
 
-            Playing() = default;
-            Playing(const Playing& another)
-                : state(play_state::STOPPED)
-                , buffer(another.buffer)
-                , play(another.play)
-                , loop(another.loop)
+            // 运行时状态（不反射、不存档）
+            math::vec3 last_position;
+            math::vec3 last_world_position;
+            bool has_last_position;
+            bool spatial_active;
+            float current_occlusion_gain;
+            float current_occlusion_hf;
+            play_state state;
+            basic::string resolved_bus_name;
+            je_audio_bus_t* bus_handle;
+            basic::optional<basic::resource<audio::filter>> occlusion_filter;
+            float applied_occlusion_hf;
+            bool occlusion_filter_bound;
+            uint64_t reverb_generation;
+            bool reverb_bound;
+
+            Source() noexcept
+                : buffer()
+                , source(audio::source::create())
+                , volume(1.0f)
+                , pitch(1.0f)
+                , play(true)
+                , loop(true)
+                , spatial(true)
+                , bus("SFX")
+                , reference_distance(1.0f)
+                , max_distance(32.0f)
+                , rolloff(1.0f)
+                , last_position()
+                , last_world_position()
+                , has_last_position(false)
+                , spatial_active(false)
+                , current_occlusion_gain(1.0f)
+                , current_occlusion_hf(1.0f)
+                , state(play_state::STOPPED)
+                , resolved_bus_name()
+                , bus_handle(nullptr)
+                , occlusion_filter()
+                , applied_occlusion_hf(1.0f)
+                , occlusion_filter_bound(false)
+                , reverb_generation(0)
+                , reverb_bound(false)
             {
             }
-            Playing(Playing&&) = default;
+            Source(const Source& another) noexcept
+                : Source()
+            {
+                buffer = another.buffer;
+                volume = another.volume;
+                pitch = another.pitch;
+                play = another.play;
+                loop = another.loop;
+                spatial = another.spatial;
+                bus = another.bus;
+                reference_distance = another.reference_distance;
+                max_distance = another.max_distance;
+                rolloff = another.rolloff;
+            }
+            Source(Source&& another) noexcept
+                : buffer(another.buffer)
+                , source(std::move(another.source))
+                , volume(another.volume)
+                , pitch(another.pitch)
+                , play(another.play)
+                , loop(another.loop)
+                , spatial(another.spatial)
+                , bus(another.bus)
+                , reference_distance(another.reference_distance)
+                , max_distance(another.max_distance)
+                , rolloff(another.rolloff)
+                , last_position()
+                , last_world_position()
+                , has_last_position(false)
+                , spatial_active(false)
+                , current_occlusion_gain(1.0f)
+                , current_occlusion_hf(1.0f)
+                , state(play_state::STOPPED)
+                , resolved_bus_name()
+                , bus_handle(nullptr)
+                , occlusion_filter()
+                , applied_occlusion_hf(1.0f)
+                , occlusion_filter_bound(false)
+                , reverb_generation(0)
+                , reverb_bound(false)
+            {
+            }
 
             void set_buffer(const basic::resource<audio::buffer>& buf)
             {
@@ -2504,9 +2543,173 @@ namespace jeecs
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Playing::buffer, "buffer");
-                typing::register_member(guard, &Playing::play, "play");
-                typing::register_member(guard, &Playing::loop, "loop");
+                typing::register_member(guard, &Source::buffer, "buffer");
+                typing::register_member(guard, &Source::volume, "volume");
+                typing::register_member(guard, &Source::pitch, "pitch");
+                typing::register_member(guard, &Source::play, "play");
+                typing::register_member(guard, &Source::loop, "loop");
+                typing::register_member(guard, &Source::spatial, "spatial");
+                typing::register_member(guard, &Source::bus, "bus");
+                typing::register_member(guard, &Source::reference_distance, "reference_distance");
+                typing::register_member(guard, &Source::max_distance, "max_distance");
+                typing::register_member(guard, &Source::rolloff, "rolloff");
+            }
+        };
+        /*
+        Audio::Listener [组件]
+        听众：通常挂在渲染摄像机实体上。use_2d 为 true 时使用纯 XY 的
+        距离与左右声像（忽略实体 z，横板与俯视角均适用）；false 时使用
+        完整 3D 空间。distance_model 与 doppler_factor 作用于当前播放设备。
+        */
+        struct Listener
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Listener);
+
+            float volume;
+            bool use_2d;
+            je_audio_distance_model_t distance_model;
+            float doppler_factor;
+            math::vec3 face;
+            math::vec3 up;
+
+            // 运行时状态（不反射、不存档）
+            math::vec3 last_position;
+            bool has_last_position;
+
+            Listener() noexcept
+                : volume(1.0f)
+                , use_2d(true)
+                , distance_model(JE_AUDIO_DISTANCE_MODEL_LINEAR_CLAMPED)
+                , doppler_factor(1.0f)
+                , face(0.0f, 0.0f, 1.0f)
+                , up(0.0f, 1.0f, 0.0f)
+                , last_position()
+                , has_last_position(false)
+            {
+            }
+            Listener(const Listener& another) noexcept
+                : Listener()
+            {
+                volume = another.volume;
+                use_2d = another.use_2d;
+                distance_model = another.distance_model;
+                doppler_factor = another.doppler_factor;
+                face = another.face;
+                up = another.up;
+            }
+            Listener(Listener&& another) noexcept
+                : Listener()
+            {
+                volume = another.volume;
+                use_2d = another.use_2d;
+                distance_model = another.distance_model;
+                doppler_factor = another.doppler_factor;
+                face = another.face;
+                up = another.up;
+            }
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Listener::volume, "volume");
+                typing::register_member(guard, &Listener::use_2d, "use_2d");
+                typing::register_member(guard, &Listener::distance_model, "distance_model");
+                typing::register_member(guard, &Listener::doppler_factor, "doppler_factor");
+                typing::register_member(guard, &Listener::face, "face");
+                typing::register_member(guard, &Listener::up, "up");
+            }
+        };
+        /*
+        Audio::Occluder [组件]
+        盒形声音遮挡体：听众到声源的线段穿过它时，按 occlusion/muffle
+        衰减增益与高频。size 为局部全尺寸（乘实体比例尺），随实体世界
+        旋转；2D 模式下只使用 XY 投影，3D 下使用完整 OBB。
+        */
+        struct Occluder
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Occluder);
+
+            math::vec3 size;
+            float occlusion;
+            float muffle;
+
+            Occluder() noexcept
+                : size(1.0f, 1.0f, 1.0f)
+                , occlusion(0.6f)
+                , muffle(0.4f)
+            {
+            }
+            Occluder(const Occluder& another) noexcept
+                : Occluder()
+            {
+                size = another.size;
+                occlusion = another.occlusion;
+                muffle = another.muffle;
+            }
+            Occluder(Occluder&& another) noexcept
+                : Occluder()
+            {
+                size = another.size;
+                occlusion = another.occlusion;
+                muffle = another.muffle;
+            }
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Occluder::size, "size");
+                typing::register_member(guard, &Occluder::occlusion, "occlusion");
+                typing::register_member(guard, &Occluder::muffle, "muffle");
+            }
+        };
+        /*
+        Audio::ReverbZone [组件]
+        混响区域：听众进入区域后，系统为所有空间化音源的第 0 路辅助发送
+        绑定统一的 EFX 混响；多个区域重叠时取体积最小的内层区域。
+        设备不支持 EFX 时静默降级为无混响。
+        */
+        struct ReverbZone
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(ReverbZone);
+
+            math::vec3 size;
+            float decay_time;
+            float gain;
+            float gain_hf;
+            float diffusion;
+
+            ReverbZone() noexcept
+                : size(8.0f, 8.0f, 8.0f)
+                , decay_time(1.49f)
+                , gain(0.32f)
+                , gain_hf(0.89f)
+                , diffusion(1.0f)
+            {
+            }
+            ReverbZone(const ReverbZone& another) noexcept
+                : ReverbZone()
+            {
+                size = another.size;
+                decay_time = another.decay_time;
+                gain = another.gain;
+                gain_hf = another.gain_hf;
+                diffusion = another.diffusion;
+            }
+            ReverbZone(ReverbZone&& another) noexcept
+                : ReverbZone()
+            {
+                size = another.size;
+                decay_time = another.decay_time;
+                gain = another.gain;
+                gain_hf = another.gain_hf;
+                diffusion = another.diffusion;
+            }
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &ReverbZone::size, "size");
+                typing::register_member(guard, &ReverbZone::decay_time, "decay_time");
+                typing::register_member(guard, &ReverbZone::gain, "gain");
+                typing::register_member(guard, &ReverbZone::gain_hf, "gain_hf");
+                typing::register_member(guard, &ReverbZone::diffusion, "diffusion");
             }
         };
     }

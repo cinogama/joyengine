@@ -506,6 +506,22 @@ namespace Particle::Emitter::simulation_space_type
         }
     }
 }
+// Audio::Listener::distance_model：距离衰减模型。
+// 序列化为整数值；与 OpenAL 的距离模型取值一一对应
+namespace Audio::Listener::distance_model
+{
+    using parser = void
+    {
+        public extern func saving(val: Audio::Listener::distance_model)=> string
+        {
+            return val as int as string;
+        }
+        public extern func restoring(dat: string)=> Audio::Listener::distance_model
+        {
+            return dat as int as Audio::Listener::distance_model;
+        }
+    }
+}
 namespace file_resource
 {
     using parser = void

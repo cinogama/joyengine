@@ -127,8 +127,10 @@ namespace JEEditor::Editor::ComponentPresets
             ("物理场景", PHYSICS2D_SCENE_COMPONENTS),
         ]),
         ("音频", [
-            ("音源", ["Audio::Source", "Audio::Playing"]),
+            ("音源", ["Audio::Source"]),
             ("音频监听器", ["Audio::Listener"]),
+            ("声音遮挡", ["Audio::Occluder"]),
+            ("混响区域", ["Audio::ReverbZone"]),
         ]),
     ];
 

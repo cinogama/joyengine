@@ -34,7 +34,7 @@
 | `Animation` | 动画播放器（`Animator`） | [动画](animation.md) |
 | `Particle` | 粒子发射器（`Emitter`） | [粒子](particle.md) |
 | `Tilemap` | 瓦片地图 | [瓦片地图](tilemap.md) |
-| `Audio` | 声源、监听者与播放状态 | [音频](audio.md) |
+| `Audio` | 音源、监听者、声音遮挡体与混响区域 | [音频](audio.md) |
 | `Input` | 虚拟手柄（`VirtualGamepad`） | [输入](input.md) |
 
 此外还有供编辑器使用的 `Editor::*` 组件（如保存实体名的 `Editor::Name`、标记不显示也不保存的 `Editor::Invisible`）。

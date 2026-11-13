@@ -35,6 +35,24 @@ enum je_audio_state_t
 };
 
 /*
+je_audio_distance_model_t [类型]
+声源到监听者的距离衰减模型，与 OpenAL 的距离模型一一对应
+    * NONE 不做距离衰减
+    * INVERSE / LINEAR / EXPONENT 为三种基础衰减曲线
+    * 带 CLAMPED 的变体在参考距离以内保持满增益，并受最大距离限制
+*/
+enum je_audio_distance_model_t
+{
+    JE_AUDIO_DISTANCE_MODEL_NONE,
+    JE_AUDIO_DISTANCE_MODEL_INVERSE,
+    JE_AUDIO_DISTANCE_MODEL_INVERSE_CLAMPED,
+    JE_AUDIO_DISTANCE_MODEL_LINEAR,
+    JE_AUDIO_DISTANCE_MODEL_LINEAR_CLAMPED,
+    JE_AUDIO_DISTANCE_MODEL_EXPONENT,
+    JE_AUDIO_DISTANCE_MODEL_EXPONENT_CLAMPED,
+};
+
+/*
 je_audio_format_t [类型]
 用于表示波形的格式
 */
@@ -70,6 +88,20 @@ typedef struct je_audio_buffer_t
 } je_audio_buffer_t;
 
 typedef struct je_audio_native_source_instance_t je_audio_native_source_instance_t;
+
+/*
+je_audio_bus_t [类型]
+命名的音量总线，用于按类别（如 SFX/BGM/UI）统一调速音量。
+
+总线由 je_audio_bus_get 按名称取得，进程内唯一且指针稳定，无需释放。
+声源的最终增益为 声源增益 × 总线增益 × 监听者增益。
+*/
+typedef struct je_audio_bus_t
+{
+    const char* m_name; // 总线名称，进程内稳定
+    float m_gain;       // 总线增益，默认 1.0
+} je_audio_bus_t;
+
 typedef struct je_audio_source_t
 {
     je_audio_native_source_instance_t*
@@ -80,6 +112,25 @@ typedef struct je_audio_source_t
     float m_pitch;       // 播放速度
     float m_location[3]; // 声音位置
     float m_velocity[3]; // 声源自身速度（非播放速度）
+
+    // 距离衰减参数（仅对非 relative 声源生效）
+    float m_reference_distance; // 参考距离，默认 1.0
+    float m_max_distance;       // 最大距离，默认 FLT_MAX，不额外截断
+    float m_rolloff;            // 衰减率，默认 1.0
+    float m_min_gain;           // 距离衰减的下限，默认 0.0
+    float m_max_gain;           // 距离衰减的上限，默认 1.0
+
+    // true = 位置与方向相对监听者（不再受距离衰减影响），默认 false
+    bool m_relative;
+
+    // 定向声源的锥形参数，默认内外角均为 360°（无方向性）
+    float m_direction[3];     // 声源朝向
+    float m_cone_inner_angle; // 内角，默认 360.0
+    float m_cone_outer_angle; // 外角，默认 360.0
+    float m_cone_outer_gain;  // 外角增益，默认 0.0
+
+    // 所属音量总线；nullptr = 不经过总线
+    je_audio_bus_t* m_bus;
 } je_audio_source_t;
 
 typedef struct je_audio_listener_t
@@ -90,6 +141,11 @@ typedef struct je_audio_listener_t
     float m_velocity[3]; // 监听器自身速度（非播放速度）
     float m_forward[3];  // 监听器朝向（前方向）
     float m_upward[3];   // 监听器朝向（顶方向）
+
+    // 距离衰减模型，默认 LINEAR_CLAMPED；该设置作用于当前播放设备
+    je_audio_distance_model_t m_distance_model;
+    // 多普勒系数，默认 1.0；0 表示关闭多普勒
+    float m_doppler_factor;
 } je_audio_listener_t;
 
 typedef struct je_audio_native_effect_slot_instance_t je_audio_native_effect_slot_instance_t;
@@ -554,6 +610,14 @@ je_audio_source_filter_set [基本接口]
 JE_API void je_audio_source_filter_set(je_audio_source_t* source, /* OPTIONAL */ je_audio_filter_t* filter_may_null);
 
 /*
+je_audio_source_bus_set [基本接口]
+设置音频源所属的音量总线
+    * bus_may_null 为 nullptr 时不经过任何总线（总线增益视为 1.0）
+    * 总线增益变化后，使用该总线的声源增益会自动重新提交
+*/
+JE_API void je_audio_source_bus_set(je_audio_source_t* source, /* OPTIONAL */ je_audio_bus_t* bus_may_null);
+
+/*
 je_audio_source_play [基本接口]
 播放音频源
     如果音频源已经在播放或者音频源没有设置音频，则不会有任何效果
@@ -603,8 +667,67 @@ JE_API je_audio_listener_t* je_audio_listener_get();
 /*
 je_audio_listener_update [基本接口]
 将对 je_audio_listener_t 的参数修改应用到实际的监听者上
+    * 距离模型与多普勒系数是播放设备级状态，同样在此时提交
 */
 JE_API void je_audio_listener_update();
+
+/*
+je_audio_bus_get [基本接口]
+按名称取得（必要时创建）一个音量总线
+    * 总线在进程内唯一且指针稳定，不需要释放
+    * 新建总线的增益为 1.0
+    * name 不能为空字符串；同一名称总是返回同一实例
+*/
+JE_API je_audio_bus_t* je_audio_bus_get(const char* name);
+
+/*
+je_audio_bus_gain_get [基本接口]
+获取音量总线的增益
+*/
+JE_API float je_audio_bus_gain_get(const je_audio_bus_t* bus);
+
+/*
+je_audio_bus_gain_set [基本接口]
+设置音量总线的增益，使用该总线的声源会立即重新提交增益
+*/
+JE_API void je_audio_bus_gain_set(je_audio_bus_t* bus, float gain);
+
+/*
+je_audio_oneshot_desc_t [类型]
+一次性播放（fire-and-forget）的参数描述。
+
+一次性播放由引擎分配临时声部并在播放结束后自动回收，适合脚步、金币、
+弹壳等事件音，不需要创建实体或持有声源句柄。
+    * m_lowpass_hf < 1.0 时自动为该声部挂一个低通滤波器模拟闷音
+    * 最多同时存在 32 个一次性声部，超出时回收最早创建的声部
+*/
+typedef struct je_audio_oneshot_desc_t
+{
+    const je_audio_buffer_t* m_buffer; // 要播放的音频缓冲区（不可为空）
+
+    je_audio_bus_t* m_bus; // 可为 nullptr，表示不经过总线
+
+    bool m_spatial;      // true = 按 location 空间化；false = 相对监听者（UI/环境声）
+    float m_location[3]; // 空间化位置
+
+    float m_gain;  // 音量增益
+    float m_pitch; // 播放速度
+
+    float m_reference_distance; // 参考距离
+    float m_max_distance;       // 最大距离
+    float m_rolloff;            // 衰减率
+
+    float m_lowpass_hf; // 高频增益，1.0 = 不闷音
+} je_audio_oneshot_desc_t;
+
+/*
+je_audio_oneshot_play [基本接口]
+按描述播放一次性音频
+    * 播放期间声部持有缓冲区引用，直到播放结束或声部被回收
+    * 当前没有可用播放设备时返回 false
+    * 其余情况返回 true
+*/
+JE_API bool je_audio_oneshot_play(const je_audio_oneshot_desc_t* desc);
 
 /*
 je_audio_effect_slot_create [基本接口]
@@ -764,8 +887,11 @@ typedef je_audio_native_buffer_instance_t je_AudioNativeBufferInstance;
 typedef je_audio_native_stream_instance_t je_AudioNativeStreamInstance;
 typedef je_audio_buffer_t je_AudioBuffer;
 typedef je_audio_native_source_instance_t je_AudioNativeSourceInstance;
+typedef je_audio_bus_t je_AudioBus;
 typedef je_audio_source_t je_AudioSource;
 typedef je_audio_listener_t je_AudioListener;
+typedef je_audio_distance_model_t je_AudioDistanceModel;
+typedef je_audio_oneshot_desc_t je_AudioOneshotDesc;
 typedef je_audio_native_effect_slot_instance_t je_AudioNativeEffectSlotInstance;
 typedef je_audio_effect_slot_t je_AudioEffectSlot;
 typedef je_audio_effect_reverb_t je_AudioEffectReverb;
@@ -984,6 +1110,39 @@ namespace jeecs
                 return _m_audio_buffer;
             }
         };
+        class bus
+        {
+            je_audio_bus_t* _m_bus;
+
+            bus(je_audio_bus_t* bus)
+                : _m_bus(bus)
+            {
+                assert(_m_bus != nullptr);
+            }
+
+        public:
+            inline static bus get(const std::string& name)
+            {
+                return bus(je_audio_bus_get(name.c_str()));
+            }
+
+            const char* name() const
+            {
+                return _m_bus->m_name;
+            }
+            float gain() const
+            {
+                return je_audio_bus_gain_get(_m_bus);
+            }
+            void set_gain(float gain)
+            {
+                je_audio_bus_gain_set(_m_bus, gain);
+            }
+            je_audio_bus_t* handle() const
+            {
+                return _m_bus;
+            }
+        };
         class source
         {
             JECS_DISABLE_MOVE_AND_COPY(source);
@@ -1049,6 +1208,10 @@ namespace jeecs
                     _m_audio_source,
                     filter.has_value() ? filter.value()->handle() : nullptr);
             }
+            void set_bus(/* OPTIONAL */ je_audio_bus_t* bus)
+            {
+                je_audio_source_bus_set(_m_audio_source, bus);
+            }
             void bind_effect_slot(
                 size_t pass,
                 const std::optional<basic::resource<effect_slot>>& slot,
@@ -1075,6 +1238,14 @@ namespace jeecs
                 je_audio_listener_update();
             }
         };
+        /*
+        jeecs::audio::play_oneshot [函数]
+        按描述播放一次性音频，播放结束后由引擎自动回收声部
+        */
+        inline bool play_oneshot(const je_audio_oneshot_desc_t& desc)
+        {
+            return je_audio_oneshot_play(&desc);
+        }
     }
 }
 #endif // __cplusplus

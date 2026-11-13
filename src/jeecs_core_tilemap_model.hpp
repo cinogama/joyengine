@@ -837,6 +837,11 @@ namespace jeecs
         const property_value* resolve_property(
             MapDocument* doc, int32_t layer, int32_t x, int32_t y, const std::string& name);
 
+        // 同上，但调用方须保证已对 doc 调用过 ensure_tilesets：逐格高频
+        // 查询（如音频遮挡的射线遍历）用，避免每格重复加锁。
+        const property_value* resolve_property_resolved(
+            MapDocument* doc, int32_t layer, int32_t x, int32_t y, const std::string& name);
+
         bool walkable_on(MapDocument* doc, int32_t layer, int32_t x, int32_t y);
 
         // ==================== 单元格渲染解析（唯一权威实现） ====================

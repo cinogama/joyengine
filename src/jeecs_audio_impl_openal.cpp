@@ -14,6 +14,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <deque>
+#include <cfloat>
 #include <mutex>
 #include <shared_mutex>
 #include <chrono>
@@ -310,6 +312,9 @@ namespace jeecs::audio
 constexpr size_t STREAMING_CHUNK_COUNT = 4;
 constexpr size_t STREAMING_CHUNK_DIVISOR = 4;
 
+// 一次性声部上限：超出后回收最早创建的声部，避免事件音无限占用声源。
+constexpr size_t MAX_ONESHOT_VOICES = 32;
+
 struct je_audio_native_buffer_instance_t
 {
     ALuint m_buffer_id;
@@ -455,6 +460,15 @@ namespace jeecs::audio
             unordered_set<je_audio_effect_slot_t*> m_effect_slots;
             mutex m_filters_mx; // g5
             unordered_set<je_audio_filter_t*> m_filters;
+
+            // 命名音量总线（叶锁，进程内唯一且永久存活）：不参与设备的
+            // dump/restore，增益读写与声源增益重提交由 g1 保护。
+            mutex m_buses_mx; // g6
+            unordered_map<string, je_audio_bus_t*> m_buses;
+
+            // 一次性声部队列（叶锁）：只保护队列本身，回收/关源在锁外进行。
+            mutex m_oneshot_mx;
+            deque<je_audio_source_t*> m_oneshot_voices;
 
             je_audio_listener_t m_listener;
 
@@ -885,6 +899,9 @@ namespace jeecs::audio
                 m_current_play_device.emplace(device);
                 try_restore_playing_states();
                 device->m_active = true;
+
+                // 新上下文需要重新应用监听者状态（距离模型/多普勒含在内）
+                update_listener_lockfree();
             }
 
             void update_enumed_play_devices(vector<je_audio_play_device_t>&& new_opened_devices)
@@ -1241,12 +1258,41 @@ namespace jeecs::audio
                     source->m_source_instance->m_source_id,
                     AL_LOOPING,
                     (source->m_loop && !streaming_playing) ? AL_TRUE : AL_FALSE);
-                alSourcef(source->m_source_instance->m_source_id, AL_GAIN, source->m_gain);
+
+                // 总线是声源之后、监听者之前的增益乘数
+                const float bus_gain =
+                    source->m_bus != nullptr ? source->m_bus->m_gain : 1.0f;
+
+                alSourcef(source->m_source_instance->m_source_id, AL_GAIN,
+                    source->m_gain * bus_gain);
                 alSourcef(source->m_source_instance->m_source_id, AL_PITCH, source->m_pitch);
                 alSource3f(source->m_source_instance->m_source_id, AL_POSITION,
                     source->m_location[0], source->m_location[1], -source->m_location[2]);
                 alSource3f(source->m_source_instance->m_source_id, AL_VELOCITY,
                     source->m_velocity[0], source->m_velocity[1], -source->m_velocity[2]);
+
+                alSourcei(source->m_source_instance->m_source_id, AL_SOURCE_RELATIVE,
+                    source->m_relative ? AL_TRUE : AL_FALSE);
+
+                alSourcef(source->m_source_instance->m_source_id,
+                    AL_REFERENCE_DISTANCE, source->m_reference_distance);
+                alSourcef(source->m_source_instance->m_source_id,
+                    AL_MAX_DISTANCE, source->m_max_distance);
+                alSourcef(source->m_source_instance->m_source_id,
+                    AL_ROLLOFF_FACTOR, source->m_rolloff);
+                alSourcef(source->m_source_instance->m_source_id,
+                    AL_MIN_GAIN, source->m_min_gain);
+                alSourcef(source->m_source_instance->m_source_id,
+                    AL_MAX_GAIN, source->m_max_gain);
+
+                alSource3f(source->m_source_instance->m_source_id, AL_DIRECTION,
+                    source->m_direction[0], source->m_direction[1], -source->m_direction[2]);
+                alSourcef(source->m_source_instance->m_source_id,
+                    AL_CONE_INNER_ANGLE, source->m_cone_inner_angle);
+                alSourcef(source->m_source_instance->m_source_id,
+                    AL_CONE_OUTER_ANGLE, source->m_cone_outer_angle);
+                alSourcef(source->m_source_instance->m_source_id,
+                    AL_CONE_OUTER_GAIN, source->m_cone_outer_gain);
 
                 if (source->m_source_instance->m_dump.has_value())
                 {
@@ -1524,6 +1570,55 @@ namespace jeecs::audio
                         continue;
 
                     service_streaming_source(source, instance);
+                }
+            }
+
+            // 一次性声部是否已经播放结束；调用方持有 g2/g1 与共享 g0。
+            static bool is_oneshot_finished(je_audio_source_t* source)
+            {
+                auto* instance = source->m_source_instance;
+                if (instance == nullptr)
+                    // 无设备期间处于转储状态，恢复后由 dump 流程继续，
+                    // 此处不回收
+                    return false;
+
+                if (!instance->m_playing_buffer.has_value())
+                    return true;
+
+                if (instance->m_playing_buffer.value()->m_streaming)
+                    return !instance->m_streaming_state.m_should_play;
+
+                ALint play_state;
+                alGetSourcei(instance->m_source_id, AL_SOURCE_STATE, &play_state);
+
+                return play_state == AL_STOPPED || play_state == AL_INITIAL;
+            }
+
+            // 回收已经结束的一次性声部；调用方持有 g2/g1 与共享 g0。
+            // 队列本身由叶锁保护，关源在当前持锁区间内完成。
+            void service_oneshot_sources()
+            {
+                vector<je_audio_source_t*> finished;
+                {
+                    lock_guard oneshot_lock(m_oneshot_mx);
+
+                    for (auto it = m_oneshot_voices.begin();
+                        it != m_oneshot_voices.end();)
+                    {
+                        if (is_oneshot_finished(*it))
+                        {
+                            finished.push_back(*it);
+                            it = m_oneshot_voices.erase(it);
+                        }
+                        else
+                            ++it;
+                    }
+                }
+
+                for (auto* source : finished)
+                {
+                    m_sources.erase(source);
+                    shutdown_source(source);
                 }
             }
 
@@ -2407,6 +2502,23 @@ namespace jeecs::audio
                 source->m_velocity[1] = 0.0f;
                 source->m_velocity[2] = 0.0f;
 
+                source->m_reference_distance = 1.0f;
+                source->m_max_distance = FLT_MAX;
+                source->m_rolloff = 1.0f;
+                source->m_min_gain = 0.0f;
+                source->m_max_gain = 1.0f;
+
+                source->m_relative = false;
+
+                source->m_direction[0] = 0.0f;
+                source->m_direction[1] = 0.0f;
+                source->m_direction[2] = 1.0f;
+                source->m_cone_inner_angle = 360.0f;
+                source->m_cone_outer_angle = 360.0f;
+                source->m_cone_outer_gain = 0.0f;
+
+                source->m_bus = nullptr;
+
                 lock_guard g1(m_sources_mx);  // g1
                 shared_lock g0(m_context_mx); // g0
 
@@ -2544,6 +2656,136 @@ namespace jeecs::audio
 
                     break;
                 }
+            }
+            je_audio_bus_t* get_or_create_bus(const char* name)
+            {
+                assert(name != nullptr);
+
+                lock_guard g6(m_buses_mx); // g6
+
+                auto fnd = m_buses.find(name);
+                if (fnd != m_buses.end())
+                    return fnd->second;
+
+                auto* bus = new je_audio_bus_t;
+                bus->m_name = strdup(name);
+                bus->m_gain = 1.0f;
+
+                m_buses.emplace(name, bus);
+                return bus;
+            }
+            float get_bus_gain(const je_audio_bus_t* bus)
+            {
+                assert(bus != nullptr);
+
+                lock_guard g1(m_sources_mx); // g1
+                return bus->m_gain;
+            }
+            void set_bus_gain(je_audio_bus_t* bus, float gain)
+            {
+                assert(bus != nullptr);
+
+                lock_guard g1(m_sources_mx);  // g1
+                shared_lock g0(m_context_mx); // g0
+
+                bus->m_gain = gain;
+
+                for (auto* source : m_sources)
+                    if (source->m_bus == bus)
+                        update_source_lockfree(source);
+            }
+            void set_source_bus(je_audio_source_t* source, je_audio_bus_t* bus_may_null)
+            {
+                assert(source != nullptr);
+
+                lock_guard g1(m_sources_mx);  // g1
+                shared_lock g0(m_context_mx); // g0
+
+                source->m_bus = bus_may_null;
+                update_source_lockfree(source);
+            }
+            bool play_oneshot(const je_audio_oneshot_desc_t* desc)
+            {
+                assert(desc != nullptr);
+                assert(desc->m_buffer != nullptr);
+
+                {
+                    shared_lock g0(m_context_mx); // g0
+                    if (!m_current_play_device.has_value())
+                        return false;
+                }
+
+                // 声部数量到达上限时回收最早创建的声部；关闭在队列锁外进行。
+                je_audio_source_t* evicted = nullptr;
+                {
+                    lock_guard oneshot_lock(m_oneshot_mx);
+                    if (m_oneshot_voices.size() >= MAX_ONESHOT_VOICES)
+                    {
+                        evicted = m_oneshot_voices.front();
+                        m_oneshot_voices.pop_front();
+                    }
+                }
+                if (evicted != nullptr)
+                    close_source(evicted);
+
+                auto* source = create_source();
+
+                (void)set_source_buffer(source, desc->m_buffer);
+
+                {
+                    lock_guard g2(m_buffers_mx);  // g2
+                    lock_guard g1(m_sources_mx);  // g1
+                    shared_lock g0(m_context_mx); // g0
+
+                    source->m_loop = false;
+                    source->m_gain = desc->m_gain;
+                    source->m_pitch = desc->m_pitch;
+
+                    if (desc->m_spatial)
+                    {
+                        source->m_location[0] = desc->m_location[0];
+                        source->m_location[1] = desc->m_location[1];
+                        source->m_location[2] = desc->m_location[2];
+                        source->m_relative = false;
+                    }
+                    else
+                    {
+                        source->m_location[0] = 0.0f;
+                        source->m_location[1] = 0.0f;
+                        source->m_location[2] = 0.0f;
+                        source->m_relative = true;
+                    }
+
+                    source->m_reference_distance = desc->m_reference_distance;
+                    source->m_max_distance = desc->m_max_distance;
+                    source->m_rolloff = desc->m_rolloff;
+
+                    source->m_bus = desc->m_bus;
+
+                    update_source_lockfree(source);
+                }
+
+                if (desc->m_lowpass_hf < 1.0f)
+                {
+                    auto* filter = create_filter();
+                    filter->m_gain_hf =
+                        desc->m_lowpass_hf < 0.0f ? 0.0f : desc->m_lowpass_hf;
+
+                    update_filter(filter);
+                    set_source_filter(source, filter);
+
+                    // 声源已持有一份引用
+                    close_filter(filter);
+                }
+
+                play_source(source);
+
+                {
+                    lock_guard oneshot_lock(m_oneshot_mx);
+                    m_oneshot_voices.push_back(source);
+                }
+
+                return true;
             }
             bool set_source_buffer(je_audio_source_t* source, const je_audio_buffer_t* buffer)
             {
@@ -3009,12 +3251,34 @@ namespace jeecs::audio
                 }
             }
 
-            void update_listener()
+            static ALenum to_al_distance_model(je_audio_distance_model_t model)
             {
-                shared_lock g0(m_context_mx); // g0
-
+                switch (model)
+                {
+                case JE_AUDIO_DISTANCE_MODEL_NONE:
+                    return AL_NONE;
+                case JE_AUDIO_DISTANCE_MODEL_INVERSE:
+                    return AL_INVERSE_DISTANCE;
+                case JE_AUDIO_DISTANCE_MODEL_INVERSE_CLAMPED:
+                    return AL_INVERSE_DISTANCE_CLAMPED;
+                case JE_AUDIO_DISTANCE_MODEL_LINEAR:
+                    return AL_LINEAR_DISTANCE;
+                case JE_AUDIO_DISTANCE_MODEL_LINEAR_CLAMPED:
+                    return AL_LINEAR_DISTANCE_CLAMPED;
+                case JE_AUDIO_DISTANCE_MODEL_EXPONENT:
+                    return AL_EXPONENT_DISTANCE;
+                case JE_AUDIO_DISTANCE_MODEL_EXPONENT_CLAMPED:
+                    return AL_EXPONENT_DISTANCE_CLAMPED;
+                }
+                return AL_INVERSE_DISTANCE_CLAMPED;
+            }
+            void update_listener_lockfree()
+            {
                 if (m_current_play_device.has_value())
                 {
+                    alDistanceModel(to_al_distance_model(m_listener.m_distance_model));
+                    alDopplerFactor(m_listener.m_doppler_factor);
+
                     alListenerf(AL_GAIN,
                         m_listener.m_gain * m_listener.m_global_gain);
                     alListener3f(AL_POSITION,
@@ -3036,6 +3300,12 @@ namespace jeecs::audio
                     };
                     alListenerfv(AL_ORIENTATION, orientation);
                 }
+            }
+            void update_listener()
+            {
+                shared_lock g0(m_context_mx); // g0
+
+                update_listener_lockfree();
             }
             je_audio_listener_t* get_listener()
             {
@@ -3112,8 +3382,12 @@ namespace jeecs::audio
                         }
 
                         if (!need_update_device)
-                            // 保持 g2 -> g1 -> g0 的锁序补流式块。
+                        {
+                            // 保持 g2 -> g1 -> g0 的锁序补流式块并回收
+                            // 已结束的一次性声部。
                             service_streaming_sources();
+                            service_oneshot_sources();
+                        }
                     }
 
                     if (need_update_device)
@@ -3158,6 +3432,8 @@ namespace jeecs::audio
                 m_listener.m_upward[0] = 0.0f;
                 m_listener.m_upward[1] = 1.0f;
                 m_listener.m_upward[2] = 0.0f;
+                m_listener.m_distance_model = JE_AUDIO_DISTANCE_MODEL_LINEAR_CLAMPED;
+                m_listener.m_doppler_factor = 1.0f;
 
                 refetch_and_update_enumed_play_devices();
 
@@ -3188,6 +3464,13 @@ namespace jeecs::audio
 
                 for (auto* slot : m_effect_slots)
                     shutdown_effect_slot(slot);
+
+                for (auto& [_, bus] : m_buses)
+                {
+                    free((void*)bus->m_name);
+                    delete bus;
+                }
+                m_buses.clear();
             }
         };
 
@@ -3492,6 +3775,13 @@ void je_audio_source_filter_set(je_audio_source_t* source, /* OPTIONAL */ je_aud
     g_engine_audio_context->set_source_filter(source, filter_may_null);
 }
 
+void je_audio_source_bus_set(je_audio_source_t* source, /* OPTIONAL */ je_audio_bus_t* bus_may_null)
+{
+    assert(g_engine_audio_context != nullptr);
+
+    g_engine_audio_context->set_source_bus(source, bus_may_null);
+}
+
 void je_audio_source_play(je_audio_source_t* source)
 {
     assert(g_engine_audio_context != nullptr);
@@ -3539,6 +3829,35 @@ void je_audio_listener_update()
     assert(g_engine_audio_context != nullptr);
 
     g_engine_audio_context->update_listener();
+}
+
+je_audio_bus_t* je_audio_bus_get(const char* name)
+{
+    assert(g_engine_audio_context != nullptr);
+    assert(name != nullptr);
+
+    return g_engine_audio_context->get_or_create_bus(name);
+}
+
+float je_audio_bus_gain_get(const je_audio_bus_t* bus)
+{
+    assert(g_engine_audio_context != nullptr);
+
+    return g_engine_audio_context->get_bus_gain(bus);
+}
+
+void je_audio_bus_gain_set(je_audio_bus_t* bus, float gain)
+{
+    assert(g_engine_audio_context != nullptr);
+
+    g_engine_audio_context->set_bus_gain(bus, gain);
+}
+
+bool je_audio_oneshot_play(const je_audio_oneshot_desc_t* desc)
+{
+    assert(g_engine_audio_context != nullptr);
+
+    return g_engine_audio_context->play_oneshot(desc);
 }
 
 je_audio_filter_t* je_audio_filter_create()

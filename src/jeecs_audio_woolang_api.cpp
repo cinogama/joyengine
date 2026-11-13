@@ -144,7 +144,7 @@ WOORT_API woort_api wojeapi_audio_source_info(void)
     basic::resource<audio::source>* source =
         static_cast<basic::resource<audio::source> *>(woort_gcpointer(0));
 
-    woort_set_struct(WOORT_RETURN_SLOT, 5);
+    woort_set_struct(WOORT_RETURN_SLOT, 15);
 
     auto* source_instance = (*source)->handle();
 
@@ -165,6 +165,24 @@ WOORT_API woort_api wojeapi_audio_source_info(void)
         woort_struct_set_float(elem, i, source_instance->m_velocity[i]);
     }
     woort_struct_set(WOORT_RETURN_SLOT, 4, elem);
+
+    woort_struct_set_float(WOORT_RETURN_SLOT, 5, source_instance->m_reference_distance);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 6, source_instance->m_max_distance);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 7, source_instance->m_rolloff);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 8, source_instance->m_min_gain);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 9, source_instance->m_max_gain);
+    woort_struct_set_bool(WOORT_RETURN_SLOT, 10, source_instance->m_relative);
+
+    woort_set_struct(elem, 3);
+    for (uint16_t i = 0; i < 3; ++i)
+    {
+        woort_struct_set_float(elem, i, source_instance->m_direction[i]);
+    }
+    woort_struct_set(WOORT_RETURN_SLOT, 11, elem);
+
+    woort_struct_set_float(WOORT_RETURN_SLOT, 12, source_instance->m_cone_inner_angle);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 13, source_instance->m_cone_outer_angle);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 14, source_instance->m_cone_outer_gain);
 
     return woort_ret();
 }
@@ -195,6 +213,24 @@ WOORT_API woort_api wojeapi_audio_source_update(void)
                 src->m_velocity[i] =
                     woort_struct_get_float(WOORT_RETURN_SLOT, i);
             }
+
+            src->m_reference_distance = woort_struct_get_float(updated_info, 5);
+            src->m_max_distance = woort_struct_get_float(updated_info, 6);
+            src->m_rolloff = woort_struct_get_float(updated_info, 7);
+            src->m_min_gain = woort_struct_get_float(updated_info, 8);
+            src->m_max_gain = woort_struct_get_float(updated_info, 9);
+            src->m_relative = woort_struct_get_bool(updated_info, 10);
+
+            woort_struct_get(WOORT_RETURN_SLOT, updated_info, 11);
+            for (uint16_t i = 0; i < 3; ++i)
+            {
+                src->m_direction[i] =
+                    woort_struct_get_float(WOORT_RETURN_SLOT, i);
+            }
+
+            src->m_cone_inner_angle = woort_struct_get_float(updated_info, 12);
+            src->m_cone_outer_angle = woort_struct_get_float(updated_info, 13);
+            src->m_cone_outer_gain = woort_struct_get_float(updated_info, 14);
         });
 
     return woort_ret_void();
@@ -258,6 +294,26 @@ WOORT_API woort_api wojeapi_audio_source_set_filter(void)
     (*source)->set_filter(filter);
 
     return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_audio_source_set_bus(void)
+{
+    basic::resource<audio::source>* source =
+        static_cast<basic::resource<audio::source> *>(woort_gcpointer(0));
+
+    const char* bus_name = woort_string(1);
+    (*source)->set_bus(*bus_name == '\0' ? nullptr : je_audio_bus_get(bus_name));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_audio_source_get_bus(void)
+{
+    basic::resource<audio::source>* source =
+        static_cast<basic::resource<audio::source> *>(woort_gcpointer(0));
+
+    auto* bus = (*source)->handle()->m_bus;
+    return woort_ret_string(bus != nullptr ? bus->m_name : "");
 }
 
 WOORT_API woort_api wojeapi_audio_source_bind_effect_slot_and_filter(void)
@@ -326,7 +382,7 @@ WOORT_API woort_api wojeapi_audio_listener_info(void)
 
     auto* listener_instance = je_audio_listener_get();
 
-    woort_set_struct(result, 6);
+    woort_set_struct(result, 8);
 
     woort_struct_set_float(result, 0, listener_instance->m_gain);
     woort_struct_set_float(result, 1, listener_instance->m_global_gain);
@@ -358,6 +414,9 @@ WOORT_API woort_api wojeapi_audio_listener_info(void)
         woort_struct_set_float(elem, i, listener_instance->m_upward[i]);
     }
     woort_struct_set(result, 5, elem);
+
+    woort_struct_set_int(result, 6, (woort_Int)listener_instance->m_distance_model);
+    woort_struct_set_float(result, 7, listener_instance->m_doppler_factor);
 
     return woort_ret_value(result);
 }
@@ -395,9 +454,60 @@ WOORT_API woort_api wojeapi_audio_listener_update(void)
             {
                 lstn->m_upward[i] = woort_struct_get_float(WOORT_RETURN_SLOT, i);
             }
+
+            lstn->m_distance_model =
+                (je_audio_distance_model_t)woort_struct_get_int(updated_info, 6);
+            lstn->m_doppler_factor = woort_struct_get_float(updated_info, 7);
         });
 
     return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_audio_bus_gain_get(void)
+{
+    je_audio_bus_t* bus = je_audio_bus_get(woort_string(0));
+
+    return woort_ret_real(je_audio_bus_gain_get(bus));
+}
+
+WOORT_API woort_api wojeapi_audio_bus_gain_set(void)
+{
+    je_audio_bus_t* bus = je_audio_bus_get(woort_string(0));
+    je_audio_bus_gain_set(bus, (float)woort_real(1));
+
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_audio_oneshot_play(void)
+{
+    basic::resource<audio::buffer>* buffer =
+        static_cast<basic::resource<audio::buffer> *>(woort_gcpointer(0));
+
+    const woort_value desc_value = 1;
+
+    je_audio_oneshot_desc_t desc;
+
+    desc.m_buffer = (*buffer)->handle();
+
+    desc.m_spatial = woort_struct_get_bool(desc_value, 0);
+
+    woort_struct_get(WOORT_RETURN_SLOT, desc_value, 1);
+    for (uint16_t i = 0; i < 3; ++i)
+    {
+        desc.m_location[i] = woort_struct_get_float(WOORT_RETURN_SLOT, i);
+    }
+
+    desc.m_gain = woort_struct_get_float(desc_value, 2);
+    desc.m_pitch = woort_struct_get_float(desc_value, 3);
+    desc.m_reference_distance = woort_struct_get_float(desc_value, 4);
+    desc.m_max_distance = woort_struct_get_float(desc_value, 5);
+    desc.m_rolloff = woort_struct_get_float(desc_value, 6);
+    desc.m_lowpass_hf = woort_struct_get_float(desc_value, 7);
+
+    const char* bus_name = woort_string(2);
+    desc.m_bus = *bus_name == '\0' ? nullptr : je_audio_bus_get(bus_name);
+
+    return woort_ret_bool(je_audio_oneshot_play(&desc));
 }
 
 enum class woolang_je_audio_effect_kind

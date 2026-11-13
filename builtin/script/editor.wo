@@ -927,3 +927,23 @@ namespace Particle::Emitter::simulation_space_type
         }
     }
 }
+
+namespace Audio::Listener::distance_model
+{
+    using parser = void
+    {
+        public extern func edit(val: Audio::Listener::distance_model, tag: string)=> option<Audio::Listener::distance_model>
+        {
+            // 距离衰减模型下拉（枚举值与选项下标一致）
+            match (Combo(F"##{tag}",
+                ["无衰减", "反比", "反比（钳制）", "线性", "线性（钳制）", "指数", "指数（钳制）"],
+                option::value(val as int)))
+            {
+                value(idx)?
+                    return option::value(idx as Audio::Listener::distance_model);
+                none?;
+            }
+            return option::none;
+        }
+    }
+}

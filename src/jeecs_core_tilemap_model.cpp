@@ -1346,6 +1346,14 @@ namespace jeecs
                 return nullptr;
             // API 直调时无系统代管图集解析，此处兜底（幂等）
             documents::inst().ensure_tilesets(*doc);
+
+            return resolve_property_resolved(doc, layer, x, y, name);
+        }
+        const property_value* resolve_property_resolved(
+            MapDocument* doc, int32_t layer, int32_t x, int32_t y, const std::string& name)
+        {
+            if (doc == nullptr || !doc->in_bounds(layer, x, y))
+                return nullptr;
             // 1. 逐格覆盖
             auto cit = doc->cell_properties.find({ layer, x + y * doc->width });
             if (cit != doc->cell_properties.end())

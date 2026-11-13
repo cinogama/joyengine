@@ -356,6 +356,19 @@ namespace je
                 public pitch: mut real,
                 public location: mut(real, real, real),
                 public velocity: mut(real, real, real),
+                // 距离衰减（仅对非 relative 声源生效）
+                public reference_distance: mut real,
+                public max_distance: mut real,
+                public rolloff: mut real,
+                public min_gain: mut real,
+                public max_gain: mut real,
+                // true = 位置相对听众，不受距离衰减影响
+                public relative: mut bool,
+                // 定向声源锥形参数；内外角默认 360°
+                public direction: mut(real, real, real),
+                public cone_inner_angle: mut real,
+                public cone_outer_angle: mut real,
+                public cone_outer_gain: mut real,
             };
             
             extern("libjoyecs", "wojeapi_audio_source_create")
@@ -406,9 +419,27 @@ namespace je
             extern("libjoyecs", "wojeapi_audio_source_bind_effect_slot_and_filter")
                 public func bind_effect_slot_and_filter(
                     self: source, effect_slot: option<effect_slot>, filter: option<filter>, pass: int)=> void;
+
+            // 设置声源所属的音量总线；空字符串 = 不经过总线
+            extern("libjoyecs", "wojeapi_audio_source_set_bus")
+                public func set_bus(self: source, bus: string)=> void;
+
+            extern("libjoyecs", "wojeapi_audio_source_get_bus")
+                public func get_bus(self: source)=> string;
         }
         namespace listener
         {
+            public enum distance_model
+            {
+                NONE = 0,
+                INVERSE,
+                INVERSE_CLAMPED,
+                LINEAR,
+                LINEAR_CLAMPED,
+                EXPONENT,
+                EXPONENT_CLAMPED,
+            }
+
             using listener_data_t = struct{
                 public gain: mut real,
                 public global_gain: mut real,
@@ -416,6 +447,8 @@ namespace je
                 public velocity: mut (real, real, real),
                 public forward: mut (real, real, real),
                 public upward: mut (real, real, real),
+                public distance_model: mut distance_model,
+                public doppler_factor: mut real,
             };
             
             extern("libjoyecs", "wojeapi_audio_listener_info")
@@ -430,6 +463,80 @@ namespace je
                 f(i);
                 _update(i);
             }
+        }
+
+        // ==================== 音量总线 ====================
+        // 按名称分组（如 SFX/BGM/UI）调音量；声源的最终增益为
+        // 声源增益 × 总线增益 × 监听者增益。读取不存在的总线会按 1.0 创建。
+        namespace bus
+        {
+            extern("libjoyecs", "wojeapi_audio_bus_gain_get")
+                public func gain(name: string)=> real;
+
+            extern("libjoyecs", "wojeapi_audio_bus_gain_set")
+                public func set_gain(name: string, gain: real)=> void;
+        }
+
+        // ==================== 一次性播放 ====================
+        // 适合脚步、金币、弹壳等事件音：不需要实体或声源句柄，播放结束
+        // 后由引擎回收（同时最多 32 个，超出时回收最早的）。
+        using oneshot_desc_t = struct{
+            public spatial: mut bool,
+            public location: mut(real, real, real),
+            public gain: mut real,
+            public pitch: mut real,
+            public reference_distance: mut real,
+            public max_distance: mut real,
+            public rolloff: mut real,
+            // 1.0 = 不闷音；<1 时自动挂低通滤波器
+            public lowpass_hf: mut real,
+        };
+
+        public func oneshot_desc()=> oneshot_desc_t
+        {
+            return oneshot_desc_t{
+                spatial = mut true,
+                location = mut (0., 0., 0.),
+                gain = mut 1.,
+                pitch = mut 1.,
+                reference_distance = mut 1.,
+                max_distance = mut 32.,
+                rolloff = mut 1.,
+                lowpass_hf = mut 1.,
+            };
+        }
+
+        extern("libjoyecs", "wojeapi_audio_oneshot_play")
+            func _play_oneshot(buffer: buffer, desc: oneshot_desc_t, bus: string)=> bool;
+
+        // 完整控制：bus 为空字符串时不经过总线
+        public func play_once_with(buffer: buffer, desc: oneshot_desc_t, bus: string)=> bool
+        {
+            return _play_oneshot(buffer, desc, bus);
+        }
+
+        // 非空间化（相对听众），适合 UI / 环境声
+        public func play_once(buffer: buffer)=> bool
+        {
+            let mut desc = oneshot_desc();
+            desc.spatial = false;
+            return _play_oneshot(buffer, desc, "SFX");
+        }
+
+        // 2D 位置播放（z=0），默认使用 SFX 总线
+        public func play_once_at(buffer: buffer, x: real, y: real)=> bool
+        {
+            let mut desc = oneshot_desc();
+            desc.location = (x, y, 0.);
+            return _play_oneshot(buffer, desc, "SFX");
+        }
+
+        // 3D 位置播放
+        public func play_once_at_3d(buffer: buffer, x: real, y: real, z: real)=> bool
+        {
+            let mut desc = oneshot_desc();
+            desc.location = (x, y, z);
+            return _play_oneshot(buffer, desc, "SFX");
         }
     }
 }

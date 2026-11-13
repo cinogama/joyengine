@@ -2013,22 +2013,22 @@ WOORT_API woort_api wojeapi_animation_events(void)
     return woort_ret_value(out_array);
 }
 
-WOORT_API woort_api wojeapi_towoo_audio_playing_set_buffer(void)
+WOORT_API woort_api wojeapi_towoo_audio_source_set_buffer(void)
 {
-    auto& playing = wo_component<Audio::Playing>(0, WOORT_RETURN_SLOT);
+    auto& source = wo_component<Audio::Source>(0, WOORT_RETURN_SLOT);
 
     auto* buf =
         static_cast<basic::resource<audio::buffer>*>(woort_gcpointer(1));
-    playing.set_buffer(*buf);
+    source.set_buffer(*buf);
 
     return woort_ret_void();
 }
 
-WOORT_API woort_api wojeapi_towoo_audio_playing_get_buffer(void)
+WOORT_API woort_api wojeapi_towoo_audio_source_get_buffer(void)
 {
-    auto& playing = wo_component<Audio::Playing>(0, WOORT_RETURN_SLOT);
+    auto& source = wo_component<Audio::Source>(0, WOORT_RETURN_SLOT);
 
-    auto res = playing.buffer.get_resource();
+    auto res = source.buffer.get_resource();
     if (res.has_value())
     {
         return woort_ret_option_gchandle(
@@ -2050,6 +2050,38 @@ WOORT_API woort_api wojeapi_towoo_audio_source_get_source(void)
         [](void* p)
         { delete static_cast<basic::resource<audio::source>*>(p); },
         nullptr);
+}
+
+WOORT_API woort_api wojeapi_towoo_audio_source_play_oneshot(void)
+{
+    auto& source = wo_component<Audio::Source>(0, WOORT_RETURN_SLOT);
+
+    auto* buf =
+        static_cast<basic::resource<audio::buffer>*>(woort_gcpointer(1));
+
+    je_audio_oneshot_desc_t desc;
+
+    desc.m_buffer = (*buf)->handle();
+
+    // 系统尚未跑过第一帧时总线句柄可能尚未解析，这里按名称兜底
+    desc.m_bus = source.bus_handle;
+    if (desc.m_bus == nullptr && source.bus.c_str()[0] != '\0')
+        desc.m_bus = je_audio_bus_get(source.bus.c_str());
+
+    desc.m_spatial = source.spatial_active;
+
+    desc.m_location[0] = source.last_world_position.x;
+    desc.m_location[1] = source.last_world_position.y;
+    desc.m_location[2] = source.last_world_position.z;
+
+    desc.m_gain = source.volume * source.current_occlusion_gain;
+    desc.m_pitch = source.pitch;
+    desc.m_reference_distance = source.reference_distance;
+    desc.m_max_distance = source.max_distance;
+    desc.m_rolloff = source.rolloff;
+    desc.m_lowpass_hf = source.current_occlusion_hf;
+
+    return woort_ret_bool(je_audio_oneshot_play(&desc));
 }
 
 // 解析 UI 元素矩形；未挂 WorldLayout 时按根元素回退（anchor 相对显示区解析）。

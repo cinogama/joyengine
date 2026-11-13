@@ -30,6 +30,11 @@ struct je_audio_listener_t {
     float m_velocity[3]; // 监听器自身速度（非播放速度）
     float m_forward[3];  // 监听器朝向（前方向）
     float m_upward[3];   // 监听器朝向（顶方向）
+
+    // 距离模型，默认 LINEAR_CLAMPED
+    je_audio_distance_model_t m_distance_model;
+    // 多普勒系数，默认 1.0；0 = 关闭
+    float m_doppler_factor;
 };
 ```
 

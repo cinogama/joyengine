@@ -1373,6 +1373,36 @@ namespace JEEditor::Editor::TilemapEditor
                     none?;
                 }
 
+                // 音频遮挡使用两个保留浮点属性（默认不存在 = 不遮挡），
+                // 由音频系统在听众→声源的射线穿过的格子上累乘。
+                do SeparatorText("音频遮挡");
+                let occ = ts_id->get_tile_property_real(
+                    tid, "audio_occlusion")->or(0.);
+                match (SliderFloat(
+                        "遮挡##tile_audio_occlusion", occ, 0., 1.))
+                {
+                    value(v)?
+                        do batch_set_prop_real(state, ts_id, ids,
+                            "audio_occlusion", option::value(v));
+                    none?;
+                }
+                if (IsItemHovered())
+                    do SetTooltip("瓦片对声音的遮挡：0 = 不遮挡，1 = 完全隔音；"
+                        + "属性未设置时按 0 处理，可框选批量设置");
+                let muffle = ts_id->get_tile_property_real(
+                    tid, "audio_muffle")->or(0.);
+                match (SliderFloat(
+                        "闷音##tile_audio_muffle", muffle, 0., 1.))
+                {
+                    value(v)?
+                        do batch_set_prop_real(state, ts_id, ids,
+                            "audio_muffle", option::value(v));
+                    none?;
+                }
+                if (IsItemHovered())
+                    do SetTooltip("遮挡时压制高频：0 = 不闷音，1 = 完全失去高频；"
+                        + "属性未设置时按 0 处理");
+
                 do SeparatorText("法线");
                 let (nx, ny, nz) = ts_id->tile_normal(tid);
 

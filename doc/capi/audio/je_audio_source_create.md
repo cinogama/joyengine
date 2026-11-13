@@ -25,11 +25,28 @@ JE_API je_audio_source_t* je_audio_source_create();
 ```cpp
 struct je_audio_source_t {
     je_audio_native_source_instance_t* m_source_instance;
-    bool m_loop;         // 是否循环播放
-    float m_gain;        // 音量增益
-    float m_pitch;       // 播放速度
+    bool m_loop;         // 是否循环播放，默认 false
+    float m_gain;        // 音量增益，默认 1.0
+    float m_pitch;       // 播放速度，默认 1.0
     float m_location[3]; // 声音位置
     float m_velocity[3]; // 声源自身速度（非播放速度）
+
+    // 距离衰减参数（仅对非 relative 声源生效）
+    float m_reference_distance; // 参考距离，默认 1.0
+    float m_max_distance;       // 最大距离，默认 FLT_MAX
+    float m_rolloff;            // 衰减率，默认 1.0
+    float m_min_gain;           // 距离衰减下限，默认 0.0
+    float m_max_gain;           // 距离衰减上限，默认 1.0
+
+    bool m_relative;      // true = 相对监听者，默认 false
+
+    // 定向声源的锥形参数，默认内外角 360°（无方向性）
+    float m_direction[3];
+    float m_cone_inner_angle;
+    float m_cone_outer_angle;
+    float m_cone_outer_gain;
+
+    je_audio_bus_t* m_bus; // 所属音量总线，nullptr = 不经过总线
 };
 ```
 

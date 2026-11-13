@@ -52,6 +52,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         typeinfo::load("Animation::AnimatorSystem")->unwrap;
     let PARTICLE_SYSTEM_TYPE =
         typeinfo::load("Particle::ParticleSystem")->unwrap;
+    let AUDIO_SYSTEM_TYPE =
+        typeinfo::load("Audio::AudioUpdatingSystem")->unwrap;
         
     // 确保世界中存在编辑器调试摄像机（带 Editor::Invisible 标记的透视摄像机），
     // 没有则创建默认的一个。调试摄像机是编辑器内部实体，不会随世界文件保存
@@ -109,6 +111,9 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 粒子系统与变换系统同为运行时系统：编辑态即模拟，便于在视口
         // 中实时预览与调参发射器
         do new_world->add_system(PARTICLE_SYSTEM_TYPE);
+        // 音频系统同样在编辑态模拟：世界里有 Audio::Listener 时即可听到
+        // 空间化音源，便于直接调整衰减/遮挡/混响参数
+        do new_world->add_system(AUDIO_SYSTEM_TYPE);
         
         // Create editor camera.
         ensureDebugCamera(new_world);

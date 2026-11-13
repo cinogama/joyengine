@@ -103,7 +103,8 @@ namespace jeecs
 
             jeecs::typing::register_type<Audio::Source>(guard, "Audio::Source");
             jeecs::typing::register_type<Audio::Listener>(guard, "Audio::Listener");
-            jeecs::typing::register_type<Audio::Playing>(guard, "Audio::Playing");
+            jeecs::typing::register_type<Audio::Occluder>(guard, "Audio::Occluder");
+            jeecs::typing::register_type<Audio::ReverbZone>(guard, "Audio::ReverbZone");
 
             jeecs::typing::register_type<Input::VirtualGamepad>(guard, "Input::VirtualGamepad");
 
@@ -326,6 +327,31 @@ namespace jeecs
                 "    {\n"
                 "        world   = 0,\n"
                 "        local   = 1,\n"
+                "    }\n"
+                "}\n");
+
+            typing::register_script_parser<je_audio_distance_model_t>(
+                guard,
+                [](const je_audio_distance_model_t* v, woort_value value)
+                {
+                    woort_set_int(value, (woort_Int)*v);
+                },
+                [](je_audio_distance_model_t* v, woort_value value)
+                {
+                    *v = static_cast<je_audio_distance_model_t>(woort_int(value));
+                },
+                "Audio::Listener::distance_model",
+                "namespace Audio::Listener\n"
+                "{\n"
+                "    public enum distance_model\n"
+                "    {\n"
+                "        none              = 0,\n"
+                "        inverse           = 1,\n"
+                "        inverse_clamped   = 2,\n"
+                "        linear            = 3,\n"
+                "        linear_clamped    = 4,\n"
+                "        exponent          = 5,\n"
+                "        exponent_clamped  = 6,\n"
                 "    }\n"
                 "}\n");
 
