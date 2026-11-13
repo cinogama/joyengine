@@ -635,6 +635,18 @@ namespace je
                 public func set_tile_walkable(self: Tileset, tile_id: int,
                     walkable: int)=> void;
 
+            // ==================== 瓦片音频遮挡 ====================
+            // 瓦片内置的音频遮挡/闷音系数，默认 (0, 0) = 不遮挡/不闷音。
+            // 音频系统对听众→声源的射线穿过的格子累乘 (1 - 系数)。
+            // 返回 (occlusion, muffle)；id 无效时返回 (0, 0)。
+            extern("libjoyecs", "wojeapi_tilemap_tile_audio")
+                public func tile_audio(self: Tileset, tile_id: int)=> (real, real);
+
+            // 设置音频遮挡/闷音系数（夹取到 [0, 1]）；id 无效返回 false
+            extern("libjoyecs", "wojeapi_tilemap_set_tile_audio")
+                public func set_tile_audio(self: Tileset, tile_id: int,
+                    occlusion: real, muffle: real)=> bool;
+
             // ==================== 瓦片法线 ====================
             // 顶点法线（局部空间单位向量，参与地图网格顶点生成），默认
             // (0, 0, -1) 指向屏幕外侧（朝向摄像机）。自动拼接格整格共享

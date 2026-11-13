@@ -395,6 +395,13 @@ namespace JEEditor::Editor::TilemapEditor
             normal->push(nz);
             tile->set("normal", normal);
 
+            // 音频遮挡/闷音系数：默认 0，不写盘以保持稀疏
+            let (audio_occlusion, audio_muffle) = ts->tile_audio(tile_id);
+            if (audio_occlusion != 0.)
+                tile->set("audio_occlusion", audio_occlusion);
+            if (audio_muffle != 0.)
+                tile->set("audio_muffle", audio_muffle);
+
             let variant_count = ts->tile_variant_count(tile_id);
             if (variant_count > 0)
             {

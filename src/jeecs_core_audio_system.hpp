@@ -7,8 +7,32 @@
 #include "jeecs/components.hpp"
 #include "jeecs/game.hpp"
 
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 namespace jeecs::audio
 {
+    // 单张地图的平整化音频遮挡网格：按 map_stamp 失效，只有地图/图集
+    // 版本变化时才重建，射线查询只做数组索引。
+    struct audio_map_grid
+    {
+        uint64_t m_stamp;
+        int32_t m_width;
+        int32_t m_height;
+        std::vector<float> m_occlusion;
+        std::vector<float> m_muffle;
+
+        audio_map_grid()
+            : m_stamp(0)
+            , m_width(0)
+            , m_height(0)
+            , m_occlusion()
+            , m_muffle()
+        {
+        }
+    };
+
     struct AudioUpdatingSystem : game_system
     {
         AudioUpdatingSystem(game_world w);
@@ -26,5 +50,9 @@ namespace jeecs::audio
         uint64_t m_reverb_generation;
 
         std::optional<basic::resource<effect<je_audio_effect_reverb_t>>> m_reverb_effect;
-        std::optional<basic::resource<effect_slot>>                      m_reverb_slot;    };
+        std::optional<basic::resource<effect_slot>>                      m_reverb_slot;
+
+        // 地图路径 -> 音频遮挡网格（按 map_stamp 失效）
+        std::unordered_map<std::string, audio_map_grid> m_audio_maps;
+    };
 }

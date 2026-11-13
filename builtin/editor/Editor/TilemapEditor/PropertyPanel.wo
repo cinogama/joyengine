@@ -1,12 +1,12 @@
 // 瓦片地图编辑器 —— 属性面板。
 // 地图编辑器的页签：
 //   格子属性：悬停格子的属性取值链展示与逐格覆盖编辑；
-//   瓦片：选中瓦片的名称/通行性/法线/自动拼接类型/默认属性（写回图集
-//     文档；调色板框选多格时通行性/法线/自动拼接/默认属性批量应用）；
+//   瓦片：选中瓦片的名称/通行性/音频遮挡/法线/自动拼接类型/默认属性（写回图集
+//     文档；调色板框选多格时通行性/音频遮挡/法线/自动拼接/默认属性批量应用）；
 //   图层样式：活动图层的专属着色器、附加纹理通道与 uniform 变量；
 //   图集设置：地图的图集引用管理。
 // 图集编辑器的页签：
-//   瓦片：选中瓦片的名称/通行性/法线/自动拼接类型/默认属性（同上，
+//   瓦片：选中瓦片的名称/通行性/音频遮挡/法线/自动拼接类型/默认属性（同上，
 //     调色板拖动框选可批量设置）；
 //   图集设置：图集名称、源纹理（含附加层级）与属性 schema。
 
@@ -872,7 +872,7 @@ namespace JEEditor::Editor::TilemapEditor
     }
 
     // ===== 批量设置瓦片属性 =====
-    // 瓦片面板里的通行性/法线/自动拼接/默认属性对当前框选内的全部瓦片
+    // 瓦片面板里的通行性/音频遮挡/法线/自动拼接/默认属性对当前框选内的全部瓦片
     // 生效（图集编辑器里拖动框选，地图编辑器里即画笔块；无框选时退化为
     // 单块）。名称只写锚点瓦片——批量重名没有意义。
     //
@@ -918,6 +918,28 @@ namespace JEEditor::Editor::TilemapEditor
     {
         for (let tid : ids)
             do ts_id->set_tile_walkable(tid, walkable ? 1 | 0);
+        do note_tileset_edit(state, ts_id);
+    }
+    // 音频遮挡/闷音是瓦片内置系数；批量编辑时只改被拖动的那一项，
+    // 另一项保留各瓦片原值
+    func batch_set_audio_occlusion(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, occlusion: real)=> void
+    {
+        for (let tid : ids)
+        {
+            let (_, muffle) = ts_id->tile_audio(tid);
+            do ts_id->set_tile_audio(tid, occlusion, muffle);
+        }
+        do note_tileset_edit(state, ts_id);
+    }
+    func batch_set_audio_muffle(state: EditorState, ts_id: tilemap::Tileset,
+        ids: vec<int>, muffle: real)=> void
+    {
+        for (let tid : ids)
+        {
+            let (occlusion, _) = ts_id->tile_audio(tid);
+            do ts_id->set_tile_audio(tid, occlusion, muffle);
+        }
         do note_tileset_edit(state, ts_id);
     }
     func batch_set_kind(state: EditorState, ts_id: tilemap::Tileset,
@@ -1352,7 +1374,7 @@ namespace JEEditor::Editor::TilemapEditor
                 {
                     do TextColored((255, 196, 96, 255),
                         F"批量编辑：框选 {ids->len} 块瓦片");
-                    do TextDisabled("通行性/法线/自动拼接/默认属性应用到全部；名称只改锚点");
+                    do TextDisabled("通行性/音频遮挡/法线/自动拼接/默认属性应用到全部；名称只改锚点");
                 }
                 do Separator();
 
@@ -1373,35 +1395,30 @@ namespace JEEditor::Editor::TilemapEditor
                     none?;
                 }
 
-                // 音频遮挡使用两个保留浮点属性（默认不存在 = 不遮挡），
-                // 由音频系统在听众→声源的射线穿过的格子上累乘。
+                // 音频遮挡是瓦片内置系数（默认 0），与通行性一样属于
+                // 图集文档；音频系统按射线穿过的格子累乘。
                 do SeparatorText("音频遮挡");
-                let occ = ts_id->get_tile_property_real(
-                    tid, "audio_occlusion")->or(0.);
+                let (audio_occlusion, audio_muffle) = ts_id->tile_audio(tid);
                 match (SliderFloat(
-                        "遮挡##tile_audio_occlusion", occ, 0., 1.))
+                        "遮挡##tile_audio_occlusion", audio_occlusion, 0., 1.))
                 {
                     value(v)?
-                        do batch_set_prop_real(state, ts_id, ids,
-                            "audio_occlusion", option::value(v));
+                        do batch_set_audio_occlusion(state, ts_id, ids, v);
                     none?;
                 }
                 if (IsItemHovered())
                     do SetTooltip("瓦片对声音的遮挡：0 = 不遮挡，1 = 完全隔音；"
-                        + "属性未设置时按 0 处理，可框选批量设置");
-                let muffle = ts_id->get_tile_property_real(
-                    tid, "audio_muffle")->or(0.);
+                        + "默认不遮挡，可框选批量设置");
                 match (SliderFloat(
-                        "闷音##tile_audio_muffle", muffle, 0., 1.))
+                        "闷音##tile_audio_muffle", audio_muffle, 0., 1.))
                 {
                     value(v)?
-                        do batch_set_prop_real(state, ts_id, ids,
-                            "audio_muffle", option::value(v));
+                        do batch_set_audio_muffle(state, ts_id, ids, v);
                     none?;
                 }
                 if (IsItemHovered())
                     do SetTooltip("遮挡时压制高频：0 = 不闷音，1 = 完全失去高频；"
-                        + "属性未设置时按 0 处理");
+                        + "默认不闷音");
 
                 do SeparatorText("法线");
                 let (nx, ny, nz) = ts_id->tile_normal(tid);

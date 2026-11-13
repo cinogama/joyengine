@@ -17,8 +17,9 @@ constexpr uint32_t IMAGE_TEXTURE_CACHE_VERSION = 0x00000003;
 // (see jeecs_cache_binary_* in jeecs.hpp and jeecs_graphic_animation_cache.cpp).
 constexpr uint32_t ANIMATION_CACHE_VERSION = 0x00000002;
 // Tile atlas/tilemap caches generated from the .je4tileset/.je4tilemap TOML
-// sources; payloads are binary cache documents.
-constexpr uint32_t TILESET_CACHE_VERSION = 0x00000001;
+// sources; payloads are binary cache documents. Tileset v2 adds the built-in
+// audio occlusion/muffle coefficients to each tile entry.
+constexpr uint32_t TILESET_CACHE_VERSION = 0x00000002;
 constexpr uint32_t TILEMAP_CACHE_VERSION = 0x00000001;
 // Audio cache generated from the audio file and its optional .je4audio TOML
 // source; the payload is a raw interleaved PCM region followed by a binary

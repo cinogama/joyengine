@@ -17,7 +17,6 @@
 #include <optional>
 #include <string>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace jeecs::audio
@@ -27,10 +26,6 @@ namespace jeecs::audio
     namespace
     {
         constexpr float OCCLUSION_EPSILON = 1e-4f;
-
-        // 瓦片地图用于音频遮挡的保留浮点属性名；缺省不存在 = 不遮挡。
-        const std::string AUDIO_OCCLUSION_PROPERTY = "audio_occlusion";
-        const std::string AUDIO_MUFFLE_PROPERTY = "audio_muffle";
 
         struct occluder_snapshot
         {
@@ -42,7 +37,7 @@ namespace jeecs::audio
         };
         struct tilemap_snapshot
         {
-            std::shared_ptr<Tilemap::MapDocument> m_document;
+            const audio_map_grid* m_grid;
             math::vec3 m_position;
             math::quat m_rotation;
             math::vec3 m_scale;
@@ -52,6 +47,59 @@ namespace jeecs::audio
             float m_gain;
             float m_hf;
         };
+
+        // 把地图的所有格子在所有图层上的音频系数合并成两张平整化网格
+        // （同一格取各层最大值）。只在 map_stamp 变化时调用。
+        void rebuild_audio_grid(
+            audio_map_grid& grid, Tilemap::MapDocument& document)
+        {
+            auto& registry = Tilemap::documents::inst();
+            registry.ensure_tilesets(document);
+
+            grid.m_stamp = registry.map_stamp(document);
+            grid.m_width = document.width;
+            grid.m_height = document.height;
+
+            const size_t cell_count =
+                (size_t)document.width * (size_t)document.height;
+
+            grid.m_occlusion.assign(cell_count, 0.0f);
+            grid.m_muffle.assign(cell_count, 0.0f);
+
+            for (size_t i = 0; i < cell_count; ++i)
+            {
+                float occlusion = 0.0f;
+                float muffle = 0.0f;
+
+                for (int32_t layer = 0;
+                    layer < (int32_t)document.layers.size(); ++layer)
+                {
+                    const int32_t value = document.layers[layer].grid[i];
+                    if (value == 0)
+                        continue;
+
+                    const auto cell = Tilemap::decode_tile_value(value);
+                    if (!cell.has_value()
+                        || cell->tileset_idx < 0
+                        || cell->tileset_idx >= (int32_t)document.tilesets.size()
+                        || !document.tilesets[cell->tileset_idx].resolved.has_value())
+                        continue;
+
+                    const auto* tileset =
+                        document.tilesets[cell->tileset_idx].resolved->get();
+                    const auto* def = tileset->tile_def(cell->local_id);
+
+                    if (def != nullptr)
+                    {
+                        occlusion = std::max(occlusion, def->audio_occlusion);
+                        muffle = std::max(muffle, def->audio_muffle);
+                    }
+                }
+
+                grid.m_occlusion[i] = std::clamp(occlusion, 0.0f, 1.0f);
+                grid.m_muffle[i] = std::clamp(muffle, 0.0f, 1.0f);
+            }
+        }
 
         // 世界坐标 -> 地图局部网格坐标（1 格 = 1 单位，y 向下为正）。
         math::vec3 to_grid_space(
@@ -278,8 +326,8 @@ namespace jeecs::audio
             return true;
         }
 
-        // 累乘线段穿过的瓦片格子的 audio_occlusion / audio_muffle。
-        // 同一格内所有图层取各系数的最大值；起点格由 DDA 跳过。
+        // 累乘线段穿过的格子的缓存音频系数。起点格由 DDA 跳过。
+        // 网格已按地图/图集版本平整化，热路径只做数组索引。
         void accumulate_tilemap_occlusion(
             const tilemap_snapshot& snapshot,
             const math::vec3& listener,
@@ -287,8 +335,10 @@ namespace jeecs::audio
             occlusion_result& result)
         {
             const auto& scale = snapshot.m_scale;
+            const auto* grid = snapshot.m_grid;
 
-            if (std::fabs(scale.x) < 1e-6f || std::fabs(scale.y) < 1e-6f)
+            if (std::fabs(scale.x) < 1e-6f || std::fabs(scale.y) < 1e-6f
+                || grid->m_width <= 0 || grid->m_height <= 0)
                 return;
 
             const math::vec3 from = to_grid_space(
@@ -296,17 +346,12 @@ namespace jeecs::audio
             const math::vec3 to = to_grid_space(
                 snapshot.m_rotation, snapshot.m_position, scale, source);
 
-            auto* document = snapshot.m_document.get();
-
-            if (document->width <= 0 || document->height <= 0)
-                return;
-
             // 裁剪到地图矩形，避免远处声源让 DDA 遍历地图外的海量空格
             float t0 = 0.0f;
             float t1 = 1.0f;
             if (!clip_segment_to_grid(
                     from.x, from.y, to.x, to.y,
-                    (float)document->width, (float)document->height,
+                    (float)grid->m_width, (float)grid->m_height,
                     t0, t1))
                 return;
 
@@ -324,40 +369,15 @@ namespace jeecs::audio
             visit_segment_cells(start_x, start_y, end_x, end_y, skip_first,
                 [&](int32_t cx, int32_t cy)
                 {
-                    float cell_occlusion = 0.0f;
-                    float cell_muffle = 0.0f;
+                    if (cx < 0 || cy < 0
+                        || cx >= grid->m_width || cy >= grid->m_height)
+                        return;
 
-                    for (int32_t layer = 0;
-                        layer < (int32_t)document->layers.size(); ++layer)
-                    {
-                        if (!document->in_bounds(layer, cx, cy))
-                            continue;
+                    const size_t index =
+                        (size_t)cy * (size_t)grid->m_width + (size_t)cx;
 
-                        if (document->layers[layer].grid[
-                                (size_t)cy * document->width + cx] == 0)
-                            // 空格不遮挡
-                            continue;
-
-                        const auto* occlusion = Tilemap::resolve_property_resolved(
-                            document, layer, cx, cy, AUDIO_OCCLUSION_PROPERTY);
-                        if (occlusion != nullptr
-                            && std::holds_alternative<float>(*occlusion))
-                            cell_occlusion = std::max(
-                                cell_occlusion, std::get<float>(*occlusion));
-
-                        const auto* muffle = Tilemap::resolve_property_resolved(
-                            document, layer, cx, cy, AUDIO_MUFFLE_PROPERTY);
-                        if (muffle != nullptr
-                            && std::holds_alternative<float>(*muffle))
-                            cell_muffle = std::max(
-                                cell_muffle, std::get<float>(*muffle));
-                    }
-
-                    cell_occlusion = std::clamp(cell_occlusion, 0.0f, 1.0f);
-                    cell_muffle = std::clamp(cell_muffle, 0.0f, 1.0f);
-
-                    result.m_gain *= 1.0f - cell_occlusion;
-                    result.m_hf *= 1.0f - cell_muffle;
+                    result.m_gain *= 1.0f - grid->m_occlusion[index];
+                    result.m_hf *= 1.0f - grid->m_muffle[index];
                 });
         }
     }
@@ -372,6 +392,7 @@ namespace jeecs::audio
         , m_reverb_generation(0)
         , m_reverb_effect()
         , m_reverb_slot()
+        , m_audio_maps()
     {
     }
 
@@ -546,15 +567,24 @@ namespace jeecs::audio
             if (map.map_path.c_str()[0] == '\0')
                 continue;
 
-            auto document = Tilemap::documents::inst().observe_map(
-                map.map_path.cpp_str());
+            const std::string path = map.map_path.cpp_str();
+
+            auto document = Tilemap::documents::inst().observe_map(path);
             if (!document.has_value())
                 continue;
 
             Tilemap::documents::inst().ensure_tilesets(*document.value());
 
+            audio_map_grid& grid = m_audio_maps[path];
+
+            const uint64_t stamp =
+                Tilemap::documents::inst().map_stamp(*document.value());
+
+            if (grid.m_stamp != stamp)
+                rebuild_audio_grid(grid, *document.value());
+
             tilemaps.push_back(tilemap_snapshot{
-                document.value(),
+                &grid,
                 trans.world_position,
                 trans.world_rotation,
                 trans.local_scale,

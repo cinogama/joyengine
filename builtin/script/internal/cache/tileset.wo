@@ -22,6 +22,7 @@
 //     "tiles" -> LIST of DOCUMENT
 //         "id" -> INT32, "name" -> STRING, "walkable" -> BOOL
 //         "kind" -> INT32, "normal" -> LIST of 3 FLOAT32
+//         "audio_occlusion" / "audio_muffle" -> FLOAT32
 //         "variants" -> BUFFER（int32）
 //         "properties" -> LIST of DOCUMENT
 //             "name" -> STRING, "type" -> INT32, "value" -> 类型化值
@@ -475,6 +476,12 @@ extern func generate(
             || !cache->append_bool(bool_or(tile["walkable"], true)))
             return false;
         if (!append_key(cache, "kind") || !cache->append_int32(kind))
+            return false;
+        if (!append_key(cache, "audio_occlusion")
+            || !cache->append_float32(real_of(tile["audio_occlusion"])))
+            return false;
+        if (!append_key(cache, "audio_muffle")
+            || !cache->append_float32(real_of(tile["audio_muffle"])))
             return false;
 
         let normal = array_of(tile["normal"]);

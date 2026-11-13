@@ -199,10 +199,18 @@ namespace jeecs
             std::vector<int32_t> variant_tiles;     // blob47 显式变体表（瓦片 id）
             std::map<std::string, property_value> properties;   // 瓦片默认属性
 
+            // 音频遮挡系数（0 = 不遮挡，1 = 完全遮挡）。音频系统按射线穿过
+            // 的格子累乘，默认 0；与通行性一样是瓦片的内置元数据。
+            float audio_occlusion;
+            // 音频闷音系数（0 = 不闷音，1 = 完全失去高频），默认 0。
+            float audio_muffle;
+
             TileDef()
                 : walkable(true)
                 , kind(JE_TILE_KIND_PLAIN)
                 , normal(DEFAULT_TILE_NORMAL)
+                , audio_occlusion(0.f)
+                , audio_muffle(0.f)
             {
             }
         };
@@ -255,6 +263,9 @@ namespace jeecs
             TileDef& ensure_tile_def(int32_t tile_id);
             bool tile_walkable(int32_t tile_id) const;
             je_tile_kind_t tile_kind(int32_t tile_id) const;
+            // 音频遮挡/闷音系数；无元数据即默认 0（不遮挡/不闷音）
+            float tile_audio_occlusion(int32_t tile_id) const;
+            float tile_audio_muffle(int32_t tile_id) const;
             // 元数据是否已回到默认（默认条目可从稀疏表移除）
             static bool tile_def_is_default(const TileDef& def);
             // 元数据编辑器收尾：默认条目从稀疏表移除
@@ -403,6 +414,7 @@ namespace jeecs
         //     "tiles" -> LIST of DOCUMENT
         //         "id" -> INT32, "name" -> STRING, "walkable" -> BOOL
         //         "kind" -> INT32, "normal" -> LIST of 3 FLOAT32
+        //         "audio_occlusion" / "audio_muffle" -> FLOAT32
         //         "variants" -> BUFFER（int32）
         //         "properties" -> LIST of DOCUMENT
         //             "name" -> STRING, "value" -> 类型化值（含 "type"）
@@ -835,11 +847,6 @@ namespace jeecs
 
         // ==================== 属性与通行性 ====================
         const property_value* resolve_property(
-            MapDocument* doc, int32_t layer, int32_t x, int32_t y, const std::string& name);
-
-        // 同上，但调用方须保证已对 doc 调用过 ensure_tilesets：逐格高频
-        // 查询（如音频遮挡的射线遍历）用，避免每格重复加锁。
-        const property_value* resolve_property_resolved(
             MapDocument* doc, int32_t layer, int32_t x, int32_t y, const std::string& name);
 
         bool walkable_on(MapDocument* doc, int32_t layer, int32_t x, int32_t y);

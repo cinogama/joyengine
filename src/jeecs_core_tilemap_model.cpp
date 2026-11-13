@@ -113,12 +113,25 @@ namespace jeecs
             return def == nullptr ? JE_TILE_KIND_PLAIN : def->kind;
         }
 
+        float TilesetDocument::tile_audio_occlusion(int32_t tile_id) const
+        {
+            const auto* def = tile_def(tile_id);
+            return def == nullptr ? 0.f : def->audio_occlusion;
+        }
+
+        float TilesetDocument::tile_audio_muffle(int32_t tile_id) const
+        {
+            const auto* def = tile_def(tile_id);
+            return def == nullptr ? 0.f : def->audio_muffle;
+        }
+
         bool TilesetDocument::tile_def_is_default(const TileDef& def)
         {
             return def.name.empty() && def.walkable
                 && def.kind == JE_TILE_KIND_PLAIN
                 && def.normal == DEFAULT_TILE_NORMAL
-                && def.variant_tiles.empty() && def.properties.empty();
+                && def.variant_tiles.empty() && def.properties.empty()
+                && def.audio_occlusion == 0.f && def.audio_muffle == 0.f;
         }
 
         void TilesetDocument::compact_tile_def(int32_t tile_id)
@@ -627,7 +640,9 @@ namespace jeecs
                 if (!read_cache_int32(&tile_doc, "id", &tile_id)
                     || !read_cache_string(&tile_doc, "name", &t.name)
                     || !read_cache_bool(&tile_doc, "walkable", &t.walkable)
-                    || !read_cache_int32(&tile_doc, "kind", &kind))
+                    || !read_cache_int32(&tile_doc, "kind", &kind)
+                    || !read_cache_float32(&tile_doc, "audio_occlusion", &t.audio_occlusion)
+                    || !read_cache_float32(&tile_doc, "audio_muffle", &t.audio_muffle))
                     return std::nullopt;
                 if (!ts->tile_cell(tile_id).has_value()
                     || kind < 0 || kind > (int32_t)JE_TILE_KIND_RPGMAKER_VX)
@@ -1346,14 +1361,6 @@ namespace jeecs
                 return nullptr;
             // API 直调时无系统代管图集解析，此处兜底（幂等）
             documents::inst().ensure_tilesets(*doc);
-
-            return resolve_property_resolved(doc, layer, x, y, name);
-        }
-        const property_value* resolve_property_resolved(
-            MapDocument* doc, int32_t layer, int32_t x, int32_t y, const std::string& name)
-        {
-            if (doc == nullptr || !doc->in_bounds(layer, x, y))
-                return nullptr;
             // 1. 逐格覆盖
             auto cit = doc->cell_properties.find({ layer, x + y * doc->width });
             if (cit != doc->cell_properties.end())

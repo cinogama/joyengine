@@ -149,16 +149,18 @@ C/C++：`je_audio_bus_get("SFX")`、`je_audio_bus_gain_set` / `je_audio_bus_gain
 
 #### 瓦片地图遮挡
 
-瓦片复用通用属性系统，识别两个保留浮点属性：
+瓦片的音频遮挡/闷音是**内置元数据**（与“是否可通行”同级，不是通用属性）：每个图集瓦片可设置两个系数：
 
-| 属性名 | 类型 | 含义 |
+| 系数 | 默认值 | 含义 |
 | --- | --- | --- |
-| `audio_occlusion` | float（0..1） | 穿过的格子增益 ×= (1 - 值) |
-| `audio_muffle` | float（0..1） | 穿过的格子高频 ×= (1 - 值) |
+| `occlusion` | 0 | 0..1；穿过的格子增益 ×= (1 - 值) |
+| `muffle` | 0 | 0..1；穿过的格子高频 ×= (1 - 值) |
 
-属性不存在时按 0 处理，因此**默认不遮挡**，旧图集无需任何修改。编辑器瓦片面板新增“音频遮挡”区块，可用两个滑条为选中/框选的瓦片设置系数（0 也写入显式属性，便于覆盖图集 schema 默认值）。
+默认均为 0，因此**默认不遮挡**。编辑器瓦片面板新增“音频遮挡”区块，可用两个滑条为选中/框选的瓦片设置系数；批量拖动只改被拖动的那一项，另一项保留各瓦片原值。
 
 系统把“听者 → 声源”线段转到地图根实体的局部 XY 网格，用 DDA 遍历穿过的格子；同一格内所有图层取各系数的最大值后累乘，跳过起点格。空格不遮挡。瓦片遮挡在 2D 与 3D 模式下都按 XY 平面计算。
+
+性能上，音频系统会按地图/图集版本（`map_stamp`）把整张地图的系数平整化成两张网格缓存，只有编辑地图或图集时才重建；每帧的射线只做数组索引，不再逐格查询瓦片元数据。
 
 ### 混响区域：`Audio::ReverbZone`
 
@@ -419,7 +421,9 @@ audio::play_oneshot(desc);
 
 ### 瓦片遮挡遍历
 
-`AudioUpdatingSystem` 用地图根实体的 `world_position` / `world_rotation` / `local_scale` 把世界坐标转到地图局部网格：`gx = local.x`、`gy = -local.y`（地图格 y 向下，1 格 = 1 单位）。随后用 Amanatides-Woo DDA 遍历线段穿过的格子，跳过起点格；每格对所有图层取 `audio_occlusion` / `audio_muffle` 的最大值后累乘。属性解析走 `Tilemap::resolve_property_resolved`（调用方已 `ensure_tilesets`，逐格查询不再加锁），解析链为：逐格覆盖 → 瓦片默认 → 图集 schema 默认值；属性不存在即 0（不遮挡）。空格不参与遮挡。
+瓦片的音频系数是 `TileDef` 的内置字段（`audio_occlusion` / `audio_muffle`，默认 0），与 `walkable` 一样随图集缓存（`.je4tileset` TOML → `.je4cache`，缓存版本 v2）保存；图集 TOML 的 `tiles` 条目新增 `audio_occlusion` / `audio_muffle` 两个可选浮点键。
+
+`AudioUpdatingSystem` 用地图根实体的 `world_position` / `world_rotation` / `local_scale` 把世界坐标转到地图局部网格：`gx = local.x`、`gy = -local.y`（地图格 y 向下，1 格 = 1 单位）。系统按 `map_stamp`（地图与图集版本合并戳）把整张地图的系数平整化成两张 `width*height` 浮点网格并缓存：同一格内所有图层取最大值，空格为 0；只有地图/图集版本变化时才重建，编辑态下随编辑重建，运行时不再逐格查询瓦片元数据。射线遍历用 Amanatides-Woo DDA（线段先裁剪到地图矩形），跳过起点格，每格直接索引缓存网格并累乘。瓦片遮挡在 2D 与 3D 模式下都按 XY 平面计算。
 
 ### 关键源码位置
 
