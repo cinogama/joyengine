@@ -16,8 +16,10 @@
 
 #include "wo.h"
 
+#include "jeecs_graphic_render_internal.hpp"
 #include "jeecs_graphic_shader_wrapper.hpp"
 
+#include <cstdlib>
 #include <list>
 #include <optional>
 #include <unordered_map>
@@ -1518,6 +1520,57 @@ WOORT_API woort_api wojeapi_image_texture_cache_ensure(void)
     }
 
     return woort_ret_bool(false);
+}
+
+// 为 RGBA8 像素数据选择体积最小的 BC 格式：全部不透明时 BC1（返回 1），
+// 否则 BC3（返回 2）。pixels 为 width * height * 4 字节、自底向上行序。
+WOORT_API woort_api wojeapi_texture_bc_format_choose(void)
+{
+    size_t buffer_length = 0;
+    const void* pixels = woort_buffer(0, &buffer_length);
+
+    const size_t width = (size_t)woort_int(1);
+    const size_t height = (size_t)woort_int(2);
+
+    assert(pixels != nullptr);
+    assert(buffer_length == width * height * 4);
+
+    return woort_ret_int((woort_Int)jeecs::graphic::texture_bc_format_for_rgba(
+        width, height,
+        static_cast<const je_gl_texture_pixel_data_t*>(pixels)));
+}
+
+// 把 RGBA8 像素数据压缩为 BC1/BC3 块数据（format：1 = BC1，2 = BC3），
+// 返回可直接交给图形库上传的压缩缓冲；内存不足时返回 none。
+WOORT_API woort_api wojeapi_texture_bc_compress(void)
+{
+    size_t buffer_length = 0;
+    const void* pixels = woort_buffer(0, &buffer_length);
+
+    const size_t width = (size_t)woort_int(1);
+    const size_t height = (size_t)woort_int(2);
+    const je_gl_texture_format_t format =
+        (je_gl_texture_format_t)woort_int(3);
+
+    assert(pixels != nullptr);
+    assert(buffer_length == width * height * 4);
+    assert(0 != (format & JE_GL_TEXTURE_FORMAT_COMPRESSED_MASK));
+
+    auto* block_data = jeecs::graphic::compress_texture_bc(
+        format, width, height,
+        static_cast<const je_gl_texture_pixel_data_t*>(pixels));
+
+    if (block_data == nullptr)
+        return woort_ret_option_none();
+
+    const size_t block_data_size =
+        jeecs::graphic::texture_format_pixel_data_size(
+            format, width, height);
+
+    const woort_api result = woort_ret_option_buffer(block_data, block_data_size);
+    free(block_data);
+
+    return result;
 }
 
 

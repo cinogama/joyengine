@@ -25,10 +25,11 @@ JE_API /* OPTIONAL */ je_file_t* je_image_texture_cache_open_or_create(
 
 ## 注意事项
 
-- 缓存包含纹理的颜色空间和解码后的 RGBA8 像素数据，加载纹理时可直接使用而无需再解码图片
-- 校验码为图片文件与属性源文件 `<path>.je4texture` 内容连续计算的 CRC64，两者任一改变都会使缓存失效；属性源文件是可选的，缺失时颜色空间按默认的 sRGB 处理
+- 缓存包含纹理的颜色空间和解码后的像素数据，加载纹理时可直接使用而无需再解码图片
+- 像素默认按 GPU 支持的 BC1/BC3 块压缩存储（BC1：没有半透明像素，8 字节/4x4 块；BC3：存在半透明像素，16 字节/4x4 块），块数据可直接交给图形库/GPU 上传；属性源文件声明 `pixel_format = "raw"` 时存储原始 RGBA8 像素
+- 校验码为图片文件与属性源文件 `<path>.je4texture` 内容连续计算的 CRC64，两者任一改变都会使缓存失效；属性源文件是可选的，缺失时颜色空间按默认的 sRGB、像素按默认的压缩处理
 - 图片与属性源文件都不存在（如导出的运行时只携带缓存）时跳过校验
-- 缓存由 `builtin/script/internal/cache/texture.wo` 生成，文档结构为：`width`、`height`、`color_space`（INT32，0 = sRGB，1 = Linear）与 `pixels`（BUFFER，RGBA8，行序自底向上）
+- 缓存由 `builtin/script/internal/cache/texture.wo` 生成，文档结构为：`width`、`height`、`color_space`（INT32，0 = sRGB，1 = Linear）、`format`（INT32，0 = RGBA8，1 = BC1，2 = BC3）与 `pixels`（BUFFER，行序自底向上；非压缩为 宽 x 高 x 4 字节，BC1/BC3 为 ceil(宽/4) x ceil(高/4) x 8/16 字节）
 - 返回的句柄由调用方负责关闭（见 je_file_close）
 
 ## 相关接口

@@ -2049,11 +2049,12 @@ namespace JEEditor::Editor
         }
         
         // 带缓存资源的伴生文件后缀：引擎按 <源路径>.je4cache 生成/复用缓存，
-        // 纹理图片与音频另有可选的属性源文件 <源路径>.je4texture（颜色空间，
-        // 见 TextureProperties）/ <源路径>.je4audio（流式播放配置，见
-        // AudioProperties）。源文件的移动/重命名/删除必须同时处理这些伴生
-        // 文件：否则旧缓存残留在原处、新位置无谓地重新生成，删除时还会留下
-        // 孤立缓存，甚至丢掉仍在使用的纹理颜色空间/音频播放方式属性。
+        // 纹理图片与音频另有可选的属性源文件 <源路径>.je4texture（颜色空间与
+        // 缓存像素格式，见 TextureProperties）/ <源路径>.je4audio（流式播放
+        // 配置，见 AudioProperties）。源文件的移动/重命名/删除必须同时处理
+        // 这些伴生文件：否则旧缓存残留在原处、新位置无谓地重新生成，删除时
+        // 还会留下孤立缓存，甚至丢掉仍在使用的纹理颜色空间/缓存格式与音频
+        // 播放方式属性。
         func satelliteSuffixes()=> array<string>
         {
             return [".je4cache", ".je4texture", ".je4audio"];

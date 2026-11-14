@@ -11,6 +11,9 @@
 #include "jeecs/graphic.hpp"
 #include "jeecs/graphic.hpp"
 
+#include <cassert>
+#include <cstring>
+
 // Refcounted CPU-side pipeline description. The backend owns any native
 // pipeline object and stores it in m_backend_ptr.
 struct je_gl_pipeline_t
@@ -80,6 +83,68 @@ namespace jeecs::graphic
     void init_resource_handle(
         je_gl_resource_handle_t* resource_handle,
         const char* path_may_null_if_builtin);
+
+    // Texture pixel-data geometry and the BC1/BC3 block codec, implemented in
+    // jeecs_graphic_bc_codec.cpp.
+    //
+    // Byte size of one row (one 2D plane slice) for the given format:
+    // per-pixel formats use width * bytes-per-pixel, BC1/BC3 use
+    // ceil(width / 4) * bytes-per-block (8 / 16).
+    size_t texture_format_row_bytes(
+        je_gl_texture_format_t format, size_t width);
+
+    // Byte size of a whole 2D plane (width x height) for the given format.
+    size_t texture_format_pixel_data_size(
+        je_gl_texture_format_t format, size_t width, size_t height);
+
+    // Picks the BC format that keeps the image intact: BC1 when every pixel is
+    // fully opaque (8 bytes per 4x4 block), BC3 when any alpha is partial
+    // (16 bytes per block, 8-bit alpha).
+    je_gl_texture_format_t texture_bc_format_for_rgba(
+        size_t width, size_t height,
+        const je_gl_texture_pixel_data_t* rgba_pixels);
+
+    // Compresses bottom-up RGBA8 pixels into BC1/BC3 block data. Returns
+    // malloc'ed data of texture_format_pixel_data_size bytes (or null when the
+    // allocation fails). Edge pixels are clamped to fill whole 4x4 blocks.
+    /* OPTIONAL */ je_gl_texture_pixel_data_t* compress_texture_bc(
+        je_gl_texture_format_t format, size_t width, size_t height,
+        const je_gl_texture_pixel_data_t* rgba_pixels);
+
+    // Decodes BC1/BC3 block data back to bottom-up RGBA8 pixels for backends
+    // without block-compression support. Returns malloc'ed pixels.
+    /* OPTIONAL */ je_gl_texture_pixel_data_t* decode_texture_bc(
+        je_gl_texture_format_t format, size_t width, size_t height,
+        const je_gl_texture_pixel_data_t* block_data);
+
+    // RGBA8 view of a creation-time pixel snapshot for the few CPU consumers
+    // that re-interpret pixels (window icon, tilemap layer arrays). A
+    // non-compressed snapshot is returned as is with *out_decoded set to null;
+    // a BC1/BC3 snapshot is decoded into a malloc'ed buffer reported through
+    // *out_decoded, which the caller frees.
+    inline const je_gl_texture_pixel_data_t* texture_rgba_pixels(
+        je_gl_texture_format_t format, size_t width, size_t height,
+        const je_gl_texture_pixel_data_t* pixels,
+        /* OPTIONAL */ je_gl_texture_pixel_data_t** out_decoded)
+    {
+        if (0 == (format & JE_GL_TEXTURE_FORMAT_COMPRESSED_MASK))
+        {
+            *out_decoded = nullptr;
+            return pixels;
+        }
+
+        *out_decoded = decode_texture_bc(format, width, height, pixels);
+        assert(*out_decoded != nullptr);
+        return *out_decoded;
+    }
+
+    // The 2D upload commands cannot address blocks, so block-compressed
+    // textures are create-time only. Callers that would region-upload must
+    // check this.
+    inline bool texture_format_is_block_compressed(je_gl_texture_format_t format)
+    {
+        return 0 != (format & JE_GL_TEXTURE_FORMAT_COMPRESSED_MASK);
+    }
 
     // Patch the built-in JE_NDC_SCALE uniform inside an already-copied CPU
     // uniform block. DX11/Metal flip y for offscreen targets; Vulkan flips it

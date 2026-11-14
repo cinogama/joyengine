@@ -1157,7 +1157,7 @@ namespace JEEditor::Editor
 
         // 预生成项目内全部缓存化资源的二进制缓存：TOML 源资源（.je4animation /
         // .je4tileset / .je4tilemap）、图片的纹理缓存（<图片>.je4cache，包含
-        // .je4texture 中的颜色空间与解码后的像素）以及音频缓存
+        // .je4texture 中的颜色空间与像素；默认 BC1/BC3 块压缩）以及音频缓存
         //（<音频>.je4cache，包含 .je4audio 的流式播放配置与解码后的 PCM）。
         // 导出的运行时没有 je/pkg 脚本源码，无法在游戏内加载缓存生成器，
         // 因此在编辑器进程里先生成；导出只携带这些 .je4cache，源文件不随包。

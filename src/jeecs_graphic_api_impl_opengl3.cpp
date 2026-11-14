@@ -14,12 +14,28 @@
     || defined(JE_ENABLE_GLES300_GAPI)  \
     || defined(JE_ENABLE_WEBGL20_GAPI)
 
+#include <cstdlib>
 #include <cstring>
 
 #include "jeecs_graphic_imgui_backend_api.hpp"
 
 #ifndef GL_FRAMEBUFFER_SRGB_EXT
 #   define GL_FRAMEBUFFER_SRGB_EXT 0x8DB9
+#endif
+
+// S3TC (BC1/BC3) 的枚举值：桌面 GL 由 glew 提供，GLES3/WebGL2 的
+// GLES3/gl3.h 没有这些定义（且不支持该格式），这里补齐以共用同一份代码。
+#ifndef GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
+#   define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
+#endif
+#ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
+#   define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
+#endif
+#ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT
+#   define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT 0x8C4D
+#endif
+#ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT
+#   define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT 0x8C4F
 #endif
 
 #ifdef JE_ENABLE_GLES300_GAPI
@@ -1177,6 +1193,45 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
+    // BC1/BC3 以 S3TC 扩展提供。桌面 GL 的 sRGB 变体需要额外的
+    // EXT_texture_compression_s3tc_srgb；GLES3 / WebGL2 完全没有 BC 格式。
+    // 返回 false 时调用方应把块数据解码成 RGBA8 上传。
+    static bool _gl3_support_bc_compression(je_gl_texture_format_t fmt)
+    {
+#if defined(JE_ENABLE_GL330_GAPI)
+        if (GLEW_EXT_texture_compression_s3tc == GL_FALSE)
+            return false;
+
+        return 0 == (fmt & JE_GL_TEXTURE_FORMAT_SRGB)
+            || GLEW_EXT_texture_compression_s3tc_srgb != GL_FALSE;
+#else
+        (void)fmt;
+        return false;
+#endif
+    }
+
+    // 块压缩格式对应的 GL 内部格式，返回 false 表示不是 BC1/BC3
+    static bool _gl3_pick_compressed_format(
+        je_gl_texture_format_t fmt, GLint& texture_aim_format)
+    {
+        const bool is_srgb = 0 != (fmt & JE_GL_TEXTURE_FORMAT_SRGB);
+        switch (fmt & JE_GL_TEXTURE_FORMAT_COMPRESSED_MASK)
+        {
+        case JE_GL_TEXTURE_FORMAT_BC1:
+            texture_aim_format = is_srgb
+                ? GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT
+                : GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+            return true;
+        case JE_GL_TEXTURE_FORMAT_BC3:
+            texture_aim_format = is_srgb
+                ? GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT
+                : GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+            return true;
+        default:
+            return false;
+        }
+    }
+
     void texture_2d_init(
         je_graphic_impl_context_t,
         je_gl_resource_blob_t,
@@ -1188,6 +1243,10 @@ namespace jeecs::graphic::api::gl3
 
         const bool is_16bit = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16);
         const bool is_depth = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH);
+        const bool is_srgb = 0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_SRGB);
+
+        // 实际创建出的 GPU 纹理格式：块压缩不被支持时解码成 RGBA8。
+        je_gl_texture_format_t gpu_format = resource->m_format;
 
         if (is_depth)
         {
@@ -1207,6 +1266,47 @@ namespace jeecs::graphic::api::gl3
                 GL_UNSIGNED_INT,
                 NULL);
         }
+        else if (texture_format_is_block_compressed(resource->m_format))
+        {
+            assert(resource->m_initial_pixels != nullptr);
+
+            GLint compressed_format = 0;
+            if (_gl3_pick_compressed_format(resource->m_format, compressed_format)
+                && _gl3_support_bc_compression(resource->m_format))
+            {
+                glCompressedTexImage2D(
+                    GL_TEXTURE_2D, 0, compressed_format,
+                    (GLsizei)resource->m_width,
+                    (GLsizei)resource->m_height,
+                    0,
+                    (GLsizei)texture_format_pixel_data_size(
+                        resource->m_format, resource->m_width, resource->m_height),
+                    resource->m_initial_pixels);
+            }
+            else
+            {
+                // 没有 BC 支持的构建/驱动（GLES3、WebGL2、缺少扩展的桌面
+                // GL）：在 CPU 上解码成 RGBA8 后按普通纹理上传。
+                auto* decoded_pixels = decode_texture_bc(
+                    resource->m_format,
+                    resource->m_width,
+                    resource->m_height,
+                    resource->m_initial_pixels);
+                assert(decoded_pixels != nullptr);
+
+                glTexImage2D(GL_TEXTURE_2D,
+                    0, is_srgb ? GL_SRGB8_ALPHA8 : GL_RGBA,
+                    (GLsizei)resource->m_width,
+                    (GLsizei)resource->m_height,
+                    0, GL_RGBA, GL_UNSIGNED_BYTE,
+                    decoded_pixels);
+
+                free(decoded_pixels);
+                gpu_format = (je_gl_texture_format_t)(
+                    JE_GL_TEXTURE_FORMAT_RGBA
+                    | (is_srgb ? JE_GL_TEXTURE_FORMAT_SRGB : 0));
+            }
+        }
         else
         {
             GLint texture_aim_format = GL_RGBA;
@@ -1224,7 +1324,7 @@ namespace jeecs::graphic::api::gl3
         }
 
         resource->m_handle.m_ptr = new jegl_gl3_texture(
-            texture, GL_TEXTURE_2D, resource->m_format, resource->m_width, resource->m_height);
+            texture, GL_TEXTURE_2D, gpu_format, resource->m_width, resource->m_height);
     }
 
     void texture_3d_init(

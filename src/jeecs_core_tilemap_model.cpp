@@ -4,8 +4,10 @@
 // jeecs_core_tilemap_model.hpp（各函数的契约注释也在该头文件）。
 
 #include "jeecs_core_tilemap_model.hpp"
+#include "jeecs_graphic_render_internal.hpp"
 
 #include <cassert>
+#include <cstdlib>
 #include <cstring>
 #include <cmath>
 #include <cctype>
@@ -1444,6 +1446,14 @@ namespace jeecs
             // raw, so the array must decode sRGB exactly like the source.
             const size_t layer_count = (size_t)(xcount * ycount);
 
+            // 图片纹理缓存默认以 BC1/BC3 块压缩存储，切分图层需要 RGBA8：
+            // 块压缩快照先解码成临时缓冲。
+            je_gl_texture_pixel_data_t* decoded_pixels = nullptr;
+            const je_gl_texture_pixel_data_t* atlas_pixels =
+                graphic::texture_rgba_pixels(
+                    raw->m_format, raw->m_width, raw->m_height,
+                    raw->m_initial_pixels, &decoded_pixels);
+
             // 先在 CPU 侧构建完整像素快照，再交给数组纹理创建
             std::vector<uint8_t> layer_pixels(
                 layer_count * cw * ch * 4, 0);
@@ -1465,19 +1475,22 @@ namespace jeecs
                     for (size_t r = 0; r < ch; ++r)
                         memcpy(
                             dst_layer + r * cw * 4,
-                            raw->m_initial_pixels
+                            atlas_pixels
                                 + ((buf_row0 + r) * (size_t)tw
                                     + (size_t)(tx * cell_w)) * 4,
                             cw * 4);
                 }
             }
 
-            return graphic::texture_array::create(
+            auto array_texture = graphic::texture_array::create(
                 cw, ch, layer_count,
                 (je_gl_texture_format_t)(
                     JE_GL_TEXTURE_FORMAT_RGBA
                     | (raw->m_format & JE_GL_TEXTURE_FORMAT_SRGB)),
                 layer_pixels.data());
+
+            free(decoded_pixels);
+            return array_texture;
         }
 
         bool build_source_array(SourceTexture& src)

@@ -1318,6 +1318,21 @@ namespace jeecs::graphic::api::dx11
         const bool srgb =
             0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_SRGB);
 
+        // BC1/BC3 在所有 D3D11 feature level 上都受支持，不需要回退路径
+        switch (resource->m_format & JE_GL_TEXTURE_FORMAT_COMPRESSED_MASK)
+        {
+        case JE_GL_TEXTURE_FORMAT_BC1:
+            return srgb
+                ? DXGI_FORMAT_BC1_UNORM_SRGB
+                : DXGI_FORMAT_BC1_UNORM;
+        case JE_GL_TEXTURE_FORMAT_BC3:
+            return srgb
+                ? DXGI_FORMAT_BC3_UNORM_SRGB
+                : DXGI_FORMAT_BC3_UNORM;
+        default:
+            break;
+        }
+
         switch (resource->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK)
         {
         case JE_GL_TEXTURE_FORMAT_MONO:
@@ -1383,12 +1398,12 @@ namespace jeecs::graphic::api::dx11
 
         if (resource->m_initial_pixels != nullptr)
         {
-            const UINT bytes_per_row =
-                (UINT)resource->m_width
-                * ((UINT)resource->m_format
-                    & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK)
-                * ((resource->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16) ? 2 : 1);
-            const UINT bytes_per_slice = bytes_per_row * (UINT)resource->m_height;
+            // 块压缩格式的行跨度是"块行"的字节数（ceil(width/4) * 每块字节数），
+            // 不能按宽度 * 每像素字节数计算。
+            const UINT bytes_per_row = (UINT)texture_format_row_bytes(
+                resource->m_format, resource->m_width);
+            const UINT bytes_per_slice = (UINT)texture_format_pixel_data_size(
+                resource->m_format, resource->m_width, resource->m_height);
 
             if constexpr (is_array || is_cube)
             {

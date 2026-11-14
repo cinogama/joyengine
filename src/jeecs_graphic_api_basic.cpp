@@ -1056,11 +1056,11 @@ namespace jeecs::graphic
                         slice_count = texture->m_samples;
 
                     thread_handle->_m_thread_notifier->_m_increased_gpu_memory_size
-                        += texture->m_width
-                        * texture->m_height
-                        * slice_count
-                        * (texture->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK)
-                        * ((texture->m_format & JE_GL_TEXTURE_FORMAT_FLOAT16) ? 2 : 1);
+                        += texture_format_pixel_data_size(
+                            texture->m_format,
+                            texture->m_width,
+                            texture->m_height)
+                        * slice_count;
 
                     created_resource::kind blob_kind;
                     if constexpr (is_same_v<TexT, je_gl_texture_2d_t>)
@@ -2199,21 +2199,21 @@ void je_graphic_sampler_close(je_gl_sampler_t* sampler)
 static /* OPTIONAL */ je_gl_texture_pixel_data_t* _jegl_copy_texture_initial_pixels(
     je_gl_texture_format_t format,
     /* OPTIONAL */ const je_gl_texture_pixel_data_t* initial_pixels,
-    size_t pixel_count)
+    size_t width, size_t height, size_t slice_count)
 {
     if (initial_pixels == nullptr)
         return nullptr;
 
     assert(0 == (format & JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK));
 
-    const size_t pixel_size =
-        (size_t)(format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
-    assert(pixel_size != 0);
+    const size_t pixel_data_size =
+        texture_format_pixel_data_size(format, width, height) * slice_count;
+    assert(pixel_data_size != 0);
 
-    auto* pixels = (je_gl_texture_pixel_data_t*)malloc(pixel_count * pixel_size);
+    auto* pixels = (je_gl_texture_pixel_data_t*)malloc(pixel_data_size);
     assert(pixels != nullptr);
 
-    memcpy(pixels, initial_pixels, pixel_count * pixel_size);
+    memcpy(pixels, initial_pixels, pixel_data_size);
     return pixels;
 }
 
@@ -2232,7 +2232,7 @@ je_gl_texture_2d_t* je_graphic_texture_2d_create(
         height = 1;
 
     texture_instance->m_initial_pixels = _jegl_copy_texture_initial_pixels(
-        format, initial_pixels, width * height);
+        format, initial_pixels, width, height, 1);
 
     texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_2D;
     texture_instance->m_width = width;
@@ -2259,8 +2259,11 @@ je_gl_texture_3d_t* je_graphic_texture_3d_create(
     if (depth == 0)
         depth = 1;
 
+    // 块压缩格式只用于图片加载得到的 2D 纹理。
+    assert(0 == (format & JE_GL_TEXTURE_FORMAT_COMPRESSED_MASK));
+
     texture_instance->m_initial_pixels = _jegl_copy_texture_initial_pixels(
-        format, initial_pixels, width * height * depth);
+        format, initial_pixels, width, height, depth);
 
     texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_3D;
     texture_instance->m_width = width;
@@ -2288,8 +2291,11 @@ je_gl_texture_array_t* je_graphic_texture_array_create(
     if (layers == 0)
         layers = 1;
 
+    // 块压缩格式只用于图片加载得到的 2D 纹理。
+    assert(0 == (format & JE_GL_TEXTURE_FORMAT_COMPRESSED_MASK));
+
     texture_instance->m_initial_pixels = _jegl_copy_texture_initial_pixels(
-        format, initial_pixels, width * height * layers);
+        format, initial_pixels, width, height, layers);
 
     texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_ARRAY;
     texture_instance->m_width = width;
@@ -2317,8 +2323,11 @@ je_gl_texture_cube_t* je_graphic_texture_cube_create(
 
     constexpr size_t CUBE_FACE_COUNT = 6;
 
+    // 块压缩格式只用于图片加载得到的 2D 纹理。
+    assert(0 == (format & JE_GL_TEXTURE_FORMAT_COMPRESSED_MASK));
+
     texture_instance->m_initial_pixels = _jegl_copy_texture_initial_pixels(
-        format, initial_pixels, CUBE_FACE_COUNT * width * height);
+        format, initial_pixels, width, height, CUBE_FACE_COUNT);
 
     texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_CUBE;
     texture_instance->m_width = width;
@@ -2437,7 +2446,13 @@ static /* OPTIONAL */ je_file_t* _jegl_open_image_texture_cache(const char* path
     return je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, 0);
 }
 
-// Reads the document written by builtin/script/internal/cache/texture.wo.
+// Reads the document written by builtin/script/internal/cache/texture.wo:
+//   DOCUMENT
+//     "width"       -> INT32
+//     "height"      -> INT32
+//     "color_space" -> INT32（0 = sRGB，1 = Linear）
+//     "format"      -> INT32（0 = RGBA8，1 = BC1，2 = BC3）
+//     "pixels"      -> BUFFER（对应 format 的像素/块数据，行序自底向上）
 // Outputs are written only on success; *out_pixels is malloc'ed like every
 // texture pixel buffer.
 static bool _jegl_read_image_texture_cache(
@@ -2445,10 +2460,11 @@ static bool _jegl_read_image_texture_cache(
     size_t* out_width,
     size_t* out_height,
     je_image_texture_color_space_t* out_color_space,
+    je_gl_texture_format_t* out_format,
     je_gl_texture_pixel_data_t** out_pixels)
 {
     je_cache_binary_document_t root;
-    int32_t width, height, color_space;
+    int32_t width, height, color_space, cache_format;
     je_cache_binary_buffer_t pixels;
 
     if (!je_cache_binary_document_open(cache, &root)
@@ -2459,13 +2475,32 @@ static bool _jegl_read_image_texture_cache(
         || !je_cache_binary_document_index(
             &root, "color_space", JE_CACHE_BINARY_VALUE_INT32, &color_space)
         || !je_cache_binary_document_index(
+            &root, "format", JE_CACHE_BINARY_VALUE_INT32, &cache_format)
+        || !je_cache_binary_document_index(
             &root, "pixels", JE_CACHE_BINARY_VALUE_BUFFER, &pixels))
         return false;
 
     if (width <= 0 || height <= 0)
         return false;
 
-    const size_t pixels_size = (size_t)width * (size_t)height * 4;
+    je_gl_texture_format_t format = JE_GL_TEXTURE_FORMAT_RGBA;
+    switch (cache_format)
+    {
+    case 0:
+        format = JE_GL_TEXTURE_FORMAT_RGBA;
+        break;
+    case 1:
+        format = JE_GL_TEXTURE_FORMAT_BC1;
+        break;
+    case 2:
+        format = JE_GL_TEXTURE_FORMAT_BC3;
+        break;
+    default:
+        return false;
+    }
+
+    const size_t pixels_size = texture_format_pixel_data_size(
+        format, (size_t)width, (size_t)height);
 
     size_t buffer_size = 0;
     if (!je_cache_binary_buffer_read(nullptr, &buffer_size, &pixels)
@@ -2485,6 +2520,7 @@ static bool _jegl_read_image_texture_cache(
     *out_color_space = color_space == (int32_t)JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR
         ? JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR
         : JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
+    *out_format = format;
     *out_pixels = pixel_data;
     return true;
 }
@@ -2501,12 +2537,15 @@ static bool _jegl_read_image_texture_cache(
     size_t width = 0;
     size_t height = 0;
     je_image_texture_color_space_t color_space = JE_IMAGE_TEXTURE_COLOR_SPACE_SRGB;
+    // Filled by the reader below; RGBA is only a placeholder for the
+    // "no usable cache" path, where pixels stay null.
+    je_gl_texture_format_t format = JE_GL_TEXTURE_FORMAT_RGBA;
     je_gl_texture_pixel_data_t* pixels = nullptr;
 
     if (je_file_t* cache = _jegl_open_image_texture_cache(path))
     {
         if (!_jegl_read_image_texture_cache(
-            cache, &width, &height, &color_space, &pixels))
+            cache, &width, &height, &color_space, &format, &pixels))
         {
             // A cache that exists but cannot be parsed is corruption, not a
             // miss; report it instead of silently treating it as loadable.
@@ -2532,7 +2571,9 @@ static bool _jegl_read_image_texture_cache(
     texture_instance->m_kind = je_gl_texture_kind_t::TEXTURE_2D;
     texture_instance->m_width = width;
     texture_instance->m_height = height;
-    texture_instance->m_format = JE_GL_TEXTURE_FORMAT_RGBA;
+    // BC1/BC3 block data is uploaded as is by backends that support block
+    // compression; the others decode it before creating the GPU texture.
+    texture_instance->m_format = format;
 
     // Image textures default to sRGB; the <path>.je4texture property
     // source (edited from the texture properties window) can mark

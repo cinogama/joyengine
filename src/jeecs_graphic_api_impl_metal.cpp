@@ -25,6 +25,8 @@
 #include <AppKit/AppKit.hpp>
 #include <MetalKit/MetalKit.hpp>
 
+#include <cstdlib>
+
 #include "jeecs_graphic_api_interface_glfw.hpp"
 
 namespace jeecs::graphic::api::metal
@@ -1270,10 +1272,55 @@ namespace jeecs::graphic::api::metal
 
         MTL::PixelFormat texture_format;
 
+        // 设备支持 BC 时直接上传块数据；不支持（例如 iOS）时在 CPU 上解码成
+        // RGBA8，再按普通纹理上传。
+        je_gl_texture_format_t upload_format = texture->m_format;
+        je_gl_texture_pixel_data_t* decoded_pixels = nullptr;
+
         if (is_depth)
         {
             assert(is_framebuf);
             texture_format = MTL::PixelFormatDepth16Unorm;
+        }
+        else if (texture_format_is_block_compressed(texture->m_format))
+        {
+            const bool srgb =
+                0 != (texture->m_format & JE_GL_TEXTURE_FORMAT_SRGB);
+
+            if (metal_context->m_metal_device->supportsBCTextureCompression())
+            {
+                switch (texture->m_format & JE_GL_TEXTURE_FORMAT_COMPRESSED_MASK)
+                {
+                case JE_GL_TEXTURE_FORMAT_BC1:
+                    texture_format = srgb
+                        ? MTL::PixelFormatBC1_RGBA_sRGB
+                        : MTL::PixelFormatBC1_RGBA;
+                    break;
+                default:
+                    texture_format = srgb
+                        ? MTL::PixelFormatBC3_RGBA_sRGB
+                        : MTL::PixelFormatBC3_RGBA;
+                    break;
+                }
+            }
+            else
+            {
+                assert(texture->m_initial_pixels != nullptr);
+
+                decoded_pixels = decode_texture_bc(
+                    texture->m_format,
+                    texture->m_width,
+                    texture->m_height,
+                    texture->m_initial_pixels);
+                assert(decoded_pixels != nullptr);
+
+                upload_format = (je_gl_texture_format_t)(
+                    JE_GL_TEXTURE_FORMAT_RGBA
+                    | (srgb ? JE_GL_TEXTURE_FORMAT_SRGB : 0));
+                texture_format = srgb
+                    ? MTL::PixelFormatRGBA8Unorm_sRGB
+                    : MTL::PixelFormatRGBA8Unorm;
+            }
         }
         else
         {
@@ -1311,11 +1358,16 @@ namespace jeecs::graphic::api::metal
         }
         else
         {
-            const uint32_t bytes_per_row =
-                (uint32_t)texture->m_width
-                * (float16 ? 2 : 1)
-                * (texture->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
-            const uint32_t bytes_per_slice = bytes_per_row * (uint32_t)texture->m_height;
+            // 块压缩格式的 bytesPerRow 是一"块行"的字节数。
+            const uint32_t bytes_per_row = (uint32_t)texture_format_row_bytes(
+                upload_format, texture->m_width);
+            const uint32_t bytes_per_slice = (uint32_t)texture_format_pixel_data_size(
+                upload_format, texture->m_width, texture->m_height);
+
+            const je_gl_texture_pixel_data_t* const upload_pixels =
+                decoded_pixels != nullptr
+                    ? decoded_pixels
+                    : texture->m_initial_pixels;
 
             if constexpr (is_3d)
             {
@@ -1328,7 +1380,7 @@ namespace jeecs::graphic::api::metal
                         (uint32_t)texture->m_depth),
                     0,
                     0,
-                    texture->m_initial_pixels,
+                    upload_pixels,
                     bytes_per_row,
                     bytes_per_slice);
             }
@@ -1345,12 +1397,13 @@ namespace jeecs::graphic::api::metal
                             1),
                         0,
                         slice,
-                        texture->m_initial_pixels + (size_t)slice * bytes_per_slice,
+                        upload_pixels + (size_t)slice * bytes_per_slice,
                         bytes_per_row,
                         bytes_per_slice);
                 }
             }
         }
+        free(decoded_pixels);
         texture->m_handle.m_ptr = new metal_texture(texture_instance, texture_format);
         texture_desc->release();
     }

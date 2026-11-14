@@ -66,11 +66,33 @@ namespace je::cache
         public func generate_map_cache(path: string)=> bool;
 
     // 确保 path 指向的图片已有可用的纹理缓存 <path>.je4cache（颜色空间 +
-    // 解码后的像素）；缓存按图片与可选的 <path>.je4texture 属性源文件
-    // 校验，缺失或失效时调用 builtin/script/internal/cache/texture.wo 生成。
+    // 像素；默认 BC1/BC3 块压缩，属性源文件 pixel_format = "raw" 时为原始
+    // RGBA8）；缓存按图片与可选的 <path>.je4texture 属性源文件校验，缺失或
+    // 失效时调用 builtin/script/internal/cache/texture.wo 生成。
     // 引擎加载纹理时走同一流程，这里提供给导出流程预生成缓存。
     extern("libjoyecs", "wojeapi_image_texture_cache_ensure")
         public func generate_texture_cache(path: string)=> bool;
+
+    // 图片纹理缓存使用的块压缩格式（与缓存文档的 "format" 取值一致）：
+    //   BC1 —— 4x4 块，8 字节/块，RGB（全部像素不透明时选用，体积 1/8）；
+    //   BC3 —— 4x4 块，16 字节/块，RGB + 8 位 alpha（体积 1/4）。
+    // 只由纹理缓存生成器使用；块数据可直接交给图形库/GPU 上传。
+    public enum texture_bc_format
+    {
+        BC1 = 1,
+        BC3 = 2,
+    }
+
+    // 为 RGBA8 像素选择体积最小且不损失 alpha 的 BC 格式：全部不透明时为
+    // BC1，否则 BC3。pixels 为 width * height * 4 字节、自底向上行序。
+    extern("libjoyecs", "wojeapi_texture_bc_format_choose")
+        public func choose_texture_bc_format(pixels: buffer, width: int, height: int)=> int;
+
+    // 把 RGBA8 像素压缩为 format（1 = BC1，2 = BC3）的块数据，返回可直接
+    // 交给图形库/GPU 上传的压缩缓冲；内存不足时返回 none。
+    extern("libjoyecs", "wojeapi_texture_bc_compress")
+        public func compress_texture_bc(pixels: buffer, width: int, height: int,
+            format: int)=> option<buffer>;
 
     // 确保 path 指向的音频已有可用的缓存 <path>.je4cache（裸 PCM 区 +
     // 解码信息文档 + 可选的 <path>.je4audio 流式播放配置）；缓存按音频

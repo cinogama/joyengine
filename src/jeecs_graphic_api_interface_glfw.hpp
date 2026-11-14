@@ -11,6 +11,7 @@
 #include "jeecs/prefix.hpp"
 
 #include "jeecs_graphic_api_interface.hpp"
+#include "jeecs_graphic_render_internal.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -477,8 +478,17 @@ namespace jeecs::graphic
                 GLFWimage icon_data;
                 icon_data.width = (int)icon_texture->width();
                 icon_data.height = (int)icon_texture->height();
-                // Here need a y-direct flip.
-                auto* image_pixels = icon_texture->resource()->m_initial_pixels;
+
+                // Here need a y-direct flip. Image textures can be stored as
+                // BC1/BC3 block data, so take the RGBA8 view of the snapshot.
+                je_gl_texture_pixel_data_t* decoded_pixels = nullptr;
+                const auto* image_pixels = texture_rgba_pixels(
+                    icon_texture->resource()->m_format,
+                    icon_texture->width(),
+                    icon_texture->height(),
+                    icon_texture->resource()->m_initial_pixels,
+                    &decoded_pixels);
+
                 icon_data.pixels = (unsigned char*)malloc((size_t)icon_data.width * (size_t)icon_data.height * 4);
                 assert(icon_data.pixels != nullptr);
 
@@ -495,6 +505,7 @@ namespace jeecs::graphic
                 glfwSetWindowIcon(_m_windows, 1, &icon_data);
 
                 free(icon_data.pixels);
+                free(decoded_pixels);
             }
 
             if (glfwGetWindowAttrib(_m_windows, GLFW_CLIENT_API) != GLFW_NO_API)

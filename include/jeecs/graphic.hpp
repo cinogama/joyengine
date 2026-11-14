@@ -210,6 +210,13 @@ typedef uint8_t je_gl_texture_pixel_data_t;
 /*
 je_gl_texture_format_t [枚举]
 纹理像素格式；低位表示通道布局，其余位是附加标志
+    * 非压缩格式的像素数据长度为 宽 * 高 * (COLOR_DEPTH_MASK 字节数)，行序
+        自底向上
+    * BC1/BC3 是 4x4 块压缩格式：数据按块存储，COLOR_DEPTH_MASK 为 0
+        （不存在逐像素通道布局），长度由块数 * 每块字节数决定，不能按
+        RGBA8 处理；块数据可以直接交给图形库/GPU 上传
+    * 块压缩格式只用于图片加载得到的只读纹理，不支持
+        je_graphic_cmd_upload_texture_* 的区段上传
 */
 typedef enum je_gl_texture_format_t : uint16_t
 {
@@ -223,6 +230,13 @@ typedef enum je_gl_texture_format_t : uint16_t
     // Sample RGB through the sRGB transfer function (hardware decode).
     // Pixel storage is unchanged; alpha is always linear.
     JE_GL_TEXTURE_FORMAT_SRGB = 0x0080,
+
+    // BC1：4x4 块，8 字节/块，RGB（alpha 恒为不透明）
+    JE_GL_TEXTURE_FORMAT_BC1 = 0x0100,
+    // BC3：4x4 块，16 字节/块，RGB + 8 位 alpha
+    JE_GL_TEXTURE_FORMAT_BC3 = 0x0200,
+    JE_GL_TEXTURE_FORMAT_COMPRESSED_MASK =
+        JE_GL_TEXTURE_FORMAT_BC1 | JE_GL_TEXTURE_FORMAT_BC3,
 
     // Formats that do not keep a CPU-side pixel buffer.
     JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK =
@@ -238,6 +252,8 @@ typedef struct je_gl_texture_common_t
 {
     // NOTE:
     // * Pixel data is storage from LEFT/BOTTOM to RIGHT/TOP
+    // * 块压缩格式（BC1/BC3）的 m_initial_pixels 是压缩后的块数据，不是逐像素
+    //   数据；其长度按块数计算（见 je_graphic_texture_2d_create）
     // * m_initial_pixels 是创建期像素快照：只在后端首次初始化（以及图形线程
     //   重建）时读取，创建完成后不再允许任何改写。运行时修改纹理只能通过
     //   je_graphic_cmd_upload_texture_* 录制区段上传。
@@ -1721,9 +1737,11 @@ je_graphic_texture_2d_create [基本接口]
     * initial_pixels 是一份完整像素快照（行序与 je_gl_texture_common_t 的
         m_initial_pixels 一致，自底向上），创建时拷贝保存；传 nullptr 表示不创建
         像素快照（纹理在 GPU 侧未初始化）
+    * initial_pixels 的长度由格式决定：非压缩格式为 宽 * 高 * (COLOR_DEPTH_MASK
+        字节数)，BC1/BC3 为 ceil(宽/4) * ceil(高/4) * 每块字节数（8/16）
     * 若指定的格式包含 FLOAT16、DEPTH 或 FRAMEBUF，则 initial_pixels 必须为 nullptr
     * 创建期快照只在后端首次初始化（以及图形线程重建）时读取，创建后不再允许改写；
-        运行时修改纹理请使用 je_graphic_cmd_upload_texture_2d
+        运行时修改纹理请使用 je_graphic_cmd_upload_texture_2d（不支持块压缩格式）
     * 考虑到部分图形库的实现，如果指定的宽度或高度为 0，je_graphic_texture_2d_create将视其为 1
     * 图形资源被创建时，其自动获取一个引用计数；使用 jegl_share_resource可增加引
         用计数，使用 je_graphic_texture_2d_close 可减少引用计数；当资源的引用计数变为 0 时，
@@ -2745,8 +2763,11 @@ enum je_image_texture_color_space_t
 /*
 je_image_texture_cache_open_or_create [基本接口]
 打开指定图片的纹理缓存 <path>.je4cache；缓存缺失或失效时调用内置缓存生成器重建
-    * path 为图片路径；缓存包含纹理的颜色空间和解码后的 RGBA8 像素数据，
-      加载纹理时可直接使用而无需再解码图片
+    * path 为图片路径；缓存包含纹理的颜色空间和解码后的像素数据，加载纹理时
+      可直接使用而无需再解码图片
+    * 像素数据默认按 BC1/BC3 块压缩存储（属性源文件的 pixel_format = "compressed"，
+      也是默认值），可由图形库直接上传；属性源文件声明 pixel_format = "raw" 时
+      存储原始 RGBA8 像素
     * 校验码为图片文件与属性源文件 <path>.je4texture 内容连续计算的 CRC64，
       两者任一改变都会使缓存失效；属性源文件是可选的
     * 图片与属性源文件都不存在（如导出的运行时只携带缓存）时跳过校验

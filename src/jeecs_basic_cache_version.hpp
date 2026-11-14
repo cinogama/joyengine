@@ -9,9 +9,11 @@ constexpr uint32_t CACHE_MANAGER_MAIN_VERSION = 0x00000003;
 constexpr uint32_t SHADER_CACHE_VERSION = 0x00000290;
 // Image texture cache generated from the image file and its optional
 // .je4texture TOML source; the payload is a binary cache document
-// (width/height/color_space -> INT32, pixels -> RGBA8 BUFFER), keyed by
-// crc64(image file bytes chained with .je4texture bytes).
-constexpr uint32_t IMAGE_TEXTURE_CACHE_VERSION = 0x00000003;
+// (width/height/color_space/format -> INT32, pixels -> BUFFER), keyed by
+// crc64(image file bytes chained with .je4texture bytes). v4 stores the
+// pixels block-compressed (BC1/BC3, "format" = 1/2) by default; "format" = 0
+// means raw RGBA8, as written by v3.
+constexpr uint32_t IMAGE_TEXTURE_CACHE_VERSION = 0x00000004;
 // Animation set cache generated from the .je4animation TOML source (v2
 // track/key model); the payload is a binary cache document
 // (see jeecs_cache_binary_* in jeecs.hpp and jeecs_graphic_animation_cache.cpp).

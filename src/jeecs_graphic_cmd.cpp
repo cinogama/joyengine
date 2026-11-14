@@ -847,6 +847,9 @@ static size_t _jegl_upload_byte_size(
     const je_gl_texture_common_t* texture, size_t pixel_count)
 {
     assert(0 == (texture->m_format & JE_GL_TEXTURE_FORMAT_NON_PIXEL_FORMAT_MASK));
+    // 块压缩纹理只能在创建时整块上传：区段上传无法把像素坐标对齐到 4x4
+    // 块，且图片纹理创建后本来就是只读的。
+    assert(0 == (texture->m_format & JE_GL_TEXTURE_FORMAT_COMPRESSED_MASK));
 
     const size_t pixel_size =
         (size_t)(texture->m_format & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);

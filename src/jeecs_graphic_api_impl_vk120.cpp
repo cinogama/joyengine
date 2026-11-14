@@ -556,6 +556,10 @@ namespace jeecs::graphic::api::vk120
         VkSampleCountFlagBits _vk_active_msaa_samples;
         bool _vk_vsync_config;
 
+        // 设备是否支持 BC1/BC3（textureCompressionBC）；不支持时块压缩纹理
+        // 在 CPU 上解码成 RGBA8 上传。
+        bool _vk_bc_texture_supported;
+
         // Vk的全局实例
         VkInstance _vk_instance;
         basic_interface* _vk_jegl_interface;
@@ -2656,6 +2660,7 @@ namespace jeecs::graphic::api::vk120
                 _vk_msaa_config = 1;
 
             _vk_vsync_config = config->m_fps == 0;
+            _vk_bc_texture_supported = false;
 
             // 获取所有支持的层
             uint32_t vk_layer_count;
@@ -2942,6 +2947,13 @@ namespace jeecs::graphic::api::vk120
                     "VK120: independentBlend is not supported by this device; "
                     "per-render-target blend state will be limited.");
             }
+
+            // 块压缩纹理（图片纹理缓存默认使用 BC1/BC3）；不支持时纹理会在
+            // CPU 上解码成 RGBA8 上传。
+            _vk_bc_texture_supported =
+                supported_features.textureCompressionBC == VK_TRUE;
+            if (_vk_bc_texture_supported)
+                device_features.textureCompressionBC = VK_TRUE;
 
             VkDeviceCreateInfo device_create_info = {};
             device_create_info.sType = VkStructureType::VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -3768,6 +3780,21 @@ namespace jeecs::graphic::api::vk120
                 0 != (format & JE_GL_TEXTURE_FORMAT_FLOAT16);
             const bool is_srgb =
                 0 != (format & JE_GL_TEXTURE_FORMAT_SRGB);
+
+            switch (format & JE_GL_TEXTURE_FORMAT_COMPRESSED_MASK)
+            {
+            case JE_GL_TEXTURE_FORMAT_BC1:
+                return is_srgb
+                    ? VK_FORMAT_BC1_RGBA_SRGB_BLOCK
+                    : VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+            case JE_GL_TEXTURE_FORMAT_BC3:
+                return is_srgb
+                    ? VK_FORMAT_BC3_SRGB_BLOCK
+                    : VK_FORMAT_BC3_UNORM_BLOCK;
+            default:
+                break;
+            }
+
             if (0 != (format & JE_GL_TEXTURE_FORMAT_RGBA))
             {
                 return is_float16
@@ -4039,14 +4066,18 @@ namespace jeecs::graphic::api::vk120
 
         // 首次初始化：把创建期像素快照整体上传进 image（新 image 没有读者，
         // 用一次临时提交并等待完成即可）。无快照时只做布局迁移。
+        // upload_format / upload_pixels 是设备实际可接受的格式与数据：块压缩
+        // 纹理在设备不支持 BC 时会由调用方解码成 RGBA8 后传入。
         template<typename TexT>
         void trans_and_update_texture_pixels(
-            jevk12_texture* texture, TexT* texture_raw_data)
+            jevk12_texture* texture, TexT* texture_raw_data,
+            je_gl_texture_format_t upload_format,
+            const je_gl_texture_pixel_data_t* upload_pixels)
         {
             assert(texture != nullptr);
             assert(texture_raw_data != nullptr);
 
-            if (texture_raw_data->m_initial_pixels == nullptr)
+            if (upload_pixels == nullptr)
             {
                 // 合法用法：仅在 GPU 侧创建纹理，没有 CPU 像素需要上传。
                 if (texture->m_current_layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
@@ -4070,18 +4101,13 @@ namespace jeecs::graphic::api::vk120
             else if constexpr (is_cube)
                 slice_count = 6;
 
-            size_t pixel_size =
-                (size_t)(texture_raw_data->m_format
-                    & JE_GL_TEXTURE_FORMAT_COLOR_DEPTH_MASK);
-            if (0 != (texture_raw_data->m_format
-                & JE_GL_TEXTURE_FORMAT_FLOAT16))
-            {
-                // RGBA16F / R16F 每个通道占 2 字节。
-                pixel_size *= 2;
-            }
-
-            const size_t staging_size = texture_raw_data->m_width
-                * texture_raw_data->m_height * slice_count * pixel_size;
+            // 按格式计算一个 2D 平面的字节数（块压缩格式按块数计算）。
+            const size_t staging_size =
+                texture_format_pixel_data_size(
+                    upload_format,
+                    texture_raw_data->m_width,
+                    texture_raw_data->m_height)
+                * slice_count;
 
             if (staging_size == 0)
                 return;
@@ -4109,7 +4135,7 @@ namespace jeecs::graphic::api::vk120
                     "VK120: staging buffer memory is not host-visible.");
             }
 
-            memcpy(data, texture_raw_data->m_initial_pixels, staging_size);
+            memcpy(data, upload_pixels, staging_size);
 
             transition_image_layout(texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
@@ -4399,7 +4425,28 @@ namespace jeecs::graphic::api::vk120
                 texture->m_width = resource->m_width;
                 texture->m_height = resource->m_height;
 
-                const VkFormat image_format = vk_format_for_texture(resource->m_format);
+                // 设备不支持 BC 时把块压缩数据解码成 RGBA8 再上传。
+                je_gl_texture_format_t upload_format =
+                    resource->m_format;
+                const je_gl_texture_pixel_data_t* upload_pixels =
+                    resource->m_initial_pixels;
+                je_gl_texture_pixel_data_t* decoded_pixels = nullptr;
+                if (texture_format_is_block_compressed(resource->m_format)
+                    && !_vk_bc_texture_supported)
+                {
+                    decoded_pixels = decode_texture_bc(
+                        resource->m_format,
+                        resource->m_width, resource->m_height,
+                        resource->m_initial_pixels);
+                    assert(decoded_pixels != nullptr);
+
+                    upload_format = (je_gl_texture_format_t)(
+                        JE_GL_TEXTURE_FORMAT_RGBA
+                        | (resource->m_format & JE_GL_TEXTURE_FORMAT_SRGB));
+                    upload_pixels = decoded_pixels;
+                }
+
+                const VkFormat image_format = vk_format_for_texture(upload_format);
                 const bool is_depth =
                     0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_DEPTH);
 
@@ -4420,8 +4467,11 @@ namespace jeecs::graphic::api::vk120
                 }
                 else
                 {
-                    trans_and_update_texture_pixels(texture, resource);
+                    trans_and_update_texture_pixels(
+                        texture, resource, upload_format, upload_pixels);
                 }
+
+                free(decoded_pixels);
                 return texture;
             }
             else
@@ -4476,7 +4526,11 @@ namespace jeecs::graphic::api::vk120
                 }
                 else
                 {
-                    trans_and_update_texture_pixels(texture, resource);
+                    // 块压缩格式只用于 2D 图片纹理（见 je_graphic_texture_*_create
+                    // 的断言），这里直接按资源自身的格式上传。
+                    trans_and_update_texture_pixels(
+                        texture, resource,
+                        resource->m_format, resource->m_initial_pixels);
                 }
                 return texture;
             }
