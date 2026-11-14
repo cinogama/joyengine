@@ -1107,14 +1107,38 @@ namespace jeecs::ecs
                 return _m_world;
             }
 
+            // 碎片整理的读取锁：外部线程直接遍历实体/读取组件前持有。
+            // 碎片整理会搬运实体、搬空 chunk，读取期间进行碎片整理会让
+            // 已取出的实体句柄/组件地址失配。持有期间碎片整理被跳过
+            //（见 try_command_defragmentation），不会阻塞世界更新。
+            void lock_defragmentation() noexcept
+            {
+                _m_defragmentation_mx.lock_shared();
+            }
+            void unlock_defragmentation() noexcept
+            {
+                _m_defragmentation_mx.unlock_shared();
+            }
+
         private:
             friend class CommandBuffer;
+
+            // 有外部读取锁时跳过本轮碎片整理；正在整理时等待其完成
+            inline void try_command_defragmentation() noexcept
+            {
+                unique_lock<shared_mutex> g1(
+                    _m_defragmentation_mx, try_to_lock);
+                if (g1.owns_lock())
+                    command_defragmentation();
+            }
             inline void command_defragmentation() noexcept
             {
                 shared_lock sg1(_m_arch_types_mapping_mx);
                 for (auto& [types, archtype] : _m_arch_types_mapping)
                     archtype->command_defragmentation();
             }
+
+            shared_mutex _m_defragmentation_mx;
         };
 
         class Universe;
@@ -1977,8 +2001,8 @@ namespace jeecs::ecs
             // Finish! clear buffer.
             _m_entity_command_buffers.clear();
 
-            // 在此处整理ArchType的内存碎片：
-            _m_world->_get_arch_mgr().command_defragmentation();
+            // 在此处整理ArchType的内存碎片（外部读取锁定期间跳过）：
+            _m_world->_get_arch_mgr().try_command_defragmentation();
 
             /////////////////////////////////////////////////////////////////////////////////////
 
@@ -3054,6 +3078,16 @@ void je_ecs_world_entity_destroy(
 je_game_universe_t* je_ecs_world_in_universe(je_game_world_t* world)
 {
     return static_cast<World*>(world)->get_universe();
+}
+
+void je_ecs_world_arch_defragmentation_lock(je_game_world_t* world)
+{
+    static_cast<World*>(world)->_get_arch_mgr().lock_defragmentation();
+}
+
+void je_ecs_world_arch_defragmentation_unlock(je_game_world_t* world)
+{
+    static_cast<World*>(world)->_get_arch_mgr().unlock_defragmentation();
 }
 
 /* OPTIONAL: If entity is invalid */ je_game_world_t* je_ecs_world_of_entity(const je_game_entity_t* entity)

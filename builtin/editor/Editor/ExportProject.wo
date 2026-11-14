@@ -26,6 +26,7 @@ import pkg::buffer;
 import pkg::dumpling;
 import pkg::platform;
 import pkg::process;
+import pkg::thread;
 import pkg::toml;
 import pkg::worst;
 
@@ -936,80 +937,52 @@ namespace JEEditor::Editor
             return result->unsafe::asarray;
         }
         
-        // 导出前烘焙项目内全部世界的音频环境：
-        //   已打开的世界先保存，用其 live world 烘焙；
-        //   未打开的世界用 restoreForBake 临时恢复，让出一帧等宇宙更新处理
-        //   世界命令缓冲区（恢复的实体随之生效），再烘焙并立即关闭。
-        // 结果写入 <world>.je4cache，后续 packProjectFiles 会自动打包；
-        // 世界文件本身不记录缓存路径（运行时加载世界时按路径重建
-        // World::Path 内部实体）。
-        // 本函数含 yield()，必须在 launch_coroutine 中调用。
-        func bakeAllWorldAudioEnvironments(self: ExportProject)=> bool
+        // 导出前准备音频环境烘焙用的世界副本：先保存所有已打开的世界，
+        // 再把项目内全部 .je4world 从磁盘恢复到临时世界。
+        // 烘焙本身不在这里做：调用方（协程）让出一帧、等宇宙更新处理完
+        // 临时世界的命令缓冲区后，把返回的列表交给独立后台线程烘焙。
+        // 返回 none 表示失败（已弹错误框并清理已创建的世界）。
+        func prepareWorldsForAudioBake(self: ExportProject)
+            => option<array<(world, string)>>
         {
             // sidecar 以世界文件 CRC 为键，先统一落盘，再按落盘内容烘焙
             if (!WorldEditorViewport::saveAllWorldsChecked())
             {
                 JEEditor::GUI::Forms::MsgBox::err(
                     "导出", "保存已打开的世界失败，已中止音频环境烘焙");
-                return false;
+                return option::none;
             }
+
+            let mut worlds = []mut: vec<(world, string)>;
 
             for (let entry : self.m_worlds)
             {
-                // scanWorlds 产生 @/ 打包键；查找视口/读取文件用本地路径。
+                // scanWorlds 产生 @/ 打包键；读取文件用本地路径。
                 let path = ResourcePath::toLocalResourcePath(entry.0);
 
-                match (WorldEditorViewport::findWorldEditorViewportByPath(path))
+                match (toml::load(path))
                 {
-                    value(viewport)?
+                    err(msg)?
                     {
-                        if (!je::audio::environment::bake(
-                                viewport->getWorld(), path->to_string()))
-                        {
-                            JEEditor::GUI::Forms::MsgBox::err(
-                                "导出",
-                                F"烘焙音频环境失败：{path->to_string()}");
-                            return false;
-                        }
+                        JEEditor::GUI::Forms::MsgBox::err(
+                            "导出",
+                            F"读取世界 \"{path->to_string()}\" 失败：{msg}");
+
+                        for (let (w, _) : worlds)
+                            w->close();
+
+                        return option::none;
                     }
-                    none?
+                    ok(wdat)?
                     {
-                        match (toml::load(path))
-                        {
-                            err(msg)?
-                            {
-                                JEEditor::GUI::Forms::MsgBox::err(
-                                    "导出",
-                                    F"读取世界 \"{path->to_string()}\" 失败：{msg}");
-                                return false;
-                            }
-                            ok(wdat)?
-                            {
-                                let w = JEEditor::Saving::World::restoreForBake(
-                                    Singleton::Universe::getUniverse(), wdat);
-
-                                // 临时世界只在宇宙更新中处理命令缓冲区：
-                                // 让出一帧，恢复的实体才可见
-                                yield();
-
-                                let baked = je::audio::environment::bake(
-                                    w, path->to_string());
-                                w->close();
-
-                                if (!baked)
-                                {
-                                    JEEditor::GUI::Forms::MsgBox::err(
-                                        "导出",
-                                        F"烘焙音频环境失败：{path->to_string()}");
-                                    return false;
-                                }
-                            }
-                        }
+                        let w = JEEditor::Saving::World::restoreForBake(
+                            Singleton::Universe::getUniverse(), wdat);
+                        worlds->add((w, path->to_string()));
                     }
                 }
             }
 
-            return true;
+            return option::value(worlds->to_array);
         }
 
         // 收集向导配置并启动后台打包。
@@ -1054,21 +1027,69 @@ namespace JEEditor::Editor
                     s.m_skip_extensions = self.m_skip_extensions;
                 });
 
-            // 向导立即关闭，避免烘焙期间重复点击导出；烘焙在 UI 线程的
-            // 协程里进行（未打开的世界需恢复后让出一帧），完成后再启动
-            // 后台打包。sidecar 随后由 packProjectFiles 打包。
+            // 向导立即关闭，避免准备期间重复点击导出。世界副本的恢复放在
+            // 协程里（Woolang 侧对象只能在这里创建），让出一帧等宇宙更新
+            // 处理完命令缓冲区后，烘焙交给独立线程（像等待模块编译一样
+            // 逐帧轮询完成标志），再启动打包任务。
             self.m_closed = true;
 
             launch_coroutine(func(){
-                    if (!bakeAllWorldAudioEnvironments(self))
-                        return;
+                    match (prepareWorldsForAudioBake(self))
+                    {
+                        none?;
+                        value(bake_worlds)?
+                        {
+                            // 临时世界加入宇宙后，下一帧宇宙更新会处理其
+                            // 命令缓冲区，恢复的实体随之生效
+                            yield();
 
-                    do showModal(
-                        ModulePrepare::createWithTitle(
-                            "项目导出",
-                            func(prepare: ModulePrepare){
-                                return runExportJob(prepare, settings);
-                            }));
+                            // 后台烘焙：只读世界副本，持碎片整理锁防止
+                            // 宇宙更新在读取期间搬运实体。完成后关闭副本，
+                            // 工作线程只通过这两个 mutable 与协程通信。
+                            let bake_done = mutable::create(false);
+                            let bake_error = mutable::create("");
+
+                            do thread::create(func(){
+                                    for (let (w, path) : bake_worlds)
+                                    {
+                                        w->arch_defragmentation_lock();
+                                        let baked =
+                                            je::audio::environment::bake(w, path);
+                                        w->arch_defragmentation_unlock();
+
+                                        if (!baked)
+                                        {
+                                            bake_error->set(
+                                                F"烘焙音频环境失败：{path}");
+                                            break;
+                                        }
+                                    }
+
+                                    for (let (w, _) : bake_worlds)
+                                        w->close();
+
+                                    bake_done->set(true);
+                                });
+
+                            while (!bake_done->get)
+                                yield();
+
+                            let error_message = bake_error->get;
+                            if (error_message->len > 0)
+                            {
+                                JEEditor::GUI::Forms::MsgBox::err(
+                                    "导出", error_message);
+                                return;
+                            }
+
+                            do showModal(
+                                ModulePrepare::createWithTitle(
+                                    "项目导出",
+                                    func(prepare: ModulePrepare){
+                                        return runExportJob(prepare, settings);
+                                    }));
+                        }
+                    }
                 });
         }
         

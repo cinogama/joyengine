@@ -391,8 +391,13 @@ namespace JEEditor::Editor::WorldEditorViewport
                 if (!self->saveWorldTo(path))
                     return;
 
-                if (je::audio::environment::bake(
-                        self.m_world_instance, path->to_string()))
+                // 烘焙只读实体/组件：锁住碎片整理，避免与宇宙更新并发搬运实体
+                do self.m_world_instance->arch_defragmentation_lock();
+                let baked = je::audio::environment::bake(
+                    self.m_world_instance, path->to_string());
+                do self.m_world_instance->arch_defragmentation_unlock();
+
+                if (baked)
                 {
                     Statebar::showState(3.) <| func(){
                         Text("音频环境已烘焙");
