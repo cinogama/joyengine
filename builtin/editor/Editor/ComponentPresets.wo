@@ -131,6 +131,7 @@ namespace JEEditor::Editor::ComponentPresets
             ("音频监听器", ["Audio::Listener"]),
             ("声音遮挡", ["Audio::Occluder"]),
             ("混响区域", ["Audio::ReverbZone"]),
+            ("音频门洞", ["Audio::Portal"]),
         ]),
     ];
 

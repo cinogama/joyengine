@@ -7,6 +7,7 @@
 #include "jeecs/prefix.hpp"
 #include "jeecs/file.hpp"
 #include "jeecs/basic.hpp"
+#include "jeecs/ecs.hpp"
 
 JE_FORCE_CAPI
 
@@ -927,6 +928,38 @@ je_audio_devices_disconnect_all [基本接口]
     je_audio_devices_enumerate_and_do
 */
 JE_API void je_audio_devices_disconnect_all();
+
+/*
+je_audio_environment_bake [基本接口]
+把世界中由 Audio::ReverbZone（房间）与 Audio::Portal（门洞）构成的音频
+环境烘焙到 <world_path>.je4cache 的 audio_environment 字段
+    * world_path 必须是已经存在于磁盘上的世界文件路径；烘焙结果以该文件的
+        CRC64 作为缓存键，世界保存后会自然失效
+    * 只读取世界中的组件与实体变换，不读取 tilemap；tilemap 如需生成房间/
+        门洞，应把它们生成为普通实体/组件后再烘焙
+    * 烘焙内容包括房间声学参数、门洞连接关系与全房间对路径表
+    * 失败（世界路径为空、文件不存在、写缓存失败）返回 false
+*/
+JE_API bool je_audio_environment_bake(
+    je_game_world_t* world, const char* world_path);
+
+/*
+je_audio_environment_reload [基本接口]
+通知世界的音频系统重新加载 <世界源路径>.je4cache 中的音频环境
+    * 世界保存后旧 sidecar 会因 CRC 失效，调用本接口可以让正在运行的音频
+        系统立刻回退到实时构建或加载新烘焙结果
+    * 不需要音频环境的世界可以忽略本接口
+*/
+JE_API void je_audio_environment_reload(je_game_world_t* world);
+
+/*
+je_audio_environment_generation_get [基本接口]
+获取世界音频环境的重载代数；每次 je_audio_environment_reload 递增
+    * 音频系统用它判断是否需要重新读取 sidecar
+*/
+JE_API uint64_t je_audio_environment_generation_get(
+    je_game_world_t* world);
+
 typedef je_audio_native_play_device_instance_t je_AudioNativePlayDeviceInstance;
 typedef je_audio_play_device_t je_AudioPlayDevice;
 typedef je_audio_state_t je_AudioState;

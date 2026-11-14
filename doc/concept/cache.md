@@ -49,6 +49,9 @@
 | 瓦片集 `.je4tileset`、瓦片地图 `.je4tilemap`（TOML） | 图集与地图的二进制文档 | 内置生成脚本 `tileset.wo` / `tilemap.wo` | 源文件 |
 | 着色器 `.shader` | 各图形后端的着色器代码（HLSL、GLSL、GLSL ES、MSL、SPIR-V）及配置与反射信息 | 引擎内置的着色器生成器 | 源文件 |
 | 内置生成脚本、编辑器主脚本 | 编译后的 Woolang 二进制 | 引擎启动流程 | 见[第二部分](#编辑器主脚本的缓存) |
+| 世界 `.je4world` | 音频环境 `audio_environment`（房间、门洞、全房间对路径表） | `AudioUpdatingSystem::BakeEnvironment`（编辑器手动/导出时烘焙） | 世界文件（只依赖世界组件，不依赖 tilemap） |
+
+世界级音频环境 sidecar `<world>.je4cache` 由编辑器手动或导出时烘焙，不在加载时懒生成；payload 的 `audio_environment` 字段是 binary cache document。世界保存后世界文件 CRC 变化，sidecar 自动失效；运行时缺失/失效时从 `Audio::ReverbZone`/`Audio::Portal` 组件实时构建同样的环境图，因此不烘焙也能正常工作。
 
 **纹理只经由缓存加载**：运行时不会绕过缓存直接解码图片，图片的属性文件（如颜色空间 `color_space = "linear"`）也随像素一起写进纹理缓存。
 

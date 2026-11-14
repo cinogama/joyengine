@@ -30,19 +30,24 @@ import pkg::toml;
 import pkg::worst;
 
 import je;
+import je::ecs;
 import je::graphic;
 import je::gui;
 import je::internal;
 import je::cache;
+import je::audio;
 
 import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::Editor::ModulePrepare;
 import builtin::editor::Editor::Template;
 import builtin::editor::Editor::Project;
 import builtin::editor::Editor::ResourcePath;
 import builtin::editor::Editor::WorldEditorViewport;
+import builtin::editor::Editor::Saving::World;
 
 import builtin::editor::Singleton;
+import builtin::editor::Singleton::Universe;
 import builtin::editor::GUI::Theme;
 
 using std;
@@ -931,6 +936,73 @@ namespace JEEditor::Editor
             return result->unsafe::asarray;
         }
         
+        // 导出前烘焙项目内全部世界的音频环境：
+        //   已打开的世界先保存，用其 live world 烘焙；
+        //   未打开的世界用 restoreForBake 临时加载，烘焙后立即关闭。
+        // 结果写入 <world>.je4cache，后续 packProjectFiles 会自动打包。
+        func bakeAllWorldAudioEnvironments(self: ExportProject)=> bool
+        {
+            if (!WorldEditorViewport::saveAllWorldsChecked())
+            {
+                JEEditor::GUI::Forms::MsgBox::err(
+                    "导出", "保存已打开的世界失败，已中止音频环境烘焙");
+                return false;
+            }
+
+            for (let entry : self.m_worlds)
+            {
+                // scanWorlds 产生 @/ 打包键；查找视口/读取文件用本地路径。
+                let path = ResourcePath::toLocalResourcePath(entry.0);
+
+                match (WorldEditorViewport::findWorldEditorViewportByPath(path))
+                {
+                    value(viewport)?
+                    {
+                        if (!je::audio::environment::bake(
+                                viewport->getWorld(), path->to_string()))
+                        {
+                            JEEditor::GUI::Forms::MsgBox::err(
+                                "导出",
+                                F"烘焙音频环境失败：{path->to_string()}");
+                            return false;
+                        }
+                    }
+                    none?
+                    {
+                        match (toml::load(path))
+                        {
+                            err(msg)?
+                            {
+                                JEEditor::GUI::Forms::MsgBox::err(
+                                    "导出",
+                                    F"读取世界 \"{path->to_string()}\" 失败：{msg}");
+                                return false;
+                            }
+                            ok(wdat)?
+                            {
+                                let w = JEEditor::Saving::World::restoreForBake(
+                                    Singleton::Universe::getUniverse(), wdat);
+
+                                let baked = je::audio::environment::bake(
+                                    w, path->to_string());
+                                w->close();
+
+                                if (!baked)
+                                {
+                                    JEEditor::GUI::Forms::MsgBox::err(
+                                        "导出",
+                                        F"烘焙音频环境失败：{path->to_string()}");
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return true;
+        }
+
         // 收集向导配置并启动后台打包。
         func startExport(self: ExportProject)
         {
@@ -972,6 +1044,11 @@ namespace JEEditor::Editor
                     s.m_min_compress_size_kb = self.m_min_compress_size_kb;
                     s.m_skip_extensions = self.m_skip_extensions;
                 });
+
+            // 在 UI 线程完成全部世界的音频环境烘焙，避免后台任务
+            // 读取 live world；sidecar 随后由 packProjectFiles 打包。
+            if (!bakeAllWorldAudioEnvironments(self))
+                return;
 
             do showModal(
                 ModulePrepare::createWithTitle(

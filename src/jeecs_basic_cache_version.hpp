@@ -35,6 +35,12 @@ constexpr uint32_t TILEMAP_CACHE_VERSION = 0x00000001;
 // encoding. v3: the pcm moved out of the document into a raw leading region.
 constexpr uint32_t AUDIO_CACHE_VERSION = 0x00000003;
 
+// World-level derived cache: <world>.je4cache. The payload is a binary cache
+// document with an "audio_environment" field (rooms/portals/path table) baked
+// from the world's Audio::ReverbZone and Audio::Portal components. The cache
+// key is the crc64 of the .je4world file, so saving the world invalidates it.
+constexpr uint32_t WORLD_CACHE_VERSION = 0x00000001;
+
 constexpr uint32_t INTERNAL_SCRIPT_CACHE_VERSION = 0x00000001;
 
 constexpr uint32_t EDITOR_SCRIPT_CACHE_VERSION = 0x00000001;

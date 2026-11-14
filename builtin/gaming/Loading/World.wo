@@ -22,8 +22,11 @@ namespace JEGaming::Loading::World
             -> ok_or(F"Failed to load world from `{path}`.")
             =>> parse
             ;
-                    
-        return_ok! Saving::World::restore(u, world_dat);
+
+        let w = Saving::World::restore(u, world_dat);
+        // 世界源路径用于世界级派生缓存（<path>.je4cache 的音频环境）
+        w->set_source_path(path);
+        return_ok! w;
     }
     public async! func loadAsync(u: universe, path: string)=> result<world, string>
     {

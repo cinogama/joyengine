@@ -6,7 +6,9 @@
 #include "jeecs/audio.hpp"
 #include "jeecs/components.hpp"
 #include "jeecs/game.hpp"
+#include "jeecs_core_audio_environment.hpp"
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -63,9 +65,23 @@ namespace jeecs::audio
             }
         };
 
-        // 区域实体 id -> 运行时效果槽
+        // 环境房间 id -> 运行时效果槽
         std::unordered_map<uint32_t, reverb_room_runtime> m_reverb_rooms;
         uint64_t m_next_reverb_epoch;
+
+        // 世界级音频环境：优先使用 sidecar 烘焙结果，缺失/不可用时由
+        // ReverbZone/Portal 组件实时构建。
+        std::optional<audio_environment> m_baked_environment;
+        std::string m_baked_environment_world_path;
+        uint64_t m_baked_environment_generation;
+
+        audio_environment m_live_environment;
+        uint64_t m_live_environment_signature;
+        bool m_has_live_environment;
+
+        // 环境变化时递增；用于清空/重建房间效果槽
+        uint64_t m_environment_serial;
+        uint64_t m_applied_environment_serial;
 
         // 地图路径 -> 音频遮挡网格（按 map_stamp 失效）
         std::unordered_map<std::string, audio_map_grid> m_audio_maps;

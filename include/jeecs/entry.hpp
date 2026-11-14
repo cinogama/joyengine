@@ -105,6 +105,7 @@ namespace jeecs
             jeecs::typing::register_type<Audio::Listener>(guard, "Audio::Listener");
             jeecs::typing::register_type<Audio::Occluder>(guard, "Audio::Occluder");
             jeecs::typing::register_type<Audio::ReverbZone>(guard, "Audio::ReverbZone");
+            jeecs::typing::register_type<Audio::Portal>(guard, "Audio::Portal");
 
             jeecs::typing::register_type<Input::VirtualGamepad>(guard, "Input::VirtualGamepad");
 

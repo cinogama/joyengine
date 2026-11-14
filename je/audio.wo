@@ -1,6 +1,8 @@
 // Joyengine 4.x
 import pkg::std;
 
+import je::ecs;
+
 namespace je
 {
     namespace audio
@@ -553,6 +555,17 @@ namespace je
             let mut desc = oneshot_desc();
             desc.location = (x, y, z);
             return _play_oneshot(buffer, desc, bus::SE);
+        }
+
+        // 世界级音频环境烘焙。房间由 Audio::ReverbZone 表示，门洞由
+        // Audio::Portal 表示；结果写入 <world_path>.je4cache。
+        namespace environment
+        {
+            extern("libjoyecs", "wojeapi_audio_environment_bake")
+                public func bake(w: world, path: string)=> bool;
+
+            extern("libjoyecs", "wojeapi_audio_environment_reload")
+                public func reload(w: world)=> void;
         }
     }
 }

@@ -31,6 +31,7 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 
 - `je_ecs_universe_*` - Universe 生命周期与任务管理
 - `je_ecs_world_*` - World 管理与实体操作
+- `je_ecs_world_source_path_*` / `je_ecs_world_command_flush` - 世界源路径、临时世界命令缓冲区处理
 - `je_ecs_requirements_collect` / `je_ecs_world_collection_update` - 切片查询需求收集与刷新
 - `je_arch_*` - 原型（Archetype）遍历
 
@@ -97,6 +98,7 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 - `je_audio_effect_*` - 音频效果
 - `je_audio_filter_*` - 音频滤波器
 - `je_audio_listener_*` - 监听者（距离模型与多普勒）
+- `je_audio_environment_*` - 世界音频环境（房间/门洞图）的烘焙与重载
 
 ### [tilemap/](tilemap/) - 瓦片地图
 地图/瓦片集文档、图层、瓦片、源与逐格属性的读写。

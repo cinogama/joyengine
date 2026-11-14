@@ -2786,6 +2786,62 @@ namespace jeecs
                 typing::register_member(guard, &ReverbZone::diffusion, "diffusion");
             }
         };
+        /*
+        Audio::Portal [组件]
+        门洞：连接两个相邻空间（Audio::ReverbZone 或室外）。系统沿门洞的
+        世界法线在中心两侧各取一个采样点，用房间权重自动解析两侧房间；
+        两侧是同一房间或同为室外时忽略。transmission 描述通过门洞的整体
+        声能，muffle 描述高频损失；enabled 为 false 时烘焙与实时环境图都
+        忽略该门洞。
+        门洞只依赖组件与实体变换；tilemap 只是将来生成这类实体的工具，
+        音频系统不读取 tilemap。
+        */
+        struct Portal
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Portal);
+
+            math::vec3 size;    // 门洞局部全尺寸（x/y 为开口，z 为厚度）
+            math::vec3 normal;  // 局部穿透方向，随实体世界旋转
+            float transmission; // 通过门洞的整体声能，0..1
+            float muffle;       // 通过门洞的高频损失，0..1
+            bool enabled;       // false 时不参与环境图
+
+            Portal() noexcept
+                : size(2.0f, 2.0f, 0.25f)
+                , normal(0.0f, 0.0f, 1.0f)
+                , transmission(1.0f)
+                , muffle(0.0f)
+                , enabled(true)
+            {
+            }
+            Portal(const Portal& another) noexcept
+                : Portal()
+            {
+                size = another.size;
+                normal = another.normal;
+                transmission = another.transmission;
+                muffle = another.muffle;
+                enabled = another.enabled;
+            }
+            Portal(Portal&& another) noexcept
+                : Portal()
+            {
+                size = another.size;
+                normal = another.normal;
+                transmission = another.transmission;
+                muffle = another.muffle;
+                enabled = another.enabled;
+            }
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Portal::size, "size");
+                typing::register_member(guard, &Portal::normal, "normal");
+                typing::register_member(guard, &Portal::transmission, "transmission");
+                typing::register_member(guard, &Portal::muffle, "muffle");
+                typing::register_member(guard, &Portal::enabled, "enabled");
+            }
+        };
     }
     namespace Input
     {

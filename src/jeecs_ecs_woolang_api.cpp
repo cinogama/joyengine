@@ -199,6 +199,21 @@ WOORT_API woort_api wojeapi_get_system_from_world(void)
     return woort_ret_option_pointer(system_addr);
 }
 
+WOORT_API woort_api wojeapi_ecs_world_source_path_set(void)
+{
+    je_ecs_world_source_path_set(
+        static_cast<je_game_world_t*>(woort_pointer(0)),
+        woort_string(1));
+    return woort_ret_void();
+}
+
+WOORT_API woort_api wojeapi_ecs_world_command_flush(void)
+{
+    je_ecs_world_command_flush(
+        static_cast<je_game_world_t*>(woort_pointer(0)));
+    return woort_ret_void();
+}
+
 WOORT_API woort_api wojeapi_remove_system_from_world(void)
 {
     /*

@@ -206,6 +206,44 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 * 全局一次性播放不享受混响区域；
 * 同一区域的效果参数变化时只需更新效果并重绑效果槽，不会重建整个区域。
 
+### 门洞：`Audio::Portal`
+
+`Audio::ReverbZone` 表示房间，`Audio::Portal` 表示房间之间的开口（门、窗、走廊接口）。二者都是普通 ECS 组件；音频系统只读取组件与实体变换，**不读取 tilemap**。tilemap 工具将来可以把房间/门洞生成为这些实体，但引擎的音频环境不依赖 tilemap。
+
+| 成员 | 默认值 | 说明 |
+| --- | --- | --- |
+| `size` | (2, 2, 0.25) | 门洞局部全尺寸；x/y 为开口，z 为厚度（用于两侧采样） |
+| `normal` | (0, 0, 1) | 局部穿透方向，随实体世界旋转 |
+| `transmission` | 1 | 通过门洞的整体声能，0..1 |
+| `muffle` | 0 | 通过门洞的高频损失，0..1 |
+| `enabled` | true | false 时烘焙与实时环境图都忽略该门洞 |
+
+系统沿门洞世界法线在中心两侧各取一个采样点，用房间 OBB 的权重自动解析两侧房间；两侧是同一房间或同为室外时忽略。作者只需把门洞放在开口处，并让 `normal` 指向穿透方向。没有门洞连接的房间之间仍会通过直接路径的遮挡衰减/闷音听到声音，但不会参与房间图路径。
+
+### 音频环境图与烘焙
+
+系统把房间与门洞构建成一张图：
+
+* 节点 = 房间（`ReverbZone`）+ 室外；
+* 边 = 门洞，权重为 `transmission` / `muffle`；
+* 预计算所有房间对的路径：路径 transmission 为沿途乘积，muffle 为 `1 - Π(1 - muffle)`，并记录经过的门洞数。
+
+运行时按声源/听者所在房间查路径表：
+
+* 同房间：只发送该房间混响；
+* 不同房间且有路径：源房间发送按路径 transmission 衰减、muffle 闷音，听者房间以 `0.25 × 听者权重 × 路径 transmission` 二次激发；
+* 无路径（封闭墙）：保留直接遮挡 fallback，墙后的混响仍会随遮挡增益减弱。
+
+**世界级烘焙 sidecar**：每个 `.je4world` 可以在同目录生成 `<world>.je4cache`，payload 是 binary cache document，其中 `audio_environment` 字段保存房间、门洞与路径表。sidecar 以世界文件 CRC64 为缓存键，世界保存后自动失效。运行时优先使用有效期内的 sidecar；sidecar 缺失/版本不符/`use_2d` 不一致时，从 `ReverbZone`/`Portal` 组件实时构建同样的环境，因此不烘焙也能正常工作。
+
+烘焙入口：
+
+* 世界视口菜单 **工具 → 烘焙音频环境**（会先保存世界）；
+* 主菜单 **工具 → 烘焙当前世界音频环境**；
+* **导出项目时自动对项目内全部 `.je4world` 烘焙**：已打开的世界先保存，未打开的世界临时加载、烘焙后关闭；sidecar 随项目一起打包。
+
+烘焙是组件图计算（房间/门洞数量通常很少），同步执行；烘焙结果自包含，运行时不需要再用组件重建房间图。
+
 ### 效果器与滤波器
 
 除了直达的声音，声源还可以经由*辅助发送*（send）把声音送进*效果槽*（effect slot），效果槽中装载一个*效果器*（effect）：
@@ -231,11 +269,14 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 ### 编辑器工作流
 
 1. 新建世界时会自动添加 `Audio::AudioUpdatingSystem`；
-2. “添加组件 → 音频”提供四个预设：**音源**（`Audio::Source`）、**音频监听器**（`Audio::Listener`）、**声音遮挡**（`Audio::Occluder`）、**混响区域**（`Audio::ReverbZone`）；
+2. “添加组件 → 音频”提供五个预设：**音源**（`Audio::Source`）、**音频监听器**（`Audio::Listener`）、**声音遮挡**（`Audio::Occluder`）、**混响区域**（`Audio::ReverbZone`）、**音频门洞**（`Audio::Portal`）；
 3. 把 `Audio::Listener` 挂到摄像机实体，`use_2d` 保持默认 true 即可用于横板/俯视角；
 4. 音源实体拖入 `.wav`，按需调整 `bus`、`reference_distance`、`max_distance`；
-5. 在瓦片地图编辑器的瓦片面板中设置“音频遮挡/闷音”；
-6. 需要混响的房间/洞穴放一个 `Audio::ReverbZone`，调整尺寸覆盖房间；在 Inspector 里选一个预设（`room`/`cave`/`hallway` 等），按需调整 `fade` 与 `send_gain`。多个区域可以重叠，系统会按权重交叉淡化。
+5. 在瓦片地图编辑器的瓦片面板中设置“音频遮挡/闷音”（这是独立的实时遮挡路径，不参与音频环境烘焙）；
+6. 需要混响的房间/洞穴放一个 `Audio::ReverbZone`，调整尺寸覆盖房间；在 Inspector 里选一个预设（`room`/`cave`/`hallway` 等），按需调整 `fade` 与 `send_gain`。多个区域可以重叠，系统会按权重交叉淡化；
+7. 在两个房间/室外之间的门口放 `Audio::Portal`，`size` 覆盖开口，`normal` 指向穿透方向；用 `transmission`/`muffle` 调整通过声能与高频损失；
+8. 需要固定导出结果或避免运行时建图时：保存世界后使用 **世界视口 → 工具 → 烘焙音频环境**（或主菜单 **工具 → 烘焙当前世界音频环境**）。导出项目时会自动烘焙全部世界；
+9. 不烘焙也能工作：sidecar 缺失时系统从 `ReverbZone`/`Portal` 组件实时构建同样的房间图。
 
 旧版本的 `Audio::Playing` 已移除，旧世界中的音源需要把 `buffer`/`play`/`loop` 重新配置到 `Audio::Source` 上。
 
@@ -422,7 +463,7 @@ audio::play_oneshot(desc);
 音频系统只实现 `CommitUpdate`（第 7 阶段，晚于 `LATE_UPDATE!`），因此脚本在同一帧内对组件的修改当帧生效。处理顺序：
 
 1. **Listener + Translation**：速度 = 位置差 / `max(deltatime, 0.0001)`（首帧不产生速度尖峰）；`use_2d` 时位置/速度的 z 归零；`face` / `up` 乘以世界旋转；提交位置、速度、朝向、`m_gain = volume`、距离模型与多普勒系数（不触碰 `m_global_gain`）。系统**不查询 Camera 组件**。
-2. **ReverbZone + Translation 快照**：复制每个区域的中心、旋转、半尺寸、`fade`、预设与自定义参数；按听者位置选出听者所在区域（权重更高者优先，同权重取体积更小者）。区域效果槽不在这里创建，而是等声源真正用到时按需创建。
+2. **音频环境**：收集 `Audio::ReverbZone + Translation`（房间）与 `Audio::Portal + Translation`（门洞，跳过 `enabled = false`）的组件快照；世界源路径或重载代数变化时读取 `<world>.je4cache` 的 `audio_environment`。sidecar 有效且 `use_2d` 与当前 Listener 一致时使用烘焙图，否则用组件快照实时构建同一张图（输入签名变化时才重建）。图包含房间 OBB、门洞连接和全房间对路径表；区域效果槽不在这里创建，而是等声源真正用到时按需创建。
 3. **遮挡快照**：一次性收集所有 `Audio::Occluder + Translation`；对每个 `Tilemap::Map + Translation` 通过 `Tilemap::documents::observe_map` 取得文档并 `ensure_tilesets`，本帧持有 `shared_ptr` 保活。
 4. **Source + Translation（可选）**：
    * `spatial = false` 或没有 Translation → relative，位置/速度写 0；
@@ -430,7 +471,7 @@ audio::play_oneshot(desc);
    * 对每个空间化声源做线段测试：Occluder 的 2D 矩形/3D OBB + 瓦片地图 DDA，得到 `occlusion.m_gain` 与 `occlusion.m_hf`；
    * `m_gain = volume × occlusion.m_gain`；`occlusion.m_hf < 1` 时按需创建/更新 per-source 低通滤波器并绑定（`AL_DIRECT_FILTER`），恢复时解绑；
    * `bus` 变化时经 `je_audio_source_bus_set` 提交；
-   * **混响发送**：按 `zone_weight` 取得声源所在的前两个区域，再加上听者房间的二次激发，最多 3 路；每路发送使用独立的低通滤波器，`gain = 区域权重`、`gain_hf = occlusion.m_hf`，然后绑定到该区域的 EAX 效果槽。区域效果参数变化时更新效果并重绑效果槽；发送的房间或槽 epoch 变化时才重新绑定发送；
+   * **混响发送**：用环境房间权重取声源所在的前两个房间；同房间直接发送，不同房间按路径表的 `transmission`/`muffle` 调整发送权重与高频，并给听者房间加入二次激发（最多 3 路）。每路发送使用独立的低通滤波器（`gain = 发送权重`、`gain_hf = 遮挡 hf × 路径 muffle`），绑定到该房间的 EAX 效果槽。房间效果参数变化时更新效果并重绑效果槽；发送的房间或槽 epoch 变化时才重新绑定发送；
    * 最后提交空间参数（位置、速度、方向、锥形、空气吸收、min/max gain）并驱动播放状态机。
 
 播放状态机（`Audio::Source::play_state` 只有 `STOPPED` / `PLAYING`）：
@@ -445,6 +486,24 @@ audio::play_oneshot(desc);
 
 `loop` 每帧写入镜像，因此运行中切换循环立即生效。缓冲的绑定每帧都会调用 `set_playing_buffer`，底层只有在缓冲真正改变时才停止播放并返回 true。`Audio::Source` 的拷贝构造创建新的 AL 声源，所以由预制体实例化出的实体都拥有独立的播放状态；运行时状态（上次位置、遮挡滤波器、总线缓存、混响发送槽等）不反射、不存档。
 
+### 音频环境烘焙（世界级 sidecar）
+
+`<world>.je4cache` 使用 `WORLD_CACHE_VERSION`，payload 是 binary cache document，`audio_environment` 字段包含：
+
+* `format`（sidecar 内部 schema 版本）、`use_2d`；
+* `rooms`：每个房间的 OBB、`fade`、EAX 预设/自定义参数、`send_gain`；
+* `portals`：解析后的两侧房间、中心/法线、`transmission`/`muffle`；
+* `paths`：`(rooms + 1)^2` 的路径表（transmission、muffle、门洞数），室外节点在末尾。
+
+烘焙入口 `je_audio_environment_bake(world, world_path)`：
+
+1. 遍历世界实体（未启用/未 update 的临时世界先处理命令缓冲区），收集 `ReverbZone`/`Portal`；
+2. 从 `Anchor` / `LocalToParent` / `LocalToWorld` / 局部变换组件解析实体世界变换（不依赖 `Translation` 是否已更新，因此未启用/未 update 的临时世界也能烘焙）；
+3. 用与运行时相同的 builder 解析门洞两侧房间并计算全房间对路径；
+4. 以世界文件 CRC64 为键写 `<world>.je4cache`，设置世界源路径并递增重载代数。
+
+缓存头 CRC 是世界文件本身的 CRC，世界保存后 sidecar 自动失效。运行时 `AudioUpdatingSystem` 在世界源路径/重载代数变化时读取 sidecar；world 不保存路径时没有 sidecar，直接走实时构建。sidecar 自包含，运行时不需要再用 `ReverbZone`/`Portal` 组件重建图；需要动态修改房间/门洞时重新烘焙，或删除 sidecar 使用实时图。
+
 ### 瓦片遮挡遍历
 
 瓦片的音频系数是 `TileDef` 的内置字段（`audio_occlusion` / `audio_muffle`，默认 0），与 `walkable` 一样随图集缓存（`.je4tileset` TOML → `.je4cache`，缓存版本 v2）保存；图集 TOML 的 `tiles` 条目新增 `audio_occlusion` / `audio_muffle` 两个可选浮点键。
@@ -455,11 +514,13 @@ audio::play_oneshot(desc);
 
 | 内容 | 位置 |
 | --- | --- |
-| 音频组件（Source/Listener/Occluder/ReverbZone） | `include/jeecs/components.hpp`（`namespace Audio`） |
+| 音频组件（Source/Listener/Occluder/ReverbZone/Portal） | `include/jeecs/components.hpp`（`namespace Audio`） |
 | C ABI、效果器参数与默认值、C++ 封装 | `include/jeecs/audio.hpp`（逐函数说明见 [doc/capi/audio](../capi/audio/)） |
 | OpenAL 后端（设备、热插拔、EFX、总线、一次性声部、缓存加载） | `src/jeecs_audio_impl_openal.cpp` |
 | 缓存生成器脚本（pkg::audio 解码） | `builtin/script/internal/cache/audio.wo` |
 | 组件同步、2D 空间、遮挡、混响与播放状态机 | `src/jeecs_core_audio_system.cpp` |
+| 音频环境图、路径表、`.je4world.je4cache` 读写 | `src/jeecs_core_audio_environment.hpp/.cpp` |
+| 世界源路径/重载代数 | `src/jeecs_basic_arch_system.cpp`、`include/jeecs/ecs.hpp` |
 | 瓦片属性解析与遮挡遍历支持 | `src/jeecs_core_tilemap_model.hpp/.cpp` |
 | Woolang 绑定 | `je/audio.wo`、`src/jeecs_audio_woolang_api.cpp` |
 | 组件辅助函数（towoo） | `je/towoo/towoo.wo`、`src/jeecs_woolang_towoo_script_basic.cpp` |

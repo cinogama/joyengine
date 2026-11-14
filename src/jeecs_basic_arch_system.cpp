@@ -6,6 +6,7 @@
 #include "jeecs/debug.hpp"
 #include "jeecs/ecs.hpp"
 #include "jeecs/game.hpp"
+#include "jeecs/audio.hpp"
 #include "jeecs/logging.hpp"
 #include "jeecs/math.hpp"
 #include "jeecs/prefix.hpp"
@@ -1433,6 +1434,11 @@ namespace jeecs::ecs
 
             system_container_t m_systems;
             system_slice_cache_container_t m_system_slice_caches;
+
+            // 世界源文件路径（通常为 .je4world），由加载器/编辑器设置；
+            // 只用于世界级派生缓存，例如 <path>.je4cache 的音频环境。
+            string m_source_path;
+            uint64_t m_audio_environment_generation;
         private:
             inline static shared_mutex _m_alive_worlds_mx;
             inline static unordered_set<World*> _m_alive_worlds;
@@ -1445,6 +1451,8 @@ namespace jeecs::ecs
                 , _m_arch_change_counter(100)
                 , _m_world_enabled(false)
                 , _m_destroying_flag(false)
+                , m_source_path()
+                , m_audio_environment_generation(0)
             {
                 lock_guard g1(_m_alive_worlds_mx);
                 _m_alive_worlds.emplace(this);
@@ -1460,6 +1468,22 @@ namespace jeecs::ecs
             system_container_t& get_system_instances() noexcept
             {
                 return m_systems;
+            }
+            void set_source_path(const char* path)
+            {
+                m_source_path = path != nullptr ? path : "";
+            }
+            const char* source_path() const noexcept
+            {
+                return m_source_path.c_str();
+            }
+            void reload_audio_environment() noexcept
+            {
+                ++m_audio_environment_generation;
+            }
+            uint64_t audio_environment_generation() const noexcept
+            {
+                return m_audio_environment_generation;
             }
             void _destroy_system_instance(
                 const je_type_info_t* type, je_system_t sys) noexcept
@@ -3054,6 +3078,31 @@ void je_ecs_world_entity_destroy(
 je_game_universe_t* je_ecs_world_in_universe(je_game_world_t* world)
 {
     return static_cast<World*>(world)->get_universe();
+}
+
+void je_ecs_world_source_path_set(je_game_world_t* world, const char* path)
+{
+    static_cast<World*>(world)->set_source_path(path);
+}
+
+const char* je_ecs_world_source_path_get(je_game_world_t* world)
+{
+    return static_cast<World*>(world)->source_path();
+}
+
+void je_ecs_world_command_flush(je_game_world_t* world)
+{
+    static_cast<World*>(world)->get_command_buffer().update();
+}
+
+void je_audio_environment_reload(je_game_world_t* world)
+{
+    static_cast<World*>(world)->reload_audio_environment();
+}
+
+uint64_t je_audio_environment_generation_get(je_game_world_t* world)
+{
+    return static_cast<World*>(world)->audio_environment_generation();
 }
 
 /* OPTIONAL: If entity is invalid */ je_game_world_t* je_ecs_world_of_entity(const je_game_entity_t* entity)
