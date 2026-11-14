@@ -33,6 +33,7 @@ je_audio_source_play(source);
 ## 注意事项
 
 - 停止后调用 `je_audio_source_play` 会从音频起始位置重新播放
+- 停止的声源会归还硬件声源，不会占用播放设备的声源配额
 
 ## 相关接口
 

@@ -333,6 +333,8 @@ struct je_audio_native_stream_instance_t
 };
 struct je_audio_native_source_instance_t
 {
+    // 硬件声源 id；0 表示这是虚拟声源：逻辑状态存于 m_dump，不占用
+    // openal 的声源配额，直到真正开始播放时才按需领取。
     ALuint m_source_id;
     ContextHelper::Holder<const je_audio_buffer_t> m_playing_buffer;
     ContextHelper::Holder<je_audio_filter_t> m_playing_filter;
@@ -469,6 +471,12 @@ namespace jeecs::audio
             mutex m_oneshot_mx;
             deque<je_audio_source_t*> m_oneshot_voices;
 
+            // 硬件声源（voice）池：只有正在播放的虚拟声源才占用。
+            // id 属于当前设备上下文，设备销毁时池随之清空。受 g1 保护。
+            vector<ALuint> m_free_voices;
+            size_t m_allocated_voice_count;
+            bool m_voice_limit_reached; // alGenSources 已报告达到设备上限
+
             je_audio_listener_t m_listener;
 
             struct OpenALEfx
@@ -568,19 +576,29 @@ namespace jeecs::audio
                 {
                     assert(source->m_source_instance != nullptr);
 
-                    auto& dump = source->m_source_instance->m_dump.emplace();
+                    auto* instance = source->m_source_instance;
+
+                    if (instance->m_source_id == 0)
+                    {
+                        // 虚拟声源：逻辑状态和进度已经在 dump 中，无需读取 AL
+                        assert(instance->m_dump.has_value());
+                        states.m_sources_dump[source] =
+                            shutdown_source_native_instance(source);
+                        continue;
+                    }
+
+                    auto& dump = instance->m_dump.emplace();
 
                     const bool streaming
-                        = source->m_source_instance->m_playing_buffer.has_value()
-                        && source->m_source_instance->m_playing_buffer.value()->m_streaming;
+                        = instance->m_playing_buffer.has_value()
+                        && instance->m_playing_buffer.value()->m_streaming;
 
                     // NOTE: Source 需要转储播放状态和播放进度
                     if (streaming)
                     {
                         // 流式声源使用逻辑状态：欠载瞬间 AL 会报告 STOPPED，
                         // 但那不代表播放结束。
-                        const auto& stream
-                            = source->m_source_instance->m_streaming_state;
+                        const auto& stream = instance->m_streaming_state;
 
                         dump.m_play_state = !stream.m_should_play
                             ? je_audio_state_t::JE_AUDIO_STATE_STOPPED
@@ -592,7 +610,7 @@ namespace jeecs::audio
                     {
                         ALenum play_state;
                         alGetSourcei(
-                            source->m_source_instance->m_source_id,
+                            instance->m_source_id,
                             AL_SOURCE_STATE,
                             &play_state);
 
@@ -612,15 +630,14 @@ namespace jeecs::audio
                     }
 
                     alGetSourcei(
-                        source->m_source_instance->m_source_id,
+                        instance->m_source_id,
                         AL_BYTE_OFFSET,
                         &dump.m_play_process);
 
                     if (streaming)
                     {
                         // AL_BYTE_OFFSET 相对当前队列头，补上已经出队播放的字节。
-                        const auto& stream
-                            = source->m_source_instance->m_streaming_state;
+                        const auto& stream = instance->m_streaming_state;
 
                         size_t played = stream.m_consumed_bytes
                             + (size_t)dump.m_play_process;
@@ -632,7 +649,7 @@ namespace jeecs::audio
                             // 但队列里的块其实都已播完，按块大小累计。
                             ALint al_play_state;
                             alGetSourcei(
-                                source->m_source_instance->m_source_id,
+                                instance->m_source_id,
                                 AL_SOURCE_STATE,
                                 &al_play_state);
 
@@ -650,6 +667,11 @@ namespace jeecs::audio
 
                     states.m_sources_dump[source] = shutdown_source_native_instance(source);
                 }
+
+                // 设备上下文即将销毁，池中的 voice id 一并作废。
+                m_free_voices.clear();
+                m_allocated_voice_count = 0;
+                m_voice_limit_reached = false;
 
                 for (auto* buffer : m_buffers)
                 {
@@ -817,7 +839,6 @@ namespace jeecs::audio
                         assert(source->m_source_instance == nullptr);
 
                         source->m_source_instance = fnd->second;
-                        alGenSources(1, &source->m_source_instance->m_source_id);
 
                         fnd->second = nullptr; // 置空，后续需要清理无主的转储信息，避免错误释放
                     }
@@ -825,6 +846,15 @@ namespace jeecs::audio
                     // ; // 这是一个新的 source 实例，在转储期间被创建出来的。
 
                     update_source_lockfree(source);
+
+                    // 只有正在播放的声源需要重新占用 voice；暂停/停止的声源
+                    // 保持虚拟，恢复播放时再按需绑定。
+                    auto* instance = source->m_source_instance;
+                    if (instance->m_playing_buffer.has_value()
+                        && instance->m_dump.has_value()
+                        && instance->m_dump->m_play_state
+                            == je_audio_state_t::JE_AUDIO_STATE_PLAYING)
+                        bind_source_voice_lockfree(source);
                 }
                 for (auto& [_, source_instance] : states.m_sources_dump)
                 {
@@ -1239,13 +1269,23 @@ namespace jeecs::audio
                 if (source->m_source_instance == nullptr)
                 {
                     source->m_source_instance = new je_audio_native_source_instance_t;
-                    alGenSources(1, &source->m_source_instance->m_source_id);
+                    source->m_source_instance->m_source_id = 0;
 
                     reset_streaming_state(&source->m_source_instance->m_streaming_state);
 
                     assert(!source->m_source_instance->m_playing_buffer.has_value());
                     assert(!source->m_source_instance->m_dump.has_value());
+
+                    // 新建声源是虚拟的：直到真正播放前不占用 openal 的声源；
+                    // 逻辑状态（播放状态/进度）保存在 dump 中。
+                    auto& dump = source->m_source_instance->m_dump.emplace();
+                    dump.m_play_state = je_audio_state_t::JE_AUDIO_STATE_STOPPED;
+                    dump.m_play_process = 0;
                 }
+
+                if (source->m_source_instance->m_source_id == 0)
+                    // 虚拟声源：参数保存在 je_audio_source_t/实例中，播放时一起提交
+                    return;
 
                 const bool streaming_playing
                     = source->m_source_instance->m_playing_buffer.has_value()
@@ -1379,6 +1419,131 @@ namespace jeecs::audio
                     }
                     source->m_source_instance->m_dump.reset();
                 }
+            }
+
+            // ==================== 硬件声源（voice） ====================
+
+            // 取得一个硬件声源；池空且已达到 openal 的声源上限时返回 0。
+            // 上限只在 alGenSources 失败时探测一次，避免反复触发错误。
+            ALuint acquire_voice_lockfree()
+            {
+                if (!m_free_voices.empty())
+                {
+                    ALuint voice = m_free_voices.back();
+                    m_free_voices.pop_back();
+                    return voice;
+                }
+
+                if (m_voice_limit_reached)
+                    return 0;
+
+                while (alGetError() != AL_NO_ERROR)
+                {
+                }
+
+                ALuint voice = 0;
+                alGenSources(1, &voice);
+                if (alGetError() != AL_NO_ERROR || voice == 0)
+                {
+                    // 多出的声源保持虚拟，等有 voice 归还后再由设备线程补绑。
+                    m_voice_limit_reached = true;
+
+                    debug::logwarn(
+                        "Audio source limit reached (%u voices), extra sources "
+                        "will stay virtual.",
+                        (unsigned)m_allocated_voice_count);
+                    return 0;
+                }
+
+                ++m_allocated_voice_count;
+                return voice;
+            }
+            void release_voice_lockfree(ALuint voice)
+            {
+                assert(voice != 0);
+                m_free_voices.push_back(voice);
+            }
+
+            // 把声源的硬件声源归还到池中，并把 AL 当前的播放进度写回 dump，
+            // 使声源回到虚拟状态。logical_state 是停止后的逻辑状态。
+            void release_source_voice_lockfree(
+                je_audio_source_t* source, je_audio_state_t logical_state)
+            {
+                auto* instance = source->m_source_instance;
+                assert(instance != nullptr);
+                assert(instance->m_source_id != 0);
+                assert(!instance->m_dump.has_value());
+
+                const je_audio_buffer_t* buffer = nullptr;
+                if (instance->m_playing_buffer.has_value())
+                    buffer = instance->m_playing_buffer.value();
+
+                size_t play_process = 0;
+                if (logical_state != je_audio_state_t::JE_AUDIO_STATE_STOPPED
+                    && buffer != nullptr)
+                {
+                    if (buffer->m_streaming)
+                    {
+                        // AL_BYTE_OFFSET 相对当前队列头，补上已出队的字节。
+                        const auto& stream = instance->m_streaming_state;
+                        size_t played = stream.m_consumed_bytes;
+                        if (stream.m_queued_count > 0)
+                        {
+                            ALint queue_offset = 0;
+                            alGetSourcei(
+                                instance->m_source_id, AL_BYTE_OFFSET, &queue_offset);
+                            played += (size_t)queue_offset;
+                        }
+
+                        if (source->m_loop && buffer->m_size > 0)
+                            played %= buffer->m_size;
+
+                        play_process = min(played, buffer->m_size);
+                    }
+                    else
+                    {
+                        ALint offset = 0;
+                        alGetSourcei(instance->m_source_id, AL_BYTE_OFFSET, &offset);
+                        play_process = (size_t)offset;
+                    }
+                }
+
+                if (buffer != nullptr && buffer->m_streaming)
+                {
+                    clear_streaming_queue(instance);
+                    release_streaming_chunk_buffers(instance);
+                    reset_streaming_playback(instance);
+                }
+                else
+                {
+                    alSourceStop(instance->m_source_id);
+                    alSourcei(instance->m_source_id, AL_BUFFER, 0);
+                }
+
+                auto& dump = instance->m_dump.emplace();
+                dump.m_play_state = logical_state;
+                dump.m_play_process = (ALint)play_process;
+
+                release_voice_lockfree(instance->m_source_id);
+                instance->m_source_id = 0;
+            }
+
+            // 给虚拟声源绑定硬件声源；达到设备上限时返回 false，声源保持虚拟。
+            // 绑定后由 update_source_lockfree 消费 dump 并恢复播放/暂停状态。
+            bool bind_source_voice_lockfree(je_audio_source_t* source)
+            {
+                auto* instance = source->m_source_instance;
+                assert(instance != nullptr);
+                assert(instance->m_source_id == 0);
+                assert(instance->m_dump.has_value());
+
+                ALuint voice = acquire_voice_lockfree();
+                if (voice == 0)
+                    return false;
+
+                instance->m_source_id = voice;
+                update_source_lockfree(source);
+                return true;
             }
             // 释放流式块缓冲名（属于当前设备上下文），读取进度保留。
             static void release_streaming_chunk_buffers(
@@ -1561,6 +1726,10 @@ namespace jeecs::audio
                     if (instance == nullptr)
                         continue;
 
+                    // 虚拟声源没有块队列可补
+                    if (instance->m_source_id == 0)
+                        continue;
+
                     if (!instance->m_playing_buffer.has_value()
                         || !instance->m_playing_buffer.value()->m_streaming)
                         continue;
@@ -1580,6 +1749,11 @@ namespace jeecs::audio
 
                 if (!instance->m_playing_buffer.has_value())
                     return true;
+
+                if (instance->m_source_id == 0)
+                    // 虚拟声源：还在等待 voice 的一次性声部不算结束
+                    return instance->m_dump->m_play_state
+                        == je_audio_state_t::JE_AUDIO_STATE_STOPPED;
 
                 if (instance->m_playing_buffer.value()->m_streaming)
                     return !instance->m_streaming_state.m_should_play;
@@ -1618,15 +1792,85 @@ namespace jeecs::audio
                 }
             }
 
+            // 维护虚拟声源与硬件声源的对应关系：先回收自然播完的 voice，
+            // 再给等待中的虚拟声源补绑。调用方持有 g2/g1 与共享 g0。
+            void service_source_voices()
+            {
+                if (!m_current_play_device.has_value())
+                    return;
+
+                for (auto* source : m_sources)
+                {
+                    auto* instance = source->m_source_instance;
+                    if (instance == nullptr || instance->m_source_id == 0)
+                        continue;
+
+                    if (!instance->m_playing_buffer.has_value())
+                    {
+                        release_source_voice_lockfree(
+                            source, je_audio_state_t::JE_AUDIO_STATE_STOPPED);
+                        continue;
+                    }
+
+                    const je_audio_buffer_t* buffer
+                        = instance->m_playing_buffer.value();
+
+                    if (buffer->m_streaming)
+                    {
+                        // 流式声源自然播完后由 service_streaming_source
+                        // 把 m_should_play 置为 false。
+                        if (!instance->m_streaming_state.m_should_play)
+                            release_source_voice_lockfree(
+                                source, je_audio_state_t::JE_AUDIO_STATE_STOPPED);
+                    }
+                    else if (!source->m_loop)
+                    {
+                        ALint play_state = AL_INITIAL;
+                        alGetSourcei(
+                            instance->m_source_id, AL_SOURCE_STATE, &play_state);
+
+                        if (play_state == AL_STOPPED || play_state == AL_INITIAL)
+                            release_source_voice_lockfree(
+                                source, je_audio_state_t::JE_AUDIO_STATE_STOPPED);
+                    }
+                }
+
+                // 给等待中的虚拟声源补绑；voice 用尽后剩余的保持虚拟，
+                // 等有 voice 归还的下一轮再处理。
+                for (auto* source : m_sources)
+                {
+                    auto* instance = source->m_source_instance;
+                    if (instance == nullptr || instance->m_source_id != 0)
+                        continue;
+
+                    if (!instance->m_playing_buffer.has_value()
+                        || instance->m_dump->m_play_state
+                            != je_audio_state_t::JE_AUDIO_STATE_PLAYING)
+                        continue;
+
+                    if (!bind_source_voice_lockfree(source))
+                        break;
+                }
+            }
+
             je_audio_native_source_instance_t* shutdown_source_native_instance(je_audio_source_t* source_instance)
             {
                 if (source_instance->m_source_instance != nullptr)
                 {
                     auto* instance = source_instance->m_source_instance;
-                    alDeleteSources(1, &instance->m_source_id);
+                    if (instance->m_source_id != 0)
+                    {
+                        // 硬件声源归还池中复用；设备销毁时池会被整体丢弃
+                        alSourceStop(instance->m_source_id);
+                        alSourcei(instance->m_source_id, AL_BUFFER, 0);
+                        release_streaming_chunk_buffers(instance);
 
-                    release_streaming_chunk_buffers(instance);
+                        release_voice_lockfree(instance->m_source_id);
+                    }
+                    else
+                        release_streaming_chunk_buffers(instance);
 
+                    instance->m_source_id = 0;
                     source_instance->m_source_instance = nullptr;
                     return instance;
                 }
@@ -2574,7 +2818,8 @@ namespace jeecs::audio
                         slot_and_filters.m_slot.set_res_may_null(slot_may_null);
                         slot_and_filters.m_filter.set_res_may_null(filter_may_null);
 
-                        if (m_alext_efx.has_value())
+                        if (m_alext_efx.has_value()
+                            && source->m_source_instance->m_source_id != 0)
                         {
                             ALint slot_id = AL_EFFECTSLOT_NULL;
                             ALint filter_id = AL_FILTER_NULL;
@@ -2630,7 +2875,8 @@ namespace jeecs::audio
 
                         source->m_source_instance->m_playing_filter.set_res_may_null(filter_may_null);
 
-                        if (m_alext_efx.has_value())
+                        if (m_alext_efx.has_value()
+                            && source->m_source_instance->m_source_id != 0)
                         {
                             ALint filter_id = AL_FILTER_NULL;
                             if (filter_may_null != nullptr)
@@ -2786,38 +3032,24 @@ namespace jeecs::audio
                             continue;
 
                         assert(buffer->m_buffer_instance != nullptr);
-                        if (!source->m_source_instance->m_playing_buffer.has_value()
-                            || source->m_source_instance->m_playing_buffer.value() != buffer)
-                        {
-                            auto* instance = source->m_source_instance;
 
-                            if (instance->m_playing_buffer.has_value()
-                                && instance->m_playing_buffer.value()->m_streaming)
-                            {
-                                // 旧缓冲是流式的：先停源并丢弃块队列。
-                                clear_streaming_queue(instance);
-                                reset_streaming_playback(instance);
-                            }
+                        auto* instance = source->m_source_instance;
+
+                        if (!instance->m_playing_buffer.has_value()
+                            || instance->m_playing_buffer.value() != buffer)
+                        {
+                            // 换音频需要停止当前播放；正在播放的源顺带归还 voice，
+                            // 等下一次 play 重新领取。
+                            if (instance->m_source_id != 0)
+                                release_source_voice_lockfree(
+                                    source, je_audio_state_t::JE_AUDIO_STATE_STOPPED);
 
                             instance->m_playing_buffer.set_res(buffer);
 
-                            ALenum play_state;
-                            alGetSourcei(
-                                instance->m_source_id,
-                                AL_SOURCE_STATE,
-                                &play_state);
-
-                            if (play_state != AL_INITIAL && play_state != AL_STOPPED)
-                                // 对正在播放的 source 设置 buffer 时，应该停止当前的播放
-                                alSourceStop(instance->m_source_id);
-
-                            if (buffer->m_streaming)
-                                attach_streaming_buffer(instance);
-                            else
-                                alSourcei(
-                                    instance->m_source_id,
-                                    AL_BUFFER,
-                                    buffer->m_buffer_instance->m_buffer_id);
+                            assert(instance->m_dump.has_value());
+                            instance->m_dump->m_play_state
+                                = je_audio_state_t::JE_AUDIO_STATE_STOPPED;
+                            instance->m_dump->m_play_process = 0;
 
                             buffer_changed = true;
                         }
@@ -2866,7 +3098,23 @@ namespace jeecs::audio
                         {
                             auto* instance = source->m_source_instance;
 
-                            if (instance->m_playing_buffer.value()->m_streaming)
+                            if (instance->m_source_id == 0)
+                            {
+                                // 虚拟声源：记录播放意图并尝试领取 voice；
+                                // 达到设备上限时保持虚拟，等有 voice 归还后
+                                // 由设备线程补绑。
+                                assert(instance->m_dump.has_value());
+
+                                if (instance->m_dump->m_play_state
+                                    == je_audio_state_t::JE_AUDIO_STATE_STOPPED)
+                                    instance->m_dump->m_play_process = 0;
+
+                                instance->m_dump->m_play_state
+                                    = je_audio_state_t::JE_AUDIO_STATE_PLAYING;
+
+                                bind_source_voice_lockfree(source);
+                            }
+                            else if (instance->m_playing_buffer.value()->m_streaming)
                             {
                                 auto& stream = instance->m_streaming_state;
 
@@ -2926,17 +3174,41 @@ namespace jeecs::audio
                         {
                             auto* instance = source->m_source_instance;
 
-                            if (instance->m_playing_buffer.value()->m_streaming)
+                            if (instance->m_source_id == 0)
+                            {
+                                // 虚拟声源：只有逻辑上正在播放才转为暂停
+                                assert(instance->m_dump.has_value());
+                                if (instance->m_dump->m_play_state
+                                    == je_audio_state_t::JE_AUDIO_STATE_PLAYING)
+                                    instance->m_dump->m_play_state
+                                        = je_audio_state_t::JE_AUDIO_STATE_PAUSED;
+                            }
+                            else if (instance->m_playing_buffer.value()->m_streaming)
                             {
                                 auto& stream = instance->m_streaming_state;
                                 if (stream.m_should_play)
                                 {
                                     stream.m_paused = true;
                                     alSourcePause(instance->m_source_id);
+
+                                    // 暂停的声源不占用硬件声源
+                                    release_source_voice_lockfree(
+                                        source, je_audio_state_t::JE_AUDIO_STATE_PAUSED);
                                 }
                             }
                             else
+                            {
                                 alSourcePause(instance->m_source_id);
+
+                                ALint play_state = AL_INITIAL;
+                                alGetSourcei(
+                                    instance->m_source_id, AL_SOURCE_STATE, &play_state);
+
+                                release_source_voice_lockfree(source,
+                                    (play_state == AL_PLAYING || play_state == AL_PAUSED)
+                                        ? je_audio_state_t::JE_AUDIO_STATE_PAUSED
+                                        : je_audio_state_t::JE_AUDIO_STATE_STOPPED);
+                            }
                         }
                     }
                     else
@@ -2977,15 +3249,17 @@ namespace jeecs::audio
                         {
                             auto* instance = source->m_source_instance;
 
-                            if (instance->m_playing_buffer.value()->m_streaming)
+                            if (instance->m_source_id == 0)
                             {
-                                assert(instance->m_streaming_state.m_initialized);
-
-                                clear_streaming_queue(instance);
-                                reset_streaming_playback(instance);
+                                // 虚拟声源：逻辑状态回到停止
+                                assert(instance->m_dump.has_value());
+                                instance->m_dump->m_play_state
+                                    = je_audio_state_t::JE_AUDIO_STATE_STOPPED;
+                                instance->m_dump->m_play_process = 0;
                             }
                             else
-                                alSourceStop(instance->m_source_id);
+                                release_source_voice_lockfree(
+                                    source, je_audio_state_t::JE_AUDIO_STATE_STOPPED);
                         }
                     }
                     else
@@ -3024,6 +3298,13 @@ namespace jeecs::audio
 
                         if (!source->m_source_instance->m_playing_buffer.has_value())
                             return je_audio_state_t::JE_AUDIO_STATE_STOPPED;
+
+                        if (source->m_source_instance->m_source_id == 0)
+                        {
+                            // 虚拟声源：返回封装层维护的逻辑状态
+                            assert(source->m_source_instance->m_dump.has_value());
+                            return source->m_source_instance->m_dump->m_play_state;
+                        }
 
                         if (source->m_source_instance->m_playing_buffer.value()->m_streaming)
                         {
@@ -3095,6 +3376,19 @@ namespace jeecs::audio
 
                         const je_audio_buffer_t* buffer
                             = source->m_source_instance->m_playing_buffer.value();
+
+                        if (source->m_source_instance->m_source_id == 0)
+                        {
+                            // 虚拟声源：返回封装层记录的逻辑进度
+                            const auto& dump = source->m_source_instance->m_dump.value();
+
+                            size_t process = (size_t)dump.m_play_process;
+                            if (buffer->m_streaming && source->m_loop
+                                && buffer->m_size > 0)
+                                process %= buffer->m_size;
+
+                            return process;
+                        }
 
                         if (buffer->m_streaming)
                         {
@@ -3188,9 +3482,18 @@ namespace jeecs::audio
                         const size_t aligned =
                             (size_t)align_offset(play_buffer.value(), offset);
 
+                        auto* instance = source->m_source_instance;
+
+                        if (instance->m_source_id == 0)
+                        {
+                            // 虚拟声源：只记录逻辑进度，播放时从该位置开始
+                            assert(instance->m_dump.has_value());
+                            instance->m_dump->m_play_process = (ALint)aligned;
+                            return;
+                        }
+
                         if (play_buffer.value()->m_streaming)
                         {
-                            auto* instance = source->m_source_instance;
                             auto& stream = instance->m_streaming_state;
                             assert(stream.m_initialized);
 
@@ -3206,7 +3509,7 @@ namespace jeecs::audio
                         }
 
                         alSourcei(
-                            source->m_source_instance->m_source_id,
+                            instance->m_source_id,
                             AL_BYTE_OFFSET,
                             (ALint)aligned);
                     }
@@ -3363,9 +3666,11 @@ namespace jeecs::audio
 
                         if (!need_update_device)
                         {
-                            // 保持 g2 -> g1 -> g0 的锁序补流式块并回收
-                            // 已结束的一次性声部。
+                            // 保持 g2 -> g1 -> g0 的锁序补流式块、维护
+                            // 虚拟声源与硬件声源的对应关系，并回收已结束的
+                            // 一次性声部。
                             service_streaming_sources();
+                            service_source_voices();
                             service_oneshot_sources();
                         }
                     }
@@ -3417,6 +3722,9 @@ namespace jeecs::audio
 
                 for (float& bus_gain : m_bus_gains)
                     bus_gain = 1.0f;
+
+                m_allocated_voice_count = 0;
+                m_voice_limit_reached = false;
 
                 refetch_and_update_enumed_play_devices();
 

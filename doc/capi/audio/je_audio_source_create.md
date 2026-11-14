@@ -10,6 +10,11 @@ JE_API je_audio_source_t* je_audio_source_create();
 
 创建一个音频源。音频源用于播放音频缓冲区中的声音。
 
+音频源是**虚拟**的：创建时不会占用播放设备的硬件声源（OpenAL 的 source），
+只有实际处于播放状态的声源才会按需占用。因此游戏可以按需创建大量声源，
+而不会触碰 OpenAL/OpenAL Soft 的声源数量上限（默认 256 个）；暂停、停止或
+自然播放结束的声源会立即把硬件声源归还给引擎复用。
+
 ## 参数
 
 无
@@ -81,6 +86,7 @@ je_audio_source_close(source);
 
 - 使用完毕后需要调用 `je_audio_source_close` 释放资源
 - 修改 source 结构体的属性后，需要调用 `je_audio_source_update` 使更改生效
+- 创建声源本身很轻量，不需要为了节省资源而复用声源
 
 ## 相关接口
 

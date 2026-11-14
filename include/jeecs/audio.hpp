@@ -577,6 +577,8 @@ JE_API void je_audio_filter_close(je_audio_filter_t* filter);
 /*
 je_audio_source_create [基本接口]
 创建一个音频源
+    * 音频源是虚拟的：创建时不占用播放设备的硬件声源，只有实际播放的
+      声源才按需占用硬件声源，因此可以存在大量声源
     使用完毕后需要调用 je_audio_source_close 释放资源
 参见：
     je_audio_source_close
@@ -633,12 +635,15 @@ je_audio_source_play [基本接口]
     如果音频源已经在播放或者音频源没有设置音频，则不会有任何效果
     如果音频源在此前被暂停，则继续播放
     如果音频源被停止，则从音频的起始位置开始播放
+    如果同时播放的声源已达到播放设备的硬件声源上限，声源保持虚拟，
+    待有硬件声源释放后自动开始播放
 */
 JE_API void je_audio_source_play(je_audio_source_t* source);
 
 /*
 je_audio_source_pause [基本接口]
 暂停音频源的播放
+    * 暂停的声源会归还硬件声源，继续播放时重新占用
 */
 JE_API void je_audio_source_pause(je_audio_source_t* source);
 
