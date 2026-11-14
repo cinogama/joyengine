@@ -31,7 +31,6 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 
 - `je_ecs_universe_*` - Universe 生命周期与任务管理
 - `je_ecs_world_*` - World 管理与实体操作
-- `je_ecs_world_command_flush` - 临时世界命令缓冲区处理
 - `je_ecs_requirements_collect` / `je_ecs_world_collection_update` - 切片查询需求收集与刷新
 - `je_arch_*` - 原型（Archetype）遍历
 

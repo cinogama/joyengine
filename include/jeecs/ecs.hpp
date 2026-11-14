@@ -349,16 +349,6 @@ je_ecs_world_destroy [基本接口]
 */
 JE_API void je_ecs_world_destroy(je_game_world_t* world);
 
-/*
-je_ecs_world_command_flush [基本接口]
-立即处理世界命令缓冲区中的结构性变更（实体/组件的增删、系统增删等），
-但不推进系统更新
-    * 用于临时加载/未启用的世界在需要立即读取实体数据时，例如编辑器导出
-        时对未打开世界做音频环境烘焙
-    * 正常游戏循环不需要调用：命令缓冲区在世界更新时自动处理
-*/
-JE_API void je_ecs_world_command_flush(je_game_world_t* world);
-
 typedef enum je_component_requirement_kind_t
 {
     JE_COMPONENT_REQUIRE_CONTAINS,  // Must have spcify component

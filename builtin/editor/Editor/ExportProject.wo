@@ -938,10 +938,12 @@ namespace JEEditor::Editor
         
         // 导出前烘焙项目内全部世界的音频环境：
         //   已打开的世界先保存，用其 live world 烘焙；
-        //   未打开的世界用 restoreForBake 临时加载，烘焙后立即关闭。
+        //   未打开的世界用 restoreForBake 临时恢复，让出一帧等宇宙更新处理
+        //   世界命令缓冲区（恢复的实体随之生效），再烘焙并立即关闭。
         // 结果写入 <world>.je4cache，后续 packProjectFiles 会自动打包；
-        // 世界文件本身不记录缓存路径（运行时加载世界时按文件旁是否存在
-        // <world>.je4cache 重建 World::Path 内部实体）。
+        // 世界文件本身不记录缓存路径（运行时加载世界时按路径重建
+        // World::Path 内部实体）。
+        // 本函数含 yield()，必须在 launch_coroutine 中调用。
         func bakeAllWorldAudioEnvironments(self: ExportProject)=> bool
         {
             // sidecar 以世界文件 CRC 为键，先统一落盘，再按落盘内容烘焙
@@ -985,6 +987,10 @@ namespace JEEditor::Editor
                             {
                                 let w = JEEditor::Saving::World::restoreForBake(
                                     Singleton::Universe::getUniverse(), wdat);
+
+                                // 临时世界只在宇宙更新中处理命令缓冲区：
+                                // 让出一帧，恢复的实体才可见
+                                yield();
 
                                 let baked = je::audio::environment::bake(
                                     w, path->to_string());
@@ -1048,19 +1054,22 @@ namespace JEEditor::Editor
                     s.m_skip_extensions = self.m_skip_extensions;
                 });
 
-            // 在 UI 线程完成全部世界的音频环境烘焙，避免后台任务
-            // 读取 live world；sidecar 随后由 packProjectFiles 打包。
-            if (!bakeAllWorldAudioEnvironments(self))
-                return;
-
-            do showModal(
-                ModulePrepare::createWithTitle(
-                    "项目导出",
-                    func(prepare: ModulePrepare){
-                        return runExportJob(prepare, settings);
-                    }));
-                    
+            // 向导立即关闭，避免烘焙期间重复点击导出；烘焙在 UI 线程的
+            // 协程里进行（未打开的世界需恢复后让出一帧），完成后再启动
+            // 后台打包。sidecar 随后由 packProjectFiles 打包。
             self.m_closed = true;
+
+            launch_coroutine(func(){
+                    if (!bakeAllWorldAudioEnvironments(self))
+                        return;
+
+                    do showModal(
+                        ModulePrepare::createWithTitle(
+                            "项目导出",
+                            func(prepare: ModulePrepare){
+                                return runExportJob(prepare, settings);
+                            }));
+                });
         }
         
         // ==========================

@@ -3056,11 +3056,6 @@ je_game_universe_t* je_ecs_world_in_universe(je_game_world_t* world)
     return static_cast<World*>(world)->get_universe();
 }
 
-void je_ecs_world_command_flush(je_game_world_t* world)
-{
-    static_cast<World*>(world)->get_command_buffer().update();
-}
-
 /* OPTIONAL: If entity is invalid */ je_game_world_t* je_ecs_world_of_entity(const je_game_entity_t* entity)
 {
     auto* chunk = static_cast<ArchType::arch_chunk*>(entity->_m_in_chunk);

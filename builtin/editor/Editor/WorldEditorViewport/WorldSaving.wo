@@ -188,9 +188,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                 do e->towoo::get_component:<World::Path>()
                     ->unwrap.cache_path->set(cache_path);
 
-                // 世界可能尚未推进更新：立即落实结构性变更，保证随后的
-                // 烘焙（及音频系统的重载）能读到该实体
-                w->flush_commands();
+                // 实体随下一次世界更新落实；烘焙后的重载发生在其后，
+                // 因此音频系统能读到该实体
                 return true;
             }
         }

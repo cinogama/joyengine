@@ -514,7 +514,7 @@ audio::play_oneshot(desc);
 
 烘焙入口 `je_audio_environment_bake(world, world_path)`：
 
-1. 遍历世界实体（未启用/未 update 的临时世界先处理命令缓冲区），收集 `ReverbZone`/`Portal`；
+1. 遍历世界实体，收集 `ReverbZone`/`Portal`（实体结构性变更经命令缓冲区落实，未更新过的临时世界需由调用方先让一帧世界更新；编辑器导出时在协程里恢复临时世界后 `yield()` 一帧再烘焙）；
 2. 从 `Anchor` / `LocalToParent` / `LocalToWorld` / 局部变换组件解析实体世界变换（不依赖 `Translation` 是否已更新，因此未启用/未 update 的临时世界也能烘焙）；
 3. 用与运行时相同的 builder 解析门洞两侧房间并计算全房间对路径；
 4. 以世界文件 CRC64 为键写 `<world>.je4cache`，并通知音频系统重载（`je_audio_environment_reload`）。
