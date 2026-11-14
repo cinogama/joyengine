@@ -941,7 +941,7 @@ namespace JEEditor::Editor
         //   未打开的世界用 restoreForBake 临时加载，烘焙后立即关闭。
         // 结果写入 <world>.je4cache，后续 packProjectFiles 会自动打包；
         // 世界文件本身不记录缓存路径（运行时加载世界时按文件旁是否存在
-        // <world>.je4cache 重建 WorldCache 内部实体）。
+        // <world>.je4cache 重建 World::Path 内部实体）。
         func bakeAllWorldAudioEnvironments(self: ExportProject)=> bool
         {
             // sidecar 以世界文件 CRC 为键，先统一落盘，再按落盘内容烘焙

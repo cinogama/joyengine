@@ -938,8 +938,8 @@ je_audio_environment_bake [基本接口]
     * 只读取世界中的组件与实体变换，不读取 tilemap；tilemap 如需生成房间/
         门洞，应把它们生成为普通实体/组件后再烘焙
     * 烘焙内容包括房间声学参数、门洞连接关系与全房间对路径表
-    * 缓存路径由世界加载时创建的 WorldCache 内部实体提供（编辑器手动烘焙
-        也会创建该实体），本接口只负责写缓存，不创建/修改组件
+    * 缓存路径由持有 World::Path 组件的内部实体提供（加载世界/手动烘焙时
+        创建），本接口只负责写缓存，不创建/修改组件
     * 失败（世界路径为空、文件不存在、写缓存失败）返回 false
 */
 JE_API bool je_audio_environment_bake(
@@ -947,7 +947,7 @@ JE_API bool je_audio_environment_bake(
 
 /*
 je_audio_environment_reload [基本接口]
-通知世界的音频系统重新读取 WorldCache 组件指向的音频环境缓存
+通知世界的音频系统重新读取 World::Path 组件指向的音频环境缓存
     * 缓存路径来自实体组件，不由世界对象保存；组件不存在时回退实时构建
     * je_audio_environment_bake 成功后会自行调用本接口，通常不需要手动调用
 */

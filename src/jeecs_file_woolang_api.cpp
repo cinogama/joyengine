@@ -38,22 +38,6 @@ WOORT_API woort_api wojeapi_read_file_all(void)
     return woort_ret_option_none();
 }
 
-WOORT_API woort_api wojeapi_file_exists(void)
-{
-    const woort_U8CString filepath = woort_string(0);
-
-    woort_vm* const last = woort_vm_swap(nullptr);
-    bool exists = false;
-    if (auto* file = je_file_open(filepath))
-    {
-        je_file_close(file);
-        exists = true;
-    }
-    (void)woort_vm_swap(last);
-
-    return woort_ret_bool(exists);
-}
-
 WOORT_API woort_api wojeapi_file_cache_write_all(void)
 {
     bool ok = false;

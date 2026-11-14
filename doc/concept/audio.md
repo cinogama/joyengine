@@ -480,7 +480,7 @@ audio::play_oneshot(desc);
 音频系统只实现 `CommitUpdate`（第 7 阶段，晚于 `LATE_UPDATE!`），因此脚本在同一帧内对组件的修改当帧生效。处理顺序：
 
 1. **Listener + Translation**：速度 = 位置差 / `max(deltatime, 0.0001)`（首帧不产生速度尖峰）；`use_2d` 时位置/速度的 z 归零；`face` / `up` 乘以世界旋转；提交位置、速度、朝向、`m_gain = volume`、距离模型与多普勒系数（不触碰 `m_global_gain`）。系统**不查询 Camera 组件**。
-2. **音频环境**：收集 `Audio::ReverbZone + Translation`（房间）与 `Audio::Portal + Translation`（门洞，跳过 `enabled = false`）的组件快照；`WorldCache` 组件的 `cache_path` 变化或收到显式重载请求时读取缓存中的 `audio_environment`。缓存有效且 `use_2d` 与当前 Listener 一致时使用烘焙图，否则用组件快照实时构建同一张图（输入签名变化时才重建）。图包含房间 OBB、门洞连接和全房间对路径表；区域效果槽不在这里创建，而是等声源真正用到时按需创建。
+2. **音频环境**：收集 `Audio::ReverbZone + Translation`（房间）与 `Audio::Portal + Translation`（门洞，跳过 `enabled = false`）的组件快照；`World::Path` 组件的 `cache_path` 变化或收到显式重载请求时读取缓存中的 `audio_environment`。缓存有效且 `use_2d` 与当前 Listener 一致时使用烘焙图，否则用组件快照实时构建同一张图（输入签名变化时才重建）。图包含房间 OBB、门洞连接和全房间对路径表；区域效果槽不在这里创建，而是等声源真正用到时按需创建。
 3. **遮挡快照**：一次性收集所有 `Audio::Occluder + Translation`；对每个 `Tilemap::Map + Translation` 通过 `Tilemap::documents::observe_map` 取得文档并 `ensure_tilesets`，本帧持有 `shared_ptr` 保活。
 4. **Source + Translation（可选）**：
    * `spatial = false` 或没有 Translation → relative，位置/速度写 0；
@@ -519,7 +519,7 @@ audio::play_oneshot(desc);
 3. 用与运行时相同的 builder 解析门洞两侧房间并计算全房间对路径；
 4. 以世界文件 CRC64 为键写 `<world>.je4cache`，并通知音频系统重载（`je_audio_environment_reload`）。
 
-缓存头 CRC 是世界文件本身的 CRC，世界保存后缓存自动失效。缓存路径是世界级派生数据，由持有 `WorldCache` 组件的内部实体（`cache_path`，配对 `Editor::Invisible`，不显示、不随世界存档）提供：加载世界时若文件旁存在 `<world>.je4cache` 就自动创建该实体，编辑器手动烘焙时也会创建；运行时 `AudioUpdatingSystem` 按该实体加载缓存，实体不存在、缓存无效或 `use_2d` 不匹配时直接走组件实时构建。缓存自包含，运行时不需要再用 `ReverbZone`/`Portal` 组件重建图；需要动态修改房间/门洞时重新烘焙，或删除缓存使用实时图。
+缓存头 CRC 是世界文件本身的 CRC，世界保存后缓存自动失效。缓存路径是世界级派生数据，由持有 `World::Path` 组件的内部实体（`cache_path`，配对 `Editor::Invisible`，不显示、不随世界存档）提供：加载世界时按路径创建该实体，编辑器手动烘焙时也会创建；运行时 `AudioUpdatingSystem` 按该实体加载缓存，实体不存在、缓存缺失/无效或 `use_2d` 不匹配时直接走组件实时构建。缓存自包含，运行时不需要再用 `ReverbZone`/`Portal` 组件重建图；需要动态修改房间/门洞时重新烘焙，或删除缓存使用实时图。
 
 ### 瓦片遮挡遍历
 
@@ -532,14 +532,14 @@ audio::play_oneshot(desc);
 | 内容 | 位置 |
 | --- | --- |
 | 音频组件（Source/Listener/Occluder/ReverbZone/Portal） | `include/jeecs/components.hpp`（`namespace Audio`） |
-| 世界级缓存组件（WorldCache） | `include/jeecs/components.hpp`（`jeecs` 命名空间） |
+| 世界级缓存路径组件（World::Path） | `include/jeecs/components.hpp`（`namespace World`） |
 | C ABI、效果器参数与默认值、C++ 封装 | `include/jeecs/audio.hpp`（逐函数说明见 [doc/capi/audio](../capi/audio/)） |
 | OpenAL 后端（设备、热插拔、EFX、总线、一次性声部、缓存加载） | `src/jeecs_audio_impl_openal.cpp` |
 | 缓存生成器脚本（pkg::audio 解码） | `builtin/script/internal/cache/audio.wo` |
 | 组件同步、2D 空间、遮挡、混响与播放状态机 | `src/jeecs_core_audio_system.cpp` |
 | 音频环境图、路径表、`.je4world.je4cache` 读写 | `src/jeecs_core_audio_environment.hpp/.cpp` |
 | 缓存组件维护、编辑器手动烘焙/导出烘焙 | `builtin/editor/Editor/WorldEditorViewport/WorldSaving.wo`、`builtin/editor/Editor/ExportProject.wo` |
-| 加载世界时按缓存存在性创建 WorldCache 实体 | `builtin/gaming/Loading/World.wo` |
+| 加载世界时创建 World::Path 实体 | `builtin/gaming/Loading/World.wo` |
 | 瓦片属性解析与遮挡遍历支持 | `src/jeecs_core_tilemap_model.hpp/.cpp` |
 | Woolang 绑定 | `je/audio.wo`、`src/jeecs_audio_woolang_api.cpp` |
 | 组件辅助函数（towoo） | `je/towoo/towoo.wo`、`src/jeecs_woolang_towoo_script_basic.cpp` |

@@ -560,12 +560,12 @@ namespace jeecs::audio
             portal_snapshots.push_back(snapshot);
         }
 
-        // 世界级 sidecar：由 WorldCache 组件提供缓存路径；
+        // 世界级 sidecar：由 World::Path 组件提供缓存路径；
         // 组件缺失时回退实时构建。路径变化或显式重载请求时重新读取。
         std::string environment_cache_path;
 
-        for (auto&& [world_cache] : query<view typesof(WorldCache&)>())
-            environment_cache_path = world_cache.cache_path.cpp_str();
+        for (auto&& [world_path] : query<view typesof(World::Path&)>())
+            environment_cache_path = world_path.cache_path.cpp_str();
 
         if (m_environment_cache_reload_requested
             || m_loaded_environment_cache_path != environment_cache_path)

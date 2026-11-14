@@ -40,7 +40,7 @@ namespace jeecs::audio
         AudioUpdatingSystem(game_world w);
         void CommitUpdate();
 
-        // 请求下一帧重新读取 WorldCache 组件指向的缓存
+        // 请求下一帧重新读取 World::Path 组件指向的缓存
         void RequestEnvironmentCacheReload() noexcept
         {
             m_environment_cache_reload_requested = true;
@@ -75,7 +75,7 @@ namespace jeecs::audio
         std::unordered_map<uint32_t, reverb_room_runtime> m_reverb_rooms;
         uint64_t m_next_reverb_epoch;
 
-        // 世界级音频环境：优先使用 WorldCache 组件指向的 sidecar
+        // 世界级音频环境：优先使用 World::Path 组件指向的 sidecar
         // 烘焙结果，缺失/不可用时由 ReverbZone/Portal 组件实时构建。
         std::optional<audio_environment> m_baked_environment;
         std::string m_loaded_environment_cache_path;

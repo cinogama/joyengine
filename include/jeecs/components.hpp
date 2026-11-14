@@ -2844,41 +2844,43 @@ namespace jeecs
         };
     }
 
-    /*
-    WorldCache [组件]
-    世界缓存：cache_path 指向该世界的烘焙缓存 <world>.je4cache。缓存文档
-    是世界级的，未来其他子系统也可以从里面读取自己的字段，因此不属于某个
-    具体领域。持有该组件的实体是引擎/编辑器内部实体（配对 Editor::Invisible，
-    不显示、不随世界存档）：加载世界时若文件旁存在 <world>.je4cache、或
-    编辑器手动烘焙时创建，缓存路径属于世界文件的派生信息。世界内建议只放
-    一个，多个时以最后一个为准。
-    */
-    struct WorldCache
+    namespace World
     {
-        JECS_DISABLE_MOVE_AND_COPY_OPERATOR(WorldCache);
+        /*
+        World::Path [组件]
+        世界缓存路径：cache_path 指向该世界的烘焙缓存 <world>.je4cache。缓存
+        文档是世界级的，未来其他子系统也可以从里面读取自己的字段，因此不属于
+        某个具体领域。持有该组件的实体是引擎/编辑器内部实体（配对
+        Editor::Invisible，不显示、不随世界存档）：加载世界时创建，编辑器
+        手动烘焙时也会创建。世界内建议只放一个，多个时以最后一个为准。
+        */
+        struct Path
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Path);
 
-        basic::string cache_path;
+            basic::string cache_path;
 
-        WorldCache() noexcept
-            : cache_path()
-        {
-        }
-        WorldCache(const WorldCache& another) noexcept
-            : WorldCache()
-        {
-            cache_path = another.cache_path;
-        }
-        WorldCache(WorldCache&& another) noexcept
-            : WorldCache()
-        {
-            cache_path = another.cache_path;
-        }
+            Path() noexcept
+                : cache_path()
+            {
+            }
+            Path(const Path& another) noexcept
+                : Path()
+            {
+                cache_path = another.cache_path;
+            }
+            Path(Path&& another) noexcept
+                : Path()
+            {
+                cache_path = another.cache_path;
+            }
 
-        static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-        {
-            typing::register_member(guard, &WorldCache::cache_path, "cache_path");
-        }
-    };
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Path::cache_path, "cache_path");
+            }
+        };
+    }
 
     namespace Input
     {

@@ -17,35 +17,31 @@ using je::file;
 
 namespace JEGaming::Loading::World
 {
-    // 世界级缓存：世界文件旁存在 <path>.je4cache 时，创建持有 WorldCache
-    // 的引擎内部实体（配对 Editor::Invisible：不显示、不随世界存档）。
-    // 缓存路径不写进世界文件，加载时按世界路径重新建立；各子系统按这个
-    // 实体读取自己使用的缓存字段（如音频环境）。缓存由编辑器手动/导出时
-    // 烘焙产生，缺失时子系统自行实时构建，不影响世界正常加载。
-    func attachWorldCache(w: world, path: string)=> void
+    // 世界级缓存路径：加载世界时创建持有 World::Path 的引擎内部实体
+    // （配对 Editor::Invisible：不显示、不随世界存档）。缓存路径不写进
+    // 世界文件，各子系统按这个实体读取自己使用的缓存字段（如音频环境）。
+    // 这里不判断缓存是否存在：缓存读取与校验交给各子系统（音频侧由
+    // je_cache_file_load 处理），缺失/过期时子系统自行回退，不影响加载。
+    func attachWorldPath(w: world, path: string)=> void
     {
-        // 导出后缓存位于资源镜像中：用引擎文件接口探测（磁盘优先、镜像兜底）
-        if (!file::exists(path + ".je4cache"))
-            return;
-
-        match (typeinfo::load("WorldCache"))
+        match (typeinfo::load("World::Path"))
         {
             none?
-                logerr("WorldCache component is not registered, world cache disabled.");
-            value(world_cache_type)?
+                logerr("World::Path component is not registered, world cache disabled.");
+            value(path_type)?
             {
                 match (typeinfo::load("Editor::Invisible"))
                 {
                     none?;
                     value(invisible_type)?
                     {
-                        match (w->add_entity([world_cache_type, invisible_type]))
+                        match (w->add_entity([path_type, invisible_type]))
                         {
                             none?
-                                logerr(F"Failed to create WorldCache entity for `{path}`.");
+                                logerr(F"Failed to create World::Path entity for `{path}`.");
                             value(e)?
                             {
-                                match (e->get_component(world_cache_type))
+                                match (e->get_component(path_type))
                                 {
                                     none?;
                                     value(cinst)?
@@ -73,7 +69,7 @@ namespace JEGaming::Loading::World
             ;
 
         let w = Saving::World::restore(u, world_dat);
-        attachWorldCache(w, path);
+        attachWorldPath(w, path);
         return_ok! w;
     }
     public async! func loadAsync(u: universe, path: string)=> result<world, string>

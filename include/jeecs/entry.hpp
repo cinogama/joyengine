@@ -22,7 +22,7 @@ namespace jeecs
             // 先于组件注册，保证生成的 types.wo 中类型声明位于使用之前。
             jeecs::typing::register_type<math::color>(guard, nullptr);
 
-            jeecs::typing::register_type<WorldCache>(guard, "WorldCache");
+            jeecs::typing::register_type<World::Path>(guard, "World::Path");
 
             jeecs::typing::register_type<Transform::LocalPosition>(guard, "Transform::LocalPosition");
             jeecs::typing::register_type<Transform::LocalRotation>(guard, "Transform::LocalRotation");
