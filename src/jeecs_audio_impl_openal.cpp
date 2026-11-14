@@ -1437,9 +1437,8 @@ namespace jeecs::audio
                 if (m_voice_limit_reached)
                     return 0;
 
-                while (alGetError() != AL_NO_ERROR)
-                {
-                }
+                // 清空残留错误，避免旧错误污染 alGenSources 的失败判定。
+                alGetError();
 
                 ALuint voice = 0;
                 alGenSources(1, &voice);
