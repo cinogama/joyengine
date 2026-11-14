@@ -51,6 +51,8 @@ struct je_audio_source_t {
     float m_cone_outer_angle;
     float m_cone_outer_gain;
 
+    float m_air_absorption; // 空气吸收因子，默认 0.0（关闭）；需要 EFX
+
     je_audio_bus_t m_bus; // 所属音量总线，默认 JE_AUDIO_BUS_NONE
 };
 ```

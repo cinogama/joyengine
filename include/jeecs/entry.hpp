@@ -383,6 +383,51 @@ namespace jeecs
                 "    }\n"
                 "}\n");
 
+            typing::register_script_parser<je_audio_effect_eax_reverb_preset_t>(
+                guard,
+                [](const je_audio_effect_eax_reverb_preset_t* v, woort_value value)
+                {
+                    woort_set_int(value, (woort_Int)*v);
+                },
+                [](je_audio_effect_eax_reverb_preset_t* v, woort_value value)
+                {
+                    *v = static_cast<je_audio_effect_eax_reverb_preset_t>(woort_int(value));
+                },
+                "Audio::ReverbZone::preset",
+                "namespace Audio::ReverbZone\n"
+                "{\n"
+                "    public enum preset\n"
+                "    {\n"
+                "        custom            = 0,\n"
+                "        generic           = 1,\n"
+                "        padded_cell       = 2,\n"
+                "        room              = 3,\n"
+                "        bathroom          = 4,\n"
+                "        living_room       = 5,\n"
+                "        stone_room        = 6,\n"
+                "        auditorium        = 7,\n"
+                "        concert_hall      = 8,\n"
+                "        cave              = 9,\n"
+                "        arena             = 10,\n"
+                "        hangar            = 11,\n"
+                "        carpeted_hallway  = 12,\n"
+                "        hallway           = 13,\n"
+                "        stone_corridor    = 14,\n"
+                "        alley             = 15,\n"
+                "        forest            = 16,\n"
+                "        city              = 17,\n"
+                "        mountains         = 18,\n"
+                "        quarry            = 19,\n"
+                "        plain             = 20,\n"
+                "        parking_lot       = 21,\n"
+                "        sewer_pipe        = 22,\n"
+                "        underwater        = 23,\n"
+                "        drugged           = 24,\n"
+                "        dizzy             = 25,\n"
+                "        psychotic         = 26,\n"
+                "    }\n"
+                "}\n");
+
             je_towoo_api_update();
         }
 

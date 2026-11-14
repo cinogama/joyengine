@@ -141,6 +141,10 @@ typedef struct je_audio_source_t
     float m_cone_outer_angle; // 外角，默认 360.0
     float m_cone_outer_gain;  // 外角增益，默认 0.0
 
+    // 空气吸收因子：随距离衰减高频，0 表示关闭，范围 [0.0, 10.0]；
+    // 需要设备支持 EFX，默认 0.0
+    float m_air_absorption;
+
     je_audio_bus_t m_bus; // 所属音量总线
 } je_audio_source_t;
 
@@ -460,6 +464,43 @@ typedef struct je_audio_effect_eax_reverb_t
     float m_room_rolloff_factor;    // 房间衰减因子，默认值为 0.0，范围 [0.0, 10.0]
     bool m_decay_hf_limit;          // 高频衰减限制器，默认值为 true
 } je_audio_effect_eax_reverb_t;
+
+/*
+je_audio_effect_eax_reverb_preset_t [枚举]
+EAX 混响预设。取值与 EAX/EFX 的标准预设一一对应，
+CUSTOM 表示不使用预设、由 je_audio_effect_eax_reverb_t 的字段自定义。
+*/
+typedef enum je_audio_effect_eax_reverb_preset_t
+{
+    JE_AUDIO_EAX_REVERB_PRESET_CUSTOM = 0,
+    JE_AUDIO_EAX_REVERB_PRESET_GENERIC,
+    JE_AUDIO_EAX_REVERB_PRESET_PADDEDCELL,
+    JE_AUDIO_EAX_REVERB_PRESET_ROOM,
+    JE_AUDIO_EAX_REVERB_PRESET_BATHROOM,
+    JE_AUDIO_EAX_REVERB_PRESET_LIVINGROOM,
+    JE_AUDIO_EAX_REVERB_PRESET_STONEROOM,
+    JE_AUDIO_EAX_REVERB_PRESET_AUDITORIUM,
+    JE_AUDIO_EAX_REVERB_PRESET_CONCERTHALL,
+    JE_AUDIO_EAX_REVERB_PRESET_CAVE,
+    JE_AUDIO_EAX_REVERB_PRESET_ARENA,
+    JE_AUDIO_EAX_REVERB_PRESET_HANGAR,
+    JE_AUDIO_EAX_REVERB_PRESET_CARPETEDHALLWAY,
+    JE_AUDIO_EAX_REVERB_PRESET_HALLWAY,
+    JE_AUDIO_EAX_REVERB_PRESET_STONECORRIDOR,
+    JE_AUDIO_EAX_REVERB_PRESET_ALLEY,
+    JE_AUDIO_EAX_REVERB_PRESET_FOREST,
+    JE_AUDIO_EAX_REVERB_PRESET_CITY,
+    JE_AUDIO_EAX_REVERB_PRESET_MOUNTAINS,
+    JE_AUDIO_EAX_REVERB_PRESET_QUARRY,
+    JE_AUDIO_EAX_REVERB_PRESET_PLAIN,
+    JE_AUDIO_EAX_REVERB_PRESET_PARKINGLOT,
+    JE_AUDIO_EAX_REVERB_PRESET_SEWERPIPE,
+    JE_AUDIO_EAX_REVERB_PRESET_UNDERWATER,
+    JE_AUDIO_EAX_REVERB_PRESET_DRUGGED,
+    JE_AUDIO_EAX_REVERB_PRESET_DIZZY,
+    JE_AUDIO_EAX_REVERB_PRESET_PSYCHOTIC,
+    JE_AUDIO_EAX_REVERB_PRESET_COUNT,
+} je_audio_effect_eax_reverb_preset_t;
 
 /*
 je_audio_buffer_create [基本接口]
@@ -914,6 +955,7 @@ typedef je_audio_effect_autowah_t je_AudioEffectAutowah;
 typedef je_audio_effect_compressor_t je_AudioEffectCompressor;
 typedef je_audio_effect_equalizer_t je_AudioEffectEqualizer;
 typedef je_audio_effect_eax_reverb_t je_AudioEffectEaxReverb;
+typedef je_audio_effect_eax_reverb_preset_t je_AudioEffectEaxReverbPreset;
 typedef je_audio_filter_type_t je_AudioFilterType;
 typedef je_audio_native_filter_instance_t je_AudioNativeFilterInstance;
 typedef je_audio_filter_t je_AudioFilter;

@@ -369,6 +369,8 @@ namespace je
                 public cone_inner_angle: mut real,
                 public cone_outer_angle: mut real,
                 public cone_outer_gain: mut real,
+                // 空气吸收因子，0 = 关闭；需要 EFX
+                public air_absorption: mut real,
             };
             
             extern("libjoyecs", "wojeapi_audio_source_create")

@@ -39,18 +39,33 @@ namespace jeecs::audio
         void CommitUpdate();
 
     private:
-        // 听众当前所在的最内层混响区域及其参数；无区域时 m_reverb_active 为 false。
-        bool  m_reverb_active;
-        float m_reverb_decay_time;
-        float m_reverb_gain;
-        float m_reverb_gain_hf;
-        float m_reverb_diffusion;
+        // 每个活跃混响区域对应一个 EFX EAX 混响效果 + 效果槽。
+        // 槽重建/效果参数变化时 m_slot_epoch 递增，音源据此决定是否重绑发送。
+        struct reverb_room_runtime
+        {
+            bool m_active;
+            uint64_t m_slot_epoch;
+            basic::optional<basic::resource<effect<je_audio_effect_eax_reverb_t>>> m_effect;
+            basic::optional<basic::resource<effect_slot>> m_slot;
+            je_audio_effect_eax_reverb_t m_params;
+            bool m_has_params;
+            float m_slot_gain;
 
-        // 区域参数变化时递增；音源按代数决定是否需要重新绑定/解绑第 0 路发送。
-        uint64_t m_reverb_generation;
+            reverb_room_runtime() noexcept
+                : m_active(false)
+                , m_slot_epoch(0)
+                , m_effect()
+                , m_slot()
+                , m_params()
+                , m_has_params(false)
+                , m_slot_gain(-1.0f)
+            {
+            }
+        };
 
-        std::optional<basic::resource<effect<je_audio_effect_reverb_t>>> m_reverb_effect;
-        std::optional<basic::resource<effect_slot>>                      m_reverb_slot;
+        // 区域实体 id -> 运行时效果槽
+        std::unordered_map<uint32_t, reverb_room_runtime> m_reverb_rooms;
+        uint64_t m_next_reverb_epoch;
 
         // 地图路径 -> 音频遮挡网格（按 map_stamp 失效）
         std::unordered_map<std::string, audio_map_grid> m_audio_maps;

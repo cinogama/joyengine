@@ -2425,6 +2425,9 @@ namespace jeecs
         buffer 为空时声源不播放；play 为 false 时暂停，循环播放自然结束
         时 play 会自动置为 false。spatial 为 false 或实体没有 Transform
         时按相对听众（UI/环境声）处理，不做距离衰减与左右声像。
+
+        direction 是声源局部朝向，乘实体世界旋转后作为锥形指向的轴；
+        cone_* 默认 360°（无方向性）。air_absorption 需要设备支持 EFX。
         */
         struct Source
         {
@@ -2435,6 +2438,9 @@ namespace jeecs
                 STOPPED,
                 PLAYING,
             };
+
+            // 每个空间化音源最多绑定 3 路混响发送（源所在区域 ×2 + 听者区域 ×1）
+            static constexpr size_t REVERB_SEND_COUNT = 3;
 
             basic::file_resource<audio::buffer> buffer;
             basic::resource<audio::source> source;
@@ -2448,6 +2454,34 @@ namespace jeecs
             float reference_distance;
             float max_distance;
             float rolloff;
+            float min_gain;
+            float max_gain;
+            float cone_inner_angle;
+            float cone_outer_angle;
+            float cone_outer_gain;
+            float air_absorption;
+            math::vec3 direction;
+
+            // 每个空间化音源最多绑定 3 路混响发送（源所在区域 ×2 + 听者区域 ×1）
+            struct reverb_send_state
+            {
+                uint32_t room_id;
+                uint64_t room_epoch;
+                float applied_gain;
+                float applied_hf;
+                bool filter_bound;
+                basic::optional<basic::resource<audio::filter>> filter;
+
+                reverb_send_state() noexcept
+                    : room_id(0)
+                    , room_epoch(0)
+                    , applied_gain(-1.0f)
+                    , applied_hf(-1.0f)
+                    , filter_bound(false)
+                    , filter()
+                {
+                }
+            };
 
             // 运行时状态（不反射、不存档）
             math::vec3 last_position;
@@ -2461,8 +2495,7 @@ namespace jeecs
             basic::optional<basic::resource<audio::filter>> occlusion_filter;
             float applied_occlusion_hf;
             bool occlusion_filter_bound;
-            uint64_t reverb_generation;
-            bool reverb_bound;
+            reverb_send_state reverb_sends[REVERB_SEND_COUNT];
 
             Source() noexcept
                 : buffer()
@@ -2476,6 +2509,13 @@ namespace jeecs
                 , reference_distance(1.0f)
                 , max_distance(32.0f)
                 , rolloff(1.0f)
+                , min_gain(0.0f)
+                , max_gain(1.0f)
+                , cone_inner_angle(360.0f)
+                , cone_outer_angle(360.0f)
+                , cone_outer_gain(0.0f)
+                , air_absorption(0.0f)
+                , direction(0.0f, 0.0f, 1.0f)
                 , last_position()
                 , last_world_position()
                 , has_last_position(false)
@@ -2487,8 +2527,7 @@ namespace jeecs
                 , occlusion_filter()
                 , applied_occlusion_hf(1.0f)
                 , occlusion_filter_bound(false)
-                , reverb_generation(0)
-                , reverb_bound(false)
+                , reverb_sends()
             {
             }
             Source(const Source& another) noexcept
@@ -2504,6 +2543,13 @@ namespace jeecs
                 reference_distance = another.reference_distance;
                 max_distance = another.max_distance;
                 rolloff = another.rolloff;
+                min_gain = another.min_gain;
+                max_gain = another.max_gain;
+                cone_inner_angle = another.cone_inner_angle;
+                cone_outer_angle = another.cone_outer_angle;
+                cone_outer_gain = another.cone_outer_gain;
+                air_absorption = another.air_absorption;
+                direction = another.direction;
             }
             Source(Source&& another) noexcept
                 : buffer(another.buffer)
@@ -2517,6 +2563,13 @@ namespace jeecs
                 , reference_distance(another.reference_distance)
                 , max_distance(another.max_distance)
                 , rolloff(another.rolloff)
+                , min_gain(another.min_gain)
+                , max_gain(another.max_gain)
+                , cone_inner_angle(another.cone_inner_angle)
+                , cone_outer_angle(another.cone_outer_angle)
+                , cone_outer_gain(another.cone_outer_gain)
+                , air_absorption(another.air_absorption)
+                , direction(another.direction)
                 , last_position()
                 , last_world_position()
                 , has_last_position(false)
@@ -2528,8 +2581,7 @@ namespace jeecs
                 , occlusion_filter()
                 , applied_occlusion_hf(1.0f)
                 , occlusion_filter_bound(false)
-                , reverb_generation(0)
-                , reverb_bound(false)
+                , reverb_sends()
             {
             }
 
@@ -2550,6 +2602,13 @@ namespace jeecs
                 typing::register_member(guard, &Source::reference_distance, "reference_distance");
                 typing::register_member(guard, &Source::max_distance, "max_distance");
                 typing::register_member(guard, &Source::rolloff, "rolloff");
+                typing::register_member(guard, &Source::min_gain, "min_gain");
+                typing::register_member(guard, &Source::max_gain, "max_gain");
+                typing::register_member(guard, &Source::cone_inner_angle, "cone_inner_angle");
+                typing::register_member(guard, &Source::cone_outer_angle, "cone_outer_angle");
+                typing::register_member(guard, &Source::cone_outer_gain, "cone_outer_gain");
+                typing::register_member(guard, &Source::air_absorption, "air_absorption");
+                typing::register_member(guard, &Source::direction, "direction");
             }
         };
         /*
@@ -2659,15 +2718,21 @@ namespace jeecs
         };
         /*
         Audio::ReverbZone [组件]
-        混响区域：听众进入区域后，系统为所有空间化音源的第 0 路辅助发送
-        绑定统一的 EFX 混响；多个区域重叠时取体积最小的内层区域。
+        混响区域：一个区域代表一个声学空间。系统按声源所在区域（不是听者）
+        为每个空间化音源绑定该区域的 EFX EAX 混响发送，跨墙的混响尾音会被
+        遮挡滤波器闷掉；重叠区域按 fade 权重同时参与。
         设备不支持 EFX 时静默降级为无混响。
         */
         struct ReverbZone
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(ReverbZone);
 
-            math::vec3 size;
+            math::vec3 size;  // 区域局部全尺寸（乘实体比例尺）
+            float fade;       // 区域外侧发送权重衰减距离，0 表示硬边界
+            float send_gain;  // 区域混响的湿声发送上限
+            je_audio_effect_eax_reverb_preset_t preset;
+
+            // preset == CUSTOM 时生效的自定义参数
             float decay_time;
             float gain;
             float gain_hf;
@@ -2675,6 +2740,9 @@ namespace jeecs
 
             ReverbZone() noexcept
                 : size(8.0f, 8.0f, 8.0f)
+                , fade(1.0f)
+                , send_gain(1.0f)
+                , preset(JE_AUDIO_EAX_REVERB_PRESET_CUSTOM)
                 , decay_time(1.49f)
                 , gain(0.32f)
                 , gain_hf(0.89f)
@@ -2685,6 +2753,9 @@ namespace jeecs
                 : ReverbZone()
             {
                 size = another.size;
+                fade = another.fade;
+                send_gain = another.send_gain;
+                preset = another.preset;
                 decay_time = another.decay_time;
                 gain = another.gain;
                 gain_hf = another.gain_hf;
@@ -2694,6 +2765,9 @@ namespace jeecs
                 : ReverbZone()
             {
                 size = another.size;
+                fade = another.fade;
+                send_gain = another.send_gain;
+                preset = another.preset;
                 decay_time = another.decay_time;
                 gain = another.gain;
                 gain_hf = another.gain_hf;
@@ -2703,6 +2777,9 @@ namespace jeecs
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
                 typing::register_member(guard, &ReverbZone::size, "size");
+                typing::register_member(guard, &ReverbZone::fade, "fade");
+                typing::register_member(guard, &ReverbZone::send_gain, "send_gain");
+                typing::register_member(guard, &ReverbZone::preset, "preset");
                 typing::register_member(guard, &ReverbZone::decay_time, "decay_time");
                 typing::register_member(guard, &ReverbZone::gain, "gain");
                 typing::register_member(guard, &ReverbZone::gain_hf, "gain_hf");

@@ -144,7 +144,7 @@ WOORT_API woort_api wojeapi_audio_source_info(void)
     basic::resource<audio::source>* source =
         static_cast<basic::resource<audio::source> *>(woort_gcpointer(0));
 
-    woort_set_struct(WOORT_RETURN_SLOT, 15);
+    woort_set_struct(WOORT_RETURN_SLOT, 16);
 
     auto* source_instance = (*source)->handle();
 
@@ -183,6 +183,7 @@ WOORT_API woort_api wojeapi_audio_source_info(void)
     woort_struct_set_float(WOORT_RETURN_SLOT, 12, source_instance->m_cone_inner_angle);
     woort_struct_set_float(WOORT_RETURN_SLOT, 13, source_instance->m_cone_outer_angle);
     woort_struct_set_float(WOORT_RETURN_SLOT, 14, source_instance->m_cone_outer_gain);
+    woort_struct_set_float(WOORT_RETURN_SLOT, 15, source_instance->m_air_absorption);
 
     return woort_ret();
 }
@@ -231,6 +232,7 @@ WOORT_API woort_api wojeapi_audio_source_update(void)
             src->m_cone_inner_angle = woort_struct_get_float(updated_info, 12);
             src->m_cone_outer_angle = woort_struct_get_float(updated_info, 13);
             src->m_cone_outer_gain = woort_struct_get_float(updated_info, 14);
+            src->m_air_absorption = woort_struct_get_float(updated_info, 15);
         });
 
     return woort_ret_void();

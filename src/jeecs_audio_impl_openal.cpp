@@ -430,6 +430,13 @@ namespace jeecs::audio
             bool m_context_updating_thread_quit;
             optional<je_audio_play_device_t*> m_current_play_device;
 
+            // 当前 context 实际生效的辅助发送路数。它是 ALC 的 context 属性
+            // （ALC_MAX_AUXILIARY_SENDS），和设备的理论上限不是一回事：
+            // 不传该属性时 openal-soft 只会启用默认的 2 路。
+            size_t m_active_auxiliary_sends;
+            // 设备是否支持 AL_SOFT_source_spatialize（强制空间化立体声源）
+            bool m_source_spatialize_soft;
+
             shared_mutex m_context_mx; // g0
 
             // 设备线程的定时唤醒：不持有 g0 等待，使补块线程按 g2 -> g1 -> g0
@@ -893,6 +900,9 @@ namespace jeecs::audio
                     debug::logfatal("Failed to clear current audio context.");
 
                 alcDestroyContext(current_context);
+
+                m_active_auxiliary_sends = 0;
+                m_source_spatialize_soft = false;
             }
             void active_using_device(je_audio_play_device_t* device)
             {
@@ -901,11 +911,76 @@ namespace jeecs::audio
 
                 debug::loginfo("Active audio device: %s.", device->m_name);
 
-                auto* current_context = alcCreateContext(JE_AL_DEVICE(device->m_device_instance), nullptr);
+                // 辅助发送路数是 context 属性：设备查询返回的是理论上限，
+                // 不在这里请求时 openal-soft 只会启用默认的 2 路。
+                ALCint context_attributes[6];
+                size_t context_attribute_count = 0;
+
+                if (device->m_max_auxiliary_sends > 0)
+                {
+                    context_attributes[context_attribute_count++] =
+                        ALC_MAX_AUXILIARY_SENDS;
+                    context_attributes[context_attribute_count++] =
+                        device->m_max_auxiliary_sends > 4
+                            ? 4
+                            : device->m_max_auxiliary_sends;
+                }
+
+                const bool hrtf_soft_enabled = alcIsExtensionPresent(
+                    JE_AL_DEVICE(device->m_device_instance),
+                    "ALC_SOFT_HRTF");
+
+                if (hrtf_soft_enabled)
+                {
+                    // DONT_CARE 交给后端决定：耳机时启用 HRTF，扬声器时
+                    // 保持普通的声道声像，避免在扬声器上强行双耳化。
+                    context_attributes[context_attribute_count++] =
+                        ALC_HRTF_SOFT;
+                    context_attributes[context_attribute_count++] =
+                        ALC_DONT_CARE_SOFT;
+                }
+
+                context_attributes[context_attribute_count] = 0;
+
+                auto* current_context = alcCreateContext(
+                    JE_AL_DEVICE(device->m_device_instance),
+                    context_attributes);
                 if (current_context == nullptr || AL_FALSE == alcMakeContextCurrent(current_context))
                 {
                     debug::logfatal("Failed to create context for device: %s.", device->m_name);
                     return;
+                }
+
+                m_source_spatialize_soft =
+                    alIsExtensionPresent("AL_SOFT_source_spatialize") == AL_TRUE;
+
+                if (hrtf_soft_enabled)
+                {
+                    ALCint hrtf_status = ALC_HRTF_DISABLED_SOFT;
+                    alcGetIntegerv(
+                        JE_AL_DEVICE(device->m_device_instance),
+                        ALC_HRTF_STATUS_SOFT,
+                        1,
+                        &hrtf_status);
+
+                    switch (hrtf_status)
+                    {
+                    case ALC_HRTF_ENABLED_SOFT:
+                        debug::loginfo("Audio device: %s, HRTF enabled.", device->m_name);
+                        break;
+                    case ALC_HRTF_HEADPHONES_DETECTED_SOFT:
+                        debug::loginfo("Audio device: %s, HRTF enabled (headphones detected).", device->m_name);
+                        break;
+                    case ALC_HRTF_DENIED_SOFT:
+                        debug::loginfo("Audio device: %s, HRTF denied by configuration.", device->m_name);
+                        break;
+                    case ALC_HRTF_UNSUPPORTED_FORMAT_SOFT:
+                        debug::logwarn("Audio device: %s, HRTF unsupported for the output format.", device->m_name);
+                        break;
+                    default:
+                        debug::loginfo("Audio device: %s, HRTF disabled.", device->m_name);
+                        break;
+                    }
                 }
 
                 if (device->m_max_auxiliary_sends <= 0)
@@ -914,11 +989,23 @@ namespace jeecs::audio
 
                     // 关闭 EFX 拓展
                     m_alext_efx.reset();
+                    m_active_auxiliary_sends = 0;
                 }
                 else
                 {
-                    debug::loginfo("Audio device: %s, support EFX with max %d sends for each source.",
-                        device->m_name, (int)device->m_max_auxiliary_sends);
+                    // 取当前 context 实际启用的发送路数（已被设备上限钳制）
+                    ALCint active_sends = 0;
+                    alcGetIntegerv(
+                        JE_AL_DEVICE(device->m_device_instance),
+                        ALC_MAX_AUXILIARY_SENDS,
+                        1,
+                        &active_sends);
+
+                    m_active_auxiliary_sends =
+                        active_sends > 0 ? (size_t)active_sends : 0;
+
+                    debug::loginfo("Audio device: %s, support EFX with %d active sends for each source.",
+                        device->m_name, (int)m_active_auxiliary_sends);
 
                     // 开启 EFX 拓展
                     m_alext_efx.emplace(device->m_device_instance);
@@ -1330,6 +1417,17 @@ namespace jeecs::audio
                 alSourcef(source->m_source_instance->m_source_id,
                     AL_CONE_OUTER_GAIN, source->m_cone_outer_gain);
 
+                if (m_alext_efx.has_value())
+                    alSourcef(source->m_source_instance->m_source_id,
+                        AL_AIR_ABSORPTION_FACTOR, source->m_air_absorption);
+
+                // 立体声 buffer 默认不参与空间化（AL_SOFT_source_spatialize
+                // 的 Auto 语义）；空间化音源强制打开，非空间化音源保持立体声。
+                if (m_source_spatialize_soft)
+                    alSourcei(source->m_source_instance->m_source_id,
+                        AL_SOURCE_SPATIALIZE_SOFT,
+                        source->m_relative ? AL_FALSE : AL_TRUE);
+
                 if (source->m_source_instance->m_dump.has_value())
                 {
                     auto& dump = source->m_source_instance->m_dump.value();
@@ -1396,7 +1494,7 @@ namespace jeecs::audio
 
                         alSourcei(source->m_source_instance->m_source_id, AL_DIRECT_FILTER, filter_id);
 
-                        const size_t max_auxiliary_sends = m_current_play_device.value()->m_max_auxiliary_sends;
+                        const size_t max_auxiliary_sends = m_active_auxiliary_sends;
                         for (size_t i = 0; i < max_auxiliary_sends; i += 1)
                         {
                             auto& binded_effect_slot_and_filter =
@@ -2756,6 +2854,8 @@ namespace jeecs::audio
                 source->m_cone_outer_angle = 360.0f;
                 source->m_cone_outer_gain = 0.0f;
 
+                source->m_air_absorption = 0.0f;
+
                 source->m_bus = JE_AUDIO_BUS_NONE;
 
                 lock_guard g1(m_sources_mx);  // g1
@@ -2818,7 +2918,8 @@ namespace jeecs::audio
                         slot_and_filters.m_filter.set_res_may_null(filter_may_null);
 
                         if (m_alext_efx.has_value()
-                            && source->m_source_instance->m_source_id != 0)
+                            && source->m_source_instance->m_source_id != 0
+                            && slot_idx < m_active_auxiliary_sends)
                         {
                             ALint slot_id = AL_EFFECTSLOT_NULL;
                             ALint filter_id = AL_FILTER_NULL;
@@ -3701,6 +3802,8 @@ namespace jeecs::audio
                     alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT"))
                 , m_context_updating_thread_quit(false)
                 , m_current_play_device(nullopt)
+                , m_active_auxiliary_sends(0)
+                , m_source_spatialize_soft(false)
             {
                 m_listener.m_gain = 1.0f;
                 m_listener.m_global_gain = 1.0f;

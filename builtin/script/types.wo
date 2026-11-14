@@ -538,6 +538,22 @@ namespace Audio::Source::bus
         }
     }
 }
+// Audio::ReverbZone::preset：EAX 混响预设。
+// 序列化为整数值；与 je_audio_effect_eax_reverb_preset_t 的取值一一对应
+namespace Audio::ReverbZone::preset
+{
+    using parser = void
+    {
+        public extern func saving(val: Audio::ReverbZone::preset)=> string
+        {
+            return val as int as string;
+        }
+        public extern func restoring(dat: string)=> Audio::ReverbZone::preset
+        {
+            return dat as int as Audio::ReverbZone::preset;
+        }
+    }
+}
 namespace file_resource
 {
     using parser = void

@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -26,6 +27,11 @@ namespace jeecs::audio
     namespace
     {
         constexpr float OCCLUSION_EPSILON = 1e-4f;
+        constexpr float REVERB_WEIGHT_EPSILON = 1e-4f;
+
+        // 声源不在听者房间时，穿过墙/门洞的声音仍会激发听者房间的混响。
+        // 该系数是这种二次激发的发送上限。
+        constexpr float LISTENER_ROOM_EXCITATION = 0.25f;
 
         struct occluder_snapshot
         {
@@ -307,25 +313,6 @@ namespace jeecs::audio
             return t_enter > OCCLUSION_EPSILON && t_enter <= 1.0f;
         }
 
-        bool point_in_box(
-            const math::vec3& point,
-            const math::vec3& center,
-            const math::quat& rotation,
-            const math::vec3& half_extent,
-            bool use_2d)
-        {
-            const math::vec3 local = rotation.inverse() * (point - center);
-
-            if (std::fabs(local.x) > half_extent.x)
-                return false;
-            if (std::fabs(local.y) > half_extent.y)
-                return false;
-            if (!use_2d && std::fabs(local.z) > half_extent.z)
-                return false;
-
-            return true;
-        }
-
         // 累乘线段穿过的格子的缓存音频系数。起点格由 DDA 跳过。
         // 网格已按地图/图集版本平整化，热路径只做数组索引。
         void accumulate_tilemap_occlusion(
@@ -348,7 +335,7 @@ namespace jeecs::audio
 
             // 裁剪到地图矩形，避免远处声源让 DDA 遍历地图外的海量空格
             float t0 = 0.0f;
-            float t1 = 1.0f;
+            float t1 = 0.0f;
             if (!clip_segment_to_grid(
                     from.x, from.y, to.x, to.y,
                     (float)grid->m_width, (float)grid->m_height,
@@ -380,18 +367,119 @@ namespace jeecs::audio
                     result.m_hf *= 1.0f - grid->m_muffle[index];
                 });
         }
+
+        // 一个混响区域在当帧的只读快照。区域实体的 Transform 可能在本帧
+        // 内变化，快照保证房间选择与效果更新看到同一组参数。
+        struct reverb_zone_snapshot
+        {
+            uint32_t m_id;
+            math::vec3 m_center;
+            math::quat m_rotation;
+            math::vec3 m_half_extent;
+            float m_fade;
+            je_audio_effect_eax_reverb_preset_t m_preset;
+            float m_decay_time;
+            float m_gain;
+            float m_gain_hf;
+            float m_diffusion;
+            float m_send_gain;
+        };
+
+        struct reverb_candidate
+        {
+            const reverb_zone_snapshot* m_zone;
+            float m_weight;
+        };
+
+        // 区域权重：区域内为 1，区域外在 fade 距离内平滑降到 0。
+        // use_2d 时完全忽略 z，避免 2D 场景里区域高度参与判断。
+        float zone_weight(
+            const math::vec3& point,
+            const reverb_zone_snapshot& zone,
+            bool use_2d)
+        {
+            const math::vec3 local =
+                zone.m_rotation.inverse() * (point - zone.m_center);
+
+            const float dx =
+                std::max(std::fabs(local.x) - zone.m_half_extent.x, 0.0f);
+            const float dy =
+                std::max(std::fabs(local.y) - zone.m_half_extent.y, 0.0f);
+            const float dz = use_2d
+                ? 0.0f
+                : std::max(std::fabs(local.z) - zone.m_half_extent.z, 0.0f);
+
+            const float outside = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+            if (outside <= 0.0f)
+                return 1.0f;
+
+            if (zone.m_fade <= 1e-6f)
+                return 0.0f;
+
+            const float t = std::min(outside / zone.m_fade, 1.0f);
+            return 1.0f - t * t * (3.0f - 2.0f * t);
+        }
+
+        // EAX 标准混响预设；顺序与 je_audio_effect_eax_reverb_preset_t
+        // 去掉 CUSTOM 后一一对应。数值来自 EFX/EAX 规范。
+        const je_audio_effect_eax_reverb_t EAX_REVERB_PRESETS[] = {
+#include "eax_reverb_presets.inc"
+        };
+
+        static_assert(
+            sizeof(EAX_REVERB_PRESETS) / sizeof(EAX_REVERB_PRESETS[0])
+                == (size_t)(JE_AUDIO_EAX_REVERB_PRESET_COUNT - 1),
+            "EAX_REVERB_PRESETS must cover every non-custom preset.");
+
+        je_audio_effect_eax_reverb_t make_reverb_params(
+            const reverb_zone_snapshot& zone)
+        {
+            if (zone.m_preset > JE_AUDIO_EAX_REVERB_PRESET_CUSTOM
+                && zone.m_preset < JE_AUDIO_EAX_REVERB_PRESET_COUNT)
+            {
+                return EAX_REVERB_PRESETS[(size_t)zone.m_preset - 1];
+            }
+
+            // CUSTOM：以原通用混响的默认值为基线，只覆盖组件暴露的参数。
+            je_audio_effect_eax_reverb_t params{};
+            params.m_density = 1.0f;
+            params.m_diffusion = zone.m_diffusion;
+            params.m_gain = zone.m_gain;
+            params.m_gain_hf = zone.m_gain_hf;
+            params.m_gain_lf = 1.0f;
+            params.m_decay_time = zone.m_decay_time;
+            params.m_decay_hf_ratio = 0.83f;
+            params.m_decay_lf_ratio = 1.0f;
+            params.m_reflections_gain = 0.05f;
+            params.m_reflections_delay = 0.007f;
+            params.m_late_reverb_gain = 1.26f;
+            params.m_late_reverb_delay = 0.011f;
+            params.m_echo_time = 0.25f;
+            params.m_echo_depth = 0.0f;
+            params.m_modulation_time = 0.25f;
+            params.m_modulation_depth = 0.0f;
+            params.m_air_absorption_gain_hf = 0.994f;
+            params.m_hf_reference = 5000.0f;
+            params.m_lf_reference = 250.0f;
+            params.m_room_rolloff_factor = 0.0f;
+            params.m_decay_hf_limit = false;
+            return params;
+        }
+
+        bool same_reverb_params(
+            const je_audio_effect_eax_reverb_t& a,
+            const je_audio_effect_eax_reverb_t& b)
+        {
+            // 两个结构体都是值初始化后逐字段赋值的 POD，padding 为 0。
+            return std::memcmp(&a, &b, sizeof(a)) == 0;
+        }
     }
 
     AudioUpdatingSystem::AudioUpdatingSystem(game_world w)
         : game_system(w)
-        , m_reverb_active(false)
-        , m_reverb_decay_time(0.0f)
-        , m_reverb_gain(0.0f)
-        , m_reverb_gain_hf(0.0f)
-        , m_reverb_diffusion(0.0f)
-        , m_reverb_generation(0)
-        , m_reverb_effect()
-        , m_reverb_slot()
+        , m_reverb_rooms()
+        , m_next_reverb_epoch(0)
         , m_audio_maps()
     {
     }
@@ -457,89 +545,70 @@ namespace jeecs::audio
                 });
         }
 
-        // ==================== 2. 混响区域 ====================
-        bool zone_active = false;
-        float zone_decay_time = 0.0f;
-        float zone_gain = 0.0f;
-        float zone_gain_hf = 0.0f;
-        float zone_diffusion = 0.0f;
+        // ==================== 2. 混响区域快照 ====================
+        std::vector<reverb_zone_snapshot> reverb_zones;
+        std::unordered_set<uint32_t> live_reverb_zone_ids;
+
+        for (auto&& [zone_entity, zone, trans] :
+            query_entity<view typesof(
+                Audio::ReverbZone&, Transform::Translation&)>())
+        {
+            reverb_zone_snapshot snapshot{
+                zone_entity._m_raw._m_id,
+                trans.world_position,
+                trans.world_rotation,
+                math::vec3(
+                    std::fabs(zone.size.x * trans.local_scale.x) * 0.5f,
+                    std::fabs(zone.size.y * trans.local_scale.y) * 0.5f,
+                    std::fabs(zone.size.z * trans.local_scale.z) * 0.5f),
+                zone.fade,
+                zone.preset,
+                zone.decay_time,
+                zone.gain,
+                zone.gain_hf,
+                zone.diffusion,
+                zone.send_gain,
+            };
+
+            live_reverb_zone_ids.insert(snapshot.m_id);
+            reverb_zones.push_back(snapshot);
+        }
+
+        // 听者所在区域：重叠时取权重更高者，权重相同取体积更小者。
+        const reverb_zone_snapshot* listener_reverb_zone = nullptr;
+        float listener_reverb_weight = 0.0f;
 
         if (listener_present)
         {
             float best_volume = std::numeric_limits<float>::max();
 
-            for (auto&& [zone, trans] : query<
-                view typesof(Audio::ReverbZone&, Transform::Translation&)
-            >())
+            for (const auto& zone : reverb_zones)
             {
-                const math::vec3 half_extent(
-                    std::fabs(zone.size.x * trans.local_scale.x) * 0.5f,
-                    std::fabs(zone.size.y * trans.local_scale.y) * 0.5f,
-                    std::fabs(zone.size.z * trans.local_scale.z) * 0.5f);
+                const float weight =
+                    zone_weight(listener_position, zone, listener_2d);
 
-                if (!point_in_box(
-                        listener_position,
-                        trans.world_position,
-                        trans.world_rotation,
-                        half_extent,
-                        listener_2d))
+                if (weight <= REVERB_WEIGHT_EPSILON)
                     continue;
 
-                const float volume =
-                    half_extent.x * half_extent.y * half_extent.z;
+                const float volume = listener_2d
+                    ? zone.m_half_extent.x * zone.m_half_extent.y
+                    : zone.m_half_extent.x * zone.m_half_extent.y
+                        * zone.m_half_extent.z;
 
-                if (volume < best_volume)
+                if (listener_reverb_zone == nullptr
+                    || weight > listener_reverb_weight
+                    || (weight == listener_reverb_weight
+                        && volume < best_volume))
                 {
+                    listener_reverb_zone = &zone;
+                    listener_reverb_weight = weight;
                     best_volume = volume;
-                    zone_active = true;
-
-                    zone_decay_time = zone.decay_time;
-                    zone_gain = zone.gain;
-                    zone_gain_hf = zone.gain_hf;
-                    zone_diffusion = zone.diffusion;
                 }
             }
         }
 
-        const bool reverb_changed =
-            (zone_active != m_reverb_active)
-            || (zone_active
-                && (zone_decay_time != m_reverb_decay_time
-                    || zone_gain != m_reverb_gain
-                    || zone_gain_hf != m_reverb_gain_hf
-                    || zone_diffusion != m_reverb_diffusion));
-
-        if (reverb_changed)
-        {
-            m_reverb_active = zone_active;
-            m_reverb_decay_time = zone_decay_time;
-            m_reverb_gain = zone_gain;
-            m_reverb_gain_hf = zone_gain_hf;
-            m_reverb_diffusion = zone_diffusion;
-
-            ++m_reverb_generation;
-
-            if (zone_active)
-            {
-                if (!m_reverb_effect.has_value())
-                    m_reverb_effect.emplace(
-                        effect<je_audio_effect_reverb_t>::create());
-
-                if (!m_reverb_slot.has_value())
-                    m_reverb_slot.emplace(effect_slot::create());
-
-                m_reverb_effect.value()->update(
-                    [&](je_audio_effect_reverb_t* reverb)
-                    {
-                        reverb->m_decay_time = zone_decay_time;
-                        reverb->m_gain = zone_gain;
-                        reverb->m_gain_hf = zone_gain_hf;
-                        reverb->m_diffusion = zone_diffusion;
-                    });
-
-                m_reverb_slot.value()->bind_effect(m_reverb_effect.value());
-            }
-        }
+        for (auto& room : m_reverb_rooms)
+            room.second.m_active = false;
 
         // ==================== 3. 遮挡快照 ====================
         std::vector<occluder_snapshot> occluders;
@@ -590,6 +659,56 @@ namespace jeecs::audio
                 trans.local_scale,
             });
         }
+
+        // 确保区域的效果器/效果槽存在，并按需更新参数。
+        auto ensure_reverb_room =
+            [this](const reverb_zone_snapshot& zone) -> reverb_room_runtime&
+        {
+            reverb_room_runtime& room = m_reverb_rooms[zone.m_id];
+
+            if (!room.m_slot.has_value())
+            {
+                room.m_effect.emplace(
+                    effect<je_audio_effect_eax_reverb_t>::create());
+                room.m_slot.emplace(effect_slot::create());
+                room.m_slot_epoch = ++m_next_reverb_epoch;
+                room.m_has_params = false;
+                room.m_slot_gain = -1.0f;
+            }
+
+            room.m_active = true;
+
+            const je_audio_effect_eax_reverb_t params =
+                make_reverb_params(zone);
+
+            if (!room.m_has_params
+                || !same_reverb_params(room.m_params, params))
+            {
+                room.m_params = params;
+                room.m_has_params = true;
+
+                room.m_effect.value()->update(
+                    [&](je_audio_effect_eax_reverb_t* data)
+                    {
+                        *data = params;
+                    });
+
+                // EFX 的效果参数更新后需要重新绑定到效果槽才能生效
+                room.m_slot.value()->bind_effect(room.m_effect.value());
+            }
+
+            if (room.m_slot_gain != zone.m_send_gain)
+            {
+                room.m_slot_gain = zone.m_send_gain;
+                room.m_slot.value()->update(
+                    [&](je_audio_effect_slot_t* data)
+                    {
+                        data->m_gain = zone.m_send_gain;
+                    });
+            }
+
+            return room;
+        };
 
         // ==================== 4. 音源 ====================
         for (auto&& [source, trans] : query<
@@ -701,21 +820,130 @@ namespace jeecs::audio
                 source.occlusion_filter_bound = false;
             }
 
-            // 混响区域变化时重绑第 0 路辅助发送
-            const bool want_reverb = spatial_active && m_reverb_active;
+            // ---- 混响发送：按声源所在区域选择，而不是听者所在区域 ----
+            reverb_candidate reverb_candidates[3];
+            int reverb_candidate_count = 0;
 
-            if (source.reverb_generation != m_reverb_generation
-                || source.reverb_bound != want_reverb)
+            if (spatial_active)
             {
-                source.reverb_generation = m_reverb_generation;
-                source.reverb_bound = want_reverb;
+                // 声源最多取权重最高的两个区域；重叠区域按权重同时发送。
+                reverb_candidate source_rooms[2];
+                int source_room_count = 0;
 
-                if (want_reverb)
+                for (const auto& zone : reverb_zones)
+                {
+                    const float weight =
+                        zone_weight(position, zone, listener_2d);
+
+                    if (weight <= REVERB_WEIGHT_EPSILON)
+                        continue;
+
+                    int insert_at = source_room_count;
+                    while (insert_at > 0
+                        && source_rooms[insert_at - 1].m_weight < weight)
+                        --insert_at;
+
+                    if (insert_at >= 2)
+                        continue;
+
+                    const int move_end =
+                        std::min(source_room_count, 1);
+
+                    for (int i = move_end; i > insert_at; --i)
+                        source_rooms[i] = source_rooms[i - 1];
+
+                    source_rooms[insert_at] =
+                        reverb_candidate{ &zone, weight };
+
+                    if (source_room_count < 2)
+                        ++source_room_count;
+                }
+
+                for (int i = 0; i < source_room_count; ++i)
+                    reverb_candidates[reverb_candidate_count++] =
+                        source_rooms[i];
+
+                // 听者房间的二次激发：声源不在听者区域内时，让穿墙/门洞的
+                // 声音把听者所在房间的混响激起来。
+                if (listener_reverb_zone != nullptr
+                    && listener_reverb_weight > REVERB_WEIGHT_EPSILON)
+                {
+                    const float listener_zone_weight = zone_weight(
+                        position, *listener_reverb_zone, listener_2d);
+
+                    // 已经在听者区域内：由上面的源区域发送覆盖，不再重复。
+                    if (listener_zone_weight <= REVERB_WEIGHT_EPSILON)
+                    {
+                        reverb_candidates[reverb_candidate_count++] =
+                            reverb_candidate{
+                                listener_reverb_zone,
+                                LISTENER_ROOM_EXCITATION
+                                    * listener_reverb_weight };
+                    }
+                }
+            }
+
+            for (size_t send_index = 0;
+                send_index < Audio::Source::REVERB_SEND_COUNT;
+                ++send_index)
+            {
+                Audio::Source::reverb_send_state& send =
+                    source.reverb_sends[send_index];
+
+                if ((int)send_index >= reverb_candidate_count)
+                {
+                    if (send.filter_bound)
+                    {
+                        source.source->bind_effect_slot(
+                            send_index, std::nullopt, std::nullopt);
+                        send.filter_bound = false;
+                    }
+                    send.room_id = 0;
+                    continue;
+                }
+
+                const reverb_candidate& candidate =
+                    reverb_candidates[send_index];
+
+                reverb_room_runtime& room =
+                    ensure_reverb_room(*candidate.m_zone);
+
+                if (!send.filter.has_value())
+                    send.filter.emplace(filter::create());
+
+                // EFX 没有 per-send gain：用该路发送的低通滤波器 gain 代替。
+                // 声源整体增益已经包含遮挡增益，这里只补房间权重与高频闷音。
+                if (send.applied_gain != candidate.m_weight
+                    || send.applied_hf != occlusion.m_hf)
+                {
+                    send.applied_gain = candidate.m_weight;
+                    send.applied_hf = occlusion.m_hf;
+
+                    send.filter.value()->update(
+                        [&](je_audio_filter_t* filter_data)
+                        {
+                            filter_data->m_type =
+                                JE_AUDIO_FILTER_LOWPASS;
+                            filter_data->m_gain = candidate.m_weight;
+                            filter_data->m_gain_hf = occlusion.m_hf;
+                        });
+                }
+
+                if (!send.filter_bound
+                    || send.room_id != candidate.m_zone->m_id
+                    || send.room_epoch != room.m_slot_epoch)
+                {
                     source.source->bind_effect_slot(
-                        0, m_reverb_slot, std::nullopt);
-                else
-                    source.source->bind_effect_slot(
-                        0, std::nullopt, std::nullopt);
+                        send_index,
+                        std::optional<basic::resource<effect_slot>>(
+                            room.m_slot.value()),
+                        std::optional<basic::resource<filter>>(
+                            send.filter.value()));
+
+                    send.room_id = candidate.m_zone->m_id;
+                    send.room_epoch = room.m_slot_epoch;
+                    send.filter_bound = true;
+                }
             }
 
             // 提交空间参数
@@ -737,6 +965,18 @@ namespace jeecs::audio
                         data->m_velocity[0] = velocity.x;
                         data->m_velocity[1] = velocity.y;
                         data->m_velocity[2] = velocity.z;
+
+                        math::vec3 direction =
+                            trans->world_rotation * source.direction;
+
+                        if (direction.length() > 1e-6f)
+                            direction = direction.unit();
+                        else
+                            direction = math::vec3(0.0f, 0.0f, 1.0f);
+
+                        data->m_direction[0] = direction.x;
+                        data->m_direction[1] = direction.y;
+                        data->m_direction[2] = direction.z;
                     }
                     else
                     {
@@ -747,11 +987,24 @@ namespace jeecs::audio
                         data->m_velocity[0] = 0.0f;
                         data->m_velocity[1] = 0.0f;
                         data->m_velocity[2] = 0.0f;
+
+                        data->m_direction[0] = 0.0f;
+                        data->m_direction[1] = 0.0f;
+                        data->m_direction[2] = 1.0f;
                     }
 
                     data->m_reference_distance = source.reference_distance;
                     data->m_max_distance = source.max_distance;
                     data->m_rolloff = source.rolloff;
+
+                    data->m_min_gain = source.min_gain;
+                    data->m_max_gain = source.max_gain;
+
+                    data->m_cone_inner_angle = source.cone_inner_angle;
+                    data->m_cone_outer_angle = source.cone_outer_angle;
+                    data->m_cone_outer_gain = source.cone_outer_gain;
+
+                    data->m_air_absorption = source.air_absorption;
                 });
 
             // 播放状态机
@@ -803,6 +1056,26 @@ namespace jeecs::audio
                     }
                 }
             }
+        }
+
+        // ==================== 5. 回收不再使用的区域效果 ====================
+        for (auto it = m_reverb_rooms.begin(); it != m_reverb_rooms.end();)
+        {
+            if (live_reverb_zone_ids.count(it->first) == 0)
+            {
+                it = m_reverb_rooms.erase(it);
+                continue;
+            }
+
+            if (!it->second.m_active)
+            {
+                it->second.m_slot.reset();
+                it->second.m_effect.reset();
+                it->second.m_has_params = false;
+                it->second.m_slot_gain = -1.0f;
+            }
+
+            ++it;
         }
     }
 }

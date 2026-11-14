@@ -55,6 +55,15 @@
 | `reference_distance` | 1 | 参考距离：此距离内为满增益（钳制模型） |
 | `max_distance` | 32 | 最大距离：线性钳制模型下衰减到此距离归零 |
 | `rolloff` | 1 | 衰减率 |
+| `min_gain` | 0 | 距离衰减的下限 |
+| `max_gain` | 1 | 距离衰减的上限 |
+| `direction` | (0, 0, 1) | 声源局部朝向；乘实体世界旋转后作为锥形指向的轴 |
+| `cone_inner_angle` | 360 | 锥形内角（度），此角度内为满增益 |
+| `cone_outer_angle` | 360 | 锥形外角（度），此角度外为外角增益 |
+| `cone_outer_gain` | 0 | 外角增益 |
+| `air_absorption` | 0 | 空气吸收因子：随距离衰减高频，0 = 关闭；需要 EFX |
+
+锥形指向默认内外角都是 360°，即无方向性；要模拟喇叭、声源朝向明显的角色时再设置。2D 场景里使用锥形时，请把 `direction` 设成 XY 平面内的方向（例如 `(1, 0, 0)`），否则默认的 +Z 朝向在 XY 平面上没有意义。
 
 `play` 的行为约定：
 
@@ -99,7 +108,9 @@
 * 听者全局唯一：存在多个 `Listener` 组件时，它们会先后写入同一个全局听者、相互覆盖，**请只保留一个**；
 * Woolang 的 `je::audio::listener::update` 还能设置 `global_gain`（全局增益），实际音量为 `volume × global_gain`，组件不会改动它，适合用作总音量。
 
-⚠️ openal-soft 默认**只对单声道音频做空间化**，立体声缓冲会忽略位置直接播放。需要定位的音效请使用单声道 WAV，背景音乐等可以使用立体声。
+⚠️ openal-soft 默认**只对单声道音频做空间化**。本引擎在设备支持 `AL_SOFT_source_spatialize` 时会给 `spatial = true` 的声源强制开启空间化（立体声缓冲会先下混），但定位音效仍建议使用单声道 WAV；`spatial = false` 的立体声（BGM 等）保持原样。
+
+耳机下 openal-soft 可以启用 HRTF 双耳渲染。引擎创建 context 时允许后端自动选择（`ALC_SOFT_HRTF` 的 `DONT_CARE`），并在日志中记录实际状态；是否真正启用取决于设备、耳机检测与用户的 openal 配置。
 
 ### 一个实体发出多种声音
 
@@ -164,21 +175,36 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 
 ### 混响区域：`Audio::ReverbZone`
 
+一个区域代表一个声学空间（房间、洞穴、走廊、室外）。系统按**声源所在区域**而不是听者所在区域选择混响：洞穴里的怪叫带洞穴混响，即使听者站在走廊里。
+
 | 成员 | 默认值 | 说明 |
 | --- | --- | --- |
 | `size` | (8, 8, 8) | 区域局部全尺寸，乘实体比例尺 |
-| `decay_time` | 1.49 | 混响衰减时间（秒） |
-| `gain` | 0.32 | 混响湿声增益 |
-| `gain_hf` | 0.89 | 混响高频增益 |
-| `diffusion` | 1.0 | 扩散度 |
+| `fade` | 1 | 区域外侧发送权重的衰减距离；0 = 硬边界 |
+| `send_gain` | 1 | 区域混响的湿声发送上限 |
+| `preset` | `custom` | EAX 混响预设；`custom` 时使用下面四个成员 |
+| `decay_time` | 1.49 | 混响衰减时间（秒），仅 `custom` |
+| `gain` | 0.32 | 混响湿声增益，仅 `custom` |
+| `gain_hf` | 0.89 | 混响高频增益，仅 `custom` |
+| `diffusion` | 1.0 | 扩散度，仅 `custom` |
 
-听者进入区域后，系统把该区域的参数写进一个 EFX 混响效果，并把所有 **spatial** 的 `Audio::Source` 的第 0 路辅助发送绑到该效果槽；离开区域解除。多个区域重叠时取体积最小的内层区域。区域参数变化时会自动重绑。
+`preset` 提供 EAX 标准预设：`generic`、`padded_cell`、`room`、`bathroom`、`living_room`、`stone_room`、`auditorium`、`concert_hall`、`cave`、`arena`、`hangar`、`carpeted_hallway`、`hallway`、`stone_corridor`、`alley`、`forest`、`city`、`mountains`、`quarry`、`plain`、`parking_lot`、`sewer_pipe`、`underwater`、`drugged`、`dizzy`、`psychotic`。预设值来自 EFX/EAX 规范，比手工调四个浮点更接近真实空间。
+
+系统行为：
+
+* **按声源选区域**：对每个 `spatial` 声源计算它到各区域的有符号距离。区域内权重为 1，向外在 `fade` 距离内平滑降到 0；最多取权重最高的两个区域同时发送，重叠区域因此可以自然交叉淡化，不再“体积最小者通吃”。
+* **权重即发送增益**：EFX 没有 per-send gain，系统用该路发送的低通滤波器 `gain` 表示区域权重，用 `gain_hf` 复用遮挡的高频衰减。声源整体增益已经包含遮挡增益，所以墙后的混响尾巴既更轻、也更闷。
+* **听者房间的二次激发**：声源不在听者所在区域时，额外把它的一小部分声音送进听者区域的混响槽（上限 `0.25 × 听者区域权重`），模拟穿过墙/门洞的声音激发室内混响。声源已经在听者区域内时不会重复添加。
+* **湿声遮挡**：发送滤波器的高频与直达声使用同一个遮挡高频系数；墙后的洞穴混响是闷的，不会出现“直达声闷、混响亮”的割裂。
+* **按需创建与回收**：只有被声源使用的区域才会创建 EFX 效果与效果槽；离开后释放，区域被删除时一并清理。区域创建时 context 会请求 4 路辅助发送，系统混响占用第 0..2 路。
+* **2D 模式**：`Audio::Listener::use_2d = true` 时区域权重完全忽略 z，`size.z` 不参与判断；`size` 的 XY 才是有效范围。
 
 注意：
 
 * 设备不支持 EFX 时静默降级为无混响；
-* 第 0 路发送由系统接管，脚本若手动给同一个 ECS 音源绑定第 0 路发送会被覆盖；
-* 全局一次性播放不享受混响区域。
+* 第 0..2 路发送由系统接管，脚本若手动给同一个 ECS 音源绑定这几路会被覆盖；剩余路数可用于自定义发送；
+* 全局一次性播放不享受混响区域；
+* 同一区域的效果参数变化时只需更新效果并重绑效果槽，不会重建整个区域。
 
 ### 效果器与滤波器
 
@@ -189,7 +215,7 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
   └──辅助发送 0..N（每路可挂滤波器）→ 效果槽（装载效果器）→ 听者
 ```
 
-一个效果槽可以被多个声源共享；一个声源可以同时使用多路发送（引擎上限 8 路，实际可用路数取决于音频设备）。可用的效果器：
+一个效果槽可以被多个声源共享；一个声源可以同时使用多路发送。引擎创建 context 时最多请求 4 路（不请求时 openal-soft 只启用默认的 2 路）；系统混响占用第 0..2 路，脚本可以使用剩余路数。设备实际启用的路数可能少于请求值，超出路数的绑定不会生效。可用的效果器：
 
 | 类别 | 效果器（Woolang 名） |
 | --- | --- |
@@ -209,7 +235,7 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 3. 把 `Audio::Listener` 挂到摄像机实体，`use_2d` 保持默认 true 即可用于横板/俯视角；
 4. 音源实体拖入 `.wav`，按需调整 `bus`、`reference_distance`、`max_distance`；
 5. 在瓦片地图编辑器的瓦片面板中设置“音频遮挡/闷音”；
-6. 需要混响的房间/洞穴放一个 `Audio::ReverbZone`，调整尺寸覆盖房间。
+6. 需要混响的房间/洞穴放一个 `Audio::ReverbZone`，调整尺寸覆盖房间；在 Inspector 里选一个预设（`room`/`cave`/`hallway` 等），按需调整 `fade` 与 `send_gain`。多个区域可以重叠，系统会按权重交叉淡化。
 
 旧版本的 `Audio::Playing` 已移除，旧世界中的音源需要把 `buffer`/`play`/`loop` 重新配置到 `Audio::Source` 上。
 
@@ -378,7 +404,7 @@ audio::play_oneshot(desc);
 
 ### Context：设备、上下文与热插拔
 
-后端只有一个全局 `Context`。它枚举播放设备（支持 `ALC_ENUMERATE_ALL_EXT` 时枚举全部设备），并为当前设备创建 OpenAL 上下文；设备支持 `ALC_EXT_EFX` 且最大辅助发送数大于 0 时，通过 `alcGetProcAddress` 加载 EFX 函数，否则关闭 EFX 并告警。
+后端只有一个全局 `Context`。它枚举播放设备（支持 `ALC_ENUMERATE_ALL_EXT` 时枚举全部设备），并为当前设备创建 OpenAL 上下文；设备支持 `ALC_EXT_EFX` 且最大辅助发送数大于 0 时，通过 `alcGetProcAddress` 加载 EFX 函数，否则关闭 EFX 并告警。创建上下文时会请求最多 4 路辅助发送（`ALC_MAX_AUXILIARY_SENDS`；不请求时 openal-soft 只启用默认的 2 路），并在支持时允许后端自动选择 HRTF（`ALC_SOFT_HRTF` + `ALC_DONT_CARE_SOFT`）；实际生效的发送路数从设备上下文查询后记入 `m_active_auxiliary_sends`，日志同时记录 HRTF 状态。
 
 后台线程每 100ms 检查一次（同时为流式声源补块）：当前设备断开，或者正在使用的默认设备不再是系统默认设备时，重新枚举并切换到新的默认设备。切换流程：
 
@@ -396,7 +422,7 @@ audio::play_oneshot(desc);
 音频系统只实现 `CommitUpdate`（第 7 阶段，晚于 `LATE_UPDATE!`），因此脚本在同一帧内对组件的修改当帧生效。处理顺序：
 
 1. **Listener + Translation**：速度 = 位置差 / `max(deltatime, 0.0001)`（首帧不产生速度尖峰）；`use_2d` 时位置/速度的 z 归零；`face` / `up` 乘以世界旋转；提交位置、速度、朝向、`m_gain = volume`、距离模型与多普勒系数（不触碰 `m_global_gain`）。系统**不查询 Camera 组件**。
-2. **ReverbZone + Translation**：选出包含听者的体积最小的区域；参数变化时更新本系统持有的 reverb 效果与效果槽，递增 `m_reverb_generation`。
+2. **ReverbZone + Translation 快照**：复制每个区域的中心、旋转、半尺寸、`fade`、预设与自定义参数；按听者位置选出听者所在区域（权重更高者优先，同权重取体积更小者）。区域效果槽不在这里创建，而是等声源真正用到时按需创建。
 3. **遮挡快照**：一次性收集所有 `Audio::Occluder + Translation`；对每个 `Tilemap::Map + Translation` 通过 `Tilemap::documents::observe_map` 取得文档并 `ensure_tilesets`，本帧持有 `shared_ptr` 保活。
 4. **Source + Translation（可选）**：
    * `spatial = false` 或没有 Translation → relative，位置/速度写 0；
@@ -404,8 +430,8 @@ audio::play_oneshot(desc);
    * 对每个空间化声源做线段测试：Occluder 的 2D 矩形/3D OBB + 瓦片地图 DDA，得到 `occlusion.m_gain` 与 `occlusion.m_hf`；
    * `m_gain = volume × occlusion.m_gain`；`occlusion.m_hf < 1` 时按需创建/更新 per-source 低通滤波器并绑定（`AL_DIRECT_FILTER`），恢复时解绑；
    * `bus` 变化时经 `je_audio_source_bus_set` 提交；
-   * 混响代数变化时重绑/解绑第 0 路辅助发送；
-   * 最后提交空间参数并驱动播放状态机。
+   * **混响发送**：按 `zone_weight` 取得声源所在的前两个区域，再加上听者房间的二次激发，最多 3 路；每路发送使用独立的低通滤波器，`gain = 区域权重`、`gain_hf = occlusion.m_hf`，然后绑定到该区域的 EAX 效果槽。区域效果参数变化时更新效果并重绑效果槽；发送的房间或槽 epoch 变化时才重新绑定发送；
+   * 最后提交空间参数（位置、速度、方向、锥形、空气吸收、min/max gain）并驱动播放状态机。
 
 播放状态机（`Audio::Source::play_state` 只有 `STOPPED` / `PLAYING`）：
 
@@ -417,7 +443,7 @@ audio::play_oneshot(desc);
 | 播放中 | 缓冲刚被更换（底层已自动停止） | 若 `play` 为 true 立即重新播放 |
 | 播放中 | 声源暂停 / 播放中 | 按 `play` 恢复或暂停 |
 
-`loop` 每帧写入镜像，因此运行中切换循环立即生效。缓冲的绑定每帧都会调用 `set_playing_buffer`，底层只有在缓冲真正改变时才停止播放并返回 true。`Audio::Source` 的拷贝构造创建新的 AL 声源，所以由预制体实例化出的实体都拥有独立的播放状态；运行时状态（上次位置、遮挡滤波器、总线缓存、混响代数等）不反射、不存档。
+`loop` 每帧写入镜像，因此运行中切换循环立即生效。缓冲的绑定每帧都会调用 `set_playing_buffer`，底层只有在缓冲真正改变时才停止播放并返回 true。`Audio::Source` 的拷贝构造创建新的 AL 声源，所以由预制体实例化出的实体都拥有独立的播放状态；运行时状态（上次位置、遮挡滤波器、总线缓存、混响发送槽等）不反射、不存档。
 
 ### 瓦片遮挡遍历
 
