@@ -1,0 +1,283 @@
+// 音频总线窗口：按类别统一调节引擎音量总线（je::audio::bus）的增益。
+//
+// 声源的最终增益 = 声源增益 × 总线增益 × 监听者增益，因此这里的调节对
+// 所有使用相同总线的声源立即生效（引擎会重新提交这些声源的增益）。
+//
+// 各总线增益保存在 AudioBusSettings 单例里，编辑器退出时由
+// Singleton::saveAll 写入项目的 .temp/audio_bus_settings.toml；下次打开
+// 项目时（ProjectOpen::onClose 中 cwd 已切换）读取并立即应用到引擎。
+// NONE 不经过总线、增益恒为 1.0，不列出也不保存。
+
+import pkg::std;
+
+import je;
+import je::audio;
+import je::gui;
+
+import pkg::interface;
+import pkg::toml;
+
+import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Widgets;
+import builtin::editor::Singleton;
+
+using std;
+using je;
+using je::gui;
+using toml;
+using JEEditor::GUI;
+using JEEditor::GUI::Windows;
+using JEEditor::GUI::Widgets;
+using JEEditor::Singleton;
+
+namespace JEEditor::Editor
+{
+    // 一条总线在面板与配置文件中的信息。m_key 是单例 TOML 的键名，
+    // 与枚举值的顺序解耦，方便手工查看 .temp/audio_bus_settings.toml。
+    using AudioBusRow = struct{
+        m_bus: je::audio::bus,
+        m_key: string,
+        m_name: string,
+        m_desc: string,
+    };
+
+    let s_audio_bus_rows = [
+        AudioBusRow{
+            m_bus = je::audio::bus::BGM,
+            m_key = "bgm",
+            m_name = "背景音乐（BGM）",
+            m_desc = "长时间循环播放的背景音乐",
+        },
+        AudioBusRow{
+            m_bus = je::audio::bus::BGS,
+            m_key = "bgs",
+            m_name = "背景环境声（BGS）",
+            m_desc = "环境底噪，如风声、雨声、人群声",
+        },
+        AudioBusRow{
+            m_bus = je::audio::bus::ME,
+            m_key = "me",
+            m_name = "音乐效果（ME）",
+            m_desc = "胜利、升级等短乐句",
+        },
+        AudioBusRow{
+            m_bus = je::audio::bus::SE,
+            m_key = "se",
+            m_name = "音效（SE）",
+            m_desc = "脚步、打击、界面反馈等效果音",
+        },
+        AudioBusRow{
+            m_bus = je::audio::bus::VOICE,
+            m_key = "voice",
+            m_name = "语音（VOICE）",
+            m_desc = "对白与旁白",
+        },
+        AudioBusRow{
+            m_bus = je::audio::bus::CUSTOM_0,
+            m_key = "custom_0",
+            m_name = "自定义 1",
+            m_desc = "CUSTOM_0 —— 预留给游戏自行分配用途的自定义总线",
+        },
+        AudioBusRow{
+            m_bus = je::audio::bus::CUSTOM_1,
+            m_key = "custom_1",
+            m_name = "自定义 2",
+            m_desc = "CUSTOM_1 —— 预留给游戏自行分配用途的自定义总线",
+        },
+        AudioBusRow{
+            m_bus = je::audio::bus::CUSTOM_2,
+            m_key = "custom_2",
+            m_name = "自定义 3",
+            m_desc = "CUSTOM_2 —— 预留给游戏自行分配用途的自定义总线",
+        },
+        AudioBusRow{
+            m_bus = je::audio::bus::CUSTOM_3,
+            m_key = "custom_3",
+            m_name = "自定义 4",
+            m_desc = "CUSTOM_3 —— 预留给游戏自行分配用途的自定义总线",
+        },
+    ];
+
+    using AudioBusSettings = struct{
+        // 各总线增益，下标与 s_audio_bus_rows 一一对应（NONE 不参与）
+        m_gains: mut vec<real>,
+    }
+    {
+        public let SINGLETON_LABEL = "audio_bus_settings";
+
+        public func createAndLoad(content: option<Toml>)=> AudioBusSettings
+            where require!(AudioBusSettings: ISingleton);
+        {
+            let mut gains = []mut: vec<real>;
+            for (let row : s_audio_bus_rows)
+            {
+                let mut gain = 1.;
+                match (content)
+                {
+                    none?;
+                    value(data)?
+                    {
+                        // 键缺失或取值不是浮点数时按默认的 1.0 处理
+                        match (data[row.m_key]->as_float)
+                        {
+                            none?;
+                            value(loaded)? gain = loaded;
+                        }
+                    }
+                }
+                gains->add(gain);
+            }
+
+            return AudioBusSettings{
+                m_gains = mut gains,
+            };
+        }
+
+        public func save(self: AudioBusSettings)=> option<Toml>
+        {
+            let data = new_table();
+            for (let mut i = 0; i < s_audio_bus_rows->len; i += 1)
+                data->set(s_audio_bus_rows[i].m_key, self.m_gains[i]);
+
+            return option::value(data);
+        }
+
+        // 把各总线增益提交给引擎：打开项目时的恢复与面板操作共用
+        public func applyGains(self: AudioBusSettings)=> void
+        {
+            for (let mut i = 0; i < s_audio_bus_rows->len; i += 1)
+                je::audio::bus::set_gain(s_audio_bus_rows[i].m_bus, self.m_gains[i]);
+        }
+
+        // 设置第 row 条总线的增益并立即作用于引擎
+        public func setGain(self: AudioBusSettings, row: int, gain: real)=> void
+        {
+            // vec 元素不可就地赋值，整表重建；总线只有 9 条，开销可忽略
+            let updated = []mut: vec<real>;
+            for (let mut i = 0; i < self.m_gains->len; i += 1)
+                updated->add(i == row ? gain | self.m_gains[i]);
+
+            self.m_gains = updated;
+            je::audio::bus::set_gain(s_audio_bus_rows[row].m_bus, gain);
+        }
+
+        // 所有总线恢复为 100% 并立即作用于引擎
+        public func resetGains(self: AudioBusSettings)=> void
+        {
+            self.m_gains = vec::create:<real>(s_audio_bus_rows->len, 1.);
+            self->applyGains();
+        }
+    }
+
+    using AudioBuses = struct{
+        m_close: mut bool,
+    }
+    {
+        let mut s_audio_buses_window = option::none: option<AudioBuses>;
+
+        // 恢复上次保存的总线增益。设置文件在项目工作目录的 .temp 下，
+        // 必须在 ProjectOpen 切换 cwd 之后调用（见 ProjectOpen::onClose）。
+        public func restoreAudioBusGains()
+        {
+            do Singleton::apply:<AudioBusSettings>(
+                \settings = settings->applyGains(););
+        }
+
+        public func isAudioBusesExist()
+        {
+            return s_audio_buses_window->is_value;
+        }
+        public func showAudioBuses()
+        {
+            do show(create());
+        }
+        public func closeAudioBuses()
+        {
+            match (s_audio_buses_window)
+            {
+                none?;
+                value(inst)?
+                    inst->close();
+            }
+        }
+
+        func create()=> AudioBuses
+            where require!(AudioBuses: IWindows);
+        {
+            return AudioBuses{
+                m_close = mut false,
+            };
+        }
+        func close(self: AudioBuses)
+        {
+            self.m_close = true;
+        }
+
+        public func onCreate(self: AudioBuses)=> void
+        {
+            s_audio_buses_window = option::value(self);
+        }
+        public func onClose(_: AudioBuses)=> void
+        {
+            s_audio_buses_window = option::none;
+        }
+        public func getTitle(_: AudioBuses)=> string
+        {
+            return "音频总线";
+        }
+        public func getSizeConstraints(_: AudioBuses)=> SizeConstraints
+        {
+            return SizeConstraints::Limited(((400., 300.), (960., 1200.)));
+        }
+
+        // 每条总线一行：名称 + 0..100% 滑杆。拖动即写回单例并提交给引擎，
+        // 无需额外的“应用”动作；退出编辑器时随 Singleton::saveAll 落盘。
+        public func run(self: AudioBuses)=> bool
+        {
+            if (self.m_close)
+                return false;
+
+            TextDisabled("按类别统一调节各总线的音量");
+            TextDisabled("最终增益 = 声源增益 × 总线增益 × 监听者增益");
+            Separator();
+
+            do Singleton::apply:<AudioBusSettings>(
+                func(settings)
+                {
+                    for (let mut i = 0; i < s_audio_bus_rows->len; i += 1)
+                    {
+                        let row = s_audio_bus_rows[i];
+                        if (i != 0)
+                            memberSeparator();
+
+                        do beginMemberRow(
+                            row.m_name, option::none: option<Color32RGBA>, 0.);
+
+                        match (SliderFloatFormat(
+                                F"##audio_bus_volume_{i}",
+                                settings.m_gains[i] * 100.,
+                                0., 100., "%.0f%%"))
+                        {
+                            none?;
+                            value(percent)?
+                                settings->setGain(i, percent / 100.);
+                        }
+                        if (IsItemHovered())
+                            do SetTooltip(row.m_desc);
+                    }
+                });
+
+            Separator();
+            if (Button("全部重置为 100%"))
+            {
+                do Singleton::apply:<AudioBusSettings>(
+                    func(settings)
+                    {
+                        do settings->resetGains();
+                    });
+            }
+
+            return true;
+        }
+    }
+}
