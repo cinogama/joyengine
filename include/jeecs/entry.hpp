@@ -355,6 +355,34 @@ namespace jeecs
                 "    }\n"
                 "}\n");
 
+            typing::register_script_parser<je_audio_bus_t>(
+                guard,
+                [](const je_audio_bus_t* v, woort_value value)
+                {
+                    woort_set_int(value, (woort_Int)*v);
+                },
+                [](je_audio_bus_t* v, woort_value value)
+                {
+                    *v = static_cast<je_audio_bus_t>(woort_int(value));
+                },
+                "Audio::Source::bus",
+                "namespace Audio::Source\n"
+                "{\n"
+                "    public enum bus\n"
+                "    {\n"
+                "        none      = 0,\n"
+                "        bgm       = 1,\n"
+                "        bgs       = 2,\n"
+                "        me        = 3,\n"
+                "        se        = 4,\n"
+                "        voice     = 5,\n"
+                "        custom_0  = 6,\n"
+                "        custom_1  = 7,\n"
+                "        custom_2  = 8,\n"
+                "        custom_3  = 9,\n"
+                "    }\n"
+                "}\n");
+
             je_towoo_api_update();
         }
 

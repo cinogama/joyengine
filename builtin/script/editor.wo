@@ -947,3 +947,23 @@ namespace Audio::Listener::distance_model
         }
     }
 }
+
+namespace Audio::Source::bus
+{
+    using parser = void
+    {
+        public extern func edit(val: Audio::Source::bus, tag: string)=> option<Audio::Source::bus>
+        {
+            // 音量总线下拉（枚举值与选项下标一致）
+            match (Combo(F"##{tag}",
+                ["无", "BGM", "BGS", "ME", "SE", "Voice", "自定义 0", "自定义 1", "自定义 2", "自定义 3"],
+                option::value(val as int)))
+            {
+                value(idx)?
+                    return option::value(idx as Audio::Source::bus);
+                none?;
+            }
+            return option::none;
+        }
+    }
+}

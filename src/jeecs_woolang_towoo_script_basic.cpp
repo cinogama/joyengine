@@ -2063,10 +2063,7 @@ WOORT_API woort_api wojeapi_towoo_audio_source_play_oneshot(void)
 
     desc.m_buffer = (*buf)->handle();
 
-    // 系统尚未跑过第一帧时总线句柄可能尚未解析，这里按名称兜底
-    desc.m_bus = source.bus_handle;
-    if (desc.m_bus == nullptr && source.bus.c_str()[0] != '\0')
-        desc.m_bus = je_audio_bus_get(source.bus.c_str());
+    desc.m_bus = source.bus;
 
     desc.m_spatial = source.spatial_active;
 

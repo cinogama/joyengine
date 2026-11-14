@@ -301,8 +301,7 @@ WOORT_API woort_api wojeapi_audio_source_set_bus(void)
     basic::resource<audio::source>* source =
         static_cast<basic::resource<audio::source> *>(woort_gcpointer(0));
 
-    const char* bus_name = woort_string(1);
-    (*source)->set_bus(*bus_name == '\0' ? nullptr : je_audio_bus_get(bus_name));
+    (*source)->set_bus((je_audio_bus_t)woort_int(1));
 
     return woort_ret_void();
 }
@@ -312,8 +311,7 @@ WOORT_API woort_api wojeapi_audio_source_get_bus(void)
     basic::resource<audio::source>* source =
         static_cast<basic::resource<audio::source> *>(woort_gcpointer(0));
 
-    auto* bus = (*source)->handle()->m_bus;
-    return woort_ret_string(bus != nullptr ? bus->m_name : "");
+    return woort_ret_int((woort_Int)(*source)->handle()->m_bus);
 }
 
 WOORT_API woort_api wojeapi_audio_source_bind_effect_slot_and_filter(void)
@@ -465,15 +463,14 @@ WOORT_API woort_api wojeapi_audio_listener_update(void)
 
 WOORT_API woort_api wojeapi_audio_bus_gain_get(void)
 {
-    je_audio_bus_t* bus = je_audio_bus_get(woort_string(0));
-
-    return woort_ret_real(je_audio_bus_gain_get(bus));
+    return woort_ret_real(
+        je_audio_bus_gain_get((je_audio_bus_t)woort_int(0)));
 }
 
 WOORT_API woort_api wojeapi_audio_bus_gain_set(void)
 {
-    je_audio_bus_t* bus = je_audio_bus_get(woort_string(0));
-    je_audio_bus_gain_set(bus, (float)woort_real(1));
+    je_audio_bus_gain_set(
+        (je_audio_bus_t)woort_int(0), (float)woort_real(1));
 
     return woort_ret_void();
 }
@@ -504,8 +501,7 @@ WOORT_API woort_api wojeapi_audio_oneshot_play(void)
     desc.m_rolloff = woort_struct_get_float(desc_value, 6);
     desc.m_lowpass_hf = woort_struct_get_float(desc_value, 7);
 
-    const char* bus_name = woort_string(2);
-    desc.m_bus = *bus_name == '\0' ? nullptr : je_audio_bus_get(bus_name);
+    desc.m_bus = (je_audio_bus_t)woort_int(2);
 
     return woort_ret_bool(je_audio_oneshot_play(&desc));
 }

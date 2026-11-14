@@ -420,12 +420,12 @@ namespace je
                 public func bind_effect_slot_and_filter(
                     self: source, effect_slot: option<effect_slot>, filter: option<filter>, pass: int)=> void;
 
-            // 设置声源所属的音量总线；空字符串 = 不经过总线
+            // 设置声源所属的音量总线
             extern("libjoyecs", "wojeapi_audio_source_set_bus")
-                public func set_bus(self: source, bus: string)=> void;
+                public func set_bus(self: source, bus: bus)=> void;
 
             extern("libjoyecs", "wojeapi_audio_source_get_bus")
-                public func get_bus(self: source)=> string;
+                public func get_bus(self: source)=> bus;
         }
         namespace listener
         {
@@ -466,15 +466,29 @@ namespace je
         }
 
         // ==================== 音量总线 ====================
-        // 按名称分组（如 SFX/BGM/UI）调音量；声源的最终增益为
-        // 声源增益 × 总线增益 × 监听者增益。读取不存在的总线会按 1.0 创建。
+        // 预设分组统一调音量；声源的最终增益为
+        // 声源增益 × 总线增益 × 监听者增益。NONE 不经过总线（增益恒为 1.0）。
+        public enum bus
+        {
+            NONE = 0,
+            BGM,
+            BGS,
+            ME,
+            SE,
+            VOICE,
+            CUSTOM_0,
+            CUSTOM_1,
+            CUSTOM_2,
+            CUSTOM_3,
+        }
+
         namespace bus
         {
             extern("libjoyecs", "wojeapi_audio_bus_gain_get")
-                public func gain(name: string)=> real;
+                public func gain(self: bus)=> real;
 
             extern("libjoyecs", "wojeapi_audio_bus_gain_set")
-                public func set_gain(name: string, gain: real)=> void;
+                public func set_gain(self: bus, gain: real)=> void;
         }
 
         // ==================== 一次性播放 ====================
@@ -507,10 +521,10 @@ namespace je
         }
 
         extern("libjoyecs", "wojeapi_audio_oneshot_play")
-            func _play_oneshot(buffer: buffer, desc: oneshot_desc_t, bus: string)=> bool;
+            func _play_oneshot(buffer: buffer, desc: oneshot_desc_t, bus: bus)=> bool;
 
-        // 完整控制：bus 为空字符串时不经过总线
-        public func play_once_with(buffer: buffer, desc: oneshot_desc_t, bus: string)=> bool
+        // 完整控制：NONE = 不经过总线
+        public func play_once_with(buffer: buffer, desc: oneshot_desc_t, bus: bus)=> bool
         {
             return _play_oneshot(buffer, desc, bus);
         }
@@ -520,15 +534,15 @@ namespace je
         {
             let mut desc = oneshot_desc();
             desc.spatial = false;
-            return _play_oneshot(buffer, desc, "SFX");
+            return _play_oneshot(buffer, desc, bus::SE);
         }
 
-        // 2D 位置播放（z=0），默认使用 SFX 总线
+        // 2D 位置播放（z=0），默认使用 SE 总线
         public func play_once_at(buffer: buffer, x: real, y: real)=> bool
         {
             let mut desc = oneshot_desc();
             desc.location = (x, y, 0.);
-            return _play_oneshot(buffer, desc, "SFX");
+            return _play_oneshot(buffer, desc, bus::SE);
         }
 
         // 3D 位置播放
@@ -536,7 +550,7 @@ namespace je
         {
             let mut desc = oneshot_desc();
             desc.location = (x, y, z);
-            return _play_oneshot(buffer, desc, "SFX");
+            return _play_oneshot(buffer, desc, bus::SE);
         }
     }
 }

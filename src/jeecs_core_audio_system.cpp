@@ -663,18 +663,11 @@ namespace jeecs::audio
             source.current_occlusion_gain = occlusion.m_gain;
             source.current_occlusion_hf = occlusion.m_hf;
 
-            // 音量总线：名称变化时解析为稳定句柄
-            if (std::strcmp(
-                    source.resolved_bus_name.c_str(),
-                    source.bus.c_str()) != 0)
+            // 音量总线：变化时提交到声源
+            if (source.bus_applied != source.bus)
             {
-                source.resolved_bus_name = source.bus;
-
-                source.bus_handle = source.bus.c_str()[0] == '\0'
-                    ? nullptr
-                    : je_audio_bus_get(source.bus.c_str());
-
-                source.source->set_bus(source.bus_handle);
+                source.bus_applied = source.bus;
+                source.source->set_bus(source.bus);
             }
 
             // 遮挡闷音：按需创建低通滤波器并绑定

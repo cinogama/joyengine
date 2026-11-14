@@ -51,7 +51,7 @@
 | `play` | true | 播放/暂停开关：false 暂停，再 true 从暂停处继续 |
 | `loop` | true | 是否循环 |
 | `spatial` | true | false = 相对听者（UI/环境声），不做距离衰减与左右声像 |
-| `bus` | `"SFX"` | 音量总线名；空字符串 = 不经过总线 |
+| `bus` | `SE` | 音量总线分组（BGM/BGS/ME/SE/VOICE + 自定义槽位）；`NONE` = 不经过总线 |
 | `reference_distance` | 1 | 参考距离：此距离内为满增益（钳制模型） |
 | `max_distance` | 32 | 最大距离：线性钳制模型下衰减到此距离归零 |
 | `rolloff` | 1 | 衰减率 |
@@ -115,7 +115,7 @@
 
 ### 音量总线
 
-`bus` 用于按类别（SFX/BGM/UI/Ambient…）统一调音量。总线按名称在进程内唯一、指针稳定，不需要创建或释放；第一次访问时自动创建，增益为 1。
+`bus` 是预设的分组枚举，用于按类别统一调音量：`BGM`（背景音乐）/ `BGS`（背景环境声）/ `ME`（音乐效果）/ `SE`（音效）/ `VOICE`（语音）加 `CUSTOM_0..3` 自定义槽位；`NONE` 不经过总线（增益恒为 1）。各总线增益进程内共享，启动时全部为 1。
 
 最终增益为：
 
@@ -126,12 +126,12 @@
 Woolang：
 
 ```woolang
-je::audio::bus::set_gain("SFX", 0.8);
-je::audio::bus::set_gain("BGM", 0.5);
-let sfx_volume = je::audio::bus::gain("SFX");
+je::audio::bus::SE->set_gain(0.8);
+je::audio::bus::BGM->set_gain(0.5);
+let sfx_volume = je::audio::bus::SE->gain();
 ```
 
-C/C++：`je_audio_bus_get("SFX")`、`je_audio_bus_gain_set` / `je_audio_bus_gain_get`。
+C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_BUS_*` 枚举值。
 
 ### 声音遮挡
 
@@ -228,7 +228,7 @@ import je::audio;
 let coin = je::audio::buffer::load("@/sounds/coin.wav")->unwrap;
 
 UPDATE! {
-    // 2D 位置播放（z=0，SFX 总线）
+    // 2D 位置播放（z=0，SE 总线）
     je::audio::play_once_at(coin,
         player_pos[0], player_pos[1]);
 }
@@ -236,7 +236,7 @@ UPDATE! {
 // 实体音源：读取组件并控制播放
 system! bgm(src: Audio::Source)
 {
-    src.bus->set("BGM");
+    src.bus->set(je::audio::bus::BGM);
     src.volume->set(0.6);
     src.loop->set(true);
     src.play->set(true);
@@ -251,7 +251,7 @@ system! voice(src: Audio::Source, hurt: Audio::HurtFlag)
 }
 
 // 总线音量
-je::audio::bus::set_gain("SFX", 0.8);
+je::audio::bus::SE->set_gain(0.8);
 ```
 
 不经过组件、直接用声源播放并挂混响/滤波：
@@ -267,7 +267,7 @@ src->update(func(info){
     info.max_distance = 32.;
     info.rolloff = 1.;
 });
-src->set_bus("BGM");
+src->set_bus(je::audio::bus::BGM);
 src->play();
 
 // 混响效果 → 效果槽 → 声源的第 0 路辅助发送
@@ -297,13 +297,13 @@ src->update([](je_audio_source_t* s) {
     s->m_max_distance = 32.0f;
     s->m_rolloff = 1.0f;
 });
-src->set_bus(audio::bus::get("SFX").handle());
+src->set_bus(JE_AUDIO_BUS_SE);
 src->play();
 
 // 一次性播放
 je_audio_oneshot_desc_t desc;
 desc.m_buffer = buf.value()->handle();
-desc.m_bus = audio::bus::get("SFX").handle();
+desc.m_bus = JE_AUDIO_BUS_SE;
 desc.m_spatial = true;
 desc.m_location[0] = 1.0f;
 desc.m_location[1] = 2.0f;
@@ -341,7 +341,7 @@ audio::play_oneshot(desc);
 
 `je_audio_source_t`、`je_audio_listener_t`、`je_audio_filter_t`、`je_audio_effect_slot_t` 以及各效果器结构体都是 **CPU 侧的参数镜像**：修改字段后调用对应的 `je_audio_*_update` 才会提交给 OpenAL。C++ 的 `update(lambda)` 与 Woolang 的 `update(func)` 都是“取镜像→修改→提交”的封装。效果器在数据结构体之前额外分配一个 `EffectHead`（原生实例、效果种类、引用计数），`je_audio_effect_*` 接口以 `void*` 统一处理各类效果器。
 
-`je_audio_source_t` 的空间参数包括：`reference_distance` / `max_distance` / `rolloff` / `min_gain` / `max_gain`、`relative`、锥形参数（`direction` / `cone_*`）与 `m_bus` 总线句柄。距离模型与多普勒系数是**上下文级**状态，放在 `je_audio_listener_t` 上，由 `je_audio_listener_update` 通过 `alDistanceModel` / `alDopplerFactor` 提交。
+`je_audio_source_t` 的空间参数包括：`reference_distance` / `max_distance` / `rolloff` / `min_gain` / `max_gain`、`relative`、锥形参数（`direction` / `cone_*`）与 `m_bus` 音量总线。距离模型与多普勒系数是**上下文级**状态，放在 `je_audio_listener_t` 上，由 `je_audio_listener_update` 通过 `alDistanceModel` / `alDopplerFactor` 提交。
 
 缓冲、效果器、效果槽、滤波器都带引用计数：声源通过 `ContextHelper::Holder` 持有当前的缓冲、直达滤波器与每路发送的槽/滤波器，效果槽持有绑定的效果器。`close` 只减少引用计数，计数归零才真正释放，因此关闭仍被绑定的资源是安全的。
 
@@ -349,7 +349,7 @@ audio::play_oneshot(desc);
 
 ### 音量总线（实现）
 
-`Context` 内维护 `名称 → je_audio_bus_t*` 的进程级表（`m_buses_mx` 叶锁）。总线没有关闭操作、指针稳定，`m_gain` 的读写与使用该总线的声源增益重提交都由声源锁 g1 保护：`je_audio_bus_gain_set` 持 g1 遍历 `m_sources`，对 `m_bus` 匹配的声源重新提交；`update_source_lockfree` 提交 `AL_GAIN = m_gain × bus->m_gain`。总线不参与设备热插拔的 dump/restore。
+`Context` 内维护按 `je_audio_bus_t` 索引的进程级增益数组 `m_bus_gains`（`NONE` 槽位恒为 1.0）。增益的读写与使用该总线的声源增益重提交都由声源锁 g1 保护：`je_audio_bus_gain_set` 持 g1 遍历 `m_sources`，对 `m_bus` 匹配的声源重新提交；`update_source_lockfree` 提交 `AL_GAIN = m_gain × m_bus_gains[m_bus]`。总线不参与设备热插拔的 dump/restore。
 
 ### 一次性播放（实现）
 
@@ -403,7 +403,7 @@ audio::play_oneshot(desc);
    * 2D 听者下把声源位置/速度的 z 归零；
    * 对每个空间化声源做线段测试：Occluder 的 2D 矩形/3D OBB + 瓦片地图 DDA，得到 `occlusion.m_gain` 与 `occlusion.m_hf`；
    * `m_gain = volume × occlusion.m_gain`；`occlusion.m_hf < 1` 时按需创建/更新 per-source 低通滤波器并绑定（`AL_DIRECT_FILTER`），恢复时解绑；
-   * `bus` 字符串变化时解析为总线句柄并 `je_audio_source_bus_set`；
+   * `bus` 变化时经 `je_audio_source_bus_set` 提交；
    * 混响代数变化时重绑/解绑第 0 路辅助发送；
    * 最后提交空间参数并驱动播放状态机。
 

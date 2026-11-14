@@ -522,6 +522,22 @@ namespace Audio::Listener::distance_model
         }
     }
 }
+// Audio::Source::bus：声源所属的音量总线。
+// 序列化为整数值；与 je_audio_bus_t 的取值一一对应
+namespace Audio::Source::bus
+{
+    using parser = void
+    {
+        public extern func saving(val: Audio::Source::bus)=> string
+        {
+            return val as int as string;
+        }
+        public extern func restoring(dat: string)=> Audio::Source::bus
+        {
+            return dat as int as Audio::Source::bus;
+        }
+    }
+}
 namespace file_resource
 {
     using parser = void

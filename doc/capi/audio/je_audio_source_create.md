@@ -46,7 +46,7 @@ struct je_audio_source_t {
     float m_cone_outer_angle;
     float m_cone_outer_gain;
 
-    je_audio_bus_t* m_bus; // 所属音量总线，nullptr = 不经过总线
+    je_audio_bus_t m_bus; // 所属音量总线，默认 JE_AUDIO_BUS_NONE
 };
 ```
 

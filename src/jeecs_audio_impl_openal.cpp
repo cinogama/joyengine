@@ -461,10 +461,9 @@ namespace jeecs::audio
             mutex m_filters_mx; // g5
             unordered_set<je_audio_filter_t*> m_filters;
 
-            // 命名音量总线（叶锁，进程内唯一且永久存活）：不参与设备的
-            // dump/restore，增益读写与声源增益重提交由 g1 保护。
-            mutex m_buses_mx; // g6
-            unordered_map<string, je_audio_bus_t*> m_buses;
+            // 各音量总线的增益：不参与设备的 dump/restore，读写与声源增益
+            // 重提交由 g1 保护。NONE 槽位恒为 1.0。
+            float m_bus_gains[JE_AUDIO_BUS_COUNT];
 
             // 一次性声部队列（叶锁）：只保护队列本身，回收/关源在锁外进行。
             mutex m_oneshot_mx;
@@ -1260,11 +1259,8 @@ namespace jeecs::audio
                     (source->m_loop && !streaming_playing) ? AL_TRUE : AL_FALSE);
 
                 // 总线是声源之后、监听者之前的增益乘数
-                const float bus_gain =
-                    source->m_bus != nullptr ? source->m_bus->m_gain : 1.0f;
-
                 alSourcef(source->m_source_instance->m_source_id, AL_GAIN,
-                    source->m_gain * bus_gain);
+                    source->m_gain * m_bus_gains[source->m_bus]);
                 alSourcef(source->m_source_instance->m_source_id, AL_PITCH, source->m_pitch);
                 alSource3f(source->m_source_instance->m_source_id, AL_POSITION,
                     source->m_location[0], source->m_location[1], -source->m_location[2]);
@@ -2517,7 +2513,7 @@ namespace jeecs::audio
                 source->m_cone_outer_angle = 360.0f;
                 source->m_cone_outer_gain = 0.0f;
 
-                source->m_bus = nullptr;
+                source->m_bus = JE_AUDIO_BUS_NONE;
 
                 lock_guard g1(m_sources_mx);  // g1
                 shared_lock g0(m_context_mx); // g0
@@ -2657,51 +2653,35 @@ namespace jeecs::audio
                     break;
                 }
             }
-            je_audio_bus_t* get_or_create_bus(const char* name)
+            float get_bus_gain(je_audio_bus_t bus)
             {
-                assert(name != nullptr);
-
-                lock_guard g6(m_buses_mx); // g6
-
-                auto fnd = m_buses.find(name);
-                if (fnd != m_buses.end())
-                    return fnd->second;
-
-                auto* bus = new je_audio_bus_t;
-                bus->m_name = strdup(name);
-                bus->m_gain = 1.0f;
-
-                m_buses.emplace(name, bus);
-                return bus;
-            }
-            float get_bus_gain(const je_audio_bus_t* bus)
-            {
-                assert(bus != nullptr);
+                assert(bus < JE_AUDIO_BUS_COUNT);
 
                 lock_guard g1(m_sources_mx); // g1
-                return bus->m_gain;
+                return m_bus_gains[bus];
             }
-            void set_bus_gain(je_audio_bus_t* bus, float gain)
+            void set_bus_gain(je_audio_bus_t bus, float gain)
             {
-                assert(bus != nullptr);
+                assert(bus != JE_AUDIO_BUS_NONE && bus < JE_AUDIO_BUS_COUNT);
 
                 lock_guard g1(m_sources_mx);  // g1
                 shared_lock g0(m_context_mx); // g0
 
-                bus->m_gain = gain;
+                m_bus_gains[bus] = gain;
 
                 for (auto* source : m_sources)
                     if (source->m_bus == bus)
                         update_source_lockfree(source);
             }
-            void set_source_bus(je_audio_source_t* source, je_audio_bus_t* bus_may_null)
+            void set_source_bus(je_audio_source_t* source, je_audio_bus_t bus)
             {
                 assert(source != nullptr);
+                assert(bus < JE_AUDIO_BUS_COUNT);
 
                 lock_guard g1(m_sources_mx);  // g1
                 shared_lock g0(m_context_mx); // g0
 
-                source->m_bus = bus_may_null;
+                source->m_bus = bus;
                 update_source_lockfree(source);
             }
             bool play_oneshot(const je_audio_oneshot_desc_t* desc)
@@ -3435,6 +3415,9 @@ namespace jeecs::audio
                 m_listener.m_distance_model = JE_AUDIO_DISTANCE_MODEL_LINEAR_CLAMPED;
                 m_listener.m_doppler_factor = 1.0f;
 
+                for (float& bus_gain : m_bus_gains)
+                    bus_gain = 1.0f;
+
                 refetch_and_update_enumed_play_devices();
 
                 update_listener();
@@ -3464,13 +3447,6 @@ namespace jeecs::audio
 
                 for (auto* slot : m_effect_slots)
                     shutdown_effect_slot(slot);
-
-                for (auto& [_, bus] : m_buses)
-                {
-                    free((void*)bus->m_name);
-                    delete bus;
-                }
-                m_buses.clear();
             }
         };
 
@@ -3775,11 +3751,11 @@ void je_audio_source_filter_set(je_audio_source_t* source, /* OPTIONAL */ je_aud
     g_engine_audio_context->set_source_filter(source, filter_may_null);
 }
 
-void je_audio_source_bus_set(je_audio_source_t* source, /* OPTIONAL */ je_audio_bus_t* bus_may_null)
+void je_audio_source_bus_set(je_audio_source_t* source, je_audio_bus_t bus)
 {
     assert(g_engine_audio_context != nullptr);
 
-    g_engine_audio_context->set_source_bus(source, bus_may_null);
+    g_engine_audio_context->set_source_bus(source, bus);
 }
 
 void je_audio_source_play(je_audio_source_t* source)
@@ -3831,22 +3807,14 @@ void je_audio_listener_update()
     g_engine_audio_context->update_listener();
 }
 
-je_audio_bus_t* je_audio_bus_get(const char* name)
-{
-    assert(g_engine_audio_context != nullptr);
-    assert(name != nullptr);
-
-    return g_engine_audio_context->get_or_create_bus(name);
-}
-
-float je_audio_bus_gain_get(const je_audio_bus_t* bus)
+float je_audio_bus_gain_get(je_audio_bus_t bus)
 {
     assert(g_engine_audio_context != nullptr);
 
     return g_engine_audio_context->get_bus_gain(bus);
 }
 
-void je_audio_bus_gain_set(je_audio_bus_t* bus, float gain)
+void je_audio_bus_gain_set(je_audio_bus_t bus, float gain)
 {
     assert(g_engine_audio_context != nullptr);
 

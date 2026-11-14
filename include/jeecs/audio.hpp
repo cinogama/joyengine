@@ -91,16 +91,28 @@ typedef struct je_audio_native_source_instance_t je_audio_native_source_instance
 
 /*
 je_audio_bus_t [类型]
-命名的音量总线，用于按类别（如 SFX/BGM/UI）统一调速音量。
-
-总线由 je_audio_bus_get 按名称取得，进程内唯一且指针稳定，无需释放。
+预设的音量总线分组，用于按类别统一调节音量。
+    * NONE 不经过总线（总线增益视为 1.0）
+    * BGM 背景音乐 / BGS 背景环境声 / ME 音乐效果（胜利、升级等短乐句）
+    * SE 音效 / VOICE 语音
+    * CUSTOM_0..CUSTOM_3 自定义槽位，留给游戏自行分配用途
+    * COUNT 是总线数量哨兵，不是有效总线
 声源的最终增益为 声源增益 × 总线增益 × 监听者增益。
 */
-typedef struct je_audio_bus_t
+enum je_audio_bus_t
 {
-    const char* m_name; // 总线名称，进程内稳定
-    float m_gain;       // 总线增益，默认 1.0
-} je_audio_bus_t;
+    JE_AUDIO_BUS_NONE,
+    JE_AUDIO_BUS_BGM,
+    JE_AUDIO_BUS_BGS,
+    JE_AUDIO_BUS_ME,
+    JE_AUDIO_BUS_SE,
+    JE_AUDIO_BUS_VOICE,
+    JE_AUDIO_BUS_CUSTOM_0,
+    JE_AUDIO_BUS_CUSTOM_1,
+    JE_AUDIO_BUS_CUSTOM_2,
+    JE_AUDIO_BUS_CUSTOM_3,
+    JE_AUDIO_BUS_COUNT,
+};
 
 typedef struct je_audio_source_t
 {
@@ -129,8 +141,7 @@ typedef struct je_audio_source_t
     float m_cone_outer_angle; // 外角，默认 360.0
     float m_cone_outer_gain;  // 外角增益，默认 0.0
 
-    // 所属音量总线；nullptr = 不经过总线
-    je_audio_bus_t* m_bus;
+    je_audio_bus_t m_bus; // 所属音量总线
 } je_audio_source_t;
 
 typedef struct je_audio_listener_t
@@ -612,10 +623,9 @@ JE_API void je_audio_source_filter_set(je_audio_source_t* source, /* OPTIONAL */
 /*
 je_audio_source_bus_set [基本接口]
 设置音频源所属的音量总线
-    * bus_may_null 为 nullptr 时不经过任何总线（总线增益视为 1.0）
     * 总线增益变化后，使用该总线的声源增益会自动重新提交
 */
-JE_API void je_audio_source_bus_set(je_audio_source_t* source, /* OPTIONAL */ je_audio_bus_t* bus_may_null);
+JE_API void je_audio_source_bus_set(je_audio_source_t* source, je_audio_bus_t bus);
 
 /*
 je_audio_source_play [基本接口]
@@ -672,25 +682,17 @@ je_audio_listener_update [基本接口]
 JE_API void je_audio_listener_update();
 
 /*
-je_audio_bus_get [基本接口]
-按名称取得（必要时创建）一个音量总线
-    * 总线在进程内唯一且指针稳定，不需要释放
-    * 新建总线的增益为 1.0
-    * name 不能为空字符串；同一名称总是返回同一实例
-*/
-JE_API je_audio_bus_t* je_audio_bus_get(const char* name);
-
-/*
 je_audio_bus_gain_get [基本接口]
-获取音量总线的增益
+获取音量总线的增益；NONE 的增益恒为 1.0
 */
-JE_API float je_audio_bus_gain_get(const je_audio_bus_t* bus);
+JE_API float je_audio_bus_gain_get(je_audio_bus_t bus);
 
 /*
 je_audio_bus_gain_set [基本接口]
 设置音量总线的增益，使用该总线的声源会立即重新提交增益
+    * bus 不能为 NONE（NONE 的增益恒为 1.0，不可设置）
 */
-JE_API void je_audio_bus_gain_set(je_audio_bus_t* bus, float gain);
+JE_API void je_audio_bus_gain_set(je_audio_bus_t bus, float gain);
 
 /*
 je_audio_oneshot_desc_t [类型]
@@ -705,7 +707,7 @@ typedef struct je_audio_oneshot_desc_t
 {
     const je_audio_buffer_t* m_buffer; // 要播放的音频缓冲区（不可为空）
 
-    je_audio_bus_t* m_bus; // 可为 nullptr，表示不经过总线
+    je_audio_bus_t m_bus; // 所属音量总线
 
     bool m_spatial;      // true = 按 location 空间化；false = 相对监听者（UI/环境声）
     float m_location[3]; // 空间化位置
@@ -1110,39 +1112,6 @@ namespace jeecs
                 return _m_audio_buffer;
             }
         };
-        class bus
-        {
-            je_audio_bus_t* _m_bus;
-
-            bus(je_audio_bus_t* bus)
-                : _m_bus(bus)
-            {
-                assert(_m_bus != nullptr);
-            }
-
-        public:
-            inline static bus get(const std::string& name)
-            {
-                return bus(je_audio_bus_get(name.c_str()));
-            }
-
-            const char* name() const
-            {
-                return _m_bus->m_name;
-            }
-            float gain() const
-            {
-                return je_audio_bus_gain_get(_m_bus);
-            }
-            void set_gain(float gain)
-            {
-                je_audio_bus_gain_set(_m_bus, gain);
-            }
-            je_audio_bus_t* handle() const
-            {
-                return _m_bus;
-            }
-        };
         class source
         {
             JECS_DISABLE_MOVE_AND_COPY(source);
@@ -1208,7 +1177,7 @@ namespace jeecs
                     _m_audio_source,
                     filter.has_value() ? filter.value()->handle() : nullptr);
             }
-            void set_bus(/* OPTIONAL */ je_audio_bus_t* bus)
+            void set_bus(je_audio_bus_t bus)
             {
                 je_audio_source_bus_set(_m_audio_source, bus);
             }

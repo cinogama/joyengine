@@ -2444,7 +2444,7 @@ namespace jeecs
             bool play;
             bool loop;
             bool spatial;
-            basic::string bus;
+            je_audio_bus_t bus;
             float reference_distance;
             float max_distance;
             float rolloff;
@@ -2457,8 +2457,7 @@ namespace jeecs
             float current_occlusion_gain;
             float current_occlusion_hf;
             play_state state;
-            basic::string resolved_bus_name;
-            je_audio_bus_t* bus_handle;
+            je_audio_bus_t bus_applied; // 已提交到声源的总线；COUNT = 尚未提交
             basic::optional<basic::resource<audio::filter>> occlusion_filter;
             float applied_occlusion_hf;
             bool occlusion_filter_bound;
@@ -2473,7 +2472,7 @@ namespace jeecs
                 , play(true)
                 , loop(true)
                 , spatial(true)
-                , bus("SFX")
+                , bus(JE_AUDIO_BUS_SE)
                 , reference_distance(1.0f)
                 , max_distance(32.0f)
                 , rolloff(1.0f)
@@ -2484,8 +2483,7 @@ namespace jeecs
                 , current_occlusion_gain(1.0f)
                 , current_occlusion_hf(1.0f)
                 , state(play_state::STOPPED)
-                , resolved_bus_name()
-                , bus_handle(nullptr)
+                , bus_applied(JE_AUDIO_BUS_COUNT)
                 , occlusion_filter()
                 , applied_occlusion_hf(1.0f)
                 , occlusion_filter_bound(false)
@@ -2526,8 +2524,7 @@ namespace jeecs
                 , current_occlusion_gain(1.0f)
                 , current_occlusion_hf(1.0f)
                 , state(play_state::STOPPED)
-                , resolved_bus_name()
-                , bus_handle(nullptr)
+                , bus_applied(JE_AUDIO_BUS_COUNT)
                 , occlusion_filter()
                 , applied_occlusion_hf(1.0f)
                 , occlusion_filter_bound(false)
