@@ -186,9 +186,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                 let (w, runtime_system_names) = Saving::World::restore(
                     Singleton::Universe::getUniverse(),
                     wdat);
-                // 世界源路径用于世界级派生缓存（<path>.je4cache 的音频环境）
-                w->set_source_path(path->to_string());
                 ensureDebugCamera(w);
+                // 世界级缓存实体不随世界存档：文件旁存在 <world>.je4cache
+                // 时按当前路径重建，音频等子系统据此加载烘焙结果
+                do attachWorldCacheFromPath(w, option::value(path));
                 // 旧世界文件未保存粒子系统：补挂一次，保证发射器在编辑态
                 // 可预览（已存在时 add_system 无事发生）
                 do w->add_system(PARTICLE_SYSTEM_TYPE);

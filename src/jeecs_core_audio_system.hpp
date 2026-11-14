@@ -40,6 +40,12 @@ namespace jeecs::audio
         AudioUpdatingSystem(game_world w);
         void CommitUpdate();
 
+        // 请求下一帧重新读取 WorldCache 组件指向的缓存
+        void RequestEnvironmentCacheReload() noexcept
+        {
+            m_environment_cache_reload_requested = true;
+        }
+
     private:
         // 每个活跃混响区域对应一个 EFX EAX 混响效果 + 效果槽。
         // 槽重建/效果参数变化时 m_slot_epoch 递增，音源据此决定是否重绑发送。
@@ -69,11 +75,11 @@ namespace jeecs::audio
         std::unordered_map<uint32_t, reverb_room_runtime> m_reverb_rooms;
         uint64_t m_next_reverb_epoch;
 
-        // 世界级音频环境：优先使用 sidecar 烘焙结果，缺失/不可用时由
-        // ReverbZone/Portal 组件实时构建。
+        // 世界级音频环境：优先使用 WorldCache 组件指向的 sidecar
+        // 烘焙结果，缺失/不可用时由 ReverbZone/Portal 组件实时构建。
         std::optional<audio_environment> m_baked_environment;
-        std::string m_baked_environment_world_path;
-        uint64_t m_baked_environment_generation;
+        std::string m_loaded_environment_cache_path;
+        bool m_environment_cache_reload_requested;
 
         audio_environment m_live_environment;
         uint64_t m_live_environment_signature;

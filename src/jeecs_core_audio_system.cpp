@@ -435,8 +435,8 @@ namespace jeecs::audio
         , m_reverb_rooms()
         , m_next_reverb_epoch(0)
         , m_baked_environment()
-        , m_baked_environment_world_path()
-        , m_baked_environment_generation(0)
+        , m_loaded_environment_cache_path()
+        , m_environment_cache_reload_requested(false)
         , m_live_environment()
         , m_live_environment_signature(0)
         , m_has_live_environment(false)
@@ -560,23 +560,23 @@ namespace jeecs::audio
             portal_snapshots.push_back(snapshot);
         }
 
-        // 世界级 sidecar：源路径或重载代数变化时重新读取
-        je_game_world_t* audio_world = get_world().handle();
-        const char* world_source_path =
-            je_ecs_world_source_path_get(audio_world);
-        const uint64_t environment_generation =
-            je_audio_environment_generation_get(audio_world);
+        // 世界级 sidecar：由 WorldCache 组件提供缓存路径；
+        // 组件缺失时回退实时构建。路径变化或显式重载请求时重新读取。
+        std::string environment_cache_path;
 
-        if (m_baked_environment_world_path != world_source_path
-            || m_baked_environment_generation != environment_generation)
+        for (auto&& [world_cache] : query<view typesof(WorldCache&)>())
+            environment_cache_path = world_cache.cache_path.cpp_str();
+
+        if (m_environment_cache_reload_requested
+            || m_loaded_environment_cache_path != environment_cache_path)
         {
-            m_baked_environment_world_path = world_source_path;
-            m_baked_environment_generation = environment_generation;
+            m_environment_cache_reload_requested = false;
+            m_loaded_environment_cache_path = environment_cache_path;
             m_baked_environment.reset();
 
-            if (world_source_path[0] != '\0')
-                m_baked_environment =
-                    load_audio_environment_cache(world_source_path);
+            if (!environment_cache_path.empty())
+                m_baked_environment = load_audio_environment_cache(
+                    environment_cache_path.c_str());
 
             ++m_environment_serial;
         }
@@ -1149,4 +1149,15 @@ namespace jeecs::audio
         }
     }
 
+}
+
+void je_audio_environment_reload(je_game_world_t* world)
+{
+    auto* system = static_cast<jeecs::audio::AudioUpdatingSystem*>(
+        je_ecs_world_system_instance_get(
+            world,
+            jeecs::typing::id<jeecs::audio::AudioUpdatingSystem>()));
+
+    if (system != nullptr)
+        system->RequestEnvironmentCacheReload();
 }

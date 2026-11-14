@@ -376,6 +376,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                 value(editor)?
                 {
                     ensureDebugCamera(w);
+                    // WorldCache 实体不随世界快照保存，按保存路径重建
+                    //（仅当 <world>.je4cache 存在）
+                    do attachWorldCacheFromPath(w, editor.m_saving_path);
                     w->set_enable(true);
 
                     let name = Saving::World::getName(ctx.m_world_data)

@@ -78,10 +78,6 @@ namespace je
         extern("libjoyecs", "wojeapi_get_system_from_world")
             public func get_system(self: world, systype: typeinfo)=> option<handle>;
 
-        // 设置世界源文件路径（通常为 .je4world），用于世界级派生缓存
-        extern("libjoyecs", "wojeapi_ecs_world_source_path_set")
-            public func set_source_path(self: world, path: string)=> void;
-
         // 立即处理命令缓冲区的结构性变更（不推进系统更新），
         // 用于临时加载/未启用的世界
         extern("libjoyecs", "wojeapi_ecs_world_command_flush")

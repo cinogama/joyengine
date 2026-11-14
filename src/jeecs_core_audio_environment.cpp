@@ -552,10 +552,21 @@ namespace jeecs::audio
     }
 
     std::optional<audio_environment> load_audio_environment_cache(
-        const char* world_path)
+        const char* cache_path)
     {
+        // 组件持有的是缓存文件路径（<world>.je4cache），cache 管理器按
+        // 源文件路径定位并校验 CRC，所以这里去掉缓存后缀。
+        std::string source_path = cache_path;
+        constexpr const char* CACHE_SUFFIX = ".je4cache";
+        const size_t suffix_length = std::strlen(CACHE_SUFFIX);
+        if (source_path.size() > suffix_length
+            && source_path.compare(source_path.size() - suffix_length,
+                   suffix_length, CACHE_SUFFIX)
+                == 0)
+            source_path.resize(source_path.size() - suffix_length);
+
         je_file_t* file =
-            je_cache_file_load(world_path, WORLD_CACHE_VERSION, 0);
+            je_cache_file_load(source_path.c_str(), WORLD_CACHE_VERSION, 0);
 
         if (file == nullptr)
             return std::nullopt;
@@ -564,7 +575,7 @@ namespace jeecs::audio
         {
             debug::logerr(
                 "Failed to parse audio environment cache for world: %s.",
-                world_path);
+                cache_path);
             je_file_close(file);
             return std::nullopt;
         };
@@ -793,7 +804,7 @@ namespace jeecs::audio
 
         debug::loginfo(
             "Loaded baked audio environment: %s (%zu rooms, %zu portals).",
-            world_path,
+            cache_path,
             result.m_rooms.size(),
             result.m_portals.size());
 
@@ -1057,7 +1068,6 @@ namespace jeecs::audio
         if (!write_audio_environment_cache(world_path, environment))
             return false;
 
-        je_ecs_world_source_path_set(world, world_path);
         je_audio_environment_reload(world);
 
         return true;

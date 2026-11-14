@@ -81,6 +81,9 @@ namespace je
     {
         extern("libjoyecs", "wojeapi_read_file_all")
             public func readall(path: string)=> option<string>;
+        // 路径是否存在（按引擎资源路径规则：先磁盘、后默认镜像）
+        extern("libjoyecs", "wojeapi_file_exists")
+            public func exists(path: string)=> bool;
         namespace cache
         {
             extern("libjoyecs", "wojeapi_file_cache_write_all")

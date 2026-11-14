@@ -30,6 +30,7 @@ import builtin::editor::Editor::Saving::World;
 import builtin::editor::Editor::Practice;
 import builtin::editor::Editor::Project;
 import builtin::editor::Editor::DebugRun;
+import builtin::editor::Editor::ResourcePath;
 
 import Definition;
 import WindowLifecycle;
@@ -117,6 +118,103 @@ namespace JEEditor::Editor::WorldEditorViewport
         return self.m_saving_path;
     }
 
+    // ==========================
+    //  世界级缓存（WorldCache）
+    // ==========================
+
+    // 世界文件对应的派生缓存路径：世界级缓存固定为 <world>.je4cache，
+    // 以运行时资源路径（@/...）形式交给 WorldCache 组件（导出后可经镜像解析）。
+    public func worldCachePathForSaving(path: path_t)=> string
+    {
+        return ResourcePath::toRuntimeResourcePath(path) + ".je4cache";
+    }
+
+    // 更新世界内已有 WorldCache 实体指向的缓存路径（世界改名/另存后）；
+    // 不存在时不创建。返回是否找到并更新。
+    public func syncWorldCachePath(w: world, cache_path: string)=> bool
+    {
+        let mut updated = false;
+
+        for (let e : w->internal::get_all_entities())
+        {
+            match (e->towoo::get_component:<WorldCache>())
+            {
+                none?;
+                value(c)?
+                {
+                    updated = true;
+                    do c.cache_path->set(cache_path);
+                }
+            }
+        }
+
+        return updated;
+    }
+
+    // 保证世界内存在指向 world_path 对应缓存的 WorldCache 实体：已有则
+    // 更新，没有则新建。该实体是编辑器/引擎内部实体（带 Editor::Invisible，
+    // 不显示在实体列表、不随世界存档）：缓存路径属于世界文件的派生信息，
+    // 打开世界时按“<world>.je4cache 是否存在”重建，手动烘焙时也在此创建。
+    public func ensureWorldCacheComponent(w: world, world_path: path_t)=> bool
+    {
+        let cache_path = worldCachePathForSaving(world_path);
+
+        for (let e : w->internal::get_all_entities())
+        {
+            match (e->towoo::get_component:<WorldCache>())
+            {
+                none?;
+                value(c)?
+                {
+                    do c.cache_path->set(cache_path);
+                    return true;
+                }
+            }
+        }
+
+        match (w->add_entity([
+                WorldCache::type::typeinfo,
+                Editor::Invisible::type::typeinfo,
+            ]))
+        {
+            none?
+            {
+                logerr("Failed to create WorldCache entity.");
+                return false;
+            }
+            value(e)?
+            {
+                do e->internal::set_name("WorldCache");
+                do e->towoo::get_component:<WorldCache>()
+                    ->unwrap.cache_path->set(cache_path);
+
+                // 世界可能尚未推进更新：立即落实结构性变更，保证随后的
+                // 烘焙（及音频系统的重载）能读到该实体
+                w->flush_commands();
+                return true;
+            }
+        }
+    }
+
+    // 世界加载/重建时：世界文件旁存在 <world>.je4cache 才创建 WorldCache
+    // 内部实体；新位置没有缓存时清空已有实体指向的旧路径（改名/另存后
+    // 继续读旧缓存会让音频停留在旧环境）。
+    public func attachWorldCacheFromPath(w: world, world_path: option<path_t>)=> void
+    {
+        match (world_path)
+        {
+            none?;
+            value(p)?
+            {
+                let cache_file = normalize(p->to_string + ".je4cache");
+                if (isfile(cache_file))
+                    do ensureWorldCacheComponent(w, p);
+                else
+                    do syncWorldCachePath(w, "");
+            }
+        }
+    }
+
     // 把世界序列化并写入 path；失败时弹错误对话框并返回 false。
     // 编辑器中世界落盘的唯一入口。
     public func saveWorldTo(self: WorldEditorViewport, path: path_t)=> bool
@@ -131,7 +229,12 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 游戏逻辑，不应覆盖编辑现场
         if (isWorldsFrozen() || DebugRun::isDebugRunActive())
             return false;
-            
+
+        // 世界可能另存/重命名到新路径：已有的 WorldCache 内部实体先指向
+        // 本次落盘路径对应的缓存（该实体不存档，缓存路径只是运行时状态）
+        do syncWorldCachePath(
+            self.m_world_instance, worldCachePathForSaving(path));
+
         match (toml::save(
                 JEEditor::Saving::World::save(
                     self.m_world_instance, self.m_name,
@@ -148,9 +251,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                 // 已落盘：清除编辑历史的未保存标记（见 Practice::markSaved）
                 self.m_action_history->markSaved();
 
-                // 同步世界源路径；保存后旧 sidecar 已因 CRC 失效，
-                // 让音频系统重新加载/回退实时环境
-                self.m_world_instance->set_source_path(path->to_string());
+                // 世界级缓存以世界文件 CRC 为键：落盘后旧缓存已失效，
+                // 通知音频系统重新读取缓存/回退实时环境
                 je::audio::environment::reload(self.m_world_instance);
 
                 // 在独立作用域中先取出字符串：闭包按创建时的值捕获文本，
@@ -284,6 +386,15 @@ namespace JEEditor::Editor::WorldEditorViewport
                     "请先保存世界：音频环境会写入 <世界文件>.je4cache");
             value(path)?
             {
+                // WorldCache 实体是内部实体（不存档）：烘焙前保证它存在并
+                // 指向 <world>.je4cache，烘焙后的重载才能读到新缓存
+                if (!ensureWorldCacheComponent(
+                        self.m_world_instance, path))
+                {
+                    MsgBox::err("烘焙音频环境", "无法创建 WorldCache 实体");
+                    return;
+                }
+
                 // sidecar 以世界文件 CRC 为键，先落盘保证两者一致
                 if (!self->saveWorldTo(path))
                     return;
@@ -330,12 +441,15 @@ namespace JEEditor::Editor::WorldEditorViewport
         if (isWorldsFrozen() || DebugRun::isDebugRunActive())
             return false;
 
-        // 重命名/另存/路径重定向后，世界源路径与 sidecar 查找路径也要同步
+        // 重命名/另存/路径重定向后，WorldCache 内部实体按新路径同步：
+        // 资源管理器重命名世界文件时会一并移动 <world>.je4cache，新路径
+        // 没有缓存时清空旧路径（音频回退实时环境），再让音频系统重读
         match (new_path)
         {
             value(p)?
             {
-                self.m_world_instance->set_source_path(p->to_string());
+                do attachWorldCacheFromPath(
+                    self.m_world_instance, option::value(p));
                 je::audio::environment::reload(self.m_world_instance);
             }
             none?;

@@ -350,23 +350,6 @@ je_ecs_world_destroy [基本接口]
 JE_API void je_ecs_world_destroy(je_game_world_t* world);
 
 /*
-je_ecs_world_source_path_set [基本接口]
-设置世界的源文件路径（通常是该世界对应的 .je4world 路径）
-    * 世界对象本身不保存/读取文件，该路径只用于世界级别的派生缓存，
-        例如 <世界路径>.je4cache 中的音频环境烘焙结果
-    * 传入 nullptr 或空字符串表示清除路径
-*/
-JE_API void je_ecs_world_source_path_set(je_game_world_t* world, const char* path);
-
-/*
-je_ecs_world_source_path_get [基本接口]
-获取世界的源文件路径
-    * 未设置时返回空字符串
-    * 返回的指针由世界持有，在世界销毁或路径被改写前保持有效
-*/
-JE_API const char* je_ecs_world_source_path_get(je_game_world_t* world);
-
-/*
 je_ecs_world_command_flush [基本接口]
 立即处理世界命令缓冲区中的结构性变更（实体/组件的增删、系统增删等），
 但不推进系统更新
