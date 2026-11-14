@@ -288,6 +288,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             && !self.m_light_dragging
             && self.m_particle_hover_handle == GIZMO_HANDLE_NONE
             && !self.m_particle_dragging
+            && self.m_audio_hover_handle == GIZMO_HANDLE_NONE
+            && !self.m_audio_dragging
             && self.m_ui_hover_handle == UI_HANDLE_NONE
             && !self.m_ui_dragging)
         {

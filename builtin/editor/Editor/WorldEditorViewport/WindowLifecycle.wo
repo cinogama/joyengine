@@ -53,6 +53,7 @@ import TransformGizmo;
 import ColliderGizmo;
 import LightGizmo;
 import ParticleGizmo;
+import AudioGizmo;
 import UIGizmo;
 import GizmoDrawing;
 import ViewportUI;
@@ -95,6 +96,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         m_anchor_parent_entity_selector: entity_selector,
         m_physics2d_body_entity_selector: entity_selector,
         m_particle_emitter_entity_selector: entity_selector,
+        m_audio_entity_selector: entity_selector,
         m_ui_element_entity_selector: entity_selector,
     }
     {
@@ -165,6 +167,21 @@ namespace JEEditor::Editor::WorldEditorViewport
                         requirement::contains(Particle::Emitter::type::typeinfo),
                     ]),
 
+                // 音频实体（Translation + 任一 Audio 组件且不带 Invisible）：
+                // 音频图标 gizmo 与编辑手柄以它为准；图标命中保证纯音频
+                // 实体（没有渲染形状）也能在视口内点击选中
+                m_audio_entity_selector = w->create_selector([
+                        requirement::except(Editor::Invisible::type::typeinfo),
+                        requirement::contains(Transform::Translation::type::typeinfo),
+                        requirement::anyof([
+                            Audio::Source::type::typeinfo,
+                            Audio::Listener::type::typeinfo,
+                            Audio::Occluder::type::typeinfo,
+                            Audio::ReverbZone::type::typeinfo,
+                            Audio::Portal::type::typeinfo,
+                        ]),
+                    ]),
+
                 // UI 元素实体（带 UserInterface::Element 且不带 Invisible）：
                 // UI 矩形 gizmo 与视口内 UI 空间点击拾取以它为准
                 //（UI 布局不读 Translation，故不要求 Translation）
@@ -230,6 +247,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_physics2d_body_entity_selector = mut selectors.m_physics2d_body_entity_selector,
 
             m_particle_emitter_entity_selector = mut selectors.m_particle_emitter_entity_selector,
+
+            m_audio_entity_selector = mut selectors.m_audio_entity_selector,
 
             m_ui_element_entity_selector = mut selectors.m_ui_element_entity_selector,
             
@@ -317,6 +336,19 @@ namespace JEEditor::Editor::WorldEditorViewport
             m_particle_drag_undo_component = mut "",
             m_particle_drag_undo_member = mut "",
             m_particle_drag_undo_old_value = mut "",
+
+            m_audio_hover_handle = mut GIZMO_HANDLE_NONE,
+            m_audio_dragging = mut false,
+            m_audio_drag_handle = mut GIZMO_HANDLE_NONE,
+            m_audio_drag_euid = mut (0h as entity::internal::euid_t),
+            m_audio_drag_component = mut "",
+            m_audio_drag_member = mut "",
+            m_audio_drag_old_value = mut "",
+            m_audio_drag_center = mut ((0., 0., 0.) as vec3),
+            m_audio_drag_axis = mut ((1., 0., 0.) as vec3),
+            m_audio_drag_plane_normal = mut ((0., 0., 1.) as vec3),
+            m_audio_drag_plane_point = mut ((0., 0., 0.) as vec3),
+            m_audio_drag_scale = mut ((1., 1., 1.) as vec3),
 
             m_ui_hover_handle = mut UI_HANDLE_NONE,
             m_ui_dragging = mut false,
@@ -615,6 +647,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                     [ImGuiKey::ImGuiKey_3], \= self->switchGizmoLayerByShortcut(GizmoLayer::LIGHT2D);)
                 ->shortCut(
                     [ImGuiKey::ImGuiKey_4], \= self->switchGizmoLayerByShortcut(GizmoLayer::PARTICLE);)
+                ->shortCut(
+                    [ImGuiKey::ImGuiKey_5], \= self->switchGizmoLayerByShortcut(GizmoLayer::AUDIO);)
                 ->finish();
     }
     public func onUpdate(self: WorldEditorViewport)
@@ -797,14 +831,15 @@ namespace JEEditor::Editor::WorldEditorViewport
         self.m_collider_hover_handle = GIZMO_HANDLE_NONE;
         self.m_light_hover_handle = GIZMO_HANDLE_NONE;
         self.m_particle_hover_handle = GIZMO_HANDLE_NONE;
+        self.m_audio_hover_handle = GIZMO_HANDLE_NONE;
         self.m_gizmo_draw_visible = false;
 
         let input_hovered = viewport_hovered && !toolbar_hovered;
         let all_layers =
             !ui_editing && self.m_gizmo_active_layer == GizmoLayer::ALL;
 
-        // 全部模式按“后绘制者优先”的顺序运行：粒子 > 光源 > 碰撞体 >
-        // 变换（绘制顺序为 变换 → 碰撞体 → 光源 → 粒子，最上层最后
+        // 全部模式按“后绘制者优先”的顺序运行：粒子 > 音频 > 光源 > 碰撞体 >
+        // 变换（绘制顺序为 变换 → 碰撞体 → 光源 → 粒子/音频，最上层最后
         // 运行）。各 update 内部对更早运行的层让位，保证同一时刻只有
         // 一个手柄进入悬停/拖拽，且与画面层级一致。单层模式只有对应
         // 层满足条件；拖拽中的层即使层状态改变也会继续运行以完成收尾。
@@ -818,6 +853,23 @@ namespace JEEditor::Editor::WorldEditorViewport
                 none?;
                 value((rect_min, rect_max))?
                     self->updateParticleGizmo(
+                        debug_camera,
+                        input_hovered,
+                        rect_min,
+                        (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+            }
+        }
+
+        if (all_layers
+            || (!ui_editing
+                && self.m_gizmo_active_layer == GizmoLayer::AUDIO)
+            || self.m_audio_dragging)
+        {
+            match (viewport_rect)
+            {
+                none?;
+                value((rect_min, rect_max))?
+                    self->updateAudioGizmo(
                         debug_camera,
                         input_hovered,
                         rect_min,
@@ -931,6 +983,9 @@ namespace JEEditor::Editor::WorldEditorViewport
         
         // Draw gizmo here.
         self->drawGizmos(debug_camera);
+
+        // 音频组件图标/线框/手柄（屏幕空间，盖在 3D gizmo 之上）
+        self->drawAudioGizmos(debug_camera, viewport_rect);
 
         // 悬停手柄说明（屏幕空间）：与绘制/命中同源的激活层与手柄编号，
         // 帮助区分层内相邻/重合的手柄

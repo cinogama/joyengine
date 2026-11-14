@@ -30,6 +30,7 @@ export import CameraControl;
 export import EntityPicking;
 export import GizmoMath;
 export import TransformGizmo;
+export import AudioGizmo;
 export import GizmoDrawing;
 export import ViewportUI;
 export import WorldSaving;

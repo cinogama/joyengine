@@ -265,6 +265,34 @@ namespace JEEditor::Editor::WorldEditorViewport
             // 图标命中保证其任何时候都可在视口内点击选中
             addIconRects(self.m_particle_emitter_entity_selector, PARTICLE_GIZMO_ICON_SIZE_PX);
 
+            // 音频实体可能只有组件没有渲染形状，图标命中保证其可选中；
+            // 听者挂在摄像机上时徽标绘制在摄像机图标右侧，命中矩形同步
+            // 偏移，避免与摄像机图标中心重叠
+            for (let e : self.m_audio_entity_selector)
+            {
+                do try!{
+                    try! trans =
+                        e->towoo::get_component:<Transform::Translation>();
+                    try! euid = e->internal::get_entity_uid;
+
+                    let pos = trans->get_global_pos;
+                    if ((pos - cam_pos)->dot(cam_forward) <= 0.)
+                        return_value!;
+
+                    let mut center =
+                        gizmoWorldToScreen(view_proj, pos, rmin, rsize);
+                    if (e->towoo::get_component:<Audio::Listener>()->is_value
+                        && e->towoo::get_component:<Camera::Projection>()->is_value)
+                        center = center + ((AUDIO_ICON_PX * 1.4, 0.) as vec2);
+
+                    self.m_icon_gizmo_rects->add(mut (
+                        euid,
+                        center,
+                        AUDIO_ICON_PX * 0.5 + GIZMO_HIT_PX));
+                    return_value!;
+                };
+            }
+
             if (hovered
                 && !self.m_is_look_active
                 && !self.m_is_pan_active
