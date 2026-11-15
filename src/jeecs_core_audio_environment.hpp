@@ -22,7 +22,6 @@ namespace jeecs::audio
 {
     // 室外/无房间节点的房间 ID 哨兵
     constexpr uint32_t AUDIO_OUTDOOR_ROOM_ID = 0xFFFFFFFFu;
-    constexpr int32_t AUDIO_ENVIRONMENT_FORMAT_VERSION = 1;
 
     struct audio_environment_room
     {
@@ -78,20 +77,16 @@ namespace jeecs::audio
     {
         float m_transmission; // 路径上所有门洞 transmission 的乘积
         float m_muffle;       // 1 - Π(1 - 门洞 muffle)
-        int32_t m_portal_count;
 
         audio_environment_path() noexcept
             : m_transmission(0.0f)
             , m_muffle(0.0f)
-            , m_portal_count(0)
         {
         }
     };
 
     struct audio_environment
     {
-        bool m_use_2d;
-        uint64_t m_signature; // 运行时用于判断是否需要重建；不写入缓存
         std::vector<audio_environment_room> m_rooms;
         std::vector<audio_environment_portal> m_portals;
         // 节点数 = 房间数 + 1（室外节点位于 rooms.size()）；
@@ -99,9 +94,7 @@ namespace jeecs::audio
         std::vector<audio_environment_path> m_paths;
 
         audio_environment() noexcept
-            : m_use_2d(false)
-            , m_signature(0)
-            , m_rooms()
+            : m_rooms()
             , m_portals()
             , m_paths()
         {
@@ -176,12 +169,6 @@ namespace jeecs::audio
     float audio_environment_room_weight(
         const math::vec3& point,
         const audio_environment_room& room,
-        bool use_2d);
-
-    // 返回权重最高的房间 id；没有房间时返回 AUDIO_OUTDOOR_ROOM_ID。
-    uint32_t audio_environment_find_room(
-        const std::vector<audio_environment_room>& rooms,
-        const math::vec3& point,
         bool use_2d);
 
     // 输入快照哈希；输入未变化时不用重建图。

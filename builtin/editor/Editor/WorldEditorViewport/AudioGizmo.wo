@@ -603,6 +603,10 @@ namespace JEEditor::Editor::WorldEditorViewport
             let rsize = rect_size as vec2;
             let mouse = GetMousePos() as vec2;
 
+            // 视口矩形退化（窗口折叠/最小化）时除以 rsize 会产生 NaN 射线
+            if (rsize[0] <= 0. || rsize[1] <= 0.)
+                return_value!;
+
             let mouse_local = (mouse - rmin) / rsize;
             let mouse_ndc = (mouse_local - (0.5, 0.5) as vec2) * 2.;
             let mouse_ray = towoo::ray::from(

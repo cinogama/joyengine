@@ -117,11 +117,20 @@ namespace JEEditor::Editor
                     none?;
                     value(data)?
                     {
-                        // 键缺失或取值不是浮点数时按默认的 1.0 处理
+                        // 键缺失或取值不是浮点数时按默认的 1.0 处理；
+                        // 手改文件可能写出界外值，钳回 0..1
                         match (data[row.m_key]->as_float)
                         {
                             none?;
-                            value(loaded)? gain = loaded;
+                            value(loaded)?
+                            {
+                                if (loaded < 0.)
+                                    gain = 0.;
+                                else if (loaded > 1.)
+                                    gain = 1.;
+                                else
+                                    gain = loaded;
+                            }
                         }
                     }
                 }

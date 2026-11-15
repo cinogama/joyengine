@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
-#include <type_traits>
 
 namespace jeecs::audio
 {
@@ -42,42 +41,35 @@ namespace jeecs::audio
             return 1.0f - t * t * (3.0f - 2.0f * t);
         }
 
-        uint32_t find_room(
-            const std::vector<audio_environment_room>& rooms,
-            const math::vec3& point,
-            bool use_2d)
-        {
-            uint32_t result = AUDIO_OUTDOOR_ROOM_ID;
-            float best_weight = ROOM_WEIGHT_EPSILON;
-
-            for (const auto& room : rooms)
-            {
-                const float weight = room_weight(point, room, use_2d);
-                if (weight > best_weight)
-                {
-                    best_weight = weight;
-                    result = room.m_id;
-                }
-            }
-
-            return result;
-        }
-
         // 门洞两侧的房间解析必须是“点在房间内”的硬判定：fade 是混响发送
         // 权重在房间外侧的衰减距离，不代表该点属于房间。默认 fade=1 时，
         // 贴在墙上的门洞两侧会同时落进 fade 带，被算成同一个房间而失效。
+        // 房间嵌套（小房间整只放进大房间）时多个房间都包含该点：取体积
+        // 最小者——门洞属于它实际开在的那个（内层）房间。
         uint32_t find_room_inside(
             const std::vector<audio_environment_room>& rooms,
             const math::vec3& point,
             bool use_2d)
         {
+            const audio_environment_room* best = nullptr;
+            float best_volume = 0.0f;
+
             for (const auto& room : rooms)
             {
                 // 点在 OBB 内时 room_weight 恰好返回 1.0
-                if (room_weight(point, room, use_2d) >= 1.0f)
-                    return room.m_id;
+                if (room_weight(point, room, use_2d) < 1.0f)
+                    continue;
+
+                const float volume = room.m_half_extent.x
+                    * room.m_half_extent.y * room.m_half_extent.z;
+                if (best == nullptr || volume < best_volume)
+                {
+                    best = &room;
+                    best_volume = volume;
+                }
             }
-            return AUDIO_OUTDOOR_ROOM_ID;
+
+            return best != nullptr ? best->m_id : AUDIO_OUTDOOR_ROOM_ID;
         }
 
         bool vec_less(const math::vec3& a, const math::vec3& b) noexcept
@@ -209,14 +201,6 @@ namespace jeecs::audio
         return room_weight(point, room, use_2d);
     }
 
-    uint32_t audio_environment_find_room(
-        const std::vector<audio_environment_room>& rooms,
-        const math::vec3& point,
-        bool use_2d)
-    {
-        return find_room(rooms, point, use_2d);
-    }
-
     uint64_t hash_audio_environment_inputs(
         const std::vector<audio_environment_room_snapshot>& rooms,
         const std::vector<audio_environment_portal_snapshot>& portals,
@@ -268,8 +252,6 @@ namespace jeecs::audio
         bool use_2d)
     {
         audio_environment result;
-        result.m_use_2d = use_2d;
-        result.m_signature = hash_audio_environment_inputs(rooms, portals, use_2d);
 
         std::vector<audio_environment_room_snapshot> sorted_rooms = rooms;
         std::sort(sorted_rooms.begin(), sorted_rooms.end(), room_snapshot_less);
@@ -413,8 +395,6 @@ namespace jeecs::audio
                     next.m_muffle = 1.0f
                         - (1.0f - best[current].m_muffle)
                             * (1.0f - edge.m_muffle);
-                    next.m_portal_count =
-                        best[current].m_portal_count + 1;
                 }
             }
 

@@ -599,9 +599,11 @@ namespace jeecs::audio
         // 本帧不再使用的房间由第 5 步的 m_active 扫描回收。整体清空会让
         // 每帧销毁/重建全部 EFX 效果与效果槽，播放中拖动会明显卡顿。
 
-        // 听者所在房间：权重最高者
+        // 听者所在房间：权重最高者；权重并列（房间嵌套时内外房间同为
+        // 1.0）取体积最小者——听者在最内层房间里，混响按该房间算
         const audio_environment_room* listener_reverb_room = nullptr;
         float listener_reverb_weight = 0.0f;
+        float listener_reverb_volume = 0.0f;
 
         if (listener_present && environment != nullptr)
         {
@@ -610,10 +612,17 @@ namespace jeecs::audio
                 const float weight = audio_environment_room_weight(
                     listener_position, room, listener_2d);
 
-                if (weight > listener_reverb_weight)
+                const float volume = room.m_half_extent.x
+                    * room.m_half_extent.y * room.m_half_extent.z;
+
+                if (weight > listener_reverb_weight
+                    || (weight == listener_reverb_weight
+                        && listener_reverb_room != nullptr
+                        && volume < listener_reverb_volume))
                 {
                     listener_reverb_weight = weight;
                     listener_reverb_room = &room;
+                    listener_reverb_volume = volume;
                 }
             }
         }
@@ -792,9 +801,11 @@ namespace jeecs::audio
                         tilemap, listener_position, position, occlusion);
             }
 
-            // 遮挡值做时间平滑：射线在遮挡体边缘是硬切换，直接应用到增益/
-            // 闷音会在跨过边缘的瞬间突变。首帧/重新进入空间化时直接对齐，
-            // 之后指数逼近目标——进入遮挡稍快、离开遮挡稍慢。
+                // 遮挡值做时间平滑：射线在遮挡体边缘是硬切换，直接应用到增益/
+                // 闷音会在跨过边缘的瞬间突变。首帧/重新进入空间化时直接对齐，
+                // 之后指数逼近目标——进入遮挡稍快、离开遮挡稍慢。增益与闷音
+                // 各自按自己的变化方向选时间常数：只闷不变轻的遮挡按闷音的
+                // “进入”速率变闷，不会跟着增益的“离开”速率慢慢拖。
             if (!spatial_active || !listener_present)
             {
                 source.current_occlusion_gain = 1.0f;
@@ -825,15 +836,21 @@ namespace jeecs::audio
                     return next;
                 };
 
-                const float tau =
+                // 每个通道按自己的变化方向选时间常数：变小（进入遮挡）
+                // 用 attack，变大（离开遮挡）用 release
+                const float gain_tau =
                     occlusion.m_gain < source.current_occlusion_gain
+                    ? OCCLUSION_ATTACK_SECONDS
+                    : OCCLUSION_RELEASE_SECONDS;
+                const float hf_tau =
+                    occlusion.m_hf < source.current_occlusion_hf
                     ? OCCLUSION_ATTACK_SECONDS
                     : OCCLUSION_RELEASE_SECONDS;
 
                 source.current_occlusion_gain = smooth_occlusion(
-                    source.current_occlusion_gain, occlusion.m_gain, tau);
+                    source.current_occlusion_gain, occlusion.m_gain, gain_tau);
                 source.current_occlusion_hf = smooth_occlusion(
-                    source.current_occlusion_hf, occlusion.m_hf, tau);
+                    source.current_occlusion_hf, occlusion.m_hf, hf_tau);
             }
 
             occlusion.m_gain = source.current_occlusion_gain;
@@ -889,10 +906,26 @@ namespace jeecs::audio
             if (spatial_active && environment != nullptr)
             {
                 // 声源最多取权重最高的两个房间；重叠房间按权重同时发送。
+                // 权重并列（房间嵌套：内外房间同为 1.0）时小房间排前——
+                // source_rooms[0] 是声源的主房间（二次激发的路径查询用它），
+                // 应为声源实际所在的最内层房间。
                 const audio_environment_room* source_rooms[2] = {
                     nullptr, nullptr };
                 float source_weights[2] = { 0.0f, 0.0f };
                 int source_room_count = 0;
+
+                auto room_ranks_higher =
+                    [](const audio_environment_room* room_a, float weight_a,
+                        const audio_environment_room* room_b, float weight_b)
+                {
+                    if (weight_a != weight_b)
+                        return weight_a > weight_b;
+                    const float volume_a = room_a->m_half_extent.x
+                        * room_a->m_half_extent.y * room_a->m_half_extent.z;
+                    const float volume_b = room_b->m_half_extent.x
+                        * room_b->m_half_extent.y * room_b->m_half_extent.z;
+                    return volume_a < volume_b;
+                };
 
                 for (const auto& room : environment->m_rooms)
                 {
@@ -904,7 +937,9 @@ namespace jeecs::audio
 
                     int insert_at = source_room_count;
                     while (insert_at > 0
-                        && source_weights[insert_at - 1] < weight)
+                        && room_ranks_higher(&room, weight,
+                            source_rooms[insert_at - 1],
+                            source_weights[insert_at - 1]))
                         --insert_at;
 
                     if (insert_at >= 2)

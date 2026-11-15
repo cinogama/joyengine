@@ -1152,17 +1152,15 @@ namespace jeecs::audio
                                     ALC_MAX_AUXILIARY_SENDS,
                                     1,
                                     &device_max_auxiliary_sends);
-
-                                new_device.m_max_auxiliary_sends = min(
-                                    device_max_auxiliary_sends,
-                                    (ALCint)audio::MAX_AUXILIARY_SENDS);
                             }
 
                             new_device.m_device_instance = AL_JE_DEVICE(device_instance);
                             new_device.m_name = strdup(current_device_name);
                             new_device.m_active = false;
                             new_device.m_is_default = false;
-                            new_device.m_max_auxiliary_sends = (int)device_max_auxiliary_sends;
+                            new_device.m_max_auxiliary_sends = min(
+                                (int)device_max_auxiliary_sends,
+                                (int)audio::MAX_AUXILIARY_SENDS);
                         }
                     }
 
@@ -1573,6 +1571,13 @@ namespace jeecs::audio
                             (ALint)i,
                             AL_FILTER_NULL);
                 }
+
+                // 池从空变为非空且此前探测过上限：清除标志，让下一次分配
+                // 重新探测 alGenSources（有界重试——每次归还至多触发一次）。
+                // 标志原本只随设备切换复位：探测窗口被其它线程的残留 AL
+                // 错误误触发时，声部分配会被永久封顶。
+                if (m_voice_limit_reached && m_free_voices.empty())
+                    m_voice_limit_reached = false;
 
                 m_free_voices.push_back(voice);
             }
@@ -4397,7 +4402,7 @@ je_audio_effect_equalizer_t* je_audio_effect_equalizer_create()
 
     return g_engine_audio_context->create_effect<je_audio_effect_equalizer_t>();
 }
-je_audio_effect_eax_reverb_t* je_audio_effect_eaxreverb_create()
+je_audio_effect_eax_reverb_t* je_audio_effect_eax_reverb_create()
 {
     assert(g_engine_audio_context != nullptr);
 

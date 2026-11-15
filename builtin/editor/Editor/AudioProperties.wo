@@ -3,9 +3,11 @@ import pkg::std;
 import je;
 import je::gui;
 import je::audio;
+import je::cache;
 
 import pkg::fsys;
 import pkg::interface;
+import pkg::thread;
 import pkg::toml;
 
 import builtin::editor::GUI::Windows;
@@ -42,6 +44,8 @@ namespace JEEditor::Editor
         m_format: mut int,
         m_info: mut option<je::audio::buffer::buffer_data_t>,
         m_status: mut string,
+        // 缓存生成结果（后台线程写入，GUI 线程每帧轮询）；none = 进行中
+        m_cache_ready: mutable<option<bool>>,
     }
     {
         public func create(path: path_t)=> AudioProperties
@@ -49,21 +53,24 @@ namespace JEEditor::Editor
         {
             let runtime_path = ResourcePath::toRuntimeResourcePath(path);
 
-            // 加载音频取解码信息，顺带触发/校验缓存生成管线。
-            let mut info = option::none: option<je::audio::buffer::buffer_data_t>;
-            match (je::audio::buffer::load(runtime_path))
-            {
-                value(buf)? info = option::value(buf->info());
-                none?;
-            }
+            // 缓存生成（首次打开未缓存的长音频要整段解码）放在后台线程，
+            // 打开窗口本身不做重活；完成后 GUI 线程做缓存命中的轻量加载
+            // 取解码信息。
+            let cache_ready = mutable::create(option::none: option<bool>);
+            do thread::create(func(){
+                    cache_ready->set <|
+                        option::value <|
+                            je::cache::generate_audio_cache(runtime_path);
+                });
 
             return AudioProperties{
                 m_path = path,
                 m_runtime_path = runtime_path,
                 m_streaming = mut loadStreaming(path),
                 m_format = mut loadFormat(path),
-                m_info = mut info,
+                m_info = mut option::none: option<je::audio::buffer::buffer_data_t>,
                 m_status = mut "",
+                m_cache_ready = cache_ready,
             };
         }
         // 读取 <音频路径>.je4audio 中保存的流式播放配置：属性源文件不存在、
@@ -182,6 +189,29 @@ namespace JEEditor::Editor
         }
         func drawInfo(self: AudioProperties)=> void
         {
+            match (self.m_cache_ready->get)
+            {
+                // 后台还在生成缓存：显示占位，完成后的下一帧填入信息
+                none?
+                {
+                    TextDisabled("正在读取音频信息……");
+                    return;
+                }
+                value(cache_ok)?
+                {
+                    if (cache_ok && self.m_info->is_none)
+                    {
+                        // 缓存已就绪：这里的加载必然命中缓存，只有文件 IO
+                        match (je::audio::buffer::load(self.m_runtime_path))
+                        {
+                            value(buf)?
+                                self.m_info = option::value(buf->info());
+                            none?;
+                        }
+                    }
+                }
+            }
+
             match (self.m_info)
             {
                 none?

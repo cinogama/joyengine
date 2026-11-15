@@ -879,10 +879,10 @@ je_audio_effect_equalizer_create [基本接口]
 JE_API je_audio_effect_equalizer_t* je_audio_effect_equalizer_create();
 
 /*
-je_audio_effect_eaxreverb_create [基本接口]
+je_audio_effect_eax_reverb_create [基本接口]
 创建一个 EAX 混响效果实例
 */
-JE_API je_audio_effect_eax_reverb_t* je_audio_effect_eaxreverb_create();
+JE_API je_audio_effect_eax_reverb_t* je_audio_effect_eax_reverb_create();
 
 /*
 je_audio_effect_close [基本接口]
@@ -1034,7 +1034,7 @@ namespace jeecs
                 else if constexpr (std::is_same_v<T, je_audio_effect_equalizer_t>)
                     instance = je_audio_effect_equalizer_create();
                 else if constexpr (std::is_same_v<T, je_audio_effect_eax_reverb_t>)
-                    instance = je_audio_effect_eaxreverb_create();
+                    instance = je_audio_effect_eax_reverb_create();
                 else
                     static_assert(
                         std::is_void_v<T> && !std::is_void_v<T> /* false */,
