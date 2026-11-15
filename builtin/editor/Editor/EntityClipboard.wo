@@ -32,8 +32,9 @@ EntityClipboard：实体复制/粘贴的剪贴板。
 剪贴板为编辑器级共享状态，可跨视口/世界连续粘贴。供实体列表
 （EntityList.wo）与世界编辑器视口（WorldEditorViewport/ 下的
 EntityPicking.wo、WindowLifecycle.wo）共用。
-“创建...”子菜单由下方的实体快速创建预设表驱动，提供常用实体的
-一键创建（基本渲染/UI/带阴影实体、2D 光源、摄像机、物理场景配置等），
+“创建...”子菜单由下方的实体快速创建预设表驱动，按用途分组提供常用
+实体的一键创建：基础实体、UI、动画与特效、2D 光源、摄像机、2D 物理、
+音频与房间（音源/听者/遮挡/混响房间/门洞），
 预设数据沿自主分支 editor::gui::edit_forms::presets；点击同样发布
 可撤销的 CreateEntity 动作，实体名与默认着色器写入内容表由还原端
 落实。
@@ -54,9 +55,10 @@ namespace JEEditor::Editor::EntityClipboard
         public default_shader: option<string>,
     };
     
-    // 预设分组：组前绘制分隔线，区分基础实体/光源/摄像机/物理等类别
+    // 预设分组：组标题按实体用途分类（基础实体/UI/动画与特效/光照/摄像机/
+    // 物理/音频与房间），菜单里以 SeparatorText 呈现
     public using EntityPresetGroup = struct{
-        public separator_before: bool,
+        public title: string,
         public presets: array<EntityPreset>,
     };
     
@@ -64,7 +66,7 @@ namespace JEEditor::Editor::EntityClipboard
     // Renderer::Color（光源着色）
     let ENTITY_PRESET_GROUPS = [
         EntityPresetGroup{
-            separator_before = false,
+            title = "基础实体",
             presets = [
                 EntityPreset{
                     menu_label = "基本渲染实体",
@@ -73,6 +75,19 @@ namespace JEEditor::Editor::EntityClipboard
                         ->connect(BASE_RENDERER_COMPONENTS),
                     default_shader = option::none,
                 },
+                EntityPreset{
+                    menu_label = "带2D阴影的基本渲染实体",
+                    entity_name = "默认2D阴影物体",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(BASE_RENDERER_COMPONENTS)
+                        ->connect(LIGHT2D_SHADOW_COMMON_COMPONENTS),
+                    default_shader = option::none,
+                },
+            ],
+        },
+        EntityPresetGroup{
+            title = "UI",
+            presets = [
                 EntityPreset{
                     menu_label = "基本UI",
                     entity_name = "默认UI",
@@ -88,18 +103,10 @@ namespace JEEditor::Editor::EntityClipboard
                         ->connect(UI_TRANSFORM_COMPONENTS),
                     default_shader = option::value("@/resource/shader/UIText.shader"),
                 },
-                EntityPreset{
-                    menu_label = "带2D阴影的基本渲染实体",
-                    entity_name = "默认2D阴影物体",
-                    components = BASE_TRANSFORM_COMPONENTS
-                        ->connect(BASE_RENDERER_COMPONENTS)
-                        ->connect(LIGHT2D_SHADOW_COMMON_COMPONENTS),
-                    default_shader = option::none,
-                },
             ],
         },
         EntityPresetGroup{
-            separator_before = true,
+            title = "动画与特效",
             presets = [
                 EntityPreset{
                     menu_label = "粒子发射器",
@@ -114,7 +121,7 @@ namespace JEEditor::Editor::EntityClipboard
             ],
         },
         EntityPresetGroup{
-            separator_before = true,
+            title = "2D光照",
             presets = [
                 EntityPreset{
                     menu_label = "2D光源（点）",
@@ -149,7 +156,7 @@ namespace JEEditor::Editor::EntityClipboard
             ],
         },
         EntityPresetGroup{
-            separator_before = true,
+            title = "摄像机",
             presets = [
                 EntityPreset{
                     menu_label = "摄像机（透视）",
@@ -168,12 +175,54 @@ namespace JEEditor::Editor::EntityClipboard
             ],
         },
         EntityPresetGroup{
-            separator_before = true,
+            title = "2D物理",
             presets = [
                 EntityPreset{
                     menu_label = "物理场景配置",
                     entity_name = "物理场景配置",
                     components = PHYSICS2D_SCENE_COMPONENTS,
+                    default_shader = option::none,
+                },
+            ],
+        },
+        // 音频与房间：音源/听者是“发声与接收”实体；声音遮挡、混响房间
+        // 与音频门洞组成声学场景（房间图），配合 AudioUpdatingSystem 使用
+        EntityPresetGroup{
+            title = "音频与房间",
+            presets = [
+                EntityPreset{
+                    menu_label = "音源",
+                    entity_name = "音源",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(AUDIO_SOURCE_COMPONENTS),
+                    default_shader = option::none,
+                },
+                EntityPreset{
+                    menu_label = "音频监听器",
+                    entity_name = "音频监听器",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(AUDIO_LISTENER_COMPONENTS),
+                    default_shader = option::none,
+                },
+                EntityPreset{
+                    menu_label = "声音遮挡",
+                    entity_name = "声音遮挡",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(AUDIO_OCCLUDER_COMPONENTS),
+                    default_shader = option::none,
+                },
+                EntityPreset{
+                    menu_label = "混响房间",
+                    entity_name = "混响房间",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(AUDIO_REVERB_ROOM_COMPONENTS),
+                    default_shader = option::none,
+                },
+                EntityPreset{
+                    menu_label = "音频门洞",
+                    entity_name = "音频门洞",
+                    components = BASE_TRANSFORM_COMPONENTS
+                        ->connect(AUDIO_PORTAL_COMPONENTS),
                     default_shader = option::none,
                 },
             ],
@@ -250,14 +299,13 @@ namespace JEEditor::Editor::EntityClipboard
         {
             defer EndMenu();
             
-            // 快速创建预设：组分隔线隔开语义类别；悬停提示预设的全部
-            // 组件（有默认着色器时附注路径）；点击发布 CreateEntity 动作
-            //（MenuItem 点击后自动收起整个弹出层）
+            // 快速创建预设：按用途分组（组标题即分类），悬停提示预设的
+            // 全部组件（有默认着色器时附注路径）；点击发布 CreateEntity
+            // 动作（MenuItem 点击后自动收起整个弹出层）
             for (let group : ENTITY_PRESET_GROUPS)
             {
-                if (group.separator_before)
-                    Separator();
-                    
+                SeparatorText(group.title);
+
                 for (let preset : group.presets)
                 {
                     if (MenuItem(preset.menu_label))
