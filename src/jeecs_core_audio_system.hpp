@@ -85,6 +85,11 @@ namespace jeecs::audio
         uint64_t m_live_environment_signature;
         bool m_has_live_environment;
 
+        // 诊断日志状态：仅在生效环境/发送权重变化时打印一次
+        int m_logged_environment_kind;
+        size_t m_logged_environment_rooms;
+        size_t m_logged_environment_portals;
+
         // 地图路径 -> 音频遮挡网格（按 map_stamp 失效）
         std::unordered_map<std::string, audio_map_grid> m_audio_maps;
     };

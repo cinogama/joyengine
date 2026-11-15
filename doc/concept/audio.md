@@ -232,7 +232,7 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 
 * 同房间：只发送该房间混响；
 * 不同房间且有路径：源房间发送按路径 transmission 衰减、muffle 闷音，听者房间以 `0.25 × 听者权重 × 路径 transmission` 二次激发；
-* 无路径（封闭墙）：保留直接遮挡 fallback，墙后的混响仍会随遮挡增益减弱。
+* 无路径（没有连通门洞）：按墙体泄漏处理——源房间发送与听者房间二次激发都乘 `0.2` 透射、叠加 `0.7` 闷音，保证封闭房间仍有隔墙混响，同时让门洞明显更亮更响。
 
 **世界级烘焙 sidecar**：每个 `.je4world` 可以在同目录生成 `<world>.je4cache`，payload 是 binary cache document，其中 `audio_environment` 字段保存房间、门洞与路径表。sidecar 以世界文件 CRC64 为缓存键，世界保存后自动失效。运行时优先使用有效期内的 sidecar；sidecar 缺失/版本不符/`use_2d` 不一致时，从 `ReverbZone`/`Portal` 组件实时构建同样的环境，因此不烘焙也能正常工作。
 

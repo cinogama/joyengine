@@ -2,7 +2,9 @@
 #include "jeecs/audio.hpp"
 #include "jeecs/basic.hpp"
 #include "jeecs/components.hpp"
+#include "jeecs/debug.hpp"
 #include "jeecs/game.hpp"
+#include "jeecs/logging.hpp"
 #include "jeecs/prefix.hpp"
 #include "jeecs_core_audio_system.hpp"
 #include "jeecs_core_tilemap_model.hpp"
@@ -32,6 +34,13 @@ namespace jeecs::audio
         // 声源不在听者房间时，穿过墙/门洞的声音仍会激发听者房间的混响。
         // 该系数是这种二次激发的发送上限。
         constexpr float LISTENER_ROOM_EXCITATION = 0.25f;
+
+        // 两个房间之间没有门洞连接时，跨房间湿声按“墙体泄漏”计算：
+        // 少量透射 + 强闷音。不能像以前那样无路径就不做路径衰减——那等于
+        // 把墙当成 transmission=1、muffle=0 的敞开门，任何门洞（甚至
+        // transmission=0.8）反而比无门洞更安静、更闷，听感上几乎没有区别。
+        constexpr float WALL_WET_TRANSMISSION = 0.2f;
+        constexpr float WALL_WET_MUFFLE = 0.7f;
 
         struct occluder_snapshot
         {
@@ -440,6 +449,9 @@ namespace jeecs::audio
         , m_live_environment()
         , m_live_environment_signature(0)
         , m_has_live_environment(false)
+        , m_logged_environment_kind(-1)
+        , m_logged_environment_rooms(0)
+        , m_logged_environment_portals(0)
         , m_audio_maps()
     {
     }
@@ -575,6 +587,13 @@ namespace jeecs::audio
             if (!environment_cache_path.empty())
                 m_baked_environment = load_audio_environment_cache(
                     environment_cache_path.c_str());
+
+            debug::loginfo(
+                "Audio environment cache: '%s' (%s).",
+                environment_cache_path.empty()
+                ? "<none>"
+                : environment_cache_path.c_str(),
+                m_baked_environment.has_value() ? "loaded" : "miss");
         }
 
         // 实时环境：组件签名变化时重建（sidecar 缺失/不可用时使用）
@@ -597,6 +616,40 @@ namespace jeecs::audio
             environment = &m_baked_environment.value();
         else if (m_has_live_environment)
             environment = &m_live_environment;
+
+        // 诊断日志：生效的音频环境只在来源/房间数/门洞数变化时打印一次，
+        // 用于确认运行时到底用的是烘焙图还是实时图、门洞是否被接受。
+        {
+            const bool is_baked_environment =
+                m_baked_environment.has_value()
+                && environment == &m_baked_environment.value();
+            const int environment_kind =
+                environment == nullptr
+                ? 0
+                : (is_baked_environment ? 1 : 2);
+            const size_t environment_rooms =
+                environment != nullptr ? environment->m_rooms.size() : 0;
+            const size_t environment_portals =
+                environment != nullptr ? environment->m_portals.size() : 0;
+
+            if (environment_kind != m_logged_environment_kind
+                || environment_rooms != m_logged_environment_rooms
+                || environment_portals != m_logged_environment_portals)
+            {
+                m_logged_environment_kind = environment_kind;
+                m_logged_environment_rooms = environment_rooms;
+                m_logged_environment_portals = environment_portals;
+
+                debug::loginfo(
+                    "Audio environment: %s, rooms=%zu portals=%zu, use_2d=%d.",
+                    environment_kind == 1
+                    ? "baked"
+                    : (environment_kind == 2 ? "live" : "none"),
+                    environment_rooms,
+                    environment_portals,
+                    listener_2d ? 1 : 0);
+            }
+        }
 
         // 注意：环境图变化时不整体清空 m_reverb_rooms。房间 id 由确定性
         // 构建产生，拖动房间（尺寸/位置/淡出）只改变几何、声学参数不变，
@@ -811,7 +864,10 @@ namespace jeecs::audio
                 if (!source.occlusion_filter.has_value())
                     source.occlusion_filter.emplace(filter::create());
 
-                if (source.applied_occlusion_hf != occlusion.m_hf)
+                const bool occlusion_hf_changed =
+                    source.applied_occlusion_hf != occlusion.m_hf;
+
+                if (occlusion_hf_changed)
                 {
                     source.occlusion_filter.value()->update(
                         [&](je_audio_filter_t* filter_data)
@@ -822,7 +878,9 @@ namespace jeecs::audio
                     source.applied_occlusion_hf = occlusion.m_hf;
                 }
 
-                if (!source.occlusion_filter_bound)
+                // 同发送滤波器：OpenAL 在绑定时拷贝滤波器参数，只改滤波器
+                // 对象不会生效，闷音变化时必须重新绑定。
+                if (!source.occlusion_filter_bound || occlusion_hf_changed)
                 {
                     source.source->set_filter(
                         std::optional<basic::resource<filter>>(
@@ -897,15 +955,23 @@ namespace jeecs::audio
                     float weight = source_weights[i];
                     float hf = occlusion.m_hf;
 
-                    if (source_room->m_id != listener_room_id
-                        && path.m_transmission > REVERB_WEIGHT_EPSILON)
+                    if (source_room->m_id != listener_room_id)
                     {
-                        weight *= path.m_transmission;
-                        hf *= 1.0f - path.m_muffle;
+                        if (path.m_transmission > REVERB_WEIGHT_EPSILON)
+                        {
+                            weight *= path.m_transmission;
+                            hf *= 1.0f - path.m_muffle;
+                        }
+                        else
+                        {
+                            // 无门洞：按墙体泄漏衰减。声源整体增益（含直接
+                            // 遮挡增益）已经作用在这路发送上，这里再叠加
+                            // 墙体的透射与闷音，保证封闭房间仍有隔墙混响，
+                            // 同时让门洞明显更亮更响。
+                            weight *= WALL_WET_TRANSMISSION;
+                            hf *= 1.0f - WALL_WET_MUFFLE;
+                        }
                     }
-
-                    // 无路径时保留直接遮挡 fallback：source 房间混响会随
-                    // 声源整体增益（含遮挡增益）衰减，仍能穿过墙听到尾巴。
                     reverb_candidates[reverb_candidate_count++] =
                         reverb_candidate{ source_room, weight, hf };
                 }
@@ -947,6 +1013,13 @@ namespace jeecs::audio
                             weight *= path.m_transmission;
                             hf *= 1.0f - path.m_muffle;
                         }
+                        else
+                        {
+                            // 无门洞：墙体泄漏，听者房间只被很轻很闷地激发；
+                            // 有门洞时才会明显“透进来”。
+                            weight *= WALL_WET_TRANSMISSION;
+                            hf *= 1.0f - WALL_WET_MUFFLE;
+                        }
 
                         reverb_candidates[reverb_candidate_count++] =
                             reverb_candidate{
@@ -986,8 +1059,11 @@ namespace jeecs::audio
                 // EFX 没有 per-send gain：用该路发送的低通滤波器 gain 代替。
                 // 声源整体增益已经包含遮挡增益，这里只补房间权重、门洞路径
                 // 衰减与高频闷音。
-                if (send.applied_gain != candidate.m_weight
-                    || send.applied_hf != candidate.m_hf)
+                const bool send_gain_changed =
+                    send.applied_gain != candidate.m_weight
+                    || send.applied_hf != candidate.m_hf;
+
+                if (send_gain_changed)
                 {
                     send.applied_gain = candidate.m_weight;
                     send.applied_hf = candidate.m_hf;
@@ -1000,9 +1076,22 @@ namespace jeecs::audio
                             filter_data->m_gain = candidate.m_weight;
                             filter_data->m_gain_hf = candidate.m_hf;
                         });
+
+                    // 诊断日志：发送权重变化时打印一次（正常情况下只在
+                    // 跨房间/改房间参数/门洞参数时出现）
+                    debug::loginfo(
+                        "Audio send: slot=%zu room=%u weight=%.3f hf=%.3f.",
+                        send_index,
+                        (unsigned)candidate.m_room->m_id,
+                        candidate.m_weight,
+                        candidate.m_hf);
                 }
 
+                // OpenAL 在 alSource3i(AL_AUXILIARY_SEND_FILTER) 时把滤波器的
+                // gain/gain_hf 拷贝进 voice；之后单独改滤波器不会生效。所以
+                // 发送权重变化时也必须重新绑定发送。
                 if (!send.filter_bound
+                    || send_gain_changed
                     || send.room_id != candidate.m_room->m_id
                     || send.room_epoch != room.m_slot_epoch)
                 {

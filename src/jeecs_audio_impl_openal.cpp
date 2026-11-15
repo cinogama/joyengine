@@ -2917,6 +2917,16 @@ namespace jeecs::audio
                 lock_guard g4(m_effect_slots_mx); // g4
                 lock_guard g1(m_sources_mx);      // g1
 
+                // 声源还没有 native 实例（首次提交发送）：设备存在时先建立
+                // 虚拟实例。否则发送状态会写进设备转储，稍后分配 voice 时
+                // 不会从转储提交，导致这路发送永久丢失。
+                if (source->m_source_instance == nullptr
+                    && m_current_play_device.has_value())
+                {
+                    shared_lock g0(m_context_mx); // g0
+                    update_source_lockfree(source);
+                }
+
                 for (;;)
                 {
                     if (source->m_source_instance != nullptr)
@@ -2981,6 +2991,15 @@ namespace jeecs::audio
 
                 lock_guard g5(m_filters_mx);       // g5
                 lock_guard g1(m_sources_mx);       // g1
+
+                // 同发送：声源还没有实例时先建立虚拟实例，避免把滤波器状态
+                // 写进设备转储、分配 voice 时丢失。
+                if (source->m_source_instance == nullptr
+                    && m_current_play_device.has_value())
+                {
+                    shared_lock g0(m_context_mx); // g0
+                    update_source_lockfree(source);
+                }
 
                 for (;;)
                 {
