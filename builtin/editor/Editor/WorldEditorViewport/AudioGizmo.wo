@@ -51,6 +51,7 @@ namespace JEEditor::Editor::WorldEditorViewport
 
     // 音频 gizmo 配色（ImGui Color32RGBA，屏幕空间绘制直接用）
     protected let AUDIO_SOURCE_COLOR = (219, 134, 63, 220);
+    protected let AUDIO_REF_RANGE_COLOR = (255, 210, 140, 235); // 参考距离手柄/范围圈
     protected let AUDIO_LISTENER_COLOR = (100, 160, 230, 220);
     protected let AUDIO_OCCLUDER_COLOR = (150, 152, 158, 220);
     protected let AUDIO_REVERB_COLOR = (178, 128, 255, 210);
@@ -325,7 +326,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         if (handle == AUDIO_HANDLE_SOURCE_MAX)
             return (219, 134, 63, 235);
         if (handle == AUDIO_HANDLE_SOURCE_REF)
-            return (255, 210, 140, 235);
+            return AUDIO_REF_RANGE_COLOR;
         if (handle == AUDIO_HANDLE_LISTENER_FACE)
             return (100, 160, 230, 235);
 
@@ -929,6 +930,30 @@ namespace JEEditor::Editor::WorldEditorViewport
                     }
                 }
 
+                // 虚线圆环：距离范围的外圈用它，和实线的参考距离圈区分
+                func drawCircleXYDashed(
+                    center: vec3, rotation: quat, radius: real,
+                    color: Color32RGBA)=> void
+                {
+                    let segments = 48;
+                    for (let mut i = 0; i < segments; i += 2)
+                    {
+                        let a0 = 2. * mathf::PI
+                            * (i as real / segments as real);
+                        let a1 = 2. * mathf::PI
+                            * ((i + 1) as real / segments as real);
+
+                        let p0 = center + rotation * (
+                            (mathf::cos(a0) * radius,
+                                mathf::sin(a0) * radius, 0.) as vec3);
+                        let p1 = center + rotation * (
+                            (mathf::cos(a1) * radius,
+                                mathf::sin(a1) * radius, 0.) as vec3);
+
+                        screenEdge(p0, p1, color, 1.2);
+                    }
+                }
+
                 func wireColor(kind: int, selected: bool)=> Color32RGBA
                 {
                     let base = audioKindColor(kind);
@@ -1095,20 +1120,36 @@ namespace JEEditor::Editor::WorldEditorViewport
                             {
                                 try! source =
                                     e->towoo::get_component:<Audio::Source>();
-                                if (source.spatial->get)
+                                let spatial_on = source.spatial->get;
+                                let max_distance = source.max_distance->get;
+                                let ref_distance =
+                                    source.reference_distance->get;
+
+                                // 距离范围圈：参考距离实线（亮黄）、最大距离
+                                // 虚线（源色）。非空间音源的距离参数不参与
+                                // 衰减，但手柄仍可编辑，范围圈画淡一些以示
+                                // “当前不生效”；悬停/拖拽对应手柄时高亮该圈。
+                                let max_ring = (base.0, base.1, base.2,
+                                    spatial_on ? 190 | 70);
+                                let ref_ring = (
+                                    AUDIO_REF_RANGE_COLOR.0,
+                                    AUDIO_REF_RANGE_COLOR.1,
+                                    AUDIO_REF_RANGE_COLOR.2,
+                                    spatial_on ? 235 | 110);
+
+                                if (max_distance > 0.0001)
+                                    drawCircleXYDashed(pos, rotation,
+                                        max_distance,
+                                        active_handle == AUDIO_HANDLE_SOURCE_MAX
+                                            ? AUDIO_HOVER_COLOR | max_ring);
+                                if (ref_distance > 0.0001)
+                                    drawCircleXY(pos, rotation,
+                                        ref_distance,
+                                        active_handle == AUDIO_HANDLE_SOURCE_REF
+                                            ? AUDIO_HOVER_COLOR | ref_ring);
+
+                                if (spatial_on)
                                 {
-                                    let max_distance = source.max_distance->get;
-                                    let ref_distance =
-                                        source.reference_distance->get;
-
-                                    if (max_distance > 0.0001)
-                                        drawCircleXY(pos, rotation,
-                                            max_distance,
-                                            (base.0, base.1, base.2, 150));
-                                    if (ref_distance > 0.0001)
-                                        drawCircleXY(pos, rotation,
-                                            ref_distance, hot_color);
-
                                     let dir =
                                         audioSourceDirectionWorld(rotation, source);
                                     let arrow_len = (max_distance > 1.)
