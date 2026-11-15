@@ -79,6 +79,23 @@ namespace jeecs::audio
             return result;
         }
 
+        // 门洞两侧的房间解析必须是“点在房间内”的硬判定：fade 是混响发送
+        // 权重在房间外侧的衰减距离，不代表该点属于房间。默认 fade=1 时，
+        // 贴在墙上的门洞两侧会同时落进 fade 带，被算成同一个房间而失效。
+        uint32_t find_room_inside(
+            const std::vector<audio_environment_room>& rooms,
+            const math::vec3& point,
+            bool use_2d)
+        {
+            for (const auto& room : rooms)
+            {
+                // 点在 OBB 内时 room_weight 恰好返回 1.0
+                if (room_weight(point, room, use_2d) >= 1.0f)
+                    return room.m_id;
+            }
+            return AUDIO_OUTDOOR_ROOM_ID;
+        }
+
         bool vec_less(const math::vec3& a, const math::vec3& b) noexcept
         {
             if (a.x != b.x)
@@ -308,9 +325,9 @@ namespace jeecs::audio
             const float offset =
                 std::max(source.m_half_thickness, 0.01f) + 0.01f;
 
-            const uint32_t room_a = find_room(
+            const uint32_t room_a = find_room_inside(
                 result.m_rooms, source.m_center + normal * offset, use_2d);
-            const uint32_t room_b = find_room(
+            const uint32_t room_b = find_room_inside(
                 result.m_rooms, source.m_center - normal * offset, use_2d);
 
             if (room_a == room_b)
