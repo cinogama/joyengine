@@ -2,7 +2,6 @@
 #include "jeecs/audio.hpp"
 #include "jeecs/basic.hpp"
 #include "jeecs/components.hpp"
-#include "jeecs/debug.hpp"
 #include "jeecs/game.hpp"
 #include "jeecs/logging.hpp"
 #include "jeecs/prefix.hpp"
@@ -401,8 +400,6 @@ namespace jeecs::audio
         , m_live_environment()
         , m_live_environment_signature(0)
         , m_has_live_environment(false)
-        , m_logged_environment_rooms((size_t)-1)
-        , m_logged_environment_portals((size_t)-1)
         , m_occlusion_field()
         , m_loaded_occlusion_cache_path()
         , m_occlusion_cache_reload_requested(false)
@@ -542,13 +539,6 @@ namespace jeecs::audio
             if (!world_cache_path.empty())
                 m_occlusion_field = load_audio_occlusion_cache(
                     world_cache_path.c_str());
-
-            debug::loginfo(
-                "Audio occlusion cache: '%s' (%s).",
-                world_cache_path.empty()
-                ? "<none>"
-                : world_cache_path.c_str(),
-                m_occlusion_field.has_value() ? "loaded" : "miss");
         }
 
         // 缓存自校验：静态遮挡体/地图被编辑后（世界文件可能尚未保存），
@@ -564,11 +554,7 @@ namespace jeecs::audio
                 const uint64_t current_inputs =
                     hash_static_occlusion_inputs(get_world().handle());
                 if (current_inputs != m_occlusion_field->m_inputs)
-                {
-                    debug::loginfo(
-                        "Audio occlusion cache outdated, using live occlusion.");
                     m_occlusion_field.reset();
-                }
             }
         }
 
@@ -586,26 +572,6 @@ namespace jeecs::audio
         }
 
         const audio_environment* environment = &m_live_environment;
-
-        // 诊断日志：房间/门洞数量变化时打印一次
-        {
-            const size_t environment_rooms = environment->m_rooms.size();
-            const size_t environment_portals =
-                environment->m_portals.size();
-
-            if (environment_rooms != m_logged_environment_rooms
-                || environment_portals != m_logged_environment_portals)
-            {
-                m_logged_environment_rooms = environment_rooms;
-                m_logged_environment_portals = environment_portals;
-
-                debug::loginfo(
-                    "Audio environment: live, rooms=%zu portals=%zu, use_2d=%d.",
-                    environment_rooms,
-                    environment_portals,
-                    listener_2d ? 1 : 0);
-            }
-        }
 
         // 注意：环境图变化时不整体清空 m_reverb_rooms。房间 id 由确定性
         // 构建产生，拖动房间（尺寸/位置/淡出）只改变几何、声学参数不变，
@@ -1106,15 +1072,6 @@ namespace jeecs::audio
                             filter_data->m_gain = candidate.m_weight;
                             filter_data->m_gain_hf = candidate.m_hf;
                         });
-
-                    // 诊断日志：发送权重变化时打印一次（正常情况下只在
-                    // 跨房间/改房间参数/门洞参数时出现）
-                    debug::loginfo(
-                        "Audio send: slot=%zu room=%u weight=%.3f hf=%.3f.",
-                        send_index,
-                        (unsigned)candidate.m_room->m_id,
-                        candidate.m_weight,
-                        candidate.m_hf);
                 }
 
                 // OpenAL 在 alSource3i(AL_AUXILIARY_SEND_FILTER) 时把滤波器的

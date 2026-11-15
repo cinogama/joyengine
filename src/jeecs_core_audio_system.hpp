@@ -61,10 +61,6 @@ namespace jeecs::audio
         uint64_t m_live_environment_signature;
         bool m_has_live_environment;
 
-        // 诊断日志状态：仅在房间/门洞数量变化时打印一次
-        size_t m_logged_environment_rooms;
-        size_t m_logged_environment_portals;
-
         // 世界级 2D 静态遮挡场：由 World::Path 指向的缓存加载；缺失、
         // 输入变化（静态遮挡体/地图被编辑）或 3D 模式时走实时遮挡。
         std::optional<audio_occlusion_field> m_occlusion_field;
