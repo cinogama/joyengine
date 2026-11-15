@@ -475,8 +475,9 @@ WOORT_API woort_api wojeapi_entity_selector_create(void)
                 for (size_t j = 0; j < anyof_count; ++j)
                 {
                     (void)woort_vec_get(requirement_info, elem, j);
+                    // 向量元素是装箱值，必须解箱取指针
                     const auto* typeinfo =
-                        static_cast<const je_type_info_t*>(woort_pointer(requirement_info));
+                        static_cast<const je_type_info_t*>(woort_unbox_pointer(requirement_info));
                     requirements.push_back(je_component_requirement_t{
                         JE_COMPONENT_REQUIRE_ANYOF_0 + anyof_group,
                         typeinfo->m_id });
