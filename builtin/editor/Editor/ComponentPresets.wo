@@ -74,8 +74,9 @@ namespace JEEditor::Editor::ComponentPresets
         "Renderer::Textures2D",
     ];
 
-    // 音频/声学场景：音源、听者与房间图（ReverbZone 房间 + Portal 门洞）
-    public let AUDIO_SOURCE_COMPONENTS = ["Audio::Source"];
+    // 音频/声学场景：音源（Source + Spatial = 空间化）、听者与房间图
+    //（ReverbZone 房间 + Portal 门洞）；只要非空间音源时移除 Spatial
+    public let AUDIO_SOURCE_COMPONENTS = ["Audio::Source", "Audio::Spatial"];
     public let AUDIO_LISTENER_COMPONENTS = ["Audio::Listener"];
     public let AUDIO_OCCLUDER_COMPONENTS = ["Audio::Occluder"];
     public let AUDIO_REVERB_ROOM_COMPONENTS = ["Audio::ReverbZone"];

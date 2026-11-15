@@ -102,6 +102,7 @@ namespace jeecs
             jeecs::typing::register_type<Physics2D::CollisionResult>(guard, "Physics2D::CollisionResult");
 
             jeecs::typing::register_type<Audio::Source>(guard, "Audio::Source");
+            jeecs::typing::register_type<Audio::Spatial>(guard, "Audio::Spatial");
             jeecs::typing::register_type<Audio::Listener>(guard, "Audio::Listener");
             jeecs::typing::register_type<Audio::Occluder>(guard, "Audio::Occluder");
             jeecs::typing::register_type<Audio::ReverbZone>(guard, "Audio::ReverbZone");

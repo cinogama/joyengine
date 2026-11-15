@@ -733,11 +733,13 @@ namespace jeecs::audio
         };
 
         // ==================== 4. 音源 ====================
-        for (auto&& [source, trans] : query<
-            view typesof(Audio::Source&, Transform::Translation*)
+        // Audio::Spatial 是 flag 组件：配对它的 Source 才空间化（还需
+        // Transform）；否则相对听者播放（UI 提示、环境声）。
+        for (auto&& [source, spatial, trans] : query<
+            view typesof(Audio::Source&, Audio::Spatial*, Transform::Translation*)
         >())
         {
-            const bool spatial_active = source.spatial && trans != nullptr;
+            const bool spatial_active = spatial != nullptr && trans != nullptr;
 
             math::vec3 position(0.0f, 0.0f, 0.0f);
             math::vec3 velocity(0.0f, 0.0f, 0.0f);

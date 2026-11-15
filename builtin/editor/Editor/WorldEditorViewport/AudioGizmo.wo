@@ -715,7 +715,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                 value(source)?
                 {
                     let spatial =
-                        source.spatial->get ? "空间" | "非空间";
+                        e->towoo::get_component:<Audio::Spatial>->is_value
+                            ? "空间" | "非空间";
                     let playing =
                         source.play->get ? "播放" | "暂停";
                     return F"音源  {spatial}  {playing}  最大 {source.max_distance->get}";
@@ -1126,7 +1127,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                             {
                                 try! source =
                                     e->towoo::get_component:<Audio::Source>();
-                                let spatial_on = source.spatial->get;
+                                let spatial_on =
+                                    e->towoo::get_component:<Audio::Spatial>
+                                        ->is_value;
                                 let max_distance = source.max_distance->get;
                                 let ref_distance =
                                     source.reference_distance->get;

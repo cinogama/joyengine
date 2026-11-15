@@ -50,7 +50,6 @@
 | `pitch` | 1 | 播放速度/音调 |
 | `play` | true | 播放/暂停开关：false 暂停，再 true 从暂停处继续 |
 | `loop` | true | 是否循环 |
-| `spatial` | true | false = 相对听者（UI/环境声），不做距离衰减与左右声像 |
 | `bus` | `SE` | 音量总线分组（BGM/BGS/ME/SE/VOICE + 自定义槽位）；`NONE` = 不经过总线 |
 | `reference_distance` | 1 | 参考距离：此距离内为满增益（钳制模型） |
 | `max_distance` | 32 | 最大距离：线性钳制模型下衰减到此距离归零 |
@@ -73,7 +72,9 @@
 
 ⚠️ `play` 与 `loop` 默认都是 true：一个设置了 `buffer` 的新 `Source` 会立即开始循环播放。一次性音效请把 `loop` 设为 false，或改用一次性播放接口。
 
-实体没有 `Transform::Translation`（或 `spatial = false`）时，声源按“相对听者”播放：不做距离衰减、不做左右声像，适合挂在 UI 实体上的音效。
+### 空间化开关：`Audio::Spatial`
+
+`Audio::Spatial` 是 flag 组件：实体配对 `Audio::Source` + `Audio::Spatial` 才是**空间化音源**——受听者位置、距离衰减与遮挡/混响影响；没有 `Spatial` 的 `Source` 按“相对听者”播放（不做距离衰减、不做左右声像），适合挂在 UI 实体上的音效与环境声。空间化还需要实体带 `Transform::Translation`（没有时同样退回相对听者）。编辑器“添加组件 → 音频 → 音源”预设会同时挂上 `Spatial`；做 UI 音效时把 `Spatial` 组件移除即可。
 
 ### 2D 与 3D：`Audio::Listener`
 
@@ -108,7 +109,7 @@
 * 听者全局唯一：存在多个 `Listener` 组件时，它们会先后写入同一个全局听者、相互覆盖，**请只保留一个**；
 * Woolang 的 `je::audio::listener::update` 还能设置 `global_gain`（全局增益），实际音量为 `volume × global_gain`，组件不会改动它，适合用作总音量。
 
-⚠️ openal-soft 默认**只对单声道音频做空间化**。本引擎在设备支持 `AL_SOFT_source_spatialize` 时会给 `spatial = true` 的声源强制开启空间化（立体声缓冲会先下混），但定位音效仍建议使用单声道 WAV；`spatial = false` 的立体声（BGM 等）保持原样。
+⚠️ openal-soft 默认**只对单声道音频做空间化**。本引擎在设备支持 `AL_SOFT_source_spatialize` 时会给带 `Audio::Spatial` 的声源强制开启空间化（立体声缓冲会先下混），但定位音效仍建议使用单声道 WAV；不带 `Spatial` 的立体声（BGM 等）保持原样。
 
 耳机下 openal-soft 可以启用 HRTF 双耳渲染。引擎创建 context 时允许后端自动选择（`ALC_SOFT_HRTF` 的 `DONT_CARE`），并在日志中记录实际状态；是否真正启用取决于设备、耳机检测与用户的 openal 配置。
 
@@ -194,7 +195,7 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 
 系统行为：
 
-* **按声源选区域**：对每个 `spatial` 声源计算它到各区域的有符号距离。区域内权重为 1，向外在 `fade` 距离内平滑降到 0；最多取权重最高的两个区域同时发送，重叠区域因此可以自然交叉淡化，不再“体积最小者通吃”。权重并列（房间嵌套：内外房间同为 1）时小房间排前——声源的主房间（二次激发的路径查询用）与听者所在房间都取它实际所在的最内层房间，门洞两侧的解析同样如此。
+* **按声源选区域**：对每个空间化声源（带 `Audio::Spatial`）计算它到各区域的有符号距离。区域内权重为 1，向外在 `fade` 距离内平滑降到 0；最多取权重最高的两个区域同时发送，重叠区域因此可以自然交叉淡化，不再“体积最小者通吃”。权重并列（房间嵌套：内外房间同为 1）时小房间排前——声源的主房间（二次激发的路径查询用）与听者所在房间都取它实际所在的最内层房间，门洞两侧的解析同样如此。
 * **权重即发送增益**：EFX 没有 per-send gain，系统用该路发送的低通滤波器 `gain` 表示区域权重，用 `gain_hf` 复用遮挡的高频衰减。声源整体增益已经包含遮挡增益，所以墙后的混响尾巴既更轻、也更闷。
 * **听者房间的二次激发**：声源不在听者所在区域时，额外把它的一小部分声音送进听者区域的混响槽（上限 `0.25 × 听者区域权重`），模拟穿过墙/门洞的声音激发室内混响。声源已经在听者区域内时不会重复添加。
 * **湿声遮挡**：发送滤波器的高频与直达声使用同一个遮挡高频系数；墙后的洞穴混响是闷的，不会出现“直达声闷、混响亮”的割裂。
@@ -481,7 +482,7 @@ audio::play_oneshot(desc);
 2. **音频环境**：收集 `Audio::ReverbZone + Translation`（房间）与 `Audio::Portal + Translation`（门洞，跳过 `enabled = false`）的组件快照；房间/门洞图始终由组件实时构建（输入签名变化时才重建），不写缓存。图包含房间 OBB、门洞连接和全房间对路径表；区域效果槽不在这里创建，而是等声源真正用到时按需创建。
 3. **遮挡快照**：收集所有 `Audio::Occluder + Translation`；瓦片地图按 `map_stamp` 平整化成网格缓存（编辑时重建），遮挡全部逐帧实时测试。
 4. **Source + Translation（可选）**：
-   * `spatial = false` 或没有 Translation → relative，位置/速度写 0；
+   * 没有 `Audio::Spatial` 或没有 Translation → relative，位置/速度写 0；
    * 2D 听者下把声源位置/速度的 z 归零；
    * 对每个空间化声源计算遮挡：逐遮挡体 2D 矩形/3D OBB 测试 + 瓦片地图 DDA，得到 `occlusion.m_gain` 与 `occlusion.m_hf`；
    * `m_gain = volume × occlusion.m_gain`；`occlusion.m_hf < 1` 时按需创建/更新 per-source 低通滤波器并绑定（`AL_DIRECT_FILTER`），恢复时解绑；

@@ -2423,8 +2423,8 @@ namespace jeecs
         je::audio::play_once_* 或 Audio::Source::play_oneshot 播放。
 
         buffer 为空时声源不播放；play 为 false 时暂停，循环播放自然结束
-        时 play 会自动置为 false。spatial 为 false 或实体没有 Transform
-        时按相对听众（UI/环境声）处理，不做距离衰减与左右声像。
+        时 play 会自动置为 false。实体配对 Audio::Spatial 才是空间化音源
+        （见 Audio::Spatial）；否则按相对听众（UI/环境声）处理。
 
         direction 是声源局部朝向，乘实体世界旋转后作为锥形指向的轴；
         cone_* 默认 360°（无方向性）。air_absorption 需要设备支持 EFX。
@@ -2449,7 +2449,6 @@ namespace jeecs
             float pitch;
             bool play;
             bool loop;
-            bool spatial;
             je_audio_bus_t bus;
             float reference_distance;
             float max_distance;
@@ -2505,7 +2504,6 @@ namespace jeecs
                 , pitch(1.0f)
                 , play(true)
                 , loop(true)
-                , spatial(true)
                 , bus(JE_AUDIO_BUS_SE)
                 , reference_distance(1.0f)
                 , max_distance(32.0f)
@@ -2540,7 +2538,6 @@ namespace jeecs
                 pitch = another.pitch;
                 play = another.play;
                 loop = another.loop;
-                spatial = another.spatial;
                 bus = another.bus;
                 reference_distance = another.reference_distance;
                 max_distance = another.max_distance;
@@ -2560,7 +2557,6 @@ namespace jeecs
                 , pitch(another.pitch)
                 , play(another.play)
                 , loop(another.loop)
-                , spatial(another.spatial)
                 , bus(another.bus)
                 , reference_distance(another.reference_distance)
                 , max_distance(another.max_distance)
@@ -2600,7 +2596,6 @@ namespace jeecs
                 typing::register_member(guard, &Source::pitch, "pitch");
                 typing::register_member(guard, &Source::play, "play");
                 typing::register_member(guard, &Source::loop, "loop");
-                typing::register_member(guard, &Source::spatial, "spatial");
                 typing::register_member(guard, &Source::bus, "bus");
                 typing::register_member(guard, &Source::reference_distance, "reference_distance");
                 typing::register_member(guard, &Source::max_distance, "max_distance");
@@ -2613,6 +2608,15 @@ namespace jeecs
                 typing::register_member(guard, &Source::air_absorption, "air_absorption");
                 typing::register_member(guard, &Source::direction, "direction");
             }
+        };
+        /*
+        Audio::Spatial [组件]
+        flag 组件：持有它的 Audio::Source 是空间化音源——受听者位置、距离
+        衰减与遮挡/混响影响；没有它的音源相对听者播放（UI 提示、环境声）。
+        空间化还需要实体带 Transform（没有时退回相对听者）。
+        */
+        struct Spatial
+        {
         };
         /*
         Audio::Listener [组件]
