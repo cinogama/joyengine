@@ -675,7 +675,17 @@ namespace jeecs::audio
                     states.m_sources_dump[source] = shutdown_source_native_instance(source);
                 }
 
-                // 设备上下文即将销毁，池中的 voice id 一并作废。
+                // 设备上下文即将销毁，池中的 voice id 一并作废：显式归还
+                // 给 OpenAL（此时上下文仍在，销毁发生在其后的
+                // deactive_using_device）。留在上下文里等 alcDestroyContext
+                // 兜底回收会触发 "[ALSOFT] (WW) N Source not deleted"。
+                // 热插拔切换设备也走这里，旧设备的声部同样需要归还。
+                if (!m_free_voices.empty())
+                {
+                    alDeleteSources(
+                        (ALsizei)m_free_voices.size(),
+                        m_free_voices.data());
+                }
                 m_free_voices.clear();
                 m_allocated_voice_count = 0;
                 m_voice_limit_reached = false;
@@ -1978,7 +1988,8 @@ namespace jeecs::audio
                     auto* instance = source_instance->m_source_instance;
                     if (instance->m_source_id != 0)
                     {
-                        // 硬件声源归还池中复用；设备销毁时池会被整体丢弃
+                        // 硬件声源归还池中复用；设备销毁时池整体归还
+                        // OpenAL（见 dump_and_close_playing_states）
                         alSourceStop(instance->m_source_id);
                         alSourcei(instance->m_source_id, AL_BUFFER, 0);
                         release_streaming_chunk_buffers(instance);
