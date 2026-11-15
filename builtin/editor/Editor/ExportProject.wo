@@ -30,24 +30,19 @@ import pkg::toml;
 import pkg::worst;
 
 import je;
-import je::ecs;
 import je::graphic;
 import je::gui;
 import je::internal;
 import je::cache;
-import je::audio;
 
 import builtin::editor::GUI::Windows;
-import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::Editor::ModulePrepare;
 import builtin::editor::Editor::Template;
 import builtin::editor::Editor::Project;
 import builtin::editor::Editor::ResourcePath;
 import builtin::editor::Editor::WorldEditorViewport;
-import builtin::editor::Editor::Saving::World;
 
 import builtin::editor::Singleton;
-import builtin::editor::Singleton::Universe;
 import builtin::editor::GUI::Theme;
 
 using std;
@@ -935,54 +930,6 @@ namespace JEEditor::Editor
             }
             return result->unsafe::asarray;
         }
-        
-        // 导出前准备音频遮挡烘焙用的世界副本：先保存所有已打开的世界，
-        // 再把项目内全部 .je4world 从磁盘恢复到临时世界。
-        // 烘焙本身不在这里做：调用方（协程）让出一帧、等宇宙更新处理完
-        // 临时世界的命令缓冲区后，把返回的列表交给独立后台线程烘焙。
-        // 返回 none 表示失败（已弹错误框并清理已创建的世界）。
-        func prepareWorldsForAudioBake(self: ExportProject)
-            => option<array<(world, string)>>
-        {
-            // sidecar 以世界文件 CRC 为键，先统一落盘，再按落盘内容烘焙
-            if (!WorldEditorViewport::saveAllWorldsChecked())
-            {
-                JEEditor::GUI::Forms::MsgBox::err(
-                    "导出", "保存已打开的世界失败，已中止音频遮挡烘焙");
-                return option::none;
-            }
-
-            let mut worlds = []mut: vec<(world, string)>;
-
-            for (let entry : self.m_worlds)
-            {
-                // scanWorlds 产生 @/ 打包键；读取文件用本地路径。
-                let path = ResourcePath::toLocalResourcePath(entry.0);
-
-                match (toml::load(path))
-                {
-                    err(msg)?
-                    {
-                        JEEditor::GUI::Forms::MsgBox::err(
-                            "导出",
-                            F"读取世界 \"{path->to_string()}\" 失败：{msg}");
-
-                        for (let (w, _) : worlds)
-                            w->close();
-
-                        return option::none;
-                    }
-                    ok(wdat)?
-                    {
-                        let w = JEEditor::Saving::World::restoreForBake(
-                            Singleton::Universe::getUniverse(), wdat);
-                        worlds->add((w, path->to_string()));
-                    }
-                }
-            }
-
-            return option::value(worlds->to_array);
-        }
 
         // 收集向导配置并启动后台打包。
         func startExport(self: ExportProject)
@@ -1026,73 +973,22 @@ namespace JEEditor::Editor
                     s.m_skip_extensions = self.m_skip_extensions;
                 });
 
-            // 向导立即关闭，避免准备期间重复点击导出。世界副本的恢复放在
-            // 协程里（Woolang 侧对象只能在这里创建），让出一帧等宇宙更新
-            // 处理完命令缓冲区后，烘焙与打包一起交给后台任务线程完成，
-            // 进度窗口中先显示各世界的烘焙日志再进入编译/打包。
+            do showModal(
+                ModulePrepare::createWithTitle(
+                    "项目导出",
+                    func(prepare: ModulePrepare){
+                        return runExportJob(prepare, settings);
+                    }));
+
             self.m_closed = true;
-
-            launch_coroutine(func(){
-                    match (prepareWorldsForAudioBake(self))
-                    {
-                        none?;
-                        value(bake_worlds)?
-                        {
-                            // 临时世界加入宇宙后，下一帧宇宙更新会处理其
-                            // 命令缓冲区，恢复的实体随之生效
-                            yield();
-
-                            do showModal(
-                                ModulePrepare::createWithTitle(
-                                    "项目导出",
-                                    func(prepare: ModulePrepare){
-                                        return runExportJob(
-                                            prepare, settings, bake_worlds);
-                                    }));
-                        }
-                    }
-                });
         }
         
         // ==========================
         //  后台打包任务
         // ==========================
         
-        func runExportJob(prepare: ModulePrepare, settings: Settings,
-            bake_worlds: array<(world, string)>)
+        func runExportJob(prepare: ModulePrepare, settings: Settings)
         {
-            // 世界副本由导出协程在 UI 线程恢复并让过一帧；烘焙在本后台
-            // 线程完成，进度窗口逐条显示。烘焙只读实体/组件，持碎片整理
-            // 锁防止宇宙更新在读取期间搬运实体；结束后关闭副本（销毁随
-            // 下一次宇宙更新生效）。结果写入 <world>.je4cache，稍后由
-            // packProjectFiles 打包。
-            prepare->postMessage(
-                F"开始烘焙音频遮挡缓存（{bake_worlds->len} 个世界）……");
-
-            let mut bake_failure = "";
-            for (let (w, path) : bake_worlds)
-            {
-                prepare->postMessage(F"烘焙音频遮挡缓存：{path}");
-
-                w->arch_defragmentation_lock();
-                let baked = je::audio::occlusion::bake(w, path);
-                w->arch_defragmentation_unlock();
-
-                if (!baked)
-                {
-                    bake_failure = F"烘焙音频遮挡失败：{path}";
-                    break;
-                }
-            }
-
-            for (let (w, _) : bake_worlds)
-                w->close();
-
-            if (bake_failure->len > 0)
-                throw! bake_failure;
-
-            prepare->postMessage("音频遮挡缓存烘焙完成。");
-
             let export_path = settings.m_working_path / ".export";
             
             prepare->postMessage("开始打包……");

@@ -2681,13 +2681,7 @@ namespace jeecs
         Audio::Occluder [组件]
         盒形声音遮挡体：听众到声源的线段穿过它时，按 occlusion/muffle
         衰减增益与高频。size 为局部全尺寸（乘实体比例尺），随实体世界
-        旋转；2D 模式下只使用 XY 投影，3D 下使用完整 OBB。
-        is_static 标记该遮挡体在运行时保持不变：编辑器烘焙静态遮挡缓存
-        （<world>.je4cache 的 audio_occlusion 字段）时会把它和瓦片地图
-        遮挡一起烘进世界空间遮挡场，2D 运行时直接采样场内数据；动态遮挡
-        （false）仍然逐帧做线段测试。标记为静态后不要在运行时移动/改值，
-        否则缓存会失真；运行时的输入哈希校验会发现不一致（约一秒内）
-        并回退到实时遮挡。
+        旋转；2D 模式下只使用 XY 投影，3D 下使用完整 OBB。逐帧实时测试。
         */
         struct Occluder
         {
@@ -2696,13 +2690,11 @@ namespace jeecs
             math::vec3 size;
             float occlusion;
             float muffle;
-            bool is_static;
 
             Occluder() noexcept
                 : size(1.0f, 1.0f, 1.0f)
                 , occlusion(0.6f)
                 , muffle(0.4f)
-                , is_static(false)
             {
             }
             Occluder(const Occluder& another) noexcept
@@ -2711,7 +2703,6 @@ namespace jeecs
                 size = another.size;
                 occlusion = another.occlusion;
                 muffle = another.muffle;
-                is_static = another.is_static;
             }
             Occluder(Occluder&& another) noexcept
                 : Occluder()
@@ -2719,7 +2710,6 @@ namespace jeecs
                 size = another.size;
                 occlusion = another.occlusion;
                 muffle = another.muffle;
-                is_static = another.is_static;
             }
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -2727,7 +2717,6 @@ namespace jeecs
                 typing::register_member(guard, &Occluder::size, "size");
                 typing::register_member(guard, &Occluder::occlusion, "occlusion");
                 typing::register_member(guard, &Occluder::muffle, "muffle");
-                typing::register_member(guard, &Occluder::is_static, "is_static");
             }
         };
         /*
@@ -2855,44 +2844,6 @@ namespace jeecs
                 typing::register_member(guard, &Portal::transmission, "transmission");
                 typing::register_member(guard, &Portal::muffle, "muffle");
                 typing::register_member(guard, &Portal::enabled, "enabled");
-            }
-        };
-    }
-
-    namespace World
-    {
-        /*
-        World::Path [组件]
-        世界缓存路径：cache_path 指向该世界的烘焙缓存 <world>.je4cache。缓存
-        文档是世界级的，未来其他子系统也可以从里面读取自己的字段，因此不属于
-        某个具体领域。持有该组件的实体是引擎/编辑器内部实体（配对
-        Editor::Invisible，不显示、不随世界存档）：加载世界时创建，编辑器
-        手动烘焙时也会创建。世界内建议只放一个，多个时以最后一个为准。
-        */
-        struct Path
-        {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Path);
-
-            basic::string cache_path;
-
-            Path() noexcept
-                : cache_path()
-            {
-            }
-            Path(const Path& another) noexcept
-                : Path()
-            {
-                cache_path = another.cache_path;
-            }
-            Path(Path&& another) noexcept
-                : Path()
-            {
-                cache_path = another.cache_path;
-            }
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &Path::cache_path, "cache_path");
             }
         };
     }

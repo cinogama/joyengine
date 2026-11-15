@@ -77,15 +77,6 @@ namespace je
             
         extern("libjoyecs", "wojeapi_get_system_from_world")
             public func get_system(self: world, systype: typeinfo)=> option<handle>;
-
-        // 锁定世界的实体碎片整理：在其它线程直接遍历实体/读取组件期间持有，
-        // 避免碎片整理搬运实体导致句柄/组件地址失配。锁定期间世界更新跳过
-        // 碎片整理（不会阻塞更新）。必须与 unlock 成对调用。
-        extern("libjoyecs", "wojeapi_ecs_world_arch_defragmentation_lock")
-            public func arch_defragmentation_lock(self: world)=> void;
-
-        extern("libjoyecs", "wojeapi_ecs_world_arch_defragmentation_unlock")
-            public func arch_defragmentation_unlock(self: world)=> void;
     }
     public using entity = gchandle;
     namespace entity

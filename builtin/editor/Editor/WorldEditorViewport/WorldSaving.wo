@@ -10,7 +10,6 @@ import je::ecs;
 import je::gui;
 import je::internal;
 import je::typeinfo;
-import je::audio;
 
 import je::towoo;
 import je::towoo::types;
@@ -118,95 +117,6 @@ namespace JEEditor::Editor::WorldEditorViewport
         return self.m_saving_path;
     }
 
-    // ==========================
-    //  世界缓存路径（World::Path）
-    // ==========================
-
-    // 世界文件对应的派生缓存路径：世界级缓存固定为 <world>.je4cache，
-    // 以运行时资源路径（@/...）形式交给 World::Path 组件（导出后可经镜像解析）。
-    public func worldCachePathForSaving(path: path_t)=> string
-    {
-        return ResourcePath::toRuntimeResourcePath(path) + ".je4cache";
-    }
-
-    // 更新世界内已有 World::Path 实体指向的缓存路径（世界改名/另存后）；
-    // 不存在时不创建。返回是否找到并更新。
-    public func syncWorldPath(w: world, cache_path: string)=> bool
-    {
-        let mut updated = false;
-
-        for (let e : w->internal::get_all_entities())
-        {
-            match (e->towoo::get_component:<World::Path>())
-            {
-                none?;
-                value(c)?
-                {
-                    updated = true;
-                    do c.cache_path->set(cache_path);
-                }
-            }
-        }
-
-        return updated;
-    }
-
-    // 保证世界内存在指向 world_path 对应缓存的 World::Path 实体：已有则
-    // 更新，没有则新建。该实体是编辑器/引擎内部实体（带 Editor::Invisible，
-    // 不显示在实体列表、不随世界存档）：缓存路径属于世界文件的派生信息，
-    // 加载世界时创建；缓存不存在/不使用缓存时由音频等子系统自行回退。
-    public func ensureWorldPathComponent(w: world, world_path: path_t)=> bool
-    {
-        let cache_path = worldCachePathForSaving(world_path);
-
-        for (let e : w->internal::get_all_entities())
-        {
-            match (e->towoo::get_component:<World::Path>())
-            {
-                none?;
-                value(c)?
-                {
-                    do c.cache_path->set(cache_path);
-                    return true;
-                }
-            }
-        }
-
-        match (w->add_entity([
-                World::Path::type::typeinfo,
-                Editor::Invisible::type::typeinfo,
-            ]))
-        {
-            none?
-            {
-                logerr("Failed to create World::Path entity.");
-                return false;
-            }
-            value(e)?
-            {
-                do e->internal::set_name("WorldPath");
-                do e->towoo::get_component:<World::Path>()
-                    ->unwrap.cache_path->set(cache_path);
-
-                // 实体随下一次世界更新落实；烘焙后的重载发生在其后，
-                // 因此音频系统能读到该实体
-                return true;
-            }
-        }
-    }
-
-    // 世界加载/重建时创建/更新 World::Path 内部实体。不判断缓存是否存在：
-    // 缓存读取交给各子系统（音频侧由 je_cache_file_load 判定并在缺失时回退）。
-    public func attachWorldPath(w: world, world_path: option<path_t>)=> void
-    {
-        match (world_path)
-        {
-            none?;
-            value(p)?
-                do ensureWorldPathComponent(w, p);
-        }
-    }
-
     // 把世界序列化并写入 path；失败时弹错误对话框并返回 false。
     // 编辑器中世界落盘的唯一入口。
     public func saveWorldTo(self: WorldEditorViewport, path: path_t)=> bool
@@ -221,11 +131,6 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 游戏逻辑，不应覆盖编辑现场
         if (isWorldsFrozen() || DebugRun::isDebugRunActive())
             return false;
-
-        // 世界可能另存/重命名到新路径：已有的 World::Path 内部实体先指向
-        // 本次落盘路径对应的缓存（该实体不存档，缓存路径只是运行时状态）
-        do syncWorldPath(
-            self.m_world_instance, worldCachePathForSaving(path));
 
         match (toml::save(
                 JEEditor::Saving::World::save(
@@ -242,10 +147,6 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 // 已落盘：清除编辑历史的未保存标记（见 Practice::markSaved）
                 self.m_action_history->markSaved();
-
-                // 世界级缓存以世界文件 CRC 为键：落盘后旧缓存已失效，
-                // 通知音频系统重新读取缓存/回退实时环境
-                je::audio::occlusion::reload(self.m_world_instance);
 
                 // 在独立作用域中先取出字符串：闭包按创建时的值捕获文本，
                 // 之后每帧由 Statebar 调用绘制保存成功提示。
@@ -317,30 +218,8 @@ namespace JEEditor::Editor::WorldEditorViewport
             F"以下世界尚未保存到文件中，请拖动其视口顶部的图标到资源管理器以保存：{unsaved_list}");
     }
 
-    // saveAllWorlds 的可失败版本：保存所有有路径的视口，任一保存失败
-    // 返回 false（无路径的新世界不参与，导出扫描本身只包含已保存文件）。
-    public func saveAllWorldsChecked()=> bool
-    {
-        for (let viewport : getAllViewports())
-        {
-            if (viewport.m_is_runtime_editing)
-                continue;
-
-            match (viewport->getSavingPath())
-            {
-                none?;
-                value(path)?
-                {
-                    if (!viewport->saveWorldTo(path))
-                        return false;
-                }
-            }
-        }
-        return true;
-    }
-
     // 主菜单“文件 → 保存”入口：保存当前聚焦的世界视口（与视口内
-    // Ctrl+S 的行为一致；未聚焦任何视口时提示）。
+    // Ctrl+S 的行为一致；未聚焦任何世界视口时提示）。
     public func saveFocusedWorld()=> void
     {
         match (getLastFocused())
@@ -349,75 +228,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                 MsgBox::msg("保存", "当前没有聚焦的世界视口");
             value(viewport)?
                 viewport->saveByShortcut();
-        }
-    }
-
-    // 手动烘焙当前视口世界的静态遮挡缓存（写入 <world>.je4cache 的
-    // audio_occlusion）。输入是 is_static 的 Audio::Occluder 与全部瓦片
-    // 地图的音频遮挡；动态遮挡体由运行时实时处理。
-    public func bakeAudioOcclusion(self: WorldEditorViewport)=> void
-    {
-        if (self.m_is_runtime_editing)
-        {
-            MsgBox::msg("烘焙音频遮挡", "调试运行的临时视口不支持烘焙");
-            return;
-        }
-
-        if (isWorldsFrozen() || DebugRun::isDebugRunActive())
-        {
-            MsgBox::err(
-                "烘焙音频遮挡", "当前正处于调试运行或冻结状态，请先结束运行");
-            return;
-        }
-
-        match (self->getSavingPath())
-        {
-            none?
-                MsgBox::err(
-                    "烘焙音频遮挡",
-                    "请先保存世界：遮挡缓存会写入 <世界文件>.je4cache");
-            value(path)?
-            {
-                // World::Path 实体是内部实体（不存档）：烘焙前保证它存在并
-                // 指向 <world>.je4cache，烘焙后的重载才能读到新缓存
-                if (!ensureWorldPathComponent(
-                        self.m_world_instance, path))
-                {
-                    MsgBox::err("烘焙音频遮挡", "无法创建 World::Path 实体");
-                    return;
-                }
-
-                // sidecar 以世界文件 CRC 为键，先落盘保证两者一致
-                if (!self->saveWorldTo(path))
-                    return;
-
-                // 烘焙只读实体/组件：锁住碎片整理，避免与宇宙更新并发搬运实体
-                do self.m_world_instance->arch_defragmentation_lock();
-                let baked = je::audio::occlusion::bake(
-                    self.m_world_instance, path->to_string());
-                do self.m_world_instance->arch_defragmentation_unlock();
-
-                if (baked)
-                {
-                    Statebar::showState(3.) <| func(){
-                        Text("音频遮挡缓存已烘焙");
-                    };
-                }
-                else
-                    MsgBox::err("烘焙音频遮挡", "烘焙失败，请查看日志");
-            }
-        }
-    }
-
-    // 主菜单“工具 → 烘焙当前世界音频遮挡”入口
-    public func bakeFocusedWorld()=> void
-    {
-        match (getLastFocused())
-        {
-            none?
-                MsgBox::msg("烘焙音频遮挡", "当前没有聚焦的世界视口");
-            value(viewport)?
-                viewport->bakeAudioOcclusion();
         }
     }
 
@@ -438,20 +248,6 @@ namespace JEEditor::Editor::WorldEditorViewport
         if (isWorldsFrozen() || DebugRun::isDebugRunActive())
             return false;
 
-        // 重命名/另存/路径重定向后，World::Path 内部实体按新路径同步：
-        // 资源管理器重命名世界文件时会一并移动 <world>.je4cache，
-        // 再让音频系统按新路径重新读取缓存（缓存缺失时自行回退实时环境）
-        match (new_path)
-        {
-            value(p)?
-            {
-                do attachWorldPath(
-                    self.m_world_instance, option::value(p));
-                je::audio::occlusion::reload(self.m_world_instance);
-            }
-            none?;
-        }
-            
         // 重建窗口沿用当前世界实例与未保存的修改；同时把编辑器状态
         //（摄像机位姿/编辑模式）搬到新视口，避免重命名/另存后视角与模式复位
         let new_viewport = create(

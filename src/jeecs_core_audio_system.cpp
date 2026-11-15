@@ -55,7 +55,6 @@ namespace jeecs::audio
             math::vec3 m_half_extent;
             float m_occlusion;
             float m_muffle;
-            bool m_static;
         };
         struct tilemap_snapshot
         {
@@ -393,6 +392,67 @@ namespace jeecs::audio
         }
     }
 
+    audio_map_grid::audio_map_grid()
+        : m_stamp(0)
+        , m_width(0)
+        , m_height(0)
+        , m_occlusion()
+        , m_muffle()
+    {
+    }
+
+    void rebuild_audio_grid(
+        audio_map_grid& grid, Tilemap::MapDocument& document)
+    {
+        auto& registry = Tilemap::documents::inst();
+        registry.ensure_tilesets(document);
+
+        grid.m_stamp = registry.map_stamp(document);
+        grid.m_width = document.width;
+        grid.m_height = document.height;
+
+        const size_t cell_count =
+            (size_t)document.width * (size_t)document.height;
+
+        grid.m_occlusion.assign(cell_count, 0.0f);
+        grid.m_muffle.assign(cell_count, 0.0f);
+
+        for (size_t i = 0; i < cell_count; ++i)
+        {
+            float occlusion = 0.0f;
+            float muffle = 0.0f;
+
+            for (int32_t layer = 0;
+                layer < (int32_t)document.layers.size(); ++layer)
+            {
+                const int32_t value = document.layers[layer].grid[i];
+                if (value == 0)
+                    continue;
+
+                const auto cell = Tilemap::decode_tile_value(value);
+                if (!cell.has_value() || cell->tileset_idx < 0
+                    || cell->tileset_idx
+                        >= (int32_t)document.tilesets.size()
+                    || !document.tilesets[cell->tileset_idx]
+                            .resolved.has_value())
+                    continue;
+
+                const auto* tileset =
+                    document.tilesets[cell->tileset_idx].resolved->get();
+                const auto* def = tileset->tile_def(cell->local_id);
+
+                if (def != nullptr)
+                {
+                    occlusion = std::max(occlusion, def->audio_occlusion);
+                    muffle = std::max(muffle, def->audio_muffle);
+                }
+            }
+
+            grid.m_occlusion[i] = std::clamp(occlusion, 0.0f, 1.0f);
+            grid.m_muffle[i] = std::clamp(muffle, 0.0f, 1.0f);
+        }
+    }
+
     AudioUpdatingSystem::AudioUpdatingSystem(game_world w)
         : game_system(w)
         , m_reverb_rooms()
@@ -400,10 +460,6 @@ namespace jeecs::audio
         , m_live_environment()
         , m_live_environment_signature(0)
         , m_has_live_environment(false)
-        , m_occlusion_field()
-        , m_loaded_occlusion_cache_path()
-        , m_occlusion_cache_reload_requested(false)
-        , m_occlusion_validation_countdown(0.0f)
         , m_audio_maps()
     {
     }
@@ -522,42 +578,6 @@ namespace jeecs::audio
             portal_snapshots.push_back(snapshot);
         }
 
-        // 世界级静态遮挡场：World::Path 组件提供缓存路径。缓存只存遮挡，
-        // 房间/门洞图始终由组件实时构建。
-        std::string world_cache_path;
-        for (auto&& [world_path] : query<view typesof(World::Path&)>())
-            world_cache_path = world_path.cache_path.cpp_str();
-
-        if (m_occlusion_cache_reload_requested
-            || m_loaded_occlusion_cache_path != world_cache_path)
-        {
-            m_occlusion_cache_reload_requested = false;
-            m_loaded_occlusion_cache_path = world_cache_path;
-            m_occlusion_field.reset();
-            m_occlusion_validation_countdown = 0.0f;
-
-            if (!world_cache_path.empty())
-                m_occlusion_field = load_audio_occlusion_cache(
-                    world_cache_path.c_str());
-        }
-
-        // 缓存自校验：静态遮挡体/地图被编辑后（世界文件可能尚未保存），
-        // 缓存里的输入哈希与当前组件不一致，此时弃用缓存走实时遮挡。
-        // 约每秒复核一次，代价是一次实体遍历 + 地图缓存头读取。
-        if (m_occlusion_field.has_value())
-        {
-            m_occlusion_validation_countdown -= (float)deltatime();
-            if (m_occlusion_validation_countdown <= 0.0f)
-            {
-                m_occlusion_validation_countdown = 1.0f;
-
-                const uint64_t current_inputs =
-                    hash_static_occlusion_inputs(get_world().handle());
-                if (current_inputs != m_occlusion_field->m_inputs)
-                    m_occlusion_field.reset();
-            }
-        }
-
         // 实时环境：组件签名变化时重建
         const uint64_t live_signature = hash_audio_environment_inputs(
             room_snapshots, portal_snapshots, listener_2d);
@@ -602,11 +622,8 @@ namespace jeecs::audio
             room.second.m_active = false;
 
         // ==================== 3. 遮挡快照 ====================
-        // 2D 且遮挡缓存有效时，静态遮挡（is_static 遮挡体 + 全部瓦片地图）
-        // 已烘进世界空间遮挡场：不再逐帧观察地图，也不再测静态遮挡体。
-        const bool use_occlusion_field =
-            listener_2d && m_occlusion_field.has_value();
-
+        // 遮挡体与瓦片地图全部逐帧实时测试；地图网格按版本平整化缓存，
+        // 只有编辑地图/图集时才重建（见 rebuild_audio_grid）。
         std::vector<occluder_snapshot> occluders;
         for (auto&& [occluder, trans] : query<
             view typesof(Audio::Occluder&, Transform::Translation&)
@@ -621,46 +638,39 @@ namespace jeecs::audio
                     std::fabs(occluder.size.z * trans.local_scale.z) * 0.5f),
                 occluder.occlusion,
                 occluder.muffle,
-                occluder.is_static,
             });
         }
 
         std::vector<tilemap_snapshot> tilemaps;
-        if (!use_occlusion_field)
+        for (auto&& [map, trans] : query<
+            view typesof(Tilemap::Map&, Transform::Translation&)
+        >())
         {
-            for (auto&& [map, trans] : query<
-                view typesof(Tilemap::Map&, Transform::Translation&)
-            >())
-            {
-                if (map.map_path.c_str()[0] == '\0')
-                    continue;
+            if (map.map_path.c_str()[0] == '\0')
+                continue;
 
-                const std::string path = map.map_path.cpp_str();
+            const std::string path = map.map_path.cpp_str();
 
-                auto document =
-                    Tilemap::documents::inst().observe_map(path);
-                if (!document.has_value())
-                    continue;
+            auto document = Tilemap::documents::inst().observe_map(path);
+            if (!document.has_value())
+                continue;
 
-                Tilemap::documents::inst().ensure_tilesets(
-                    *document.value());
+            Tilemap::documents::inst().ensure_tilesets(*document.value());
 
-                audio_map_grid& grid = m_audio_maps[path];
+            audio_map_grid& grid = m_audio_maps[path];
 
-                const uint64_t stamp =
-                    Tilemap::documents::inst().map_stamp(
-                        *document.value());
+            const uint64_t stamp =
+                Tilemap::documents::inst().map_stamp(*document.value());
 
-                if (grid.m_stamp != stamp)
-                    rebuild_audio_grid(grid, *document.value());
+            if (grid.m_stamp != stamp)
+                rebuild_audio_grid(grid, *document.value());
 
-                tilemaps.push_back(tilemap_snapshot{
-                    &grid,
-                    trans.world_position,
-                    trans.world_rotation,
-                    trans.local_scale,
-                });
-            }
+            tilemaps.push_back(tilemap_snapshot{
+                &grid,
+                trans.world_position,
+                trans.world_rotation,
+                trans.local_scale,
+            });
         }
 
         // 确保区域的效果器/效果槽存在，并按需更新参数。
@@ -750,23 +760,8 @@ namespace jeecs::audio
 
             if (spatial_active && listener_present)
             {
-                // 2D + 有效缓存：静态遮挡由场积分给出（已含瓦片地图与
-                // 静态遮挡体），只有动态遮挡体还需要逐帧线段测试。
-                if (use_occlusion_field)
-                {
-                    const audio_occlusion_result field_occlusion =
-                        integrate_occlusion_field(
-                            *m_occlusion_field, listener_position, position);
-
-                    occlusion.m_gain *= field_occlusion.m_gain;
-                    occlusion.m_hf *= field_occlusion.m_hf;
-                }
-
                 for (const auto& occluder : occluders)
                 {
-                    if (use_occlusion_field && occluder.m_static)
-                        continue;
-
                     const bool hit = listener_2d
                         ? segment_hits_box_2d(
                             math::vec2(listener_position.x, listener_position.y),
@@ -792,12 +787,9 @@ namespace jeecs::audio
                     }
                 }
 
-                if (!use_occlusion_field)
-                {
-                    for (const auto& tilemap : tilemaps)
-                        accumulate_tilemap_occlusion(
-                            tilemap, listener_position, position, occlusion);
-                }
+                for (const auto& tilemap : tilemaps)
+                    accumulate_tilemap_occlusion(
+                        tilemap, listener_position, position, occlusion);
             }
 
             // 遮挡值做时间平滑：射线在遮挡体边缘是硬切换，直接应用到增益/
@@ -1220,15 +1212,4 @@ namespace jeecs::audio
         }
     }
 
-}
-
-void je_audio_occlusion_reload(je_game_world_t* world)
-{
-    auto* system = static_cast<jeecs::audio::AudioUpdatingSystem*>(
-        je_ecs_world_system_instance_get(
-            world,
-            jeecs::typing::id<jeecs::audio::AudioUpdatingSystem>()));
-
-    if (system != nullptr)
-        system->RequestOcclusionCacheReload();
 }

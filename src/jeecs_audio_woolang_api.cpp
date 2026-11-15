@@ -1177,19 +1177,3 @@ WOORT_API woort_api wojeapi_audio_effect_slot_update(void)
 
     return woort_ret_void();
 }
-
-WOORT_API woort_api wojeapi_audio_occlusion_bake(void)
-{
-    auto* world = static_cast<je_game_world_t*>(woort_pointer(0));
-    const char* path = woort_string(1);
-
-    return woort_ret_bool(je_audio_occlusion_bake(world, path));
-}
-
-WOORT_API woort_api wojeapi_audio_occlusion_reload(void)
-{
-    je_audio_occlusion_reload(
-        static_cast<je_game_world_t*>(woort_pointer(0)));
-
-    return woort_ret_void();
-}

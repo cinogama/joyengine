@@ -609,10 +609,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                 ->  subItem("重命名", inputForRenamingWorld)
                 ->  endItem
                 -> endMenu
-                -> subMenu("工具")
-                ->  subItem("烘焙音频遮挡缓存", \= self->bakeAudioOcclusion();)
-                ->  endItem
-                -> endMenu
                 ;
     }
     public func getSizeConstraints(_: WorldEditorViewport)=> SizeConstraints

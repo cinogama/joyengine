@@ -81,21 +81,6 @@ namespace JEEditor::Saving::World
         return (w, runtime_system_names->to_array());
     }
 
-    // 导出时烘焙音频遮挡缓存用的轻量恢复：只恢复实体（含 prefab diff 展开），
-    // 不添加世界文件中的系统。音频烘焙只读取组件，不需要系统/逻辑更新；
-    // 但实体经命令缓冲区延迟落实，调用方须先让出一帧等宇宙更新处理完
-    // 命令缓冲区，再读取实体/烘焙。
-    public func restoreForBake(u: universe, wdat: Toml)=> world
-    {
-        let w = world::create(u);
-
-        let entities_dat = wdat->get("entities")=>> \v = v->as_array;->or([]);
-        for (let edat : entities_dat)
-            do JEEditor::Saving::Entity::restore(w, edat);
-
-        return w;
-    }
-
     // 读取保存在文件中的世界名；旧版本文件未保存名字时返回 none。
     public func getName(wdat: Toml)=> option<string>
     {

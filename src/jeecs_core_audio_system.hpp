@@ -7,25 +7,41 @@
 #include "jeecs/components.hpp"
 #include "jeecs/game.hpp"
 #include "jeecs_core_audio_environment.hpp"
-#include "jeecs_core_audio_occlusion_cache.hpp"
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+namespace jeecs::Tilemap
+{
+    struct MapDocument;
+}
+
 namespace jeecs::audio
 {
+    // 地图音频遮挡的平整化网格（同一格在所有图层取最大值），
+    // 按 map_stamp 失效、编辑时重建。
+    struct audio_map_grid
+    {
+        uint64_t m_stamp;
+        int32_t m_width;
+        int32_t m_height;
+        std::vector<float> m_occlusion;
+        std::vector<float> m_muffle;
+
+        audio_map_grid();
+    };
+
+    // 把地图所有图层的音频系数合并成平整化网格（需要图集已解析）。
+    void rebuild_audio_grid(
+        audio_map_grid& grid, Tilemap::MapDocument& document);
+
     struct AudioUpdatingSystem : game_system
     {
         AudioUpdatingSystem(game_world w);
         void CommitUpdate();
-
-        // 请求下一帧重新读取 World::Path 组件指向的遮挡缓存
-        void RequestOcclusionCacheReload() noexcept
-        {
-            m_occlusion_cache_reload_requested = true;
-        }
 
     private:
         // 每个活跃混响区域对应一个 EFX EAX 混响效果 + 效果槽。
@@ -56,20 +72,12 @@ namespace jeecs::audio
         std::unordered_map<uint32_t, reverb_room_runtime> m_reverb_rooms;
         uint64_t m_next_reverb_epoch;
 
-        // 房间/门洞图始终由组件实时构建；缓存只存静态遮挡场。
+        // 房间/门洞图始终由组件实时构建。
         audio_environment m_live_environment;
         uint64_t m_live_environment_signature;
         bool m_has_live_environment;
 
-        // 世界级 2D 静态遮挡场：由 World::Path 指向的缓存加载；缺失、
-        // 输入变化（静态遮挡体/地图被编辑）或 3D 模式时走实时遮挡。
-        std::optional<audio_occlusion_field> m_occlusion_field;
-        std::string m_loaded_occlusion_cache_path;
-        bool m_occlusion_cache_reload_requested;
-        // 距离下一次输入哈希复核的剩余时间（秒）
-        float m_occlusion_validation_countdown;
-
-        // 地图路径 -> 音频遮挡网格（仅无可用遮挡场时使用，按 map_stamp 失效）
+        // 地图路径 -> 音频遮挡网格（按 map_stamp 失效，编辑地图/图集时重建）
         std::unordered_map<std::string, audio_map_grid> m_audio_maps;
     };
 }

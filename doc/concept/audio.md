@@ -155,11 +155,8 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 | `size` | (1, 1, 1) | 局部全尺寸，乘实体比例尺 |
 | `occlusion` | 0.6 | 0..1；每命中一次增益 ×= (1 - 值) |
 | `muffle` | 0.4 | 0..1；每命中一次高频 ×= (1 - 值) |
-| `is_static` | false | 勾选表示该遮挡体在运行时既不移动也不改值；2D 遮挡缓存会把它烘进场（见“音频遮挡缓存”） |
 
-系统对每个空间化声源做“听者 → 声源”的线段测试：2D 模式用 XY 投影的旋转矩形，3D 模式用完整 OBB。多个遮挡体同时命中时相乘；线段起点在盒内不算命中。遮挡只影响 `Audio::Source` 实体音源，不影响全局一次性播放。
-
-`is_static = true` 是作者承诺：运行时 `Translation`/`Rotation`/`size`/`occlusion`/`muffle` 都不变。2D 且世界带有效遮挡缓存时，静态遮挡体不再逐帧测试，而是烘进世界空间遮挡场；动态遮挡体（默认）保持逐帧测试，结果与场相乘。改完静态值后重新烘焙即可；忘记烘焙时运行时的输入校验会在一秒内发现并回退到实时遮挡。
+系统对每个空间化声源做“听者 → 声源”的线段测试：2D 模式用 XY 投影的旋转矩形，3D 模式用完整 OBB。多个遮挡体同时命中时相乘；线段起点在盒内不算命中。遮挡只影响 `Audio::Source` 实体音源，不影响全局一次性播放。遮挡体全部逐帧实时测试，可随实体任意移动、随时改值。
 
 遮挡的增益/闷音在时间上做指数平滑（进入遮挡约 0.08s、离开约 0.25s、残差 0.002 内直接对齐），避免线段跨过遮挡体边缘的一帧声音突变；首帧/重新进入空间化时直接对齐目标值，不做淡入。平滑后的增益同时作用于直达声与混响发送（发送增益是声源后级增益），闷音同时作用于直达声低通与发送低通。
 
@@ -176,7 +173,7 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 
 系统把“听者 → 声源”线段转到地图根实体的局部 XY 网格，用 DDA 遍历穿过的格子；同一格内所有图层取各系数的最大值后累乘，跳过起点格。空格不遮挡。瓦片遮挡在 2D 与 3D 模式下都按 XY 平面计算。
 
-性能上，音频系统会按地图/图集版本（`map_stamp`）把整张地图的系数平整化成两张网格缓存，只有编辑地图或图集时才重建；每帧的射线只做数组索引，不再逐格查询瓦片元数据。瓦片地图的遮挡视为静态输入：2D 且世界的遮挡缓存有效时，这些格子已烘进世界遮挡场，运行时既不再维护地图网格，也不做逐图 DDA（见“音频遮挡缓存”）。
+性能上，音频系统会按地图/图集版本（`map_stamp`）把整张地图的系数平整化成两张网格缓存，只有编辑地图或图集时才重建；每帧的射线只做数组索引，不再逐格查询瓦片元数据。
 
 ### 混响区域：`Audio::ReverbZone`
 
@@ -228,7 +225,7 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 把门洞当作**关闭的门（等同于一堵墙）**：
 
 * 房间混响：`enabled = false`，或把 `transmission` 设为 0（≤ 1e-4 的门洞不会成为图的边）。两侧房间随后按“无门洞”的墙体泄漏处理（0.2 透射 + 0.7 闷音），与一堵墙完全一致。
-* 直达声：门洞完全不参与直达声遮挡。要在关门时让直达声也像隔着墙，需要在开口处放一个 `Audio::Occluder`，`occlusion`/`muffle` 取与墙相同的值（墙体默认 0.6/0.4；瓦片墙按图集设置）。门会开合时让它保持 `is_static = false`，运行时切换数值与 `Portal.enabled`。
+* 直达声：门洞完全不参与直达声遮挡。要在关门时让直达声也像隔着墙，需要在开口处放一个 `Audio::Occluder`，`occlusion`/`muffle` 取与墙相同的值（墙体默认 0.6/0.4；瓦片墙按图集设置）。门会开合时运行时切换数值与 `Portal.enabled` 即可。
 * 想让门“开一条缝”，用 `0 < transmission ≤ 1` 加较高的 `muffle`，不要把门洞断开。
 
 ### 音频环境图
@@ -245,7 +242,7 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 * 不同房间且有路径：源房间发送按路径 transmission 衰减、muffle 闷音，听者房间以 `0.25 × 听者权重 × 路径 transmission` 二次激发；
 * 无路径（没有连通门洞）：按墙体泄漏处理——源房间发送与听者房间二次激发都乘 `0.2` 透射、叠加 `0.7` 闷音，保证封闭房间仍有隔墙混响，同时让门洞明显更亮更响。
 
-房间图只取决于组件值，编辑后当帧生效；它不再有世界级缓存。需要缓存的是逐帧遮挡计算，见“音频遮挡缓存”。
+房间图只取决于组件值，编辑后当帧生效；它没有缓存。
 
 ### 效果器与滤波器
 
@@ -292,11 +289,9 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 2. “添加组件 → 音频”提供五个预设：**音源**（`Audio::Source`）、**音频监听器**（`Audio::Listener`）、**声音遮挡**（`Audio::Occluder`）、**混响区域**（`Audio::ReverbZone`）、**音频门洞**（`Audio::Portal`）；
 3. 把 `Audio::Listener` 挂到摄像机实体，`use_2d` 保持默认 true 即可用于横板/俯视角；
 4. 音源实体拖入 `.wav`，按需调整 `bus`、`reference_distance`、`max_distance`；
-5. 在瓦片地图编辑器的瓦片面板中设置“音频遮挡/闷音”（瓦片遮挡算静态输入，2D 下会烘进世界遮挡缓存）；
+5. 在瓦片地图编辑器的瓦片面板中设置“音频遮挡/闷音”；
 6. 需要混响的房间/洞穴放一个 `Audio::ReverbZone`，调整尺寸覆盖房间；在 Inspector 里选一个预设（`room`/`cave`/`hallway` 等），按需调整 `fade` 与 `send_gain`。多个区域可以重叠，系统会按权重交叉淡化；
-7. 在两个房间/室外之间的门口放 `Audio::Portal`，`size` 覆盖开口，`normal` 指向穿透方向；用 `transmission`/`muffle` 调整通过声能与高频损失；
-8. 不动的墙体/大地图遮挡值得缓存：勾选 `Audio::Occluder` 的 `is_static`，保存世界后使用 **世界视口 → 工具 → 烘焙音频遮挡缓存**（或主菜单 **工具 → 烘焙当前世界音频遮挡**）。导出项目时会自动烘焙全部世界；
-9. 不烘焙也能工作：没有有效遮挡缓存时，系统逐帧测试全部遮挡体与瓦片地图；房间/门洞图始终实时构建，与烘焙无关。
+7. 在两个房间/室外之间的门口放 `Audio::Portal`，`size` 覆盖开口，`normal` 指向穿透方向；用 `transmission`/`muffle` 调整通过声能与高频损失。
 
 旧版本的 `Audio::Playing` 已移除，旧世界中的音源需要把 `buffer`/`play`/`loop` 重新配置到 `Audio::Source` 上。
 
@@ -484,11 +479,11 @@ audio::play_oneshot(desc);
 
 1. **Listener + Translation**：速度 = 位置差 / `max(deltatime, 0.0001)`（首帧不产生速度尖峰）；`use_2d` 时位置/速度的 z 归零；`face` / `up` 乘以世界旋转；提交位置、速度、朝向、`m_gain = volume`、距离模型与多普勒系数（不触碰 `m_global_gain`）。系统**不查询 Camera 组件**。
 2. **音频环境**：收集 `Audio::ReverbZone + Translation`（房间）与 `Audio::Portal + Translation`（门洞，跳过 `enabled = false`）的组件快照；房间/门洞图始终由组件实时构建（输入签名变化时才重建），不写缓存。图包含房间 OBB、门洞连接和全房间对路径表；区域效果槽不在这里创建，而是等声源真正用到时按需创建。
-3. **遮挡快照**：收集所有 `Audio::Occluder + Translation`（动态遮挡始终实时，静态遮挡在无缓存/3D 时实时）；2D 且 `World::Path` 指向的遮挡缓存有效时，不再逐帧 `Tilemap::documents::observe_map`/维护地图网格，静态遮挡改为采样缓存场。
+3. **遮挡快照**：收集所有 `Audio::Occluder + Translation`；瓦片地图按 `map_stamp` 平整化成网格缓存（编辑时重建），遮挡全部逐帧实时测试。
 4. **Source + Translation（可选）**：
    * `spatial = false` 或没有 Translation → relative，位置/速度写 0；
    * 2D 听者下把声源位置/速度的 z 归零；
-   * 对每个空间化声源计算遮挡：2D 且缓存场可用时，沿 listener→source 积分场密度（静态遮挡体与瓦片地图已烘入），再对 `is_static = false` 的动态遮挡体做线段测试；否则逐遮挡体 2D 矩形/3D OBB 测试 + 瓦片地图 DDA，得到 `occlusion.m_gain` 与 `occlusion.m_hf`；
+   * 对每个空间化声源计算遮挡：逐遮挡体 2D 矩形/3D OBB 测试 + 瓦片地图 DDA，得到 `occlusion.m_gain` 与 `occlusion.m_hf`；
    * `m_gain = volume × occlusion.m_gain`；`occlusion.m_hf < 1` 时按需创建/更新 per-source 低通滤波器并绑定（`AL_DIRECT_FILTER`），恢复时解绑；
    * `bus` 变化时经 `je_audio_source_bus_set` 提交；
    * **混响发送**：用环境房间权重取声源所在的前两个房间；同房间直接发送，不同房间按路径表的 `transmission`/`muffle` 调整发送权重与高频，并给听者房间加入二次激发（最多 3 路）。每路发送使用独立的低通滤波器（`gain = 发送权重`、`gain_hf = 遮挡 hf × 路径 muffle`），绑定到该房间的 EAX 效果槽。房间效果参数变化时更新效果并重绑效果槽；发送的房间或槽 epoch 变化时才重新绑定发送；
@@ -506,75 +501,22 @@ audio::play_oneshot(desc);
 
 `loop` 每帧写入镜像，因此运行中切换循环立即生效。缓冲的绑定每帧都会调用 `set_playing_buffer`，底层只有在缓冲真正改变时才停止播放并返回 true。`Audio::Source` 的拷贝构造创建新的 AL 声源，所以由预制体实例化出的实体都拥有独立的播放状态；运行时状态（上次位置、遮挡滤波器、总线缓存、混响发送槽等）不反射、不存档。
 
-### 音频遮挡缓存（世界级 sidecar）
-
-`<world>.je4cache` 使用 `WORLD_CACHE_VERSION`，payload 是 binary cache document，`audio_occlusion` 字段是一张 **2D 世界空间遮挡场**：
-
-* `format`（sidecar 内部 schema 版本）、`inputs`（静态输入哈希）、`cell_size`；
-* `origin_x` / `origin_y` / `width` / `height`：场覆盖的世界矩形；
-* `dmax`：密度量化上限；`occlusion` / `muffle`：两张 `uint16` 缓冲。
-
-缓冲里存的不是“透过率”，而是**单位长度光学密度** `-ln(透过率) / 厚度`，按 `dmax` 归一化。运行时沿射线按每格实际穿越长度积分密度再取 `exp(-τ)`：垂直穿过一堵厚墙的总衰减与旧的“每命中一次”一致，斜穿和薄墙则按真实路径自然变化（质量提升的一部分）。积分包含起点所在的格子：听者/声源站在墙内时按实际穿行长度衰减，跨过遮挡边缘时衰减连续变化，没有逐物体路径“起点在盒内不算命中”的硬切换。
-
-烘焙输入只有静态遮挡：
-
-1. `is_static = true` 的 `Audio::Occluder + Translation`；
-2. 所有 `Tilemap::Map + Translation`（瓦片地图遮挡一律视为静态）。
-
-动态遮挡体（`is_static = false`）不进场，运行时照常逐帧测试并乘算。房间/门洞图（`ReverbZone`/`Portal`）没有缓存，始终由组件实时构建。
-
-#### 栅格化
-
-* 场覆盖所有静态输入的 XY 包围盒（外扩一格）；`cell_size` 默认 0.5 世界单位，单轴超过 1024 格时自动放大格宽。
-* 每格 4×4 子采样（覆盖率抗锯齿）：遮挡体按 XY 旋转矩形测试；地图把采样点经根实体逆变换回局部网格取格，支持旋转/缩放。边缘格按覆盖率得到部分密度，因此听的边缘是平滑过渡，不再有硬边。
-* 遮挡体密度按标称厚度 `w = min(size.x, size.y) × 实体比例尺`（下限 0.05）归一化：`d = -ln(1-occlusion) / w`；多个遮挡在 log 空间相加（透过率相乘）。
-* 地图格按一格的世界名义长度 `w` 归一化，保持旧的“每格一次”语义。
-
-#### 运行时
-
-`AudioUpdatingSystem` 通过 `World::Path` 的 `cache_path` 加载 `<world>.je4cache` 的 `audio_occlusion` 字段（`je_cache_file_load` + 文档校验；字段缺失或格式不匹配按无缓存处理）。2D 听者且场有效时：
-
-* 沿 listener→source 把线段裁剪到场矩形，用 Amanatides-Woo DDA 按格积分 `occlusion`/`muffle` 密度，得到 `gain = exp(-τ_occlusion)`、`hf = exp(-τ_muffle)`；
-* 只对 `is_static = false` 的动态遮挡体做线段测试，结果乘在场的结果上；
-* 不再逐帧 `Tilemap::documents::observe_map`、不维护地图网格、不测试静态遮挡体（性能收益）。
-
-3D 听者（`use_2d = false`）不使用场，保持逐遮挡体 OBB + 瓦片地图 DDA 的实时路径。缓存是 2D 方案的明确边界。
-
-#### 有效性校验
-
-烘焙时把静态输入排序后哈希进 `inputs`：静态遮挡体的世界变换、`occlusion`/`muffle`，以及每张地图的路径/变换与地图、图集 `.je4cache` 头里的源 CRC。运行时加载后立即重算比对，此后约每秒复核一次；不匹配（例如改了静态遮挡体却没重新烘焙）就弃用场、回退实时遮挡。缓存头 CRC 是世界文件本身的 CRC，保存世界后缓存自动失效。
-
-烘焙入口 `je_audio_occlusion_bake(world, world_path)`：
-
-1. 遍历世界实体收集输入（实体结构性变更经命令缓冲区落实，未更新过的临时世界需由调用方先让一帧；编辑器导出时在协程里恢复临时世界后 `yield()` 一帧，再交给后台导出任务线程逐世界烘焙——日志显示在导出进度窗口——烘焙期间持有世界的 chunk 碎片整理锁，见 `je_ecs_world_arch_defragmentation_lock`）；
-2. 从 `Anchor` / `LocalToParent` / `LocalToWorld` / 局部变换组件解析实体世界变换（不依赖 `Translation` 是否已更新，因此未启用/未 update 的临时世界也能烘焙）；
-3. 栅格化静态遮挡体与地图，以世界文件 CRC64 为键写 `<world>.je4cache`；
-4. 通知音频系统重载场（`je_audio_occlusion_reload`，也可单独调用来强制重读）。
-
-缓存路径是世界级派生数据，由持有 `World::Path` 组件的内部实体（`cache_path`，配对 `Editor::Invisible`，不显示、不随世界存档）提供：加载世界时按路径创建该实体，编辑器手动烘焙时也会创建；运行时实体不存在、缓存缺失/无效时直接走实时路径。
-
 ### 瓦片遮挡遍历
 
 瓦片的音频系数是 `TileDef` 的内置字段（`audio_occlusion` / `audio_muffle`，默认 0），与 `walkable` 一样随图集缓存（`.je4tileset` TOML → `.je4cache`，缓存版本 v2）保存；图集 TOML 的 `tiles` 条目新增 `audio_occlusion` / `audio_muffle` 两个可选浮点键。
 
 `AudioUpdatingSystem` 用地图根实体的 `world_position` / `world_rotation` / `local_scale` 把世界坐标转到地图局部网格：`gx = local.x`、`gy = -local.y`（地图格 y 向下，1 格 = 1 单位）。系统按 `map_stamp`（地图与图集版本合并戳）把整张地图的系数平整化成两张 `width*height` 浮点网格并缓存：同一格内所有图层取最大值，空格为 0；只有地图/图集版本变化时才重建，编辑态下随编辑重建，运行时不再逐格查询瓦片元数据。射线遍历用 Amanatides-Woo DDA（线段先裁剪到地图矩形），跳过起点格，每格直接索引缓存网格并累乘。瓦片遮挡在 2D 与 3D 模式下都按 XY 平面计算。
 
-这条实时路径用于 3D 听者，或没有有效遮挡缓存的世界；2D 且有缓存时瓦片遮挡已经烘进世界遮挡场，地图网格也不再维护（见“音频遮挡缓存”）。
-
 ### 关键源码位置
 
 | 内容 | 位置 |
 | --- | --- |
 | 音频组件（Source/Listener/Occluder/ReverbZone/Portal） | `include/jeecs/components.hpp`（`namespace Audio`） |
-| 世界级缓存路径组件（World::Path） | `include/jeecs/components.hpp`（`namespace World`） |
 | C ABI、效果器参数与默认值、C++ 封装 | `include/jeecs/audio.hpp`（逐函数说明见 [doc/capi/audio](../capi/audio/)） |
 | OpenAL 后端（设备、热插拔、EFX、总线、一次性声部、缓存加载） | `src/jeecs_audio_impl_openal.cpp` |
 | 缓存生成器脚本（pkg::audio 解码） | `builtin/script/internal/cache/audio.wo` |
 | 组件同步、2D 空间、遮挡、混响与播放状态机 | `src/jeecs_core_audio_system.cpp` |
 | 音频环境图、路径表（运行时实时构建） | `src/jeecs_core_audio_environment.hpp/.cpp` |
-| 静态遮挡场烘焙、`.je4world.je4cache` 读写、射线积分 | `src/jeecs_core_audio_occlusion_cache.hpp/.cpp` |
-| 缓存组件维护、编辑器手动烘焙/导出烘焙 | `builtin/editor/Editor/WorldEditorViewport/WorldSaving.wo`、`builtin/editor/Editor/ExportProject.wo` |
-| 加载世界时创建 World::Path 实体 | `builtin/gaming/Loading/World.wo` |
 | 瓦片属性解析与遮挡遍历支持 | `src/jeecs_core_tilemap_model.hpp/.cpp` |
 | Woolang 绑定 | `je/audio.wo`、`src/jeecs_audio_woolang_api.cpp` |
 | 组件辅助函数（towoo） | `je/towoo/towoo.wo`、`src/jeecs_woolang_towoo_script_basic.cpp` |

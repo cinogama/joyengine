@@ -349,27 +349,6 @@ je_ecs_world_destroy [基本接口]
 */
 JE_API void je_ecs_world_destroy(je_game_world_t* world);
 
-/*
-je_ecs_world_arch_defragmentation_lock [基本接口]
-锁定世界的原型碎片整理（chunk 碎片整理）
-    * 在其它线程直接遍历世界实体、读取组件期间持有，避免碎片整理搬运实体
-        导致已取得的实体句柄/组件地址失配
-    * 锁定期间世界更新会跳过本轮的碎片整理（不会阻塞世界更新）；若碎片
-        整理正在进行，本接口会等待其完成后才返回
-    * 必须与 je_ecs_world_arch_defragmentation_unlock 成对调用；
-        不支持同一线程重复加锁
-请参见：
-    je_ecs_world_arch_defragmentation_unlock
-*/
-JE_API void je_ecs_world_arch_defragmentation_lock(je_game_world_t* world);
-
-/*
-je_ecs_world_arch_defragmentation_unlock [基本接口]
-解除 je_ecs_world_arch_defragmentation_lock 的锁定
-    * 必须与加锁来自同一线程
-*/
-JE_API void je_ecs_world_arch_defragmentation_unlock(je_game_world_t* world);
-
 typedef enum je_component_requirement_kind_t
 {
     JE_COMPONENT_REQUIRE_CONTAINS,  // Must have spcify component

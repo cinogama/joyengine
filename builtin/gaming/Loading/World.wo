@@ -6,7 +6,6 @@ import pkg::thread;
 
 import je;
 import je::ecs;
-import je::typeinfo;
 
 import builtin::gaming::Saving::World;
 
@@ -17,50 +16,6 @@ using je::file;
 
 namespace JEGaming::Loading::World
 {
-    // 世界级缓存路径：加载世界时创建持有 World::Path 的引擎内部实体
-    // （配对 Editor::Invisible：不显示、不随世界存档）。缓存路径不写进
-    // 世界文件，各子系统按这个实体读取自己使用的缓存字段（如音频环境）。
-    // 这里不判断缓存是否存在：缓存读取与校验交给各子系统（音频侧由
-    // je_cache_file_load 处理），缺失/过期时子系统自行回退，不影响加载。
-    func attachWorldPath(w: world, path: string)=> void
-    {
-        match (typeinfo::load("World::Path"))
-        {
-            none?
-                logerr("World::Path component is not registered, world cache disabled.");
-            value(path_type)?
-            {
-                match (typeinfo::load("Editor::Invisible"))
-                {
-                    none?;
-                    value(invisible_type)?
-                    {
-                        match (w->add_entity([path_type, invisible_type]))
-                        {
-                            none?
-                                logerr(F"Failed to create World::Path entity for `{path}`.");
-                            value(e)?
-                            {
-                                match (e->get_component(path_type))
-                                {
-                                    none?;
-                                    value(cinst)?
-                                        match (cinst->get_member("cache_path"))
-                                        {
-                                            none?;
-                                            value((mtype, maddr))?
-                                                do towoo::unsafe::dynamic_parser::restore(
-                                                    mtype, maddr, path + ".je4cache");
-                                        }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     public func load(u: universe, path: string)=> result<world, string>
     {
         try! world_dat = readall(path)
@@ -69,7 +24,6 @@ namespace JEGaming::Loading::World
             ;
 
         let w = Saving::World::restore(u, world_dat);
-        attachWorldPath(w, path);
         return_ok! w;
     }
     public async! func loadAsync(u: universe, path: string)=> result<world, string>

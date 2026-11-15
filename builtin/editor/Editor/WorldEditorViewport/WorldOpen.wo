@@ -187,9 +187,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                     Singleton::Universe::getUniverse(),
                     wdat);
                 ensureDebugCamera(w);
-                // 世界级缓存路径实体不随世界存档：加载时按当前路径重建，
-                // 音频等子系统据此加载烘焙结果（缓存缺失时自行回退）
-                do attachWorldPath(w, option::value(path));
                 w->set_enable(true);
                 
                 // “调试执行/导出时才启用”的系统以类型名保存，此处解析为

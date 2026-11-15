@@ -376,8 +376,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                 value(editor)?
                 {
                     ensureDebugCamera(w);
-                    // World::Path 实体不随世界快照保存，按保存路径重建
-                    do attachWorldPath(w, editor.m_saving_path);
                     w->set_enable(true);
 
                     let name = Saving::World::getName(ctx.m_world_data)

@@ -556,19 +556,5 @@ namespace je
             desc.location = (x, y, z);
             return _play_oneshot(buffer, desc, bus::SE);
         }
-
-        // 世界级静态遮挡烘焙：把 is_static 的 Audio::Occluder 与全部瓦片
-        // 地图的音频遮挡烘进 <world_path>.je4cache 的 audio_occlusion 字段
-        // （2D 世界空间遮挡场）。缓存路径由加载世界时/编辑器烘焙时创建的
-        // World::Path 内部实体持有，运行时音频系统按该实体加载。
-        namespace occlusion
-        {
-            extern("libjoyecs", "wojeapi_audio_occlusion_bake")
-                public func bake(w: world, path: string)=> bool;
-
-            // 重新读取 World::Path 组件指向的缓存（世界保存后旧缓存失效时用）
-            extern("libjoyecs", "wojeapi_audio_occlusion_reload")
-                public func reload(w: world)=> void;
-        }
     }
 }
