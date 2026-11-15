@@ -1027,8 +1027,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                             index += 1;
                         }
 
-                        // ---- 线框（仅音频层/全部模式/拖拽中） ----
-                        if (audio_layer_active)
+                        // ---- 区域线框（房间/遮挡/门洞） ----
+                        // 区域体积始终绘制，不依赖当前编辑层与选中状态；
+                        // 未选中淡显，选中高亮，便于随时看清声学场景布局
                         {
                             match (e->towoo::get_component:<Audio::Occluder>())
                             {
@@ -1060,7 +1061,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                                             half[2] + fade) as vec3;
                                         let base = audioKindColor(3);
                                         drawBox(pos, rotation, fade_half,
-                                            (base.0, base.1, base.2, 70));
+                                            (base.0, base.1, base.2,
+                                                selected ? 130 | 70));
                                     }
                                 }
                                 none?;
