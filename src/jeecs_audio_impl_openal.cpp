@@ -1558,6 +1558,22 @@ namespace jeecs::audio
             void release_voice_lockfree(ALuint voice)
             {
                 assert(voice != 0);
+
+                // 归还前解除全部辅助发送：voice 会被池化复用，残留的发送会让
+                // 对应效果槽一直处于“使用中”，之后引擎删除该槽时会被 OpenAL
+                // 拒绝并永久泄漏（泄漏的混响槽会持续参与混音）。
+                // 声源重新拿到 voice 时 update_source_lockfree 会按 Holder 里
+                // 保存的状态重新提交发送，不会丢逻辑状态。
+                if (m_alext_efx.has_value())
+                {
+                    for (size_t i = 0; i < m_active_auxiliary_sends; ++i)
+                        alSource3i(voice,
+                            AL_AUXILIARY_SEND_FILTER,
+                            AL_EFFECTSLOT_NULL,
+                            (ALint)i,
+                            AL_FILTER_NULL);
+                }
+
                 m_free_voices.push_back(voice);
             }
 
@@ -2914,9 +2930,11 @@ namespace jeecs::audio
                             || slot_may_null->m_effect_slot_instance != nullptr);
 
                         auto& slot_and_filters = source->m_source_instance->m_playing_effect_slot_and_filters[slot_idx];
-                        slot_and_filters.m_slot.set_res_may_null(slot_may_null);
-                        slot_and_filters.m_filter.set_res_may_null(filter_may_null);
 
+                        // 先把 AL 声源的发送指向新槽/滤波器，再释放旧 Holder
+                        // 引用：旧槽若仍被 AL 声源挂着，OpenAL 会以
+                        // AL_INVALID_OPERATION 拒绝删除，泄漏的槽会一直留在
+                        // 混音活动列表里，播放开销只增不减。
                         if (m_alext_efx.has_value()
                             && source->m_source_instance->m_source_id != 0
                             && slot_idx < m_active_auxiliary_sends)
@@ -2936,6 +2954,9 @@ namespace jeecs::audio
                                 slot_idx,
                                 filter_id);
                         }
+
+                        slot_and_filters.m_slot.set_res_may_null(slot_may_null);
+                        slot_and_filters.m_filter.set_res_may_null(filter_may_null);
                     }
                     else
                     {

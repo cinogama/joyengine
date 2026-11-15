@@ -440,8 +440,6 @@ namespace jeecs::audio
         , m_live_environment()
         , m_live_environment_signature(0)
         , m_has_live_environment(false)
-        , m_environment_serial(0)
-        , m_applied_environment_serial(0)
         , m_audio_maps()
     {
     }
@@ -577,8 +575,6 @@ namespace jeecs::audio
             if (!environment_cache_path.empty())
                 m_baked_environment = load_audio_environment_cache(
                     environment_cache_path.c_str());
-
-            ++m_environment_serial;
         }
 
         // 实时环境：组件签名变化时重建（sidecar 缺失/不可用时使用）
@@ -592,7 +588,6 @@ namespace jeecs::audio
                 room_snapshots, portal_snapshots, listener_2d);
             m_live_environment_signature = live_signature;
             m_has_live_environment = true;
-            ++m_environment_serial;
         }
 
         const audio_environment* environment = nullptr;
@@ -603,11 +598,11 @@ namespace jeecs::audio
         else if (m_has_live_environment)
             environment = &m_live_environment;
 
-        if (m_applied_environment_serial != m_environment_serial)
-        {
-            m_applied_environment_serial = m_environment_serial;
-            m_reverb_rooms.clear();
-        }
+        // 注意：环境图变化时不整体清空 m_reverb_rooms。房间 id 由确定性
+        // 构建产生，拖动房间（尺寸/位置/淡出）只改变几何、声学参数不变，
+        // 复用现有效果槽即可；ensure_reverb_room 会按参数差异更新效果，
+        // 本帧不再使用的房间由第 5 步的 m_active 扫描回收。整体清空会让
+        // 每帧销毁/重建全部 EFX 效果与效果槽，播放中拖动会明显卡顿。
 
         // 听者所在房间：权重最高者
         const audio_environment_room* listener_reverb_room = nullptr;

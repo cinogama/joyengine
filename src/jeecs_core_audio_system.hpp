@@ -85,10 +85,6 @@ namespace jeecs::audio
         uint64_t m_live_environment_signature;
         bool m_has_live_environment;
 
-        // 环境变化时递增；用于清空/重建房间效果槽
-        uint64_t m_environment_serial;
-        uint64_t m_applied_environment_serial;
-
         // 地图路径 -> 音频遮挡网格（按 map_stamp 失效）
         std::unordered_map<std::string, audio_map_grid> m_audio_maps;
     };
