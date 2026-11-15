@@ -10,6 +10,7 @@
 
 #ifndef NDEBUG
 #   include <mutex>
+#   include <tuple>
 #   include <utility>
 #endif
 
@@ -217,14 +218,25 @@ namespace
     // Material data comes from user-authored scenes and the editor, so an
     // incompatible shader/vertex/texture combination can last for many frames
     // and would otherwise flood the log on every recorded draw. Report each
-    // (pipeline, vertex) pair once; the draw itself is dropped every time.
+    // (pipeline, vertex, kind) combination once — the kind is part of the key
+    // so a vertex-layout report does not silence a later texture-kind report
+    // for the same pair; the draw itself is dropped every time.
     // Freed resources can have their addresses reused, which at worst silences
     // the message for a later pair; the drop itself is not affected.
+    enum incompatible_draw_kind
+    {
+        INCOMPATIBLE_DRAW_VERTEX_LAYOUT,
+        INCOMPATIBLE_DRAW_TEXTURE_KIND,
+    };
+
     std::mutex g_incompatible_draw_report_mx;
-    std::vector<std::pair<uintptr_t, uintptr_t>> g_incompatible_draw_reports;
+    std::vector<std::tuple<uintptr_t, uintptr_t, int>>
+        g_incompatible_draw_reports;
 
     bool _jegl_report_incompatible_draw_once(
-        const je_gl_pipeline_t* pipeline, const je_gl_vertex_t* vertex)
+        const je_gl_pipeline_t* pipeline,
+        const je_gl_vertex_t* vertex,
+        int kind)
     {
         const uintptr_t pipeline_ptr = reinterpret_cast<uintptr_t>(pipeline);
         const uintptr_t vertex_ptr = reinterpret_cast<uintptr_t>(vertex);
@@ -232,11 +244,14 @@ namespace
         std::lock_guard<std::mutex> guard(g_incompatible_draw_report_mx);
         for (const auto& reported : g_incompatible_draw_reports)
         {
-            if (reported.first == pipeline_ptr && reported.second == vertex_ptr)
+            if (std::get<0>(reported) == pipeline_ptr
+                && std::get<1>(reported) == vertex_ptr
+                && std::get<2>(reported) == kind)
                 return false;
         }
 
-        g_incompatible_draw_reports.emplace_back(pipeline_ptr, vertex_ptr);
+        g_incompatible_draw_reports.emplace_back(
+            pipeline_ptr, vertex_ptr, kind);
         return true;
     }
 #endif
@@ -519,7 +534,8 @@ struct je_gl_command_buffer_t
         const size_t mismatch = _jegl_vertex_layout_mismatch(m_vertex, shader);
         if (mismatch != SIZE_MAX)
         {
-            if (_jegl_report_incompatible_draw_once(m_pipeline, m_vertex))
+            if (_jegl_report_incompatible_draw_once(m_pipeline, m_vertex,
+                    INCOMPATIBLE_DRAW_VERTEX_LAYOUT))
             {
                 jeecs::debug::logerr(
                     "Draw skipped: shader '%s' expects a vertex layout the bound "
@@ -541,7 +557,8 @@ struct je_gl_command_buffer_t
                 if (shader->m_textures[j].m_pass == binding.m_pass
                     && shader->m_textures[j].m_kind != binding.m_kind)
                 {
-                    if (_jegl_report_incompatible_draw_once(m_pipeline, m_vertex))
+                    if (_jegl_report_incompatible_draw_once(m_pipeline, m_vertex,
+                            INCOMPATIBLE_DRAW_TEXTURE_KIND))
                     {
                         jeecs::debug::logerr(
                             "Draw skipped: shader '%s' declares texture pass %u as "
