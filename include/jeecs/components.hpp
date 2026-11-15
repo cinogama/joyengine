@@ -2490,6 +2490,7 @@ namespace jeecs
             bool spatial_active;
             float current_occlusion_gain;
             float current_occlusion_hf;
+            bool occlusion_smoothed; // 平滑状态是否已初始化（首帧直接对齐）
             play_state state;
             je_audio_bus_t bus_applied; // 已提交到声源的总线；COUNT = 尚未提交
             basic::optional<basic::resource<audio::filter>> occlusion_filter;
@@ -2522,6 +2523,7 @@ namespace jeecs
                 , spatial_active(false)
                 , current_occlusion_gain(1.0f)
                 , current_occlusion_hf(1.0f)
+                , occlusion_smoothed(false)
                 , state(play_state::STOPPED)
                 , bus_applied(JE_AUDIO_BUS_COUNT)
                 , occlusion_filter()
@@ -2576,6 +2578,7 @@ namespace jeecs
                 , spatial_active(false)
                 , current_occlusion_gain(1.0f)
                 , current_occlusion_hf(1.0f)
+                , occlusion_smoothed(false)
                 , state(play_state::STOPPED)
                 , bus_applied(JE_AUDIO_BUS_COUNT)
                 , occlusion_filter()

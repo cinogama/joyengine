@@ -42,6 +42,13 @@ namespace jeecs::audio
         constexpr float WALL_WET_TRANSMISSION = 0.2f;
         constexpr float WALL_WET_MUFFLE = 0.7f;
 
+        // 遮挡平滑：射线遮挡在遮挡体边缘是硬切换，直接应用会让声音在跨过
+        // 边缘的一帧突变。对遮挡增益与闷音做指数平滑——进入遮挡（变轻变闷）
+        // 稍快，离开遮挡（恢复明亮）稍慢，听感上像声音自然地从墙后出来。
+        constexpr float OCCLUSION_ATTACK_SECONDS = 0.08f;
+        constexpr float OCCLUSION_RELEASE_SECONDS = 0.25f;
+        constexpr float OCCLUSION_SMOOTH_EPSILON = 0.002f;
+
         struct occluder_snapshot
         {
             math::vec3 m_center;
@@ -848,8 +855,52 @@ namespace jeecs::audio
                         tilemap, listener_position, position, occlusion);
             }
 
-            source.current_occlusion_gain = occlusion.m_gain;
-            source.current_occlusion_hf = occlusion.m_hf;
+            // 遮挡值做时间平滑：射线在遮挡体边缘是硬切换，直接应用到增益/
+            // 闷音会在跨过边缘的瞬间突变。首帧/重新进入空间化时直接对齐，
+            // 之后指数逼近目标——进入遮挡稍快、离开遮挡稍慢。
+            if (!spatial_active || !listener_present)
+            {
+                source.current_occlusion_gain = 1.0f;
+                source.current_occlusion_hf = 1.0f;
+                source.occlusion_smoothed = false;
+            }
+            else if (!source.occlusion_smoothed)
+            {
+                source.current_occlusion_gain = occlusion.m_gain;
+                source.current_occlusion_hf = occlusion.m_hf;
+                source.occlusion_smoothed = true;
+            }
+            else
+            {
+                const float dt = std::max(deltatime(), 0.0f);
+
+                auto smooth_occlusion =
+                    [dt](float current, float target, float tau)
+                {
+                    if (current == target)
+                        return target;
+
+                    const float alpha = 1.0f - std::exp(-dt / tau);
+                    const float next = current + (target - current) * alpha;
+
+                    if (std::fabs(next - target) < OCCLUSION_SMOOTH_EPSILON)
+                        return target;
+                    return next;
+                };
+
+                const float tau =
+                    occlusion.m_gain < source.current_occlusion_gain
+                    ? OCCLUSION_ATTACK_SECONDS
+                    : OCCLUSION_RELEASE_SECONDS;
+
+                source.current_occlusion_gain = smooth_occlusion(
+                    source.current_occlusion_gain, occlusion.m_gain, tau);
+                source.current_occlusion_hf = smooth_occlusion(
+                    source.current_occlusion_hf, occlusion.m_hf, tau);
+            }
+
+            occlusion.m_gain = source.current_occlusion_gain;
+            occlusion.m_hf = source.current_occlusion_hf;
 
             // 音量总线：变化时提交到声源
             if (source.bus_applied != source.bus)
