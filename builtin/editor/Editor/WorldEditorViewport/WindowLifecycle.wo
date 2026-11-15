@@ -610,7 +610,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 ->  endItem
                 -> endMenu
                 -> subMenu("工具")
-                ->  subItem("烘焙音频环境", \= self->bakeAudioEnvironment();)
+                ->  subItem("烘焙音频遮挡缓存", \= self->bakeAudioOcclusion();)
                 ->  endItem
                 -> endMenu
                 ;

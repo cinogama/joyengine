@@ -2682,6 +2682,12 @@ namespace jeecs
         盒形声音遮挡体：听众到声源的线段穿过它时，按 occlusion/muffle
         衰减增益与高频。size 为局部全尺寸（乘实体比例尺），随实体世界
         旋转；2D 模式下只使用 XY 投影，3D 下使用完整 OBB。
+        is_static 标记该遮挡体在运行时保持不变：编辑器烘焙静态遮挡缓存
+        （<world>.je4cache 的 audio_occlusion 字段）时会把它和瓦片地图
+        遮挡一起烘进世界空间遮挡场，2D 运行时直接采样场内数据；动态遮挡
+        （false）仍然逐帧做线段测试。标记为静态后不要在运行时移动/改值，
+        否则缓存会失真；运行时的输入哈希校验会发现不一致（约一秒内）
+        并回退到实时遮挡。
         */
         struct Occluder
         {
@@ -2690,11 +2696,13 @@ namespace jeecs
             math::vec3 size;
             float occlusion;
             float muffle;
+            bool is_static;
 
             Occluder() noexcept
                 : size(1.0f, 1.0f, 1.0f)
                 , occlusion(0.6f)
                 , muffle(0.4f)
+                , is_static(false)
             {
             }
             Occluder(const Occluder& another) noexcept
@@ -2703,6 +2711,7 @@ namespace jeecs
                 size = another.size;
                 occlusion = another.occlusion;
                 muffle = another.muffle;
+                is_static = another.is_static;
             }
             Occluder(Occluder&& another) noexcept
                 : Occluder()
@@ -2710,6 +2719,7 @@ namespace jeecs
                 size = another.size;
                 occlusion = another.occlusion;
                 muffle = another.muffle;
+                is_static = another.is_static;
             }
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
@@ -2717,6 +2727,7 @@ namespace jeecs
                 typing::register_member(guard, &Occluder::size, "size");
                 typing::register_member(guard, &Occluder::occlusion, "occlusion");
                 typing::register_member(guard, &Occluder::muffle, "muffle");
+                typing::register_member(guard, &Occluder::is_static, "is_static");
             }
         };
         /*
@@ -2794,8 +2805,9 @@ namespace jeecs
         门洞：连接两个相邻空间（Audio::ReverbZone 或室外）。系统沿门洞的
         世界法线在中心两侧各取一个采样点，用房间权重自动解析两侧房间；
         两侧是同一房间或同为室外时忽略。transmission 描述通过门洞的整体
-        声能，muffle 描述高频损失；enabled 为 false 时烘焙与实时环境图都
-        忽略该门洞。
+        声能，muffle 描述高频损失；enabled 为 false 时实时环境图忽略该
+        门洞。transmission 低于 1e-4 的门洞也视作不连通：两侧房间按
+        “无门洞”的墙体泄漏处理，可用于表示关闭的门。
         门洞只依赖组件与实体变换；tilemap 只是将来生成这类实体的工具，
         音频系统不读取 tilemap。
         */

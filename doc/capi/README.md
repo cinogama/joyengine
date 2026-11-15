@@ -98,7 +98,7 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 - `je_audio_effect_*` - 音频效果
 - `je_audio_filter_*` - 音频滤波器
 - `je_audio_listener_*` - 监听者（距离模型与多普勒）
-- `je_audio_environment_*` - 世界音频环境（房间/门洞图）的烘焙与重载
+- `je_audio_occlusion_*` - 世界静态遮挡缓存（2D 遮挡场）的烘焙与重载
 
 ### [tilemap/](tilemap/) - 瓦片地图
 地图/瓦片集文档、图层、瓦片、源与逐格属性的读写。

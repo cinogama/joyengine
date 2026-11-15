@@ -245,7 +245,7 @@ namespace JEEditor::Editor::WorldEditorViewport
 
                 // 世界级缓存以世界文件 CRC 为键：落盘后旧缓存已失效，
                 // 通知音频系统重新读取缓存/回退实时环境
-                je::audio::environment::reload(self.m_world_instance);
+                je::audio::occlusion::reload(self.m_world_instance);
 
                 // 在独立作用域中先取出字符串：闭包按创建时的值捕获文本，
                 // 之后每帧由 Statebar 调用绘制保存成功提示。
@@ -352,21 +352,21 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
     }
 
-    // 手动烘焙当前视口世界的音频环境（写入 <world>.je4cache 的
-    // audio_environment）。房间由 Audio::ReverbZone 表示，门洞由
-    // Audio::Portal 表示；不读取 tilemap。
-    public func bakeAudioEnvironment(self: WorldEditorViewport)=> void
+    // 手动烘焙当前视口世界的静态遮挡缓存（写入 <world>.je4cache 的
+    // audio_occlusion）。输入是 is_static 的 Audio::Occluder 与全部瓦片
+    // 地图的音频遮挡；动态遮挡体由运行时实时处理。
+    public func bakeAudioOcclusion(self: WorldEditorViewport)=> void
     {
         if (self.m_is_runtime_editing)
         {
-            MsgBox::msg("烘焙音频环境", "调试运行的临时视口不支持烘焙");
+            MsgBox::msg("烘焙音频遮挡", "调试运行的临时视口不支持烘焙");
             return;
         }
 
         if (isWorldsFrozen() || DebugRun::isDebugRunActive())
         {
             MsgBox::err(
-                "烘焙音频环境", "当前正处于调试运行或冻结状态，请先结束运行");
+                "烘焙音频遮挡", "当前正处于调试运行或冻结状态，请先结束运行");
             return;
         }
 
@@ -374,8 +374,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         {
             none?
                 MsgBox::err(
-                    "烘焙音频环境",
-                    "请先保存世界：音频环境会写入 <世界文件>.je4cache");
+                    "烘焙音频遮挡",
+                    "请先保存世界：遮挡缓存会写入 <世界文件>.je4cache");
             value(path)?
             {
                 // World::Path 实体是内部实体（不存档）：烘焙前保证它存在并
@@ -383,7 +383,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 if (!ensureWorldPathComponent(
                         self.m_world_instance, path))
                 {
-                    MsgBox::err("烘焙音频环境", "无法创建 World::Path 实体");
+                    MsgBox::err("烘焙音频遮挡", "无法创建 World::Path 实体");
                     return;
                 }
 
@@ -393,31 +393,31 @@ namespace JEEditor::Editor::WorldEditorViewport
 
                 // 烘焙只读实体/组件：锁住碎片整理，避免与宇宙更新并发搬运实体
                 do self.m_world_instance->arch_defragmentation_lock();
-                let baked = je::audio::environment::bake(
+                let baked = je::audio::occlusion::bake(
                     self.m_world_instance, path->to_string());
                 do self.m_world_instance->arch_defragmentation_unlock();
 
                 if (baked)
                 {
                     Statebar::showState(3.) <| func(){
-                        Text("音频环境已烘焙");
+                        Text("音频遮挡缓存已烘焙");
                     };
                 }
                 else
-                    MsgBox::err("烘焙音频环境", "烘焙失败，请查看日志");
+                    MsgBox::err("烘焙音频遮挡", "烘焙失败，请查看日志");
             }
         }
     }
 
-    // 主菜单“工具 → 烘焙当前世界音频环境”入口
+    // 主菜单“工具 → 烘焙当前世界音频遮挡”入口
     public func bakeFocusedWorld()=> void
     {
         match (getLastFocused())
         {
             none?
-                MsgBox::msg("烘焙音频环境", "当前没有聚焦的世界视口");
+                MsgBox::msg("烘焙音频遮挡", "当前没有聚焦的世界视口");
             value(viewport)?
-                viewport->bakeAudioEnvironment();
+                viewport->bakeAudioOcclusion();
         }
     }
 
@@ -447,7 +447,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 do attachWorldPath(
                     self.m_world_instance, option::value(p));
-                je::audio::environment::reload(self.m_world_instance);
+                je::audio::occlusion::reload(self.m_world_instance);
             }
             none?;
         }

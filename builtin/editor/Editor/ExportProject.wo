@@ -936,7 +936,7 @@ namespace JEEditor::Editor
             return result->unsafe::asarray;
         }
         
-        // 导出前准备音频环境烘焙用的世界副本：先保存所有已打开的世界，
+        // 导出前准备音频遮挡烘焙用的世界副本：先保存所有已打开的世界，
         // 再把项目内全部 .je4world 从磁盘恢复到临时世界。
         // 烘焙本身不在这里做：调用方（协程）让出一帧、等宇宙更新处理完
         // 临时世界的命令缓冲区后，把返回的列表交给独立后台线程烘焙。
@@ -948,7 +948,7 @@ namespace JEEditor::Editor
             if (!WorldEditorViewport::saveAllWorldsChecked())
             {
                 JEEditor::GUI::Forms::MsgBox::err(
-                    "导出", "保存已打开的世界失败，已中止音频环境烘焙");
+                    "导出", "保存已打开的世界失败，已中止音频遮挡烘焙");
                 return option::none;
             }
 
@@ -1067,20 +1067,20 @@ namespace JEEditor::Editor
             // 下一次宇宙更新生效）。结果写入 <world>.je4cache，稍后由
             // packProjectFiles 打包。
             prepare->postMessage(
-                F"开始烘焙音频环境（{bake_worlds->len} 个世界）……");
+                F"开始烘焙音频遮挡缓存（{bake_worlds->len} 个世界）……");
 
             let mut bake_failure = "";
             for (let (w, path) : bake_worlds)
             {
-                prepare->postMessage(F"烘焙音频环境：{path}");
+                prepare->postMessage(F"烘焙音频遮挡缓存：{path}");
 
                 w->arch_defragmentation_lock();
-                let baked = je::audio::environment::bake(w, path);
+                let baked = je::audio::occlusion::bake(w, path);
                 w->arch_defragmentation_unlock();
 
                 if (!baked)
                 {
-                    bake_failure = F"烘焙音频环境失败：{path}";
+                    bake_failure = F"烘焙音频遮挡失败：{path}";
                     break;
                 }
             }
@@ -1091,7 +1091,7 @@ namespace JEEditor::Editor
             if (bake_failure->len > 0)
                 throw! bake_failure;
 
-            prepare->postMessage("音频环境烘焙完成。");
+            prepare->postMessage("音频遮挡缓存烘焙完成。");
 
             let export_path = settings.m_working_path / ".export";
             

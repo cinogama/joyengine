@@ -208,7 +208,7 @@ namespace JEEditor::Editor::MainMenu
             ->  separator()
             ->  subItem("更新全部着色器", ShaderUpdater::updateAll)
             ->      endItem
-            ->  subItem("烘焙当前世界音频环境", WorldEditorViewport::bakeFocusedWorld)
+            ->  subItem("烘焙当前世界音频遮挡", WorldEditorViewport::bakeFocusedWorld)
             ->      endItem
             ->  subItem("复制诊断信息", Diagnostics::copyDiagnosticInfo)
             ->      endItem

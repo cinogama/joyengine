@@ -36,10 +36,11 @@ constexpr uint32_t TILEMAP_CACHE_VERSION = 0x00000001;
 constexpr uint32_t AUDIO_CACHE_VERSION = 0x00000003;
 
 // World-level derived cache: <world>.je4cache. The payload is a binary cache
-// document with an "audio_environment" field (rooms/portals/path table) baked
-// from the world's Audio::ReverbZone and Audio::Portal components. The cache
-// key is the crc64 of the .je4world file, so saving the world invalidates it.
-constexpr uint32_t WORLD_CACHE_VERSION = 0x00000001;
+// document with an "audio_occlusion" field: a 2D world-space occlusion field
+// baked from static (Audio::Occluder::is_static) occluders and tilemap audio
+// occlusion. The cache key is the crc64 of the .je4world file, so saving the
+// world invalidates it. v2 replaced the removed "audio_environment" field.
+constexpr uint32_t WORLD_CACHE_VERSION = 0x00000002;
 
 constexpr uint32_t INTERNAL_SCRIPT_CACHE_VERSION = 0x00000001;
 

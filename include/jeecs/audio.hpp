@@ -930,28 +930,29 @@ je_audio_devices_disconnect_all [基本接口]
 JE_API void je_audio_devices_disconnect_all();
 
 /*
-je_audio_environment_bake [基本接口]
-把世界中由 Audio::ReverbZone（房间）与 Audio::Portal（门洞）构成的音频
-环境烘焙到 <world_path>.je4cache 的 audio_environment 字段
-    * world_path 必须是已经存在于磁盘上的世界文件路径；烘焙结果以该文件的
-        CRC64 作为缓存键，世界保存后会自然失效
-    * 只读取世界中的组件与实体变换，不读取 tilemap；tilemap 如需生成房间/
-        门洞，应把它们生成为普通实体/组件后再烘焙
-    * 烘焙内容包括房间声学参数、门洞连接关系与全房间对路径表
+je_audio_occlusion_bake [基本接口]
+把世界的静态遮挡烘焙到 <world_path>.je4cache 的 audio_occlusion 字段
+    * 输入：is_static 为 true 的 Audio::Occluder（世界变换已解析）与全部
+        Tilemap::Map 的瓦片音频遮挡；动态遮挡体（is_static = false）不烘焙
+    * 结果为世界空间 2D 遮挡场（Listener::use_2d = true 时使用）：每格存
+        单位长度光学密度，运行时沿射线积分；3D 仍走逐遮挡体实时路径
+    * world_path 必须是已经存在于磁盘上的世界文件路径；缓存键是该文件的
+        CRC64，世界保存后会自然失效
     * 缓存路径由持有 World::Path 组件的内部实体提供（加载世界/手动烘焙时
         创建），本接口只负责写缓存，不创建/修改组件
     * 失败（世界路径为空、文件不存在、写缓存失败）返回 false
 */
-JE_API bool je_audio_environment_bake(
+JE_API bool je_audio_occlusion_bake(
     je_game_world_t* world, const char* world_path);
 
 /*
-je_audio_environment_reload [基本接口]
-通知世界的音频系统重新读取 World::Path 组件指向的音频环境缓存
-    * 缓存路径来自实体组件，不由世界对象保存；组件不存在时回退实时构建
-    * je_audio_environment_bake 成功后会自行调用本接口，通常不需要手动调用
+je_audio_occlusion_reload [基本接口]
+通知世界的音频系统重新读取 World::Path 组件指向的遮挡缓存
+    * 缓存路径来自实体组件，不由世界对象保存；组件不存在/输入变化时回退
+        实时遮挡
+    * je_audio_occlusion_bake 成功后会自行调用本接口，通常不需要手动调用
 */
-JE_API void je_audio_environment_reload(je_game_world_t* world);
+JE_API void je_audio_occlusion_reload(je_game_world_t* world);
 
 typedef je_audio_native_play_device_instance_t je_AudioNativePlayDeviceInstance;
 typedef je_audio_play_device_t je_AudioPlayDevice;

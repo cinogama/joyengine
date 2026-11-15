@@ -8,7 +8,7 @@
 // jeecs_core_audio_environment.hpp —— 组件驱动的音频环境（房间/门洞图）
 //
 // 房间由 Audio::ReverbZone 表示，门洞由 Audio::Portal 表示。本文件定义
-// 烘焙与运行时共用的纯数据结构和图构建/缓存读写接口；不依赖 tilemap。
+// 运行时使用的纯数据结构与图构建接口；不依赖 tilemap，也不写缓存。
 // ============================================================================
 
 #include "jeecs/audio.hpp"
@@ -195,16 +195,4 @@ namespace jeecs::audio
         const std::vector<audio_environment_room_snapshot>& rooms,
         const std::vector<audio_environment_portal_snapshot>& portals,
         bool use_2d);
-
-    // 写/读 <world_path>.je4cache 的 audio_environment 字段。
-    bool write_audio_environment_cache(
-        const char* world_path, const audio_environment& environment);
-    std::optional<audio_environment> load_audio_environment_cache(
-        const char* world_path);
-
-    // 从世界的 Audio::ReverbZone / Audio::Portal 组件烘焙音频环境。
-    // 只读取组件与实体变换，不要求世界已启用/已 update，也不要求安装
-    // AudioUpdatingSystem。
-    bool bake_audio_environment_world(
-        je_game_world_t* world, const char* world_path);
 }

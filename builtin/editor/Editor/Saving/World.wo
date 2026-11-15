@@ -81,7 +81,7 @@ namespace JEEditor::Saving::World
         return (w, runtime_system_names->to_array());
     }
 
-    // 导出时烘焙音频环境用的轻量恢复：只恢复实体（含 prefab diff 展开），
+    // 导出时烘焙音频遮挡缓存用的轻量恢复：只恢复实体（含 prefab diff 展开），
     // 不添加世界文件中的系统。音频烘焙只读取组件，不需要系统/逻辑更新；
     // 但实体经命令缓冲区延迟落实，调用方须先让出一帧等宇宙更新处理完
     // 命令缓冲区，再读取实体/烘焙。
