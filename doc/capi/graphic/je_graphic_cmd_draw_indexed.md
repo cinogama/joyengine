@@ -29,3 +29,4 @@ JE_API void je_graphic_cmd_draw_indexed(
 
 - index_count/vertex_count/instance_count 必须大于 0
 - 索引类型固定为 uint32_t
+- Debug 构建校验 shader 的顶点输入能否由绑定的顶点布局提供、纹理类别是否与 shader 声明一致：不匹配时本次绘制会被丢弃，并输出一次错误日志（同一 shader/顶点组合只报告一次）。Release 构建不做这些校验（逐 draw 检查的开销只保留在调试期），错误的材质数据在 Release 下的渲染结果未定义
