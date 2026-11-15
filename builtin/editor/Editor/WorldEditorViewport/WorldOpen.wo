@@ -111,9 +111,6 @@ namespace JEEditor::Editor::WorldEditorViewport
         // 粒子系统与变换系统同为运行时系统：编辑态即模拟，便于在视口
         // 中实时预览与调参发射器
         do new_world->add_system(PARTICLE_SYSTEM_TYPE);
-        // 音频系统同样在编辑态模拟：世界里有 Audio::Listener 时即可听到
-        // 空间化音源，便于直接调整衰减/遮挡/混响参数
-        do new_world->add_system(AUDIO_SYSTEM_TYPE);
         
         // Create editor camera.
         ensureDebugCamera(new_world);
@@ -135,6 +132,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                 value(_)?
                 {
                     world_viewport->addRuntimeSystem(ANIMATION_SYSTEM_TYPE);
+                    // 音频系统只在调试运行/导出时启用：编辑态不常驻播放，
+                    // 需要试听时开始运行即可
+                    world_viewport->addRuntimeSystem(AUDIO_SYSTEM_TYPE);
                     break;
                 }
             }
@@ -190,12 +190,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                 // 世界级缓存路径实体不随世界存档：加载时按当前路径重建，
                 // 音频等子系统据此加载烘焙结果（缓存缺失时自行回退）
                 do attachWorldPath(w, option::value(path));
-                // 旧世界文件未保存粒子系统：补挂一次，保证发射器在编辑态
-                // 可预览（已存在时 add_system 无事发生）
-                do w->add_system(PARTICLE_SYSTEM_TYPE);
-                // 旧世界文件可能缺少音频系统：补挂，保证编辑态试听与世界级
-                // 音频环境烘焙都能找到 AudioUpdatingSystem
-                do w->add_system(AUDIO_SYSTEM_TYPE);
                 w->set_enable(true);
                 
                 // “调试执行/导出时才启用”的系统以类型名保存，此处解析为
