@@ -52,7 +52,7 @@ endif()
 
 add_library(joyengine_core_configs INTERFACE)
 
-target_include_directories(joyengine_core_configs INTERFACE 
+target_include_directories(joyengine_core_configs INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/stb"
     "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/imgui"
     "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/imgui/backends"
@@ -64,7 +64,11 @@ target_include_directories(joyengine_core_configs INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/spirv-cross"
     "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/imgui-node-editor"
     "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/ImGuiColorTextEdit"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/openal-soft/include")
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/openal-soft/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/ogg/include"
+    # ogg generates include/ogg/config_types.h into its binary dir.
+    "${CMAKE_BINARY_DIR}/3rd/ogg/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/vorbis/include")
 
 set(imgui_srcs    
     "../3rd/imgui/imconfig.h"
@@ -296,6 +300,10 @@ endif()
 
 if (JE4_BUILD_SHARED_CORE AND NOT MSVC)
     target_compile_options (box2d PRIVATE -fPIC)
+    target_compile_options (ogg PRIVATE -fPIC)
+    target_compile_options (vorbis PRIVATE -fPIC)
+    target_compile_options (vorbisenc PRIVATE -fPIC)
+    target_compile_options (vorbisfile PRIVATE -fPIC)
 endif()
 
 if (JE4_ENABLE_SHADER_WRAP_GENERATOR)
@@ -330,9 +338,13 @@ target_link_libraries(joyecs PRIVATE
     ${JE4_STATIC_LINKED_PKG_AND_MODULE_LIST}
     woolang
     woort
-    box2d 
+    box2d
     assimp
-    miniz)
+    miniz
+    ogg
+    vorbis
+    vorbisenc
+    vorbisfile)
 
 if (JE4_SPECIFY_OPENAL_LIB_NAME STREQUAL "")
     target_link_libraries(joyecs PRIVATE OpenAL)

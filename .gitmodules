@@ -76,3 +76,11 @@
 	path = 3rd/miniz
 	url = https://git.cinogama.net/cinogamaproject/joyengineecs/miniz.git
 	branch = master_3.1.2_fix
+[submodule "3rd/ogg"]
+	path = 3rd/ogg
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/ogg.git
+	branch = main
+[submodule "3rd/vorbis"]
+	path = 3rd/vorbis
+	url = https://git.cinogama.net/cinogamaproject/joyengineecs/vorbis.git
+	branch = main

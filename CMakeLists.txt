@@ -153,6 +153,15 @@ add_subdirectory("3rd/assimp")
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static miniz" FORCE)
 add_subdirectory("3rd/miniz")
 
+# ogg must be added before vorbis, so vorbis reuses the Ogg::ogg target
+# instead of calling find_package(Ogg).
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static ogg" FORCE)
+add_subdirectory("3rd/ogg")
+
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static vorbis" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "Disable vorbis tests" FORCE)
+add_subdirectory("3rd/vorbis")
+
 # Use glslang and spirv-cross to generate shader wraper for all supported platform.
 if (JE4_ENABLE_SHADER_WRAP_GENERATOR)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static glslangc" FORCE)
