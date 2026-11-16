@@ -21,8 +21,8 @@
 // gizmoAxisHiddenIn2D）；散布角环平面与视线平行时（主方向在屏幕平面
 // 内的典型 2D 情形）环平面求交无解，拖拽平面退回面向视线的平面，按
 // 命中点垂直主方向的分量换算散布角，保证 2D 下散布可拖。
-// 优先级介于光源手柄与变换游标之间：碰撞体/光源手柄被悬停/拖拽时
-// 本手柄让位，其被悬停/拖拽时变换游标让位。
+// 优先级低于变换游标（重叠时本手柄让位），高于光源/碰撞体手柄：
+// 碰撞体/光源手柄被悬停/拖拽时本手柄让位。
 
 import pkg::std;
 
@@ -451,9 +451,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                 && !self.m_is_look_active
                 && !self.m_is_pan_active
                 && !self.m_is_orbit_active
-                // 全部模式按 粒子 > 光源 > 碰撞体 > 变换 运行，粒子先跑；
-                // 其他层的拖拽仍在进行时由对应层接管
+                // 变换游标优先（全部模式下它先运行）；其他层的拖拽仍在
+                // 进行时由对应层接管
                 && !self.m_gizmo_dragging
+                && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE
                 && !self.m_collider_dragging
                 && !self.m_light_dragging))
                 return_value!;

@@ -212,8 +212,9 @@ namespace JEEditor::Editor::WorldEditorViewport
 
         // ---- 编辑层选择（第二行） ----
         // 选中实体带有组件编辑手柄时提供层切换。全部模式同时绘制并
-        // 响应变换、碰撞体、光源、粒子与音频手柄（后绘制者优先）；单层
-        // 模式只显示对应家族，其余层保留淡化线框。0-5 可直接切换。
+        // 响应变换、碰撞体、光源、粒子与音频手柄（重叠时变换游标优先
+        // 选中，其余层按 粒子 > 音频 > 光源 > 碰撞体 让位）；单层模式
+        // 只显示对应家族，其余层保留淡化线框。0-5 可直接切换。
         let selected_entity = self->getSelectedEntity();
         let mut has_collider_layer = false;
         let mut has_light_layer = false;
@@ -276,7 +277,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 toolbar_hovered = true;
                 do SetTooltip(
-                    "同时显示变换、碰撞体、光源、粒子与音频手柄（0，可能重叠）");
+                    "同时显示变换、碰撞体、光源、粒子与音频手柄（0，重叠时变换优先）");
             }
             SameLine();
 

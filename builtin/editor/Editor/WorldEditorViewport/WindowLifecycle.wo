@@ -834,11 +834,29 @@ namespace JEEditor::Editor::WorldEditorViewport
         let all_layers =
             !ui_editing && self.m_gizmo_active_layer == GizmoLayer::ALL;
 
-        // 全部模式按“后绘制者优先”的顺序运行：粒子 > 音频 > 光源 > 碰撞体 >
-        // 变换（绘制顺序为 变换 → 碰撞体 → 光源 → 粒子/音频，最上层最后
-        // 运行）。各 update 内部对更早运行的层让位，保证同一时刻只有
-        // 一个手柄进入悬停/拖拽，且与画面层级一致。单层模式只有对应
-        // 层满足条件；拖拽中的层即使层状态改变也会继续运行以完成收尾。
+        // 全部模式按“变换最优先”的顺序运行：变换游标先做命中，其余层
+        // 在其后运行并对变换的悬停/拖拽让位（绘制顺序仍为 变换 → 碰撞体
+        // → 光源 → 粒子/音频）。重叠位置总是变换手柄先被选中；单层组件
+        // 模式（1-5）下只响应对应层的手柄。其余层之间保持原有让位关系
+        //（粒子 > 音频 > 光源 > 碰撞体）。单层模式只有对应层满足条件；
+        // 拖拽中的层即使层状态改变也会继续运行以完成收尾。
+        if (all_layers
+            || (!ui_editing
+                && self.m_gizmo_active_layer == GizmoLayer::TRANSFORM)
+            || self.m_gizmo_dragging)
+        {
+            match (viewport_rect)
+            {
+                none?;
+                value((rect_min, rect_max))?
+                    self->updateTransformGizmo(
+                        debug_camera,
+                        input_hovered,
+                        rect_min,
+                        (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
+            }
+        }
+
         if (all_layers
             || (!ui_editing
                 && self.m_gizmo_active_layer == GizmoLayer::PARTICLE)
@@ -919,25 +937,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                     (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
         }
 
-        // 变换游标在变换层、全部模式或拖拽收尾时运行；单层组件模式
-        // 下不绘制也不参与命中（按 1 或工具栏切到变换层）。
-        if (all_layers
-            || (!ui_editing
-                && self.m_gizmo_active_layer == GizmoLayer::TRANSFORM)
-            || self.m_gizmo_dragging)
-        {
-            match (viewport_rect)
-            {
-                none?;
-                value((rect_min, rect_max))?
-                    self->updateTransformGizmo(
-                        debug_camera,
-                        input_hovered,
-                        rect_min,
-                        (rect_max.0 - rect_min.0, rect_max.1 - rect_min.1));
-            }
-        }
-        
         // 先处理右键状态（记录按下起点、松开时按位移决定是否弹实体菜单），
         // 再进行摄像机控制：环视以这里记录的按下起点为基准，位移切实
         // 超过阈值后才会激活，因此本调用必须先于 updateCameraControl。

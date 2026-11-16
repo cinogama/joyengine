@@ -1169,9 +1169,12 @@ namespace JEEditor::Editor::WorldEditorViewport
         let mut label = "";
         if (self.m_gizmo_active_layer == GizmoLayer::ALL)
         {
-            // 全部模式同一时刻只有一个层赢得悬停（按 粒子 > 光源 >
-            // 碰撞体 > 变换 让位），标签取赢得悬停的那一层
-            if (self.m_particle_hover_handle != GIZMO_HANDLE_NONE
+            // 全部模式同一时刻只有一个层赢得悬停：变换游标最优先，
+            // 其余层之间按 粒子 > 光源 > 碰撞体 让位
+            if (self.m_gizmo_hover_handle != GIZMO_HANDLE_NONE
+                || self.m_gizmo_dragging)
+                label = self->transformGizmoHandleLabel();
+            else if (self.m_particle_hover_handle != GIZMO_HANDLE_NONE
                 || self.m_particle_dragging)
                 label = self->particleGizmoHandleLabel();
             else if (self.m_light_hover_handle != GIZMO_HANDLE_NONE
@@ -1180,8 +1183,6 @@ namespace JEEditor::Editor::WorldEditorViewport
             else if (self.m_collider_hover_handle != GIZMO_HANDLE_NONE
                 || self.m_collider_dragging)
                 label = self->colliderGizmoHandleLabel();
-            else
-                label = self->transformGizmoHandleLabel();
         }
         else if (self.m_gizmo_active_layer == GizmoLayer::TRANSFORM)
             label = self->transformGizmoHandleLabel();

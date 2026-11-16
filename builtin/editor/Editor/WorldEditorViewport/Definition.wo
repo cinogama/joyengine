@@ -136,8 +136,9 @@ namespace JEEditor::Editor
 
         // 编辑层：同一时刻只绘制/响应一个手柄家族，避免变换游标、
         // 碰撞体、光源形状与粒子发射器的手柄在同一位置叠加。
-        // ALL 同时显示全部层的手柄（沿用“后绘制者优先”的命中顺序）；
-        // 其余为单层模式，手动选择的组件层对当前选中实体不可用时回退 ALL。
+        // ALL 同时显示全部层的手柄（重叠时变换游标优先，其余层按
+        // 粒子 > 音频 > 光源 > 碰撞体 让位）；其余为单层模式，手动选择
+        // 的组件层对当前选中实体不可用时回退 ALL。
         protected m_gizmo_layer: mut GizmoLayer,
         // 本帧解析出的实际激活层（UI 编辑模式恒为 TRANSFORM）
         protected m_gizmo_active_layer: mut GizmoLayer,

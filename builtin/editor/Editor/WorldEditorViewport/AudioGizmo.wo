@@ -626,7 +626,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                 && !self.m_is_look_active
                 && !self.m_is_pan_active
                 && !self.m_is_orbit_active
-                // 粒子层先运行且绘制在最上层，悬停/拖拽时让位
+                // 变换游标优先（全部模式下它先运行）；粒子层先于音频
+                // 运行且绘制在最上层，悬停/拖拽时也让位
+                && !self.m_gizmo_dragging
+                && self.m_gizmo_hover_handle == GIZMO_HANDLE_NONE
                 && !self.m_particle_dragging
                 && self.m_particle_hover_handle == GIZMO_HANDLE_NONE))
                 return_value!;
@@ -776,18 +779,45 @@ namespace JEEditor::Editor::WorldEditorViewport
         return audioKindName(kind);
     }
 
-    protected func drawAudioLabel(
-        dl: DrawListT, c: vec2, e: entity, kind: int)=> void
+    // 选中/悬停实体的组件摘要（多行一块背景），挂在徽标列正下方。
+    // anchor = 徽标列左下角。不能挂在徽标右侧：变换游标的 +X/+Y 轴与
+    // 音源的最大/参考距离手柄都在徽标右/上方向，右侧文本会压住它们。
+    protected func drawAudioLabels(
+        dl: DrawListT, anchor: vec2, labels: array<string>)=> void
     {
-        let text = audioLabelText(e, kind);
-        let size = CalcTextSize(text);
-        let x = c[0] + AUDIO_ICON_PX * 0.5 + 6.;
-        let y = c[1] - size[1] * 0.5;
+        let lines = labels->len;
+        if (lines == 0)
+            return;
+
+        let line_height = GetTextLineHeight();
+        let line_gap = 2.;
+        let mut width = 0.;
+        for (let text : labels)
+        {
+            let w = CalcTextSize(text).0;
+            if (width < w)
+                width = w;
+        }
+
+        // 徽标半径 12 + 选中外圈 4.5，留出 9px 间隙后文字才落到
+        // 中央手柄（半边长 8）与 +X 轴之下
+        let x = anchor[0];
+        let y = anchor[1] + 9.;
+        let height = line_height * (lines as real)
+            + line_gap * ((lines - 1) as real);
 
         dl->AddRectFilled(
-            (x - 4., y - 2.),
-            (x + size[0] + 4., y + size[1] + 2.), AUDIO_BG_COLOR);
-        dl->AddText((x, y), GIZMO_LABEL_COLOR, text);
+            (x - 4., y - 3.),
+            (x + width + 4., y + height + 3.), AUDIO_BG_COLOR);
+
+        let mut line = 0;
+        for (let text : labels)
+        {
+            dl->AddText(
+                (x, y + (line as real) * (line_height + line_gap)),
+                GIZMO_LABEL_COLOR, text);
+            line += 1;
+        }
     }
 
     // 音频图标/线框/手柄绘制（屏幕空间，在 3D gizmo 之后提交）
@@ -1000,6 +1030,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                             e->towoo::get_component:<Camera::Projection>()->is_value;
 
                         let mut index = 0;
+                        let mut hot_labels = []mut: vec<string>;
+                        let mut label_left = 0.;
+                        let mut label_bottom = 0.;
+
                         for (let kind : kinds)
                         {
                             let mut center = project(pos);
@@ -1027,10 +1061,32 @@ namespace JEEditor::Editor::WorldEditorViewport
                                 selected, icon_hovered, enabled);
 
                             if (hot)
-                                drawAudioLabel(dl, center, e, kind);
+                            {
+                                // 摘要块取徽标列的左/下包围：徽标多于一个
+                                // 时纵向堆叠，摘要统一挂在最下方
+                                let half = AUDIO_ICON_PX * 0.5;
+                                if (hot_labels->len == 0)
+                                {
+                                    label_left = center[0] - half;
+                                    label_bottom = center[1] + half;
+                                }
+                                else
+                                {
+                                    if (center[0] - half < label_left)
+                                        label_left = center[0] - half;
+                                    if (label_bottom < center[1] + half)
+                                        label_bottom = center[1] + half;
+                                }
+                                hot_labels->add(audioLabelText(e, kind));
+                            }
 
                             index += 1;
                         }
+
+                        if (hot)
+                            drawAudioLabels(
+                                dl, (label_left, label_bottom) as vec2,
+                                hot_labels->to_array);
 
                         // ---- 区域线框（房间/遮挡/门洞） ----
                         // 区域体积始终绘制，不依赖当前编辑层与选中状态；

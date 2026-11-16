@@ -261,10 +261,18 @@ namespace JEEditor::Editor::WorldEditorViewport
 
             self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
 
+            // 变换游标优先：全部模式下重叠时其它层在各自 update 里让位
+            //（见 WindowLifecycle 的更新顺序），这里只需让开其它层已经
+            // 在进行的拖拽（拖拽起点不在变换手柄上），避免拖拽中抢手。
             let hoverable = hovered
                 && !self.m_is_look_active
                 && !self.m_is_pan_active
                 && !self.m_is_orbit_active
+                && !self.m_collider_dragging
+                && !self.m_light_dragging
+                && !self.m_particle_dragging
+                && !self.m_audio_dragging
+                && !self.m_ui_dragging
                 // 透视摄像机下，游标须位于摄像机前方
                 && ((origin - cam_pos)->dot(cam_forward) > 0.);
 
@@ -272,22 +280,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                 self.m_gizmo_hover_handle = self->pickGizmoHandle(
                     view_proj, origin, orientation,
                     self.m_gizmo_draw_size, mouse, rmin, rsize, is_2d);
-
-            // 组件/UI 手柄被悬停或拖拽中时变换游标让位（不响应悬停高亮
-            // 与左键拖拽）。单层门控下组件 update 与变换 update 不会同帧
-            // 运行，这里主要防御拖拽收尾、UI 手柄与外部状态，保证任何
-            // 情况下变换游标都不抢其他手柄的点击。
-            if (self.m_collider_hover_handle != GIZMO_HANDLE_NONE
-                || self.m_collider_dragging
-                || self.m_light_hover_handle != GIZMO_HANDLE_NONE
-                || self.m_light_dragging
-                || self.m_particle_hover_handle != GIZMO_HANDLE_NONE
-                || self.m_particle_dragging
-                || self.m_audio_hover_handle != GIZMO_HANDLE_NONE
-                || self.m_audio_dragging
-                || self.m_ui_hover_handle != UI_HANDLE_NONE
-                || self.m_ui_dragging)
-                self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
 
             // 悬停手柄上按下左键：开始拖拽
             if (self.m_gizmo_hover_handle != GIZMO_HANDLE_NONE
