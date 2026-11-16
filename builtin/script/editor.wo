@@ -927,3 +927,69 @@ namespace Particle::Emitter::simulation_space_type
         }
     }
 }
+
+namespace Audio::Listener::distance_model
+{
+    using parser = void
+    {
+        public extern func edit(val: Audio::Listener::distance_model, tag: string)=> option<Audio::Listener::distance_model>
+        {
+            // 距离衰减模型下拉（枚举值与选项下标一致）
+            match (Combo(F"##{tag}",
+                ["无衰减", "反比", "反比（钳制）", "线性", "线性（钳制）", "指数", "指数（钳制）"],
+                option::value(val as int)))
+            {
+                value(idx)?
+                    return option::value(idx as Audio::Listener::distance_model);
+                none?;
+            }
+            return option::none;
+        }
+    }
+}
+
+namespace Audio::Source::bus
+{
+    using parser = void
+    {
+        public extern func edit(val: Audio::Source::bus, tag: string)=> option<Audio::Source::bus>
+        {
+            // 音量总线下拉（枚举值与选项下标一致）
+            match (Combo(F"##{tag}",
+                ["无", "BGM", "BGS", "ME", "SE", "Voice", "自定义 0", "自定义 1", "自定义 2", "自定义 3"],
+                option::value(val as int)))
+            {
+                value(idx)?
+                    return option::value(idx as Audio::Source::bus);
+                none?;
+            }
+            return option::none;
+        }
+    }
+}
+
+namespace Audio::ReverbZone::preset
+{
+    using parser = void
+    {
+        public extern func edit(val: Audio::ReverbZone::preset, tag: string)=> option<Audio::ReverbZone::preset>
+        {
+            // EAX 混响预设下拉（枚举值与选项下标一致）
+            match (Combo(F"##{tag}",
+                [
+                    "自定义", "通用", "软包间", "房间", "浴室", "客厅", "石屋",
+                    "礼堂", "音乐厅", "洞穴", "竞技场", "机库", "地毯走廊",
+                    "走廊", "石质走廊", "小巷", "森林", "城市", "山地",
+                    "采石场", "平原", "停车场", "下水道", "水下",
+                    "药物影响", "眩晕", "精神错乱",
+                ],
+                option::value(val as int)))
+            {
+                value(idx)?
+                    return option::value(idx as Audio::ReverbZone::preset);
+                none?;
+            }
+            return option::none;
+        }
+    }
+}

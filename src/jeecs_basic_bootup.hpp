@@ -28,6 +28,14 @@ namespace jeecs
 
         ;;
 
+    // Post shutdown 阶段：woolang GC 的句柄终结器在 woolang_runtime 的
+    // shutdown（逆序最后一个模块）内部才运行，晚于一切模块的 shutdown。
+    // 凡是把对象句柄交给 woolang GC 的模块，销毁必须推迟到 post_shutdown
+    //（逆序执行，位于 jeecs::shutdown 末尾、woolang 运行时关闭之后），
+    // 让迟到的终结器在模块仍完整存活时送达。
+    namespace audio { void post_shutdown(); }
+    namespace log { void post_shutdown(); }
+
     [[maybe_unused]] static void bootup(int argc, char** argv)
     {
 #define JE_MODULE_MACRO(m) m::bootup(argc, argv);
@@ -46,6 +54,10 @@ namespace jeecs
 
         for (size_t i = sizeof(callbacks) / sizeof(callback_t); i > 0; --i)
             callbacks[i - 1]();
+
+        // Post shutdown（按逆序执行，与上面的一致）
+        audio::post_shutdown();
+        log::post_shutdown();
     }
 }
 

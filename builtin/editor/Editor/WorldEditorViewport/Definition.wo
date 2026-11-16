@@ -109,6 +109,10 @@ namespace JEEditor::Editor
         //（发射器仍是常规渲染实体，参与射线拾取）
         protected m_particle_emitter_entity_selector: mut entity_selector,
 
+        // 音频实体（Translation + 任一 Audio 组件且不带 Invisible）选择器：
+        // 音频图标 gizmo 与遮挡/混响/门洞/音源/听者的编辑手柄以它为准
+        protected m_audio_entity_selector: mut entity_selector,
+
         // UI 元素实体（带 UserInterface::Element 且不带 Invisible）选择器：
         // UI 矩形 gizmo 与视口内 UI 空间点击拾取以它为准（UI 布局不读
         // Translation，故不要求 Translation）
@@ -226,6 +230,23 @@ namespace JEEditor::Editor
         protected m_particle_drag_undo_component: mut string,
         protected m_particle_drag_undo_member: mut string,
         protected m_particle_drag_undo_old_value: mut string,
+
+        // ---- 音频组件 gizmo（编辑手柄）状态 ----
+        // 选中带 Audio::Source / Listener / Occluder / ReverbZone / Portal
+        // 的实体即显示图标、线框与尺寸/距离/朝向手柄（无需模式开关）。
+        // 拖拽开始时捕获中心/轴/拖拽平面与撤销记录所需的成员旧值。
+        protected m_audio_hover_handle: mut int,
+        protected m_audio_dragging: mut bool,
+        protected m_audio_drag_handle: mut int,
+        protected m_audio_drag_euid: mut entity::internal::euid_t,
+        protected m_audio_drag_component: mut string,
+        protected m_audio_drag_member: mut string,
+        protected m_audio_drag_old_value: mut string,
+        protected m_audio_drag_center: mut vec3,
+        protected m_audio_drag_axis: mut vec3,
+        protected m_audio_drag_plane_normal: mut vec3,
+        protected m_audio_drag_plane_point: mut vec3,
+        protected m_audio_drag_scale: mut vec3,
 
         // ---- UI 元素 gizmo（编辑手柄）状态 ----
         // 选中带 UserInterface::Element 的实体即显示解析后的 UI 矩形与
@@ -380,6 +401,7 @@ namespace JEEditor::Editor
             COLLIDER,
             LIGHT2D,
             PARTICLE,
+            AUDIO,
         }
 
         
@@ -463,6 +485,11 @@ namespace JEEditor::Editor
         protected let PARTICLE_GIZMO_COLOR = (1., 0.5, 0.75, 0.65);
         protected let PARTICLE_DIRECTION_GIZMO_COLOR = (0.4, 0.85, 1., 0.85);
         protected let PARTICLE_SPREAD_GIZMO_COLOR = (1., 0.62, 0.25, 0.75);
+
+        // ---- 音频组件 gizmo 参数 ----
+        protected let AUDIO_ICON_PX = 24.;               // 音频图标边长（像素）
+        protected let AUDIO_HANDLE_HIT_PX = 8.;          // 音频点手柄命中半径（像素）
+        protected let AUDIO_MIN_SIZE = 0.01;             // 尺寸/距离下限
 
         // ---- UI 元素 gizmo 参数 ----
         // 手柄编号：移动（矩形内部）、8 个缩放手柄（四角+四边，命名以
@@ -709,6 +736,15 @@ namespace JEEditor::Editor
                     || !(e->towoo::get_component:<Physics2D::Collider::Mesh>->is_none));
         }
 
+        protected func hasAudioComponents(e: entity)=> bool
+        {
+            return e->towoo::get_component:<Audio::Source>->is_value
+                || e->towoo::get_component:<Audio::Listener>->is_value
+                || e->towoo::get_component:<Audio::Occluder>->is_value
+                || e->towoo::get_component:<Audio::ReverbZone>->is_value
+                || e->towoo::get_component:<Audio::Portal>->is_value;
+        }
+
         // 选中实体是否为指定 EUID（图标绘制/命中缩放等无 selected 快照的
         // 循环使用）
         protected func euidIsSelected(
@@ -732,7 +768,9 @@ namespace JEEditor::Editor
                 return "碰撞体";
             if (layer == GizmoLayer::LIGHT2D)
                 return "光源";
-            return "粒子";
+            if (layer == GizmoLayer::PARTICLE)
+                return "粒子";
+            return "音频";
         }
 
         // 当前选中实体是否支持指定编辑层。ALL 与 TRANSFORM 始终可用
@@ -751,6 +789,8 @@ namespace JEEditor::Editor
                     || e->towoo::get_component:<Light2D::ShadowOffset>->is_value;
             if (layer == GizmoLayer::PARTICLE)
                 return e->towoo::get_component:<Particle::Emitter>->is_value;
+            if (layer == GizmoLayer::AUDIO)
+                return hasAudioComponents(e);
             return false;
         }
 

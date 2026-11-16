@@ -36,4 +36,9 @@ namespace JEEditor::GUI::Icons
     public let GIZMO_POINT_LIGHT2D = texture2d::load(option::none, "!/builtin/icon/gizmo_point_light2d.png");
     public let GIZMO_PARALLEL_LIGHT2D = texture2d::load(option::none, "!/builtin/icon/gizmo_parallel_light2d.png");
     public let GIZMO_PARTICLE = texture2d::load(option::none, "!/builtin/icon/gizmo_particle.png");
+    public let GIZMO_AUDIO_SOURCE = texture2d::load(option::none, "!/builtin/icon/gizmo_audio_source.png");
+    public let GIZMO_AUDIO_LISTENER = texture2d::load(option::none, "!/builtin/icon/gizmo_audio_listener.png");
+    public let GIZMO_AUDIO_OCCLUDER = texture2d::load(option::none, "!/builtin/icon/gizmo_audio_occluder.png");
+    public let GIZMO_AUDIO_REVERBZONE = texture2d::load(option::none, "!/builtin/icon/gizmo_audio_reverbzone.png");
+    public let GIZMO_AUDIO_PORTAL = texture2d::load(option::none, "!/builtin/icon/gizmo_audio_portal.png");
 }

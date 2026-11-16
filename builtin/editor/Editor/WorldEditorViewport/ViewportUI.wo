@@ -212,12 +212,13 @@ namespace JEEditor::Editor::WorldEditorViewport
 
         // ---- 编辑层选择（第二行） ----
         // 选中实体带有组件编辑手柄时提供层切换。全部模式同时绘制并
-        // 响应变换、碰撞体、光源与粒子手柄（后绘制者优先）；单层模式
-        // 只显示对应家族，其余层保留淡化线框。0-4 可直接切换。
+        // 响应变换、碰撞体、光源、粒子与音频手柄（后绘制者优先）；单层
+        // 模式只显示对应家族，其余层保留淡化线框。0-5 可直接切换。
         let selected_entity = self->getSelectedEntity();
         let mut has_collider_layer = false;
         let mut has_light_layer = false;
         let mut has_particle_layer = false;
+        let mut has_audio_layer = false;
         match (selected_entity)
         {
             none?;
@@ -230,10 +231,12 @@ namespace JEEditor::Editor::WorldEditorViewport
                     || e->towoo::get_component:<Light2D::ShadowOffset>->is_value;
                 has_particle_layer =
                     e->towoo::get_component:<Particle::Emitter>->is_value;
+                has_audio_layer = hasAudioComponents(e);
             }
         }
 
-        if (has_collider_layer || has_light_layer || has_particle_layer)
+        if (has_collider_layer || has_light_layer || has_particle_layer
+            || has_audio_layer)
         {
             // 右下角显示编辑层：按实际文本/按钮宽度估算整行宽度后右对齐。
             // 估算略偏大，宁可留一点间隙也不越过右边界；视口过窄时钳制
@@ -254,6 +257,9 @@ namespace JEEditor::Editor::WorldEditorViewport
             if (has_particle_layer)
                 row_width +=
                     10. + GetFrameHeight() + 5. + CalcTextSize("粒子").0;
+            if (has_audio_layer)
+                row_width +=
+                    10. + GetFrameHeight() + 5. + CalcTextSize("音频").0;
 
             let mut row_x = rect_max.0 - 8. - row_width;
             if (row_x < rect_min.0 + 8.)
@@ -270,7 +276,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 toolbar_hovered = true;
                 do SetTooltip(
-                    "同时显示变换、碰撞体、光源与粒子手柄（0，可能重叠）");
+                    "同时显示变换、碰撞体、光源、粒子与音频手柄（0，可能重叠）");
             }
             SameLine();
 
@@ -315,6 +321,19 @@ namespace JEEditor::Editor::WorldEditorViewport
                 {
                     toolbar_hovered = true;
                     do SetTooltip("只显示发射形状、方向与散布角手柄（4）");
+                }
+            }
+
+            if (has_audio_layer)
+            {
+                SameLine();
+                if (RadioButton("音频", self.m_gizmo_layer == GizmoLayer::AUDIO))
+                    self.m_gizmo_layer = GizmoLayer::AUDIO;
+                if (IsItemHovered())
+                {
+                    toolbar_hovered = true;
+                    do SetTooltip(
+                        "只显示音源/听者、房间、遮挡与门洞的线框和编辑手柄（5）");
                 }
             }
         }

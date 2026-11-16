@@ -102,8 +102,11 @@ namespace jeecs
             jeecs::typing::register_type<Physics2D::CollisionResult>(guard, "Physics2D::CollisionResult");
 
             jeecs::typing::register_type<Audio::Source>(guard, "Audio::Source");
+            jeecs::typing::register_type<Audio::Spatial>(guard, "Audio::Spatial");
             jeecs::typing::register_type<Audio::Listener>(guard, "Audio::Listener");
-            jeecs::typing::register_type<Audio::Playing>(guard, "Audio::Playing");
+            jeecs::typing::register_type<Audio::Occluder>(guard, "Audio::Occluder");
+            jeecs::typing::register_type<Audio::ReverbZone>(guard, "Audio::ReverbZone");
+            jeecs::typing::register_type<Audio::Portal>(guard, "Audio::Portal");
 
             jeecs::typing::register_type<Input::VirtualGamepad>(guard, "Input::VirtualGamepad");
 
@@ -326,6 +329,104 @@ namespace jeecs
                 "    {\n"
                 "        world   = 0,\n"
                 "        local   = 1,\n"
+                "    }\n"
+                "}\n");
+
+            typing::register_script_parser<je_audio_distance_model_t>(
+                guard,
+                [](const je_audio_distance_model_t* v, woort_value value)
+                {
+                    woort_set_int(value, (woort_Int)*v);
+                },
+                [](je_audio_distance_model_t* v, woort_value value)
+                {
+                    *v = static_cast<je_audio_distance_model_t>(woort_int(value));
+                },
+                "Audio::Listener::distance_model",
+                "namespace Audio::Listener\n"
+                "{\n"
+                "    public enum distance_model\n"
+                "    {\n"
+                "        none              = 0,\n"
+                "        inverse           = 1,\n"
+                "        inverse_clamped   = 2,\n"
+                "        linear            = 3,\n"
+                "        linear_clamped    = 4,\n"
+                "        exponent          = 5,\n"
+                "        exponent_clamped  = 6,\n"
+                "    }\n"
+                "}\n");
+
+            typing::register_script_parser<je_audio_bus_t>(
+                guard,
+                [](const je_audio_bus_t* v, woort_value value)
+                {
+                    woort_set_int(value, (woort_Int)*v);
+                },
+                [](je_audio_bus_t* v, woort_value value)
+                {
+                    *v = static_cast<je_audio_bus_t>(woort_int(value));
+                },
+                "Audio::Source::bus",
+                "namespace Audio::Source\n"
+                "{\n"
+                "    public enum bus\n"
+                "    {\n"
+                "        none      = 0,\n"
+                "        bgm       = 1,\n"
+                "        bgs       = 2,\n"
+                "        me        = 3,\n"
+                "        se        = 4,\n"
+                "        voice     = 5,\n"
+                "        custom_0  = 6,\n"
+                "        custom_1  = 7,\n"
+                "        custom_2  = 8,\n"
+                "        custom_3  = 9,\n"
+                "    }\n"
+                "}\n");
+
+            typing::register_script_parser<je_audio_effect_eax_reverb_preset_t>(
+                guard,
+                [](const je_audio_effect_eax_reverb_preset_t* v, woort_value value)
+                {
+                    woort_set_int(value, (woort_Int)*v);
+                },
+                [](je_audio_effect_eax_reverb_preset_t* v, woort_value value)
+                {
+                    *v = static_cast<je_audio_effect_eax_reverb_preset_t>(woort_int(value));
+                },
+                "Audio::ReverbZone::preset",
+                "namespace Audio::ReverbZone\n"
+                "{\n"
+                "    public enum preset\n"
+                "    {\n"
+                "        custom            = 0,\n"
+                "        generic           = 1,\n"
+                "        padded_cell       = 2,\n"
+                "        room              = 3,\n"
+                "        bathroom          = 4,\n"
+                "        living_room       = 5,\n"
+                "        stone_room        = 6,\n"
+                "        auditorium        = 7,\n"
+                "        concert_hall      = 8,\n"
+                "        cave              = 9,\n"
+                "        arena             = 10,\n"
+                "        hangar            = 11,\n"
+                "        carpeted_hallway  = 12,\n"
+                "        hallway           = 13,\n"
+                "        stone_corridor    = 14,\n"
+                "        alley             = 15,\n"
+                "        forest            = 16,\n"
+                "        city              = 17,\n"
+                "        mountains         = 18,\n"
+                "        quarry            = 19,\n"
+                "        plain             = 20,\n"
+                "        parking_lot       = 21,\n"
+                "        sewer_pipe        = 22,\n"
+                "        underwater        = 23,\n"
+                "        drugged           = 24,\n"
+                "        dizzy             = 25,\n"
+                "        psychotic         = 26,\n"
                 "    }\n"
                 "}\n");
 

@@ -66,4 +66,4 @@ je_audio_effect_slot_close(slot);
 - [je_audio_effect_update](je_audio_effect_update.md) - 更新效果参数
 - [je_audio_effect_close](je_audio_effect_close.md) - 关闭效果
 - [je_audio_effect_slot_bind](je_audio_effect_slot_bind.md) - 绑定效果到效果槽
-- [je_audio_effect_eaxreverb_create](je_audio_effect_eaxreverb_create.md) - 创建扩展 EAX 混响
+- [je_audio_effect_eax_reverb_create](je_audio_effect_eax_reverb_create.md) - 创建扩展 EAX 混响

@@ -44,6 +44,7 @@ import builtin::editor::Editor::TilemapEditor;
 import ResourcePath;
 import ShaderUpdater;
 import TextureProperties;
+import AudioProperties;
 import Action::ModifyPrefab;
 
 using std;
@@ -293,12 +294,14 @@ namespace JEEditor::Editor
         }
         
         // 默认隐藏的名称：以 '.' 开头的文件/目录，以及引擎生成/从属的
-        // *.je4cache 缓存文件、*.je4texture 纹理属性文件与 *.je4project 工程文件。
+        // *.je4cache 缓存文件、*.je4texture 纹理属性文件、*.je4audio 音频
+        // 属性文件与 *.je4project 工程文件。
         func isHiddenName(name: string)=> bool
         {
             return name->begin_with(".")
                 || name->end_with(".je4cache")
                 || name->end_with(".je4texture")
+                || name->end_with(".je4audio")
                 || name->end_with(".je4project");
         }
         
@@ -2007,6 +2010,9 @@ namespace JEEditor::Editor
                 [".je4tileset"] = func(p: fsys::path_t) {
                     TilemapEditor::openTilesetEditorFromFile(p);
                 },
+                [".wav"] = func(p: fsys::path_t) {
+                    AudioProperties::showAudioProperties(p);
+                },
             };
             
             if (!isfile(path))
@@ -2043,13 +2049,14 @@ namespace JEEditor::Editor
         }
         
         // 带缓存资源的伴生文件后缀：引擎按 <源路径>.je4cache 生成/复用缓存，
-        // 纹理图片另有可选的属性源文件 <源路径>.je4texture（颜色空间，见
-        // TextureProperties）。源文件的移动/重命名/删除必须同时处理这些伴生
+        // 纹理图片与音频另有可选的属性源文件 <源路径>.je4texture（颜色空间，
+        // 见 TextureProperties）/ <源路径>.je4audio（流式播放配置，见
+        // AudioProperties）。源文件的移动/重命名/删除必须同时处理这些伴生
         // 文件：否则旧缓存残留在原处、新位置无谓地重新生成，删除时还会留下
-        // 孤立缓存，甚至丢掉仍在使用的纹理颜色空间属性。
+        // 孤立缓存，甚至丢掉仍在使用的纹理颜色空间/音频播放方式属性。
         func satelliteSuffixes()=> array<string>
         {
-            return [".je4cache", ".je4texture"];
+            return [".je4cache", ".je4texture", ".je4audio"];
         }
         
         // 移动伴生文件：缓存/属性文件可能在引擎尚未加载过该资源时不存在，

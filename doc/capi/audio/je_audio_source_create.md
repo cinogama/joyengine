@@ -10,6 +10,11 @@ JE_API je_audio_source_t* je_audio_source_create();
 
 创建一个音频源。音频源用于播放音频缓冲区中的声音。
 
+音频源是**虚拟**的：创建时不会占用播放设备的硬件声源（OpenAL 的 source），
+只有实际处于播放状态的声源才会按需占用。因此游戏可以按需创建大量声源，
+而不会触碰 OpenAL/OpenAL Soft 的声源数量上限（默认 256 个）；暂停、停止或
+自然播放结束的声源会立即把硬件声源归还给引擎复用。
+
 ## 参数
 
 无
@@ -25,11 +30,30 @@ JE_API je_audio_source_t* je_audio_source_create();
 ```cpp
 struct je_audio_source_t {
     je_audio_native_source_instance_t* m_source_instance;
-    bool m_loop;         // 是否循环播放
-    float m_gain;        // 音量增益
-    float m_pitch;       // 播放速度
+    bool m_loop;         // 是否循环播放，默认 false
+    float m_gain;        // 音量增益，默认 1.0
+    float m_pitch;       // 播放速度，默认 1.0
     float m_location[3]; // 声音位置
     float m_velocity[3]; // 声源自身速度（非播放速度）
+
+    // 距离衰减参数（仅对非 relative 声源生效）
+    float m_reference_distance; // 参考距离，默认 1.0
+    float m_max_distance;       // 最大距离，默认 FLT_MAX
+    float m_rolloff;            // 衰减率，默认 1.0
+    float m_min_gain;           // 距离衰减下限，默认 0.0
+    float m_max_gain;           // 距离衰减上限，默认 1.0
+
+    bool m_relative;      // true = 相对监听者，默认 false
+
+    // 定向声源的锥形参数，默认内外角 360°（无方向性）
+    float m_direction[3];
+    float m_cone_inner_angle;
+    float m_cone_outer_angle;
+    float m_cone_outer_gain;
+
+    float m_air_absorption; // 空气吸收因子，默认 0.0（关闭）；需要 EFX
+
+    je_audio_bus_t m_bus; // 所属音量总线，默认 JE_AUDIO_BUS_NONE
 };
 ```
 
@@ -64,6 +88,7 @@ je_audio_source_close(source);
 
 - 使用完毕后需要调用 `je_audio_source_close` 释放资源
 - 修改 source 结构体的属性后，需要调用 `je_audio_source_update` 使更改生效
+- 创建声源本身很轻量，不需要为了节省资源而复用声源
 
 ## 相关接口
 

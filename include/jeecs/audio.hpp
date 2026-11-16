@@ -5,7 +5,9 @@
 // =============================================================================
 
 #include "jeecs/prefix.hpp"
+#include "jeecs/file.hpp"
 #include "jeecs/basic.hpp"
+#include "jeecs/ecs.hpp"
 
 JE_FORCE_CAPI
 
@@ -34,6 +36,24 @@ enum je_audio_state_t
 };
 
 /*
+je_audio_distance_model_t [类型]
+声源到监听者的距离衰减模型，与 OpenAL 的距离模型一一对应
+    * NONE 不做距离衰减
+    * INVERSE / LINEAR / EXPONENT 为三种基础衰减曲线
+    * 带 CLAMPED 的变体在参考距离以内保持满增益，并受最大距离限制
+*/
+enum je_audio_distance_model_t
+{
+    JE_AUDIO_DISTANCE_MODEL_NONE,
+    JE_AUDIO_DISTANCE_MODEL_INVERSE,
+    JE_AUDIO_DISTANCE_MODEL_INVERSE_CLAMPED,
+    JE_AUDIO_DISTANCE_MODEL_LINEAR,
+    JE_AUDIO_DISTANCE_MODEL_LINEAR_CLAMPED,
+    JE_AUDIO_DISTANCE_MODEL_EXPONENT,
+    JE_AUDIO_DISTANCE_MODEL_EXPONENT_CLAMPED,
+};
+
+/*
 je_audio_format_t [类型]
 用于表示波形的格式
 */
@@ -48,22 +68,53 @@ enum je_audio_format_t
 };
 
 typedef struct je_audio_native_buffer_instance_t je_audio_native_buffer_instance_t;
+typedef struct je_audio_native_stream_instance_t je_audio_native_stream_instance_t;
 typedef struct je_audio_buffer_t
 {
     je_audio_native_buffer_instance_t*
         m_buffer_instance;
 
+    je_audio_native_stream_instance_t*
+        m_stream_instance; // 流式缓冲区的缓存数据源；非流式时为 nullptr
+
     mutable size_t m_references; // 引用计数
 
-    const void* m_data;
-    size_t m_size;
+    const void* m_data; // PCM 数据；流式缓冲区为 nullptr（按需从缓存文件读取）
+    size_t m_size;      // PCM 总字节数（流式缓冲区同样反映完整时长）
     size_t m_sample_rate;
     size_t m_sample_size;
     size_t m_byte_rate;
     je_audio_format_t m_format;
+    bool m_streaming; // 是否流式播放（来自 <音频路径>.je4audio，缺省 false）；true 时 PCM 不驻留内存
 } je_audio_buffer_t;
 
 typedef struct je_audio_native_source_instance_t je_audio_native_source_instance_t;
+
+/*
+je_audio_bus_t [类型]
+预设的音量总线分组，用于按类别统一调节音量。
+    * NONE 不经过总线（总线增益视为 1.0）
+    * BGM 背景音乐 / BGS 背景环境声 / ME 音乐效果（胜利、升级等短乐句）
+    * SE 音效 / VOICE 语音
+    * CUSTOM_0..CUSTOM_3 自定义槽位，留给游戏自行分配用途
+    * COUNT 是总线数量哨兵，不是有效总线
+声源的最终增益为 声源增益 × 总线增益 × 监听者增益。
+*/
+enum je_audio_bus_t
+{
+    JE_AUDIO_BUS_NONE,
+    JE_AUDIO_BUS_BGM,
+    JE_AUDIO_BUS_BGS,
+    JE_AUDIO_BUS_ME,
+    JE_AUDIO_BUS_SE,
+    JE_AUDIO_BUS_VOICE,
+    JE_AUDIO_BUS_CUSTOM_0,
+    JE_AUDIO_BUS_CUSTOM_1,
+    JE_AUDIO_BUS_CUSTOM_2,
+    JE_AUDIO_BUS_CUSTOM_3,
+    JE_AUDIO_BUS_COUNT,
+};
+
 typedef struct je_audio_source_t
 {
     je_audio_native_source_instance_t*
@@ -74,6 +125,28 @@ typedef struct je_audio_source_t
     float m_pitch;       // 播放速度
     float m_location[3]; // 声音位置
     float m_velocity[3]; // 声源自身速度（非播放速度）
+
+    // 距离衰减参数（仅对非 relative 声源生效）
+    float m_reference_distance; // 参考距离，默认 1.0
+    float m_max_distance;       // 最大距离，默认 FLT_MAX，不额外截断
+    float m_rolloff;            // 衰减率，默认 1.0
+    float m_min_gain;           // 距离衰减的下限，默认 0.0
+    float m_max_gain;           // 距离衰减的上限，默认 1.0
+
+    // true = 位置与方向相对监听者（不再受距离衰减影响），默认 false
+    bool m_relative;
+
+    // 定向声源的锥形参数，默认内外角均为 360°（无方向性）
+    float m_direction[3];     // 声源朝向
+    float m_cone_inner_angle; // 内角，默认 360.0
+    float m_cone_outer_angle; // 外角，默认 360.0
+    float m_cone_outer_gain;  // 外角增益，默认 0.0
+
+    // 空气吸收因子：随距离衰减高频，0 表示关闭，范围 [0.0, 10.0]；
+    // 需要设备支持 EFX，默认 0.0
+    float m_air_absorption;
+
+    je_audio_bus_t m_bus; // 所属音量总线
 } je_audio_source_t;
 
 typedef struct je_audio_listener_t
@@ -84,6 +157,11 @@ typedef struct je_audio_listener_t
     float m_velocity[3]; // 监听器自身速度（非播放速度）
     float m_forward[3];  // 监听器朝向（前方向）
     float m_upward[3];   // 监听器朝向（顶方向）
+
+    // 距离衰减模型，默认 LINEAR_CLAMPED；该设置作用于当前播放设备
+    je_audio_distance_model_t m_distance_model;
+    // 多普勒系数，默认 1.0；0 表示关闭多普勒
+    float m_doppler_factor;
 } je_audio_listener_t;
 
 typedef struct je_audio_native_effect_slot_instance_t je_audio_native_effect_slot_instance_t;
@@ -389,6 +467,43 @@ typedef struct je_audio_effect_eax_reverb_t
 } je_audio_effect_eax_reverb_t;
 
 /*
+je_audio_effect_eax_reverb_preset_t [枚举]
+EAX 混响预设。取值与 EAX/EFX 的标准预设一一对应，
+CUSTOM 表示不使用预设、由 je_audio_effect_eax_reverb_t 的字段自定义。
+*/
+typedef enum je_audio_effect_eax_reverb_preset_t
+{
+    JE_AUDIO_EAX_REVERB_PRESET_CUSTOM = 0,
+    JE_AUDIO_EAX_REVERB_PRESET_GENERIC,
+    JE_AUDIO_EAX_REVERB_PRESET_PADDEDCELL,
+    JE_AUDIO_EAX_REVERB_PRESET_ROOM,
+    JE_AUDIO_EAX_REVERB_PRESET_BATHROOM,
+    JE_AUDIO_EAX_REVERB_PRESET_LIVINGROOM,
+    JE_AUDIO_EAX_REVERB_PRESET_STONEROOM,
+    JE_AUDIO_EAX_REVERB_PRESET_AUDITORIUM,
+    JE_AUDIO_EAX_REVERB_PRESET_CONCERTHALL,
+    JE_AUDIO_EAX_REVERB_PRESET_CAVE,
+    JE_AUDIO_EAX_REVERB_PRESET_ARENA,
+    JE_AUDIO_EAX_REVERB_PRESET_HANGAR,
+    JE_AUDIO_EAX_REVERB_PRESET_CARPETEDHALLWAY,
+    JE_AUDIO_EAX_REVERB_PRESET_HALLWAY,
+    JE_AUDIO_EAX_REVERB_PRESET_STONECORRIDOR,
+    JE_AUDIO_EAX_REVERB_PRESET_ALLEY,
+    JE_AUDIO_EAX_REVERB_PRESET_FOREST,
+    JE_AUDIO_EAX_REVERB_PRESET_CITY,
+    JE_AUDIO_EAX_REVERB_PRESET_MOUNTAINS,
+    JE_AUDIO_EAX_REVERB_PRESET_QUARRY,
+    JE_AUDIO_EAX_REVERB_PRESET_PLAIN,
+    JE_AUDIO_EAX_REVERB_PRESET_PARKINGLOT,
+    JE_AUDIO_EAX_REVERB_PRESET_SEWERPIPE,
+    JE_AUDIO_EAX_REVERB_PRESET_UNDERWATER,
+    JE_AUDIO_EAX_REVERB_PRESET_DRUGGED,
+    JE_AUDIO_EAX_REVERB_PRESET_DIZZY,
+    JE_AUDIO_EAX_REVERB_PRESET_PSYCHOTIC,
+    JE_AUDIO_EAX_REVERB_PRESET_COUNT,
+} je_audio_effect_eax_reverb_preset_t;
+
+/*
 je_audio_buffer_create [基本接口]
 创建一个音频缓冲区
     * data 是音频数据的指针
@@ -407,20 +522,53 @@ JE_API /* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sa
     je_audio_format_t format);
 
 /*
-je_audio_buffer_load_wav [基本接口]
-加载一个WAV格式的音频文件
-    * path 是音频文件的路径
+je_audio_buffer_load [基本接口]
+加载一个音频文件（按其 <音频路径>.je4cache 缓存，缓存缺失或失效时经
+pkg::audio 解码源文件并生成；流式播放配置与缓存格式取自可选的
+<音频路径>.je4audio，PCM 一律转换为缓存格式存储，缺省 8 位整数）
+    * path 是音频文件的引擎路径（@/ 或 !/）
+    * 相同路径、且缓存版本（缓存头的 crc64，随 wav 与 .je4audio 内容变化）
+      相同的重复加载共享同一个缓冲区实例：每次加载持有该实例的一份引用，
+      je_audio_buffer_close 只释放本次加载持有的引用，最后一份引用释放时
+      缓冲区才真正关闭（缓存条目随之移除，再次加载会重新解码）
+    * 流式播放配置为 true 时 PCM 不驻留内存：缓存文件在缓冲区生命周期内
+      保持打开，声源播放时按块读取（m_data 为 nullptr，m_size 仍为 PCM
+      总字节数），调用 je_audio_buffer_close 时关闭
     * 返回值是一个指向音频缓冲区的指针
-    使用完毕后需要调用 je_audio_buffer_close 释放资源
-    如果加载失败，返回值为 nullptr
+使用完毕后需要调用 je_audio_buffer_close 释放资源
+如果加载失败（文件/缓存不可用或格式不支持），返回值为 nullptr
 参见：
     je_audio_buffer_close
+    je_audio_cache_open_or_create
 */
-JE_API /* OPTIONAL: If wav file failed to load */ const je_audio_buffer_t* je_audio_buffer_load_wav(const char* path);
+JE_API /* OPTIONAL: If audio file or its cache failed to load */ const je_audio_buffer_t* je_audio_buffer_load(const char* path);
+
+/*
+je_audio_cache_open_or_create [基本接口]
+打开音频文件的二进制缓存 <音频路径>.je4cache：缓存有效时直接返回，
+缺失或失效时调用内置生成脚本（pkg::audio 解码 + 可选的
+<音频路径>.je4audio 流式播放与缓存格式配置）重新生成
+    * path 是音频文件的引擎路径（@/ 或 !/）
+    * 仅支持单声道/立体声源（OpenAL 缓冲格式约束），生成期校验
+    * 缓存格式 format = "i8"（缺省）/"i16"/"f32"，PCM 经 pkg::audio
+      转换后存储（任何源编码都可落成 OpenAL 可用的缓存）
+缓存布局（文件头之后）：
+    [uint64 pcm_size][pcm 字节] —— 裸数据区，不套 je_cache_binary_* 值标记，
+                                  可直接按偏移访问（流式播放按块读取）
+    DOCUMENT channels / samplerate / bits -> INT32，is_float / streaming -> BOOL
+返回值是缓存文件的只读句柄（用毕 je_file_close 关闭），失败返回 nullptr
+参见：
+    je_audio_buffer_load
+    je_cache_file_load
+*/
+JE_API /* OPTIONAL */ je_file_t* je_audio_cache_open_or_create(const char* path);
 
 /*
 je_audio_buffer_close [基本接口]
 释放一个音频缓冲区
+    * 缓冲区按引用计数管理：此处释放调用方持有的一份引用，仍有其它引用
+      （声源或同路径的重复加载）时缓冲区保持存活
+    * 流式缓冲区在最后一份引用释放时一并关闭其保持打开的缓存文件
 */
 JE_API void je_audio_buffer_close(const je_audio_buffer_t* buffer);
 
@@ -454,23 +602,25 @@ typedef struct je_audio_filter_t
 je_audio_filter_create [基本接口]
 创建一个低通滤波器
 */
-je_audio_filter_t* je_audio_filter_create();
+JE_API je_audio_filter_t* je_audio_filter_create();
 
 /*
 je_audio_filter_update [基本接口]
 将对 je_audio_filter_t 的参数修改应用到实际的滤波器上
 */
-void je_audio_filter_update(je_audio_filter_t* filter);
+JE_API void je_audio_filter_update(je_audio_filter_t* filter);
 
 /*
 je_audio_filter_close [基本接口]
 关闭一个滤波器
 */
-void je_audio_filter_close(je_audio_filter_t* filter);
+JE_API void je_audio_filter_close(je_audio_filter_t* filter);
 
 /*
 je_audio_source_create [基本接口]
 创建一个音频源
+    * 音频源是虚拟的：创建时不占用播放设备的硬件声源，只有实际播放的
+      声源才按需占用硬件声源，因此可以存在大量声源
     使用完毕后需要调用 je_audio_source_close 释放资源
 参见：
     je_audio_source_close
@@ -515,17 +665,27 @@ je_audio_source_filter_set [基本接口]
 JE_API void je_audio_source_filter_set(je_audio_source_t* source, /* OPTIONAL */ je_audio_filter_t* filter_may_null);
 
 /*
+je_audio_source_bus_set [基本接口]
+设置音频源所属的音量总线
+    * 总线增益变化后，使用该总线的声源增益会自动重新提交
+*/
+JE_API void je_audio_source_bus_set(je_audio_source_t* source, je_audio_bus_t bus);
+
+/*
 je_audio_source_play [基本接口]
 播放音频源
     如果音频源已经在播放或者音频源没有设置音频，则不会有任何效果
     如果音频源在此前被暂停，则继续播放
     如果音频源被停止，则从音频的起始位置开始播放
+    如果同时播放的声源已达到播放设备的硬件声源上限，声源保持虚拟，
+    待有硬件声源释放后自动开始播放
 */
 JE_API void je_audio_source_play(je_audio_source_t* source);
 
 /*
 je_audio_source_pause [基本接口]
 暂停音频源的播放
+    * 暂停的声源会归还硬件声源，继续播放时重新占用
 */
 JE_API void je_audio_source_pause(je_audio_source_t* source);
 
@@ -564,8 +724,59 @@ JE_API je_audio_listener_t* je_audio_listener_get();
 /*
 je_audio_listener_update [基本接口]
 将对 je_audio_listener_t 的参数修改应用到实际的监听者上
+    * 距离模型与多普勒系数是播放设备级状态，同样在此时提交
 */
 JE_API void je_audio_listener_update();
+
+/*
+je_audio_bus_gain_get [基本接口]
+获取音量总线的增益；NONE 的增益恒为 1.0
+*/
+JE_API float je_audio_bus_gain_get(je_audio_bus_t bus);
+
+/*
+je_audio_bus_gain_set [基本接口]
+设置音量总线的增益，使用该总线的声源会立即重新提交增益
+    * bus 不能为 NONE（NONE 的增益恒为 1.0，不可设置）
+*/
+JE_API void je_audio_bus_gain_set(je_audio_bus_t bus, float gain);
+
+/*
+je_audio_oneshot_desc_t [类型]
+一次性播放（fire-and-forget）的参数描述。
+
+一次性播放由引擎分配临时声部并在播放结束后自动回收，适合脚步、金币、
+弹壳等事件音，不需要创建实体或持有声源句柄。
+    * m_lowpass_hf < 1.0 时自动为该声部挂一个低通滤波器模拟闷音
+    * 最多同时存在 32 个一次性声部，超出时回收最早创建的声部
+*/
+typedef struct je_audio_oneshot_desc_t
+{
+    const je_audio_buffer_t* m_buffer; // 要播放的音频缓冲区（不可为空）
+
+    je_audio_bus_t m_bus; // 所属音量总线
+
+    bool m_spatial;      // true = 按 location 空间化；false = 相对监听者（UI/环境声）
+    float m_location[3]; // 空间化位置
+
+    float m_gain;  // 音量增益
+    float m_pitch; // 播放速度
+
+    float m_reference_distance; // 参考距离
+    float m_max_distance;       // 最大距离
+    float m_rolloff;            // 衰减率
+
+    float m_lowpass_hf; // 高频增益，1.0 = 不闷音
+} je_audio_oneshot_desc_t;
+
+/*
+je_audio_oneshot_play [基本接口]
+按描述播放一次性音频
+    * 播放期间声部持有缓冲区引用，直到播放结束或声部被回收
+    * 当前没有可用播放设备时返回 false
+    * 其余情况返回 true
+*/
+JE_API bool je_audio_oneshot_play(const je_audio_oneshot_desc_t* desc);
 
 /*
 je_audio_effect_slot_create [基本接口]
@@ -668,10 +879,10 @@ je_audio_effect_equalizer_create [基本接口]
 JE_API je_audio_effect_equalizer_t* je_audio_effect_equalizer_create();
 
 /*
-je_audio_effect_eaxreverb_create [基本接口]
+je_audio_effect_eax_reverb_create [基本接口]
 创建一个 EAX 混响效果实例
 */
-JE_API je_audio_effect_eax_reverb_t* je_audio_effect_eaxreverb_create();
+JE_API je_audio_effect_eax_reverb_t* je_audio_effect_eax_reverb_create();
 
 /*
 je_audio_effect_close [基本接口]
@@ -717,15 +928,20 @@ je_audio_devices_disconnect_all [基本接口]
     je_audio_devices_enumerate_and_do
 */
 JE_API void je_audio_devices_disconnect_all();
+
 typedef je_audio_native_play_device_instance_t je_AudioNativePlayDeviceInstance;
 typedef je_audio_play_device_t je_AudioPlayDevice;
 typedef je_audio_state_t je_AudioState;
 typedef je_audio_format_t je_AudioFormat;
 typedef je_audio_native_buffer_instance_t je_AudioNativeBufferInstance;
+typedef je_audio_native_stream_instance_t je_AudioNativeStreamInstance;
 typedef je_audio_buffer_t je_AudioBuffer;
 typedef je_audio_native_source_instance_t je_AudioNativeSourceInstance;
+typedef je_audio_bus_t je_AudioBus;
 typedef je_audio_source_t je_AudioSource;
 typedef je_audio_listener_t je_AudioListener;
+typedef je_audio_distance_model_t je_AudioDistanceModel;
+typedef je_audio_oneshot_desc_t je_AudioOneshotDesc;
 typedef je_audio_native_effect_slot_instance_t je_AudioNativeEffectSlotInstance;
 typedef je_audio_effect_slot_t je_AudioEffectSlot;
 typedef je_audio_effect_reverb_t je_AudioEffectReverb;
@@ -741,6 +957,7 @@ typedef je_audio_effect_autowah_t je_AudioEffectAutowah;
 typedef je_audio_effect_compressor_t je_AudioEffectCompressor;
 typedef je_audio_effect_equalizer_t je_AudioEffectEqualizer;
 typedef je_audio_effect_eax_reverb_t je_AudioEffectEaxReverb;
+typedef je_audio_effect_eax_reverb_preset_t je_AudioEffectEaxReverbPreset;
 typedef je_audio_filter_type_t je_AudioFilterType;
 typedef je_audio_native_filter_instance_t je_AudioNativeFilterInstance;
 typedef je_audio_filter_t je_AudioFilter;
@@ -817,7 +1034,7 @@ namespace jeecs
                 else if constexpr (std::is_same_v<T, je_audio_effect_equalizer_t>)
                     instance = je_audio_effect_equalizer_create();
                 else if constexpr (std::is_same_v<T, je_audio_effect_eax_reverb_t>)
-                    instance = je_audio_effect_eaxreverb_create();
+                    instance = je_audio_effect_eax_reverb_create();
                 else
                     static_assert(
                         std::is_void_v<T> && !std::is_void_v<T> /* false */,
@@ -934,7 +1151,7 @@ namespace jeecs
             }
             inline static std::optional<basic::resource<buffer>> load(const std::string& path)
             {
-                auto* buf = je_audio_buffer_load_wav(path.c_str());
+                auto* buf = je_audio_buffer_load(path.c_str());
                 if (buf != nullptr)
                     return basic::resource<buffer>(new buffer(buf));
                 return std::nullopt;
@@ -1009,6 +1226,10 @@ namespace jeecs
                     _m_audio_source,
                     filter.has_value() ? filter.value()->handle() : nullptr);
             }
+            void set_bus(je_audio_bus_t bus)
+            {
+                je_audio_source_bus_set(_m_audio_source, bus);
+            }
             void bind_effect_slot(
                 size_t pass,
                 const std::optional<basic::resource<effect_slot>>& slot,
@@ -1035,6 +1256,14 @@ namespace jeecs
                 je_audio_listener_update();
             }
         };
+        /*
+        jeecs::audio::play_oneshot [函数]
+        按描述播放一次性音频，播放结束后由引擎自动回收声部
+        */
+        inline bool play_oneshot(const je_audio_oneshot_desc_t& desc)
+        {
+            return je_audio_oneshot_play(&desc);
+        }
     }
 }
 #endif // __cplusplus

@@ -2416,86 +2416,173 @@ namespace jeecs
     }
     namespace Audio
     {
+        /*
+        Audio::Source [组件]
+        实体音源：一个实体对应一个持久声部，持有音频缓冲区、播放控制与
+        空间衰减参数。循环的环境声/BGM 用它；一次性的角色事件音用
+        je::audio::play_once_* 或 Audio::Source::play_oneshot 播放。
+
+        buffer 为空时声源不播放；play 为 false 时暂停，循环播放自然结束
+        时 play 会自动置为 false。实体配对 Audio::Spatial 才是空间化音源
+        （见 Audio::Spatial）；否则按相对听众（UI/环境声）处理。
+
+        direction 是声源局部朝向，乘实体世界旋转后作为锥形指向的轴；
+        cone_* 默认 360°（无方向性）。air_absorption 需要设备支持 EFX。
+        */
         struct Source
         {
             JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Source);
-
-            basic::resource<audio::source> source;
-
-            float pitch;
-            float volume;
-
-            math::vec3 last_position;
-
-            Source() noexcept
-                : source(audio::source::create()), pitch(1.0f), volume(1.0f)
-
-            {
-            }
-            Source(const Source& another) noexcept
-                : Source()
-            {
-                pitch = another.pitch;
-                volume = another.volume;
-                last_position = another.last_position;
-            }
-            Source(Source&& another) noexcept
-                : source(std::move(another.source))
-                , pitch(another.pitch)
-                , volume(another.volume)
-                , last_position(another.last_position)
-            {
-            }
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &Source::pitch, "pitch");
-                typing::register_member(guard, &Source::volume, "volume");
-            }
-        };
-        struct Listener
-        {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Listener);
-            JECS_DEFAULT_CONSTRUCTOR(Listener);
-
-            float volume = 1.0f;
-            math::vec3 face = { 0, 0, 1 };
-            math::vec3 up = { 0, 1, 0 };
-
-            math::vec3 last_position = {};
-
-            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
-            {
-                typing::register_member(guard, &Listener::volume, "volume");
-                typing::register_member(guard, &Listener::face, "face");
-                typing::register_member(guard, &Listener::up, "up");
-            }
-        };
-        struct Playing
-        {
-            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Playing);
 
             enum class play_state
             {
                 STOPPED,
                 PLAYING,
-                LOOPED_PLAYING,
             };
-            play_state state = play_state::STOPPED;
+
+            // 每个空间化音源最多绑定 3 路混响发送（源所在区域 ×2 + 听者区域 ×1）
+            static constexpr size_t REVERB_SEND_COUNT = 3;
+
             basic::file_resource<audio::buffer> buffer;
+            basic::resource<audio::source> source;
 
-            bool play = true;
-            bool loop = true;
+            float volume;
+            float pitch;
+            bool play;
+            bool loop;
+            je_audio_bus_t bus;
+            float reference_distance;
+            float max_distance;
+            float rolloff;
+            float min_gain;
+            float max_gain;
+            float cone_inner_angle;
+            float cone_outer_angle;
+            float cone_outer_gain;
+            float air_absorption;
+            math::vec3 direction;
 
-            Playing() = default;
-            Playing(const Playing& another)
-                : state(play_state::STOPPED)
-                , buffer(another.buffer)
-                , play(another.play)
-                , loop(another.loop)
+            // 每个空间化音源最多绑定 3 路混响发送（源所在区域 ×2 + 听者区域 ×1）
+            struct reverb_send_state
+            {
+                uint32_t room_id;
+                uint64_t room_epoch;
+                float applied_gain;
+                float applied_hf;
+                bool filter_bound;
+                basic::optional<basic::resource<audio::filter>> filter;
+
+                reverb_send_state() noexcept
+                    : room_id(0)
+                    , room_epoch(0)
+                    , applied_gain(-1.0f)
+                    , applied_hf(-1.0f)
+                    , filter_bound(false)
+                    , filter()
+                {
+                }
+            };
+
+            // 运行时状态（不反射、不存档）
+            math::vec3 last_position;
+            math::vec3 last_world_position;
+            bool has_last_position;
+            bool spatial_active;
+            float current_occlusion_gain;
+            float current_occlusion_hf;
+            bool occlusion_smoothed; // 平滑状态是否已初始化（首帧直接对齐）
+            play_state state;
+            je_audio_bus_t bus_applied; // 已提交到声源的总线；COUNT = 尚未提交
+            basic::optional<basic::resource<audio::filter>> occlusion_filter;
+            float applied_occlusion_hf;
+            bool occlusion_filter_bound;
+            reverb_send_state reverb_sends[REVERB_SEND_COUNT];
+
+            Source() noexcept
+                : buffer()
+                , source(audio::source::create())
+                , volume(1.0f)
+                , pitch(1.0f)
+                , play(true)
+                , loop(true)
+                , bus(JE_AUDIO_BUS_SE)
+                , reference_distance(1.0f)
+                , max_distance(32.0f)
+                , rolloff(1.0f)
+                , min_gain(0.0f)
+                , max_gain(1.0f)
+                , cone_inner_angle(360.0f)
+                , cone_outer_angle(360.0f)
+                , cone_outer_gain(0.0f)
+                , air_absorption(0.0f)
+                , direction(0.0f, 0.0f, 1.0f)
+                , last_position()
+                , last_world_position()
+                , has_last_position(false)
+                , spatial_active(false)
+                , current_occlusion_gain(1.0f)
+                , current_occlusion_hf(1.0f)
+                , occlusion_smoothed(false)
+                , state(play_state::STOPPED)
+                , bus_applied(JE_AUDIO_BUS_COUNT)
+                , occlusion_filter()
+                , applied_occlusion_hf(1.0f)
+                , occlusion_filter_bound(false)
+                , reverb_sends()
             {
             }
-            Playing(Playing&&) = default;
+            Source(const Source& another) noexcept
+                : Source()
+            {
+                buffer = another.buffer;
+                volume = another.volume;
+                pitch = another.pitch;
+                play = another.play;
+                loop = another.loop;
+                bus = another.bus;
+                reference_distance = another.reference_distance;
+                max_distance = another.max_distance;
+                rolloff = another.rolloff;
+                min_gain = another.min_gain;
+                max_gain = another.max_gain;
+                cone_inner_angle = another.cone_inner_angle;
+                cone_outer_angle = another.cone_outer_angle;
+                cone_outer_gain = another.cone_outer_gain;
+                air_absorption = another.air_absorption;
+                direction = another.direction;
+            }
+            Source(Source&& another) noexcept
+                : buffer(another.buffer)
+                , source(std::move(another.source))
+                , volume(another.volume)
+                , pitch(another.pitch)
+                , play(another.play)
+                , loop(another.loop)
+                , bus(another.bus)
+                , reference_distance(another.reference_distance)
+                , max_distance(another.max_distance)
+                , rolloff(another.rolloff)
+                , min_gain(another.min_gain)
+                , max_gain(another.max_gain)
+                , cone_inner_angle(another.cone_inner_angle)
+                , cone_outer_angle(another.cone_outer_angle)
+                , cone_outer_gain(another.cone_outer_gain)
+                , air_absorption(another.air_absorption)
+                , direction(another.direction)
+                , last_position()
+                , last_world_position()
+                , has_last_position(false)
+                , spatial_active(false)
+                , current_occlusion_gain(1.0f)
+                , current_occlusion_hf(1.0f)
+                , occlusion_smoothed(false)
+                , state(play_state::STOPPED)
+                , bus_applied(JE_AUDIO_BUS_COUNT)
+                , occlusion_filter()
+                , applied_occlusion_hf(1.0f)
+                , occlusion_filter_bound(false)
+                , reverb_sends()
+            {
+            }
 
             void set_buffer(const basic::resource<audio::buffer>& buf)
             {
@@ -2504,12 +2591,267 @@ namespace jeecs
 
             static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
             {
-                typing::register_member(guard, &Playing::buffer, "buffer");
-                typing::register_member(guard, &Playing::play, "play");
-                typing::register_member(guard, &Playing::loop, "loop");
+                typing::register_member(guard, &Source::buffer, "buffer");
+                typing::register_member(guard, &Source::volume, "volume");
+                typing::register_member(guard, &Source::pitch, "pitch");
+                typing::register_member(guard, &Source::play, "play");
+                typing::register_member(guard, &Source::loop, "loop");
+                typing::register_member(guard, &Source::bus, "bus");
+                typing::register_member(guard, &Source::reference_distance, "reference_distance");
+                typing::register_member(guard, &Source::max_distance, "max_distance");
+                typing::register_member(guard, &Source::rolloff, "rolloff");
+                typing::register_member(guard, &Source::min_gain, "min_gain");
+                typing::register_member(guard, &Source::max_gain, "max_gain");
+                typing::register_member(guard, &Source::cone_inner_angle, "cone_inner_angle");
+                typing::register_member(guard, &Source::cone_outer_angle, "cone_outer_angle");
+                typing::register_member(guard, &Source::cone_outer_gain, "cone_outer_gain");
+                typing::register_member(guard, &Source::air_absorption, "air_absorption");
+                typing::register_member(guard, &Source::direction, "direction");
+            }
+        };
+        /*
+        Audio::Spatial [组件]
+        flag 组件：持有它的 Audio::Source 是空间化音源——受听者位置、距离
+        衰减与遮挡/混响影响；没有它的音源相对听者播放（UI 提示、环境声）。
+        空间化还需要实体带 Transform（没有时退回相对听者）。
+        */
+        struct Spatial
+        {
+        };
+        /*
+        Audio::Listener [组件]
+        听众：通常挂在渲染摄像机实体上。use_2d 为 true 时使用纯 XY 的
+        距离与左右声像（忽略实体 z，横板与俯视角均适用）；false 时使用
+        完整 3D 空间。distance_model 与 doppler_factor 作用于当前播放设备。
+        */
+        struct Listener
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Listener);
+
+            float volume;
+            bool use_2d;
+            je_audio_distance_model_t distance_model;
+            float doppler_factor;
+            math::vec3 face;
+            math::vec3 up;
+
+            // 运行时状态（不反射、不存档）
+            math::vec3 last_position;
+            bool has_last_position;
+
+            Listener() noexcept
+                : volume(1.0f)
+                , use_2d(true)
+                , distance_model(JE_AUDIO_DISTANCE_MODEL_LINEAR_CLAMPED)
+                , doppler_factor(1.0f)
+                , face(0.0f, 0.0f, 1.0f)
+                , up(0.0f, 1.0f, 0.0f)
+                , last_position()
+                , has_last_position(false)
+            {
+            }
+            Listener(const Listener& another) noexcept
+                : Listener()
+            {
+                volume = another.volume;
+                use_2d = another.use_2d;
+                distance_model = another.distance_model;
+                doppler_factor = another.doppler_factor;
+                face = another.face;
+                up = another.up;
+            }
+            Listener(Listener&& another) noexcept
+                : Listener()
+            {
+                volume = another.volume;
+                use_2d = another.use_2d;
+                distance_model = another.distance_model;
+                doppler_factor = another.doppler_factor;
+                face = another.face;
+                up = another.up;
+            }
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Listener::volume, "volume");
+                typing::register_member(guard, &Listener::use_2d, "use_2d");
+                typing::register_member(guard, &Listener::distance_model, "distance_model");
+                typing::register_member(guard, &Listener::doppler_factor, "doppler_factor");
+                typing::register_member(guard, &Listener::face, "face");
+                typing::register_member(guard, &Listener::up, "up");
+            }
+        };
+        /*
+        Audio::Occluder [组件]
+        盒形声音遮挡体：听众到声源的线段穿过它时，按 occlusion/muffle
+        衰减增益与高频。size 为局部全尺寸（乘实体比例尺），随实体世界
+        旋转；2D 模式下只使用 XY 投影，3D 下使用完整 OBB。逐帧实时测试。
+        */
+        struct Occluder
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Occluder);
+
+            math::vec3 size;
+            float occlusion;
+            float muffle;
+
+            Occluder() noexcept
+                : size(1.0f, 1.0f, 1.0f)
+                , occlusion(0.6f)
+                , muffle(0.4f)
+            {
+            }
+            Occluder(const Occluder& another) noexcept
+                : Occluder()
+            {
+                size = another.size;
+                occlusion = another.occlusion;
+                muffle = another.muffle;
+            }
+            Occluder(Occluder&& another) noexcept
+                : Occluder()
+            {
+                size = another.size;
+                occlusion = another.occlusion;
+                muffle = another.muffle;
+            }
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Occluder::size, "size");
+                typing::register_member(guard, &Occluder::occlusion, "occlusion");
+                typing::register_member(guard, &Occluder::muffle, "muffle");
+            }
+        };
+        /*
+        Audio::ReverbZone [组件]
+        混响区域：一个区域代表一个声学空间。系统按声源所在区域（不是听者）
+        为每个空间化音源绑定该区域的 EFX EAX 混响发送，跨墙的混响尾音会被
+        遮挡滤波器闷掉；重叠区域按 fade 权重同时参与。
+        设备不支持 EFX 时静默降级为无混响。
+        */
+        struct ReverbZone
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(ReverbZone);
+
+            math::vec3 size;  // 区域局部全尺寸（乘实体比例尺）
+            float fade;       // 区域外侧发送权重衰减距离，0 表示硬边界
+            float send_gain;  // 区域混响的湿声发送上限
+            je_audio_effect_eax_reverb_preset_t preset;
+
+            // preset == CUSTOM 时生效的自定义参数
+            float decay_time;
+            float gain;
+            float gain_hf;
+            float diffusion;
+
+            ReverbZone() noexcept
+                : size(8.0f, 8.0f, 8.0f)
+                , fade(1.0f)
+                , send_gain(1.0f)
+                , preset(JE_AUDIO_EAX_REVERB_PRESET_CUSTOM)
+                , decay_time(1.49f)
+                , gain(0.32f)
+                , gain_hf(0.89f)
+                , diffusion(1.0f)
+            {
+            }
+            ReverbZone(const ReverbZone& another) noexcept
+                : ReverbZone()
+            {
+                size = another.size;
+                fade = another.fade;
+                send_gain = another.send_gain;
+                preset = another.preset;
+                decay_time = another.decay_time;
+                gain = another.gain;
+                gain_hf = another.gain_hf;
+                diffusion = another.diffusion;
+            }
+            ReverbZone(ReverbZone&& another) noexcept
+                : ReverbZone()
+            {
+                size = another.size;
+                fade = another.fade;
+                send_gain = another.send_gain;
+                preset = another.preset;
+                decay_time = another.decay_time;
+                gain = another.gain;
+                gain_hf = another.gain_hf;
+                diffusion = another.diffusion;
+            }
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &ReverbZone::size, "size");
+                typing::register_member(guard, &ReverbZone::fade, "fade");
+                typing::register_member(guard, &ReverbZone::send_gain, "send_gain");
+                typing::register_member(guard, &ReverbZone::preset, "preset");
+                typing::register_member(guard, &ReverbZone::decay_time, "decay_time");
+                typing::register_member(guard, &ReverbZone::gain, "gain");
+                typing::register_member(guard, &ReverbZone::gain_hf, "gain_hf");
+                typing::register_member(guard, &ReverbZone::diffusion, "diffusion");
+            }
+        };
+        /*
+        Audio::Portal [组件]
+        门洞：连接两个相邻空间（Audio::ReverbZone 或室外）。系统沿门洞的
+        世界法线在中心两侧各取一个采样点，用房间权重自动解析两侧房间；
+        两侧是同一房间或同为室外时忽略。transmission 描述通过门洞的整体
+        声能，muffle 描述高频损失；enabled 为 false 时实时环境图忽略该
+        门洞。transmission 低于 1e-4 的门洞也视作不连通：两侧房间按
+        “无门洞”的墙体泄漏处理，可用于表示关闭的门。
+        门洞只依赖组件与实体变换；tilemap 只是将来生成这类实体的工具，
+        音频系统不读取 tilemap。
+        */
+        struct Portal
+        {
+            JECS_DISABLE_MOVE_AND_COPY_OPERATOR(Portal);
+
+            math::vec3 size;    // 门洞局部全尺寸（x/y 为开口，z 为厚度）
+            math::vec3 normal;  // 局部穿透方向，随实体世界旋转
+            float transmission; // 通过门洞的整体声能，0..1
+            float muffle;       // 通过门洞的高频损失，0..1
+            bool enabled;       // false 时不参与环境图
+
+            Portal() noexcept
+                : size(2.0f, 2.0f, 0.25f)
+                , normal(0.0f, 0.0f, 1.0f)
+                , transmission(1.0f)
+                , muffle(0.0f)
+                , enabled(true)
+            {
+            }
+            Portal(const Portal& another) noexcept
+                : Portal()
+            {
+                size = another.size;
+                normal = another.normal;
+                transmission = another.transmission;
+                muffle = another.muffle;
+                enabled = another.enabled;
+            }
+            Portal(Portal&& another) noexcept
+                : Portal()
+            {
+                size = another.size;
+                normal = another.normal;
+                transmission = another.transmission;
+                muffle = another.muffle;
+                enabled = another.enabled;
+            }
+
+            static void JERefRegsiter(jeecs::typing::type_unregister_guard* guard)
+            {
+                typing::register_member(guard, &Portal::size, "size");
+                typing::register_member(guard, &Portal::normal, "normal");
+                typing::register_member(guard, &Portal::transmission, "transmission");
+                typing::register_member(guard, &Portal::muffle, "muffle");
+                typing::register_member(guard, &Portal::enabled, "enabled");
             }
         };
     }
+
     namespace Input
     {
         struct VirtualGamepad

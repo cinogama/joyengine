@@ -283,6 +283,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                 || self.m_light_dragging
                 || self.m_particle_hover_handle != GIZMO_HANDLE_NONE
                 || self.m_particle_dragging
+                || self.m_audio_hover_handle != GIZMO_HANDLE_NONE
+                || self.m_audio_dragging
                 || self.m_ui_hover_handle != UI_HANDLE_NONE
                 || self.m_ui_dragging)
                 self.m_gizmo_hover_handle = GIZMO_HANDLE_NONE;
@@ -589,7 +591,8 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         if (self.m_is_look_active || self.m_is_pan_active || self.m_is_orbit_active
             || self.m_gizmo_dragging || self.m_collider_dragging
-            || self.m_light_dragging || self.m_particle_dragging)
+            || self.m_light_dragging || self.m_particle_dragging
+            || self.m_audio_dragging)
             return;
         self.m_gizmo_mode = mode;
     }
@@ -602,7 +605,8 @@ namespace JEEditor::Editor::WorldEditorViewport
     {
         if (self.m_is_look_active || self.m_is_pan_active || self.m_is_orbit_active
             || self.m_gizmo_dragging || self.m_collider_dragging
-            || self.m_light_dragging || self.m_particle_dragging)
+            || self.m_light_dragging || self.m_particle_dragging
+            || self.m_audio_dragging)
             return;
 
         if (layer != GizmoLayer::ALL)
@@ -652,7 +656,7 @@ namespace JEEditor::Editor::WorldEditorViewport
     protected func toggleGizmoSpaceByShortcut(self: WorldEditorViewport)=> void
     {
         if (self.m_is_look_active || self.m_is_pan_active || self.m_is_orbit_active
-            || self.m_gizmo_dragging)
+            || self.m_gizmo_dragging || self.m_audio_dragging)
             return;
         if (self.m_gizmo_mode == GizmoMode::SCALE)
             return;

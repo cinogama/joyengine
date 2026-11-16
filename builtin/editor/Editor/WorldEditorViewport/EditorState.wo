@@ -211,7 +211,7 @@ namespace JEEditor::Editor::WorldEditorViewport
         let layer_value =
             read_int(data, "gizmo_layer", GizmoLayer::ALL as int);
         self.m_gizmo_layer = (layer_value >= GizmoLayer::ALL as int
-                && layer_value <= GizmoLayer::PARTICLE as int)
+                && layer_value <= GizmoLayer::AUDIO as int)
             ? layer_value as GizmoLayer
             | GizmoLayer::ALL;
 

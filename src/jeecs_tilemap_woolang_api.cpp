@@ -1026,6 +1026,25 @@ WOORT_API woort_api wojeapi_tilemap_set_tile_walkable(void)
     je_tilemap_tile_walkable_set(woje_ts_doc(0), (int32_t)woort_int(1), (int32_t)woort_int(2));
     return woort_ret_void();
 }
+WOORT_API woort_api wojeapi_tilemap_tile_audio(void)
+{
+    woort_value s;
+    if (!woort_push_reserve(1, &s))
+        return woort_ret_panic("Stack overflow.");
+    float occlusion = 0.f, muffle = 0.f;
+    je_tilemap_tile_audio(woje_ts_doc(0), (int32_t)woort_int(1),
+        &occlusion, &muffle);
+    woort_set_struct(s + 0, 2);
+    woort_struct_set_float(s + 0, 0, occlusion);
+    woort_struct_set_float(s + 0, 1, muffle);
+    return woort_ret_value(s + 0);
+}
+WOORT_API woort_api wojeapi_tilemap_set_tile_audio(void)
+{
+    return woort_ret_bool(je_tilemap_tile_audio_set(woje_ts_doc(0),
+        (int32_t)woort_int(1), woort_float(2), woort_float(3))
+        ? true : false);
+}
 WOORT_API woort_api wojeapi_tilemap_tile_normal(void)
 {
     woort_value s;

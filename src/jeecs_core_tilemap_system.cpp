@@ -2561,6 +2561,42 @@ void je_tilemap_tile_walkable_set(je_tileset_document_t* doc, je_tile_id_t tile_
         doc->compact_tile_def(tile_id);   // 可能是新建的空条目
 }
 
+// ---------------- 瓦片音频遮挡系数（参与音频系统的射线遮挡） ----------------
+bool je_tilemap_tile_audio(je_tileset_document_t* doc, je_tile_id_t tile_id,
+    /* OPTIONAL */ float* out_occlusion, /* OPTIONAL */ float* out_muffle)
+{
+    if (!doc->tile_cell(tile_id).has_value())
+        return false;
+    if (out_occlusion != nullptr) *out_occlusion = doc->tile_audio_occlusion(tile_id);
+    if (out_muffle != nullptr) *out_muffle = doc->tile_audio_muffle(tile_id);
+    return true;
+}
+bool je_tilemap_tile_audio_set(je_tileset_document_t* doc, je_tile_id_t tile_id,
+    float occlusion, float muffle)
+{
+    if (!doc->tile_cell(tile_id).has_value()
+        || !std::isfinite(occlusion) || !std::isfinite(muffle))
+        return false;
+
+    const float occ = std::clamp(occlusion, 0.f, 1.f);
+    const float muf = std::clamp(muffle, 0.f, 1.f);
+
+    auto* def = je_tilemap_tile_def(doc, tile_id, true);
+    if (def == nullptr)
+        return false;
+
+    if (def->audio_occlusion != occ || def->audio_muffle != muf)
+    {
+        def->audio_occlusion = occ;
+        def->audio_muffle = muf;
+        doc->compact_tile_def(tile_id);
+        ++doc->version;
+    }
+    else
+        doc->compact_tile_def(tile_id);   // 可能是新建的空条目
+    return true;
+}
+
 // ---------------- 瓦片法线（参与网格顶点生成） ----------------
 bool je_tilemap_tile_normal(je_tileset_document_t* doc, je_tile_id_t tile_id,
     /* OPTIONAL */ float* out_x, /* OPTIONAL */ float* out_y, /* OPTIONAL */ float* out_z)

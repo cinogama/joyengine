@@ -13,7 +13,10 @@
 - **空安全**：必填指针在实现中用断言约束；确实可为空的参数在类型前标注
   `/* OPTIONAL */`，并写明空值语义。返回值同理。
 - **不做防御式回退**：违反前置条件是未定义行为（Debug 构建断言终止），不会静默
-  跳过、自动钳制或悄悄切换到旧路径。
+  跳过、自动钳制或悄悄切换到旧路径。唯一的调试期保护针对用户材质数据的不匹配
+  （shader 顶点输入无法由绑定顶点满足、纹理类别与 shader 声明不符）：Debug 构建
+  丢弃该次绘制并输出一次错误日志，Release 构建不校验（逐 draw 检查的开销只保留
+  在调试期）。
 - **复用资源层**：`je_gl_shader_t`、`je_gl_vertex_t`、`je_gl_texture_2d_t` 等纹理类型、`je_gl_frame_buffer_t`、
   `je_gl_uniform_buffer_t` 继续使用既有加载、引用计数、热重载和图形线程亲和性机制。
 
@@ -46,7 +49,9 @@
 
 1. `je_graphic_cmd_reset` 后调用 `je_graphic_cmd_begin_pass`；一个命令缓冲区可以包含多个 pass。
 2. 清屏命令只能在 `begin_pass` 之后、该 pass 的第一次 draw 之前调用。
-3. draw 之前必须绑定 pipeline 和 vertex；否则断言失败。
+3. draw 之前必须绑定 pipeline 和 vertex；否则断言失败。Debug 构建还会校验 shader
+   与 vertex 的输入布局、纹理类别与 shader 声明：不匹配时该次 draw 被丢弃并输出
+   一次错误日志（同一 shader/顶点组合只报告一次）；Release 构建不做这些校验。
 4. `je_graphic_cmd_set_uniform_*` 只影响当前 pipeline 的 per-draw uniform 块；绑定新
    pipeline 会用 shader 的默认值重新初始化该块。
 5. `je_graphic_cmd_commit` 会自动结束仍然打开的 pass；也可以显式调用

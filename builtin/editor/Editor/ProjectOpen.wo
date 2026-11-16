@@ -28,6 +28,7 @@ import builtin::editor::Singleton::Universe;
 
 import builtin::editor::Editor::Project;
 import builtin::editor::Editor::Template;
+import AudioBuses;
 
 using std;
 
@@ -397,6 +398,9 @@ namespace JEEditor::Editor
             {
                 /* 项目被打开了，调一下 apply，初始化一下 Project 实例 */
                 Singleton::apply:<Project>(\_= do nil;);
+                
+                /* 音量总线设置存在项目 .temp 下，切换工作目录之后再恢复 */
+                AudioBuses::restoreAudioBusGains();
             }
             else
             {

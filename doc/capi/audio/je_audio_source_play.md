@@ -24,7 +24,7 @@ JE_API void je_audio_source_play(je_audio_source_t* source);
 
 ```cpp
 je_audio_source_t* source = je_audio_source_create();
-const je_audio_buffer_t* buffer = je_audio_buffer_load_wav("@/sounds/effect.wav");
+const je_audio_buffer_t* buffer = je_audio_buffer_load("@/sounds/effect.wav");
 
 je_audio_source_buffer_set(source, buffer);
 je_audio_source_play(source);
@@ -35,6 +35,9 @@ je_audio_source_play(source);
 - 如果音频源已经在播放或者音频源没有设置音频，则不会有任何效果
 - 如果音频源在此前被暂停，则继续播放
 - 如果音频源被停止，则从音频的起始位置开始播放
+- 如果同时播放的声源已经达到播放设备的硬件声源上限，声源会保持虚拟状态，
+  待有硬件声源释放后自动开始播放（`je_audio_source_play_state_get` 仍返回
+  `JE_AUDIO_STATE_PLAYING`）
 
 ## 相关接口
 

@@ -22,6 +22,7 @@ import SystemShell;
 import Diagnostics;
 import ShaderUpdater;
 import Shutdown;
+import AudioBuses;
 
 import builtin::editor::Singleton::Universe;
 
@@ -175,6 +176,16 @@ namespace JEEditor::Editor::MainMenu
                         ReplConsole::showReplConsole();
                 })
             ->      checkWhen(ReplConsole::isReplConsoleExist)
+            ->      endItem
+            ->  subItem("音频总线",
+                func()
+                {
+                    if (AudioBuses::isAudioBusesExist())
+                        AudioBuses::closeAudioBuses();
+                    else
+                        AudioBuses::showAudioBuses();
+                })
+            ->      checkWhen(AudioBuses::isAudioBusesExist)
             ->      endItem
             ->  endMenu
             -> subMenu("编辑")

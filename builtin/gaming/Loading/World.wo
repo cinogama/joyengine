@@ -22,8 +22,9 @@ namespace JEGaming::Loading::World
             -> ok_or(F"Failed to load world from `{path}`.")
             =>> parse
             ;
-                    
-        return_ok! Saving::World::restore(u, world_dat);
+
+        let w = Saving::World::restore(u, world_dat);
+        return_ok! w;
     }
     public async! func loadAsync(u: universe, path: string)=> result<world, string>
     {

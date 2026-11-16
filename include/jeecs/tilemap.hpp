@@ -1079,6 +1079,34 @@ je_tilemap_tile_walkable_set [基本接口]
 JE_API void je_tilemap_tile_walkable_set(je_tileset_document_t* tileset,
     je_tile_id_t tile_id, int32_t walkable);
 
+// ---- 瓦片音频遮挡系数（参与音频系统的射线遮挡） ----
+
+/*
+je_tilemap_tile_audio [基本接口]
+取指定 id 瓦片的音频遮挡系数，经出参返回 (occlusion, muffle)
+    * occlusion：0 = 不遮挡，1 = 完全隔音
+    * muffle：0 = 不闷音，1 = 完全失去高频
+    * 默认均为 0；出参均可传 nullptr 跳过
+    * id 无效返回 false 且不写出参
+请参见：
+    je_tilemap_tile_audio_set
+*/
+JE_API bool je_tilemap_tile_audio(je_tileset_document_t* tileset, je_tile_id_t tile_id,
+    /* OPTIONAL */ float* out_occlusion, /* OPTIONAL */ float* out_muffle);
+
+/*
+je_tilemap_tile_audio_set [基本接口]
+设置指定 id 瓦片的音频遮挡/闷音系数
+    * 两个系数都会夹取到 [0, 1]；含非有限分量返回 false 且不修改
+    * 默认 (0, 0)；两者都回到 0 且没有其它元数据时，该瓦片的
+      稀疏条目会被清理
+    * id 无效返回 false
+请参见：
+    je_tilemap_tile_audio
+*/
+JE_API bool je_tilemap_tile_audio_set(je_tileset_document_t* tileset,
+    je_tile_id_t tile_id, float occlusion, float muffle);
+
 // ---- 瓦片法线（参与地图网格顶点生成） ----
 
 /*

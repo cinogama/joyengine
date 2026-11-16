@@ -1109,6 +1109,7 @@ namespace jeecs::ecs
 
         private:
             friend class CommandBuffer;
+
             inline void command_defragmentation() noexcept
             {
                 shared_lock sg1(_m_arch_types_mapping_mx);

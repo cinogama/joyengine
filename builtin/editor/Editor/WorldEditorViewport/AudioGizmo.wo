@@ -1,0 +1,1220 @@
+// 世界编辑器视口 —— 音频组件图标、线框与编辑手柄。
+// 音源/听者/遮挡/混响区域/门洞的组件徽标使用 builtin/icon 下的图标纹理
+//（经 GUI::Icons 统一加载），房间/遮挡/门洞另有屏幕空间 OBB 线框与
+// 尺寸/法线手柄。所有写回在拖拽结束时通过 ModifyComponentMember 发布为
+// 一条可撤销动作。
+
+import pkg::std;
+
+import je;
+import je::ecs;
+import je::graphic;
+import je::gui;
+import je::internal;
+import je::typeinfo;
+
+import je::towoo;
+import je::towoo::types;
+import je::towoo::components;
+
+import pkg::try;
+
+import builtin::editor::GUI::Icons;
+import builtin::editor::Editor::Action::ModifyComponentMember;
+
+import Definition;
+import GizmoMath;
+import EntityPicking;
+import TransformGizmo;
+import ParticleGizmo;
+import UIGizmo;
+
+using std;
+using je;
+using je::graphic;
+using je::gui;
+
+using JEEditor::GUI;
+using JEEditor::GUI::Icons;
+using JEEditor::Editor::Action;
+
+namespace JEEditor::Editor::WorldEditorViewport
+{
+    // 手柄编号：0..5 = 盒子的 ±X/±Y/±Z 面（axis = handle/2）；
+    // 其余为特殊手柄（避开 GIZMO_HANDLE_NONE = -1）
+    protected let AUDIO_HANDLE_FACE_BASE = 0;
+    protected let AUDIO_HANDLE_REVERB_FADE = 6;
+    protected let AUDIO_HANDLE_PORTAL_NORMAL = 7;
+    protected let AUDIO_HANDLE_SOURCE_MAX = 8;
+    protected let AUDIO_HANDLE_SOURCE_REF = 9;
+    protected let AUDIO_HANDLE_LISTENER_FACE = 10;
+
+    // 音频 gizmo 配色（ImGui Color32RGBA，屏幕空间绘制直接用）
+    protected let AUDIO_SOURCE_COLOR = (219, 134, 63, 220);
+    protected let AUDIO_REF_RANGE_COLOR = (255, 210, 140, 235); // 参考距离手柄/范围圈
+    protected let AUDIO_LISTENER_COLOR = (100, 160, 230, 220);
+    protected let AUDIO_OCCLUDER_COLOR = (150, 152, 158, 220);
+    protected let AUDIO_REVERB_COLOR = (178, 128, 255, 210);
+    protected let AUDIO_PORTAL_COLOR = (255, 158, 64, 220);
+    protected let AUDIO_HOVER_COLOR = (255, 255, 64, 255);
+    protected let AUDIO_BG_COLOR = (18, 19, 23, 190);
+    protected let AUDIO_DIM_ALPHA = 90;
+    protected let AUDIO_WIRE_ALPHA = 225;
+
+    // 音频实体世界变换（位置/旋转/局部缩放）
+    protected func audioFrame(e: entity)=> option<(vec3, quat, vec3)>
+    {
+        return or(option::none: option<(vec3, quat, vec3)>) <| try!{
+            try! trans = e->towoo::get_component:<Transform::Translation>();
+            return_value! option::value((
+                trans->get_global_pos,
+                trans->get_global_rot,
+                trans->get_local_scale));
+        };
+    }
+
+    // 组件 size（全尺寸）乘局部缩放后的半尺寸
+    protected func audioHalfExtent(size: vec3, scale: vec3)=> vec3
+    {
+        return (
+            mathf::abs(size[0] * scale[0]) * 0.5,
+            mathf::abs(size[1] * scale[1]) * 0.5,
+            mathf::abs(size[2] * scale[2]) * 0.5) as vec3;
+    }
+
+    // 屏幕空间绘制用圆角取整
+    protected func audioRoundTo(v: real, step: real)=> real
+    {
+        let i = (v / step + 0.5) as int;
+        return i as real * step;
+    }
+
+    // 组件徽标对应的图标纹理（builtin/icon，经 GUI::Icons 统一加载）
+    protected func audioKindIcon(kind: int)=> option<texture2d>
+    {
+        if (kind == 0)
+            return Icons::GIZMO_AUDIO_SOURCE;
+        if (kind == 1)
+            return Icons::GIZMO_AUDIO_LISTENER;
+        if (kind == 2)
+            return Icons::GIZMO_AUDIO_OCCLUDER;
+        if (kind == 3)
+            return Icons::GIZMO_AUDIO_REVERBZONE;
+
+        return Icons::GIZMO_AUDIO_PORTAL;
+    }
+
+    // 音频组件种类：0 音源 / 1 听者 / 2 遮挡 / 3 混响 / 4 门洞
+    protected func audioComponentKinds(e: entity)=> array<int>
+    {
+        let kinds = []mut: vec<int>;
+
+        if (e->towoo::get_component:<Audio::Source>->is_value)
+            kinds->add(0);
+        if (e->towoo::get_component:<Audio::Listener>->is_value)
+            kinds->add(1);
+        if (e->towoo::get_component:<Audio::Occluder>->is_value)
+            kinds->add(2);
+        if (e->towoo::get_component:<Audio::ReverbZone>->is_value)
+            kinds->add(3);
+        if (e->towoo::get_component:<Audio::Portal>->is_value)
+            kinds->add(4);
+
+        return kinds->to_array;
+    }
+
+    // 手柄归属的组件：混响 > 遮挡 > 门洞 > 音源 > 听者
+    protected func audioPrimaryKind(e: entity)=> int
+    {
+        if (e->towoo::get_component:<Audio::ReverbZone>->is_value)
+            return 3;
+        if (e->towoo::get_component:<Audio::Occluder>->is_value)
+            return 2;
+        if (e->towoo::get_component:<Audio::Portal>->is_value)
+            return 4;
+        if (e->towoo::get_component:<Audio::Source>->is_value)
+            return 0;
+        if (e->towoo::get_component:<Audio::Listener>->is_value)
+            return 1;
+        return -1;
+    }
+
+    protected func audioKindColor(kind: int)=> Color32RGBA
+    {
+        if (kind == 0)
+            return AUDIO_SOURCE_COLOR;
+        if (kind == 1)
+            return AUDIO_LISTENER_COLOR;
+        if (kind == 2)
+            return AUDIO_OCCLUDER_COLOR;
+        if (kind == 3)
+            return AUDIO_REVERB_COLOR;
+        return AUDIO_PORTAL_COLOR;
+    }
+
+    protected func audioKindName(kind: int)=> string
+    {
+        if (kind == 0)
+            return "音源";
+        if (kind == 1)
+            return "听者";
+        if (kind == 2)
+            return "声音遮挡";
+        if (kind == 3)
+            return "混响区域";
+        return "门洞";
+    }
+
+    protected func audioBoxCorners(
+        center: vec3, rotation: quat, half: vec3)=> array<vec3>
+    {
+        let signs = [
+            (-1., -1., -1.), (1., -1., -1.), (1., 1., -1.), (-1., 1., -1.),
+            (-1., -1., 1.), (1., -1., 1.), (1., 1., 1.), (-1., 1., 1.),
+        ];
+
+        let corners = []mut: vec<vec3>;
+        for (let (sx, sy, sz) : signs)
+        {
+            corners->add(center + rotation * (
+                (sx * half[0], sy * half[1], sz * half[2]) as vec3));
+        }
+        return corners->to_array;
+    }
+
+    protected func audioFacePoint(
+        center: vec3, rotation: quat, half: vec3, handle: int)=> vec3
+    {
+        let axis = handle / 2;
+        let sign = (handle % 2 == 0) ? 1. | -1.;
+
+        let mut local = (0., 0., 0.);
+        if (axis == 0)
+            local = (sign * half[0], 0., 0.);
+        else if (axis == 1)
+            local = (0., sign * half[1], 0.);
+        else
+            local = (0., 0., sign * half[2]);
+
+        return center + rotation * (local as vec3);
+    }
+
+    protected func audioSourceDirectionWorld(
+        rotation: quat, source: Audio::Source)=> vec3
+    {
+        let d = rotation * source.direction->get;
+        if (d->length < 0.00001)
+            return (0., 1., 0.) as vec3;
+        return d->unit;
+    }
+
+    protected func audioListenerFaceWorld(
+        rotation: quat, listener: Audio::Listener)=> vec3
+    {
+        let d = rotation * listener.face->get;
+        if (d->length < 0.00001)
+            return (0., 0., 1.) as vec3;
+        return d->unit;
+    }
+
+    protected func audioPortalNormalWorld(
+        rotation: quat, portal: Audio::Portal)=> vec3
+    {
+        let d = rotation * portal.normal->get;
+        if (d->length < 0.00001)
+            return (0., 0., 1.) as vec3;
+        return d->unit;
+    }
+
+    // 选中实体当前可拖拽的手柄点（世界坐标）
+    protected func audioHandlePoints(e: entity)=> array<(int, vec3)>
+    {
+        let points = []mut: vec<(int, vec3)>;
+
+        do try!{
+            try! frame = audioFrame(e);
+            let center = frame.0;
+            let rotation = frame.1;
+            let scale = frame.2;
+            let kind = audioPrimaryKind(e);
+
+            if (kind == 3)
+            {
+                try! zone = e->towoo::get_component:<Audio::ReverbZone>();
+                let half = audioHalfExtent(zone.size->get, scale);
+
+                for (let mut h = AUDIO_HANDLE_FACE_BASE; h < 6; h += 1)
+                    points->add((h, audioFacePoint(center, rotation, half, h)));
+
+                let fade = zone.fade->get;
+                let fade_distance = (fade > 0.) ? fade | 0.;
+                points->add((AUDIO_HANDLE_REVERB_FADE,
+                    center + rotation * (
+                        (0., half[1] + fade_distance, 0.) as vec3)));
+            }
+            else if (kind == 2)
+            {
+                try! occ = e->towoo::get_component:<Audio::Occluder>();
+                let half = audioHalfExtent(occ.size->get, scale);
+
+                for (let mut h = AUDIO_HANDLE_FACE_BASE; h < 6; h += 1)
+                    points->add((h, audioFacePoint(center, rotation, half, h)));
+            }
+            else if (kind == 4)
+            {
+                try! portal = e->towoo::get_component:<Audio::Portal>();
+                let half = audioHalfExtent(portal.size->get, scale);
+
+                for (let mut h = AUDIO_HANDLE_FACE_BASE; h < 6; h += 1)
+                    points->add((h, audioFacePoint(center, rotation, half, h)));
+
+                let arrow_len = (half[1] > 0.5) ? half[1] | 0.5;
+                points->add((AUDIO_HANDLE_PORTAL_NORMAL,
+                    center + audioPortalNormalWorld(rotation, portal)
+                        * (arrow_len * 1.6)));
+            }
+            else if (kind == 0)
+            {
+                try! source = e->towoo::get_component:<Audio::Source>();
+                points->add((AUDIO_HANDLE_SOURCE_MAX,
+                    center + rotation * (
+                        (source.max_distance->get, 0., 0.) as vec3)));
+                points->add((AUDIO_HANDLE_SOURCE_REF,
+                    center + rotation * (
+                        (0., source.reference_distance->get, 0.) as vec3)));
+            }
+            else if (kind == 1)
+            {
+                try! listener = e->towoo::get_component:<Audio::Listener>();
+                points->add((AUDIO_HANDLE_LISTENER_FACE,
+                    center + audioListenerFaceWorld(rotation, listener) * 1.2));
+            }
+
+            return_value!;
+        };
+
+        return points->to_array;
+    }
+
+    protected func audioHandleLabel(handle: int)=> string
+    {
+        if (handle >= AUDIO_HANDLE_FACE_BASE && handle < 6)
+        {
+            let axis = handle / 2;
+            let name = (axis == 0) ? "X" | ((axis == 1) ? "Y" | "Z");
+            return F"尺寸 {name}";
+        }
+        if (handle == AUDIO_HANDLE_REVERB_FADE)
+            return "淡出距离";
+        if (handle == AUDIO_HANDLE_PORTAL_NORMAL)
+            return "门洞法线";
+        if (handle == AUDIO_HANDLE_SOURCE_MAX)
+            return "最大距离";
+        if (handle == AUDIO_HANDLE_SOURCE_REF)
+            return "参考距离";
+        if (handle == AUDIO_HANDLE_LISTENER_FACE)
+            return "听者朝向";
+        return "";
+    }
+
+    protected func audioHandleColor(e: entity, handle: int)=> Color32RGBA
+    {
+        if (handle == AUDIO_HANDLE_REVERB_FADE)
+            return (178, 128, 255, 235);
+        if (handle == AUDIO_HANDLE_PORTAL_NORMAL)
+            return (255, 158, 64, 235);
+        if (handle == AUDIO_HANDLE_SOURCE_MAX)
+            return (219, 134, 63, 235);
+        if (handle == AUDIO_HANDLE_SOURCE_REF)
+            return AUDIO_REF_RANGE_COLOR;
+        if (handle == AUDIO_HANDLE_LISTENER_FACE)
+            return (100, 160, 230, 235);
+
+        let base = audioKindColor(audioPrimaryKind(e));
+        return (base.0, base.1, base.2, 235);
+    }
+
+    // 开始拖拽：按手柄找到要写的组件/成员并捕获旧值
+    protected func beginAudioDrag(
+        self: WorldEditorViewport,
+        e: entity,
+        euid: entity::internal::euid_t,
+        handle: int,
+        frame: (vec3, quat, vec3),
+        camera_trans: Transform::Translation)=> void
+    {
+        do try!{
+            let kind = audioPrimaryKind(e);
+            let mut component = "";
+            let mut member = "";
+
+            if (kind == 3)
+            {
+                component = "Audio::ReverbZone";
+                member = (handle == AUDIO_HANDLE_REVERB_FADE) ? "fade" | "size";
+            }
+            else if (kind == 2)
+            {
+                component = "Audio::Occluder";
+                member = "size";
+            }
+            else if (kind == 4)
+            {
+                component = "Audio::Portal";
+                member = (handle == AUDIO_HANDLE_PORTAL_NORMAL) ? "normal" | "size";
+            }
+            else if (kind == 0)
+            {
+                component = "Audio::Source";
+                member = (handle == AUDIO_HANDLE_SOURCE_MAX)
+                    ? "max_distance" | "reference_distance";
+            }
+            else if (kind == 1)
+            {
+                component = "Audio::Listener";
+                member = "face";
+            }
+            else
+                return_value!;
+
+            try! old_value = serializeMemberValue(e, component, member);
+
+            let center = frame.0;
+            let rotation = frame.1;
+            let scale = frame.2;
+
+            let mut axis = rotation * gizmoUnitAxis(0);
+            if (handle >= AUDIO_HANDLE_FACE_BASE && handle < 6)
+                axis = rotation * gizmoUnitAxis(handle / 2);
+            else if (handle == AUDIO_HANDLE_REVERB_FADE)
+                axis = rotation * gizmoUnitAxis(1);
+            else if (handle == AUDIO_HANDLE_SOURCE_MAX)
+                axis = rotation * gizmoUnitAxis(0);
+            else if (handle == AUDIO_HANDLE_SOURCE_REF)
+                axis = rotation * gizmoUnitAxis(1);
+
+            self.m_audio_dragging = true;
+            self.m_audio_drag_handle = handle;
+            self.m_audio_drag_euid = euid;
+            self.m_audio_drag_component = component;
+            self.m_audio_drag_member = member;
+            self.m_audio_drag_old_value = old_value;
+            self.m_audio_drag_center = center;
+            self.m_audio_drag_axis = axis;
+            self.m_audio_drag_plane_normal =
+                camera_trans->get_global_rot * ((0., 0., 1.) as vec3);
+            self.m_audio_drag_plane_point = center;
+            self.m_audio_drag_scale = scale;
+
+            return_value!;
+        };
+    }
+
+    // 拖拽进行中：按手柄含义写回组件成员（帧内直接改值，松开时发布动作）
+    protected func applyAudioDrag(
+        self: WorldEditorViewport,
+        e: entity,
+        ray_origin: vec3,
+        ray_dir: vec3)=> void
+    {
+        do try!{
+            let handle = self.m_audio_drag_handle;
+            let kind = audioPrimaryKind(e);
+            let center = self.m_audio_drag_center;
+            let scale = self.m_audio_drag_scale;
+
+            try! frame = audioFrame(e);
+            let rotation = frame.1;
+
+            if (handle >= AUDIO_HANDLE_FACE_BASE && handle < 6)
+            {
+                try! param = gizmoClosestAxisParam(
+                    center, self.m_audio_drag_axis, ray_origin, ray_dir);
+
+                let axis = handle / 2;
+                let half = mathf::abs(param
+                    / particleSafeScaleDiv(particleAxisComp(scale, axis)));
+                let mut full = half * 2.;
+
+                if (IsKeyDown(ImGuiKey::ImGuiMod_Ctrl))
+                    full = audioRoundTo(full, 0.1);
+                if (full < AUDIO_MIN_SIZE)
+                    full = AUDIO_MIN_SIZE;
+
+                if (kind == 3)
+                {
+                    try! zone = e->towoo::get_component:<Audio::ReverbZone>();
+                    zone.size->set(particleWithAxisComp(
+                        zone.size->get, axis, full));
+                }
+                else if (kind == 2)
+                {
+                    try! occ = e->towoo::get_component:<Audio::Occluder>();
+                    occ.size->set(particleWithAxisComp(
+                        occ.size->get, axis, full));
+                }
+                else if (kind == 4)
+                {
+                    try! portal = e->towoo::get_component:<Audio::Portal>();
+                    portal.size->set(particleWithAxisComp(
+                        portal.size->get, axis, full));
+                }
+            }
+            else if (handle == AUDIO_HANDLE_REVERB_FADE && kind == 3)
+            {
+                try! zone = e->towoo::get_component:<Audio::ReverbZone>();
+                let half = audioHalfExtent(zone.size->get, scale);
+
+                try! param = gizmoClosestAxisParam(
+                    center, self.m_audio_drag_axis, ray_origin, ray_dir);
+
+                let local_dist = mathf::abs(param);
+                let mut fade = local_dist - half[1];
+                if (fade < 0.)
+                    fade = 0.;
+                if (IsKeyDown(ImGuiKey::ImGuiMod_Ctrl))
+                    fade = audioRoundTo(fade, 0.1);
+
+                zone.fade->set(fade);
+            }
+            else if (handle == AUDIO_HANDLE_PORTAL_NORMAL && kind == 4)
+            {
+                try! portal = e->towoo::get_component:<Audio::Portal>();
+                try! hit = gizmoRayPlaneHit(
+                    ray_origin, ray_dir,
+                    self.m_audio_drag_plane_normal,
+                    self.m_audio_drag_plane_point);
+
+                let world_dir = hit - center;
+                if (world_dir->length < 0.0001)
+                    return_value!;
+
+                portal.normal->set(rotation->inverse * world_dir->unit);
+            }
+            else if (handle == AUDIO_HANDLE_LISTENER_FACE && kind == 1)
+            {
+                try! listener = e->towoo::get_component:<Audio::Listener>();
+                try! hit = gizmoRayPlaneHit(
+                    ray_origin, ray_dir,
+                    self.m_audio_drag_plane_normal,
+                    self.m_audio_drag_plane_point);
+
+                let world_dir = hit - center;
+                if (world_dir->length < 0.0001)
+                    return_value!;
+
+                listener.face->set(rotation->inverse * world_dir->unit);
+            }
+            else if ((handle == AUDIO_HANDLE_SOURCE_MAX
+                    || handle == AUDIO_HANDLE_SOURCE_REF) && kind == 0)
+            {
+                try! source = e->towoo::get_component:<Audio::Source>();
+                try! param = gizmoClosestAxisParam(
+                    center, self.m_audio_drag_axis, ray_origin, ray_dir);
+
+                let mut distance = mathf::abs(param);
+                if (distance < AUDIO_MIN_SIZE)
+                    distance = AUDIO_MIN_SIZE;
+                if (IsKeyDown(ImGuiKey::ImGuiMod_Ctrl))
+                    distance = audioRoundTo(distance, 0.1);
+
+                if (handle == AUDIO_HANDLE_SOURCE_MAX)
+                {
+                    let ref_distance = source.reference_distance->get;
+                    if (distance < ref_distance)
+                        distance = ref_distance;
+                    source.max_distance->set(distance);
+                }
+                else
+                {
+                    let max_distance = source.max_distance->get;
+                    if (distance > max_distance)
+                        distance = max_distance;
+                    source.reference_distance->set(distance);
+                }
+            }
+
+            return_value!;
+        };
+    }
+
+    // 结束拖拽：值有变化时发布一条可撤销动作
+    protected func finishAudioDrag(self: WorldEditorViewport)=> void
+    {
+        if (!self.m_audio_dragging || self.m_audio_drag_old_value == "")
+            return;
+
+        do try!{
+            try! e = self->findEntityByEuid(self.m_audio_drag_euid);
+            let new_value = serializeMemberValue(
+                e,
+                self.m_audio_drag_component,
+                self.m_audio_drag_member)->or("");
+
+            if (new_value != "" && new_value != self.m_audio_drag_old_value)
+                self->doAction(ModifyComponentMember::create(
+                    self.m_audio_drag_euid,
+                    self.m_audio_drag_component,
+                    self.m_audio_drag_member,
+                    self.m_audio_drag_old_value,
+                    new_value));
+
+            return_value!;
+        };
+    }
+
+    // 音频手柄交互：选中音频实体后悬停/拖拽尺寸、淡出、距离与朝向手柄
+    protected func updateAudioGizmo(
+        self: WorldEditorViewport,
+        debug_camera: option<entity>,
+        hovered: bool,
+        rect_min: ImVec2,
+        rect_size: ImVec2)=> void
+    {
+        self.m_audio_hover_handle = GIZMO_HANDLE_NONE;
+
+        // 松开左键时结束拖拽并提交撤销记录
+        if (self.m_audio_dragging
+            && !IsMouseDown(ImGuiMouseButton::ImGuiMouseButton_Left))
+        {
+            self->finishAudioDrag();
+            self.m_audio_dragging = false;
+            self.m_audio_drag_handle = GIZMO_HANDLE_NONE;
+        }
+
+        // UI 编辑视口缩放期间让位（屏幕映射不感知视口缩放）
+        if (self->uiEditingActive() && self.m_ui_view_zoom != 1.)
+            return;
+
+        if (self.m_selected_entity_id->is_none)
+            return;
+
+        do try!{
+            try! camera_entity = debug_camera;
+            try! camera_trans =
+                camera_entity->towoo::get_component:<Transform::Translation>();
+            try! camera_proj =
+                camera_entity->towoo::get_component:<Camera::Projection>();
+            try! selected_euid = self.m_selected_entity_id;
+            try! selected_entity = self->findEntityByEuid(selected_euid);
+            try! frame = audioFrame(selected_entity);
+
+            let rmin = rect_min as vec2;
+            let rsize = rect_size as vec2;
+            let mouse = GetMousePos() as vec2;
+
+            // 视口矩形退化（窗口折叠/最小化）时除以 rsize 会产生 NaN 射线
+            if (rsize[0] <= 0. || rsize[1] <= 0.)
+                return_value!;
+
+            let mouse_local = (mouse - rmin) / rsize;
+            let mouse_ndc = (mouse_local - (0.5, 0.5) as vec2) * 2.;
+            let mouse_ray = towoo::ray::from(
+                camera_trans,
+                camera_proj,
+                (mouse_ndc[0], -mouse_ndc[1]) as vec2,
+                camera_entity->towoo::get_component:<Camera::PerspectiveProjection>->is_none);
+
+            if (self.m_audio_dragging)
+            {
+                self->applyAudioDrag(
+                    selected_entity, mouse_ray->origin, mouse_ray->direction);
+                return_value!;
+            }
+
+            if (!(hovered
+                && !self.m_is_look_active
+                && !self.m_is_pan_active
+                && !self.m_is_orbit_active
+                // 粒子层先运行且绘制在最上层，悬停/拖拽时让位
+                && !self.m_particle_dragging
+                && self.m_particle_hover_handle == GIZMO_HANDLE_NONE))
+                return_value!;
+
+            let view_proj = camera_proj->get_view_proj_mat;
+            let points = audioHandlePoints(selected_entity);
+
+            let mut best = GIZMO_HANDLE_NONE;
+            let mut best_dist = AUDIO_HANDLE_HIT_PX;
+
+            for (let (handle, p) : points)
+            {
+                let s = gizmoWorldToScreen(view_proj, p, rmin, rsize);
+                let dist = (mouse - s)->length;
+                if (dist < best_dist)
+                {
+                    best = handle;
+                    best_dist = dist;
+                }
+            }
+
+            self.m_audio_hover_handle = best;
+
+            if (best != GIZMO_HANDLE_NONE
+                && IsMouseClicked(ImGuiMouseButton::ImGuiMouseButton_Left))
+            {
+                self->beginAudioDrag(
+                    selected_entity,
+                    selected_euid,
+                    best,
+                    frame,
+                    camera_trans);
+            }
+
+            return_value!;
+        };
+    }
+
+    // 程序化音频徽标：深色底盘 + 对应组件的小图标
+    protected func drawAudioBadge(
+        dl: DrawListT,
+        c: (real, real),
+        kind: int,
+        base: Color32RGBA,
+        selected: bool,
+        hovered: bool,
+        enabled: bool)=> void
+    {
+        let r = AUDIO_ICON_PX * 0.5;
+
+        let mut color = (selected || hovered) ? AUDIO_HOVER_COLOR | base;
+        if (!enabled)
+            color = (140, 142, 148, 160);
+
+        dl->AddCircleFilled(c, r + 2., AUDIO_BG_COLOR);
+        dl->AddCircle(c, r + 2., color, 1.2);
+
+        if (selected)
+            dl->AddCircle(c, r + 4.5, AUDIO_HOVER_COLOR, 1.5);
+        else if (hovered)
+            dl->AddCircle(c, r + 3.5, (255, 255, 158, 255), 1.);
+
+        // 组件字形：白色图标纹理（builtin/icon），随徽标状态染色
+        match (audioKindIcon(kind))
+        {
+            none?;
+            value(icon)?
+            {
+                let half = r * 0.72;
+                do dl->AddImageUV(
+                    (c[0] - half, c[1] - half),
+                    (c[0] + half, c[1] + half),
+                    (0., 0.), (1., 1.),
+                    icon, color);
+            }
+        }
+    }
+
+    // 选中/悬停实体的组件状态标签
+    protected func audioLabelText(e: entity, kind: int)=> string
+    {
+        if (kind == 0)
+        {
+            match (e->towoo::get_component:<Audio::Source>())
+            {
+                value(source)?
+                {
+                    let spatial =
+                        e->towoo::get_component:<Audio::Spatial>->is_value
+                            ? "空间" | "非空间";
+                    let playing =
+                        source.play->get ? "播放" | "暂停";
+                    return F"音源  {spatial}  {playing}  最大 {source.max_distance->get}";
+                }
+                none?;
+            }
+        }
+        else if (kind == 1)
+        {
+            match (e->towoo::get_component:<Audio::Listener>())
+            {
+                value(listener)?
+                {
+                    let mode = listener.use_2d->get ? "2D" | "3D";
+                    return F"听者  {mode}  音量 {listener.volume->get}";
+                }
+                none?;
+            }
+        }
+        else if (kind == 2)
+        {
+            match (e->towoo::get_component:<Audio::Occluder>())
+            {
+                value(occ)?
+                {
+                    let size = occ.size->get;
+                    return F"声音遮挡  {size[0]}x{size[1]}x{size[2]}  遮挡 {occ.occlusion->get}  闷音 {occ.muffle->get}";
+                }
+                none?;
+            }
+        }
+        else if (kind == 3)
+        {
+            match (e->towoo::get_component:<Audio::ReverbZone>())
+            {
+                value(zone)?
+                {
+                    let size = zone.size->get;
+                    return F"混响区域  {size[0]}x{size[1]}x{size[2]}  淡出 {zone.fade->get}";
+                }
+                none?;
+            }
+        }
+        else if (kind == 4)
+        {
+            match (e->towoo::get_component:<Audio::Portal>())
+            {
+                value(portal)?
+                {
+                    let state = portal.enabled->get ? "启用" | "禁用";
+                    return F"门洞  {state}  透射 {portal.transmission->get}  闷音 {portal.muffle->get}";
+                }
+                none?;
+            }
+        }
+
+        return audioKindName(kind);
+    }
+
+    protected func drawAudioLabel(
+        dl: DrawListT, c: vec2, e: entity, kind: int)=> void
+    {
+        let text = audioLabelText(e, kind);
+        let size = CalcTextSize(text);
+        let x = c[0] + AUDIO_ICON_PX * 0.5 + 6.;
+        let y = c[1] - size[1] * 0.5;
+
+        dl->AddRectFilled(
+            (x - 4., y - 2.),
+            (x + size[0] + 4., y + size[1] + 2.), AUDIO_BG_COLOR);
+        dl->AddText((x, y), GIZMO_LABEL_COLOR, text);
+    }
+
+    // 音频图标/线框/手柄绘制（屏幕空间，在 3D gizmo 之后提交）
+    protected func drawAudioGizmos(
+        self: WorldEditorViewport,
+        debug_camera: option<entity>,
+        viewport_rect: option<(ImVec2, ImVec2)>)=> void
+    {
+        if (self->uiEditingActive())
+            return;
+
+        let context =
+            or(option::none: option<(mat4, vec3, vec3, vec2, vec2)>)
+                <| try!{
+                    try! camera_entity = debug_camera;
+                    try! camera_trans =
+                        camera_entity->towoo::get_component:<Transform::Translation>();
+                    try! camera_proj =
+                        camera_entity->towoo::get_component:<Camera::Projection>();
+                    try! (rect_min, rect_max) = viewport_rect;
+
+                    let rmin = rect_min as vec2;
+                    let rsize = (rect_max.0 - rect_min.0,
+                        rect_max.1 - rect_min.1) as vec2;
+                    if (rsize[0] <= 0. || rsize[1] <= 0.)
+                        return_value! option::none;
+
+                    return_value! option::value((
+                        camera_proj->get_view_proj_mat,
+                        camera_trans->get_global_pos,
+                        camera_trans->get_global_rot
+                            * ((0., 0., 1.) as vec3),
+                        rmin,
+                        rsize));
+                };
+
+        match (context)
+        {
+            none? return;
+            value((view_proj, cam_pos, cam_forward, rmin, rsize))?
+            {
+                let dl = GetWindowDrawList();
+                PushClipRect(
+                    (rmin[0], rmin[1]),
+                    (rmin[0] + rsize[0], rmin[1] + rsize[1]));
+
+                let audio_layer_active =
+                    self.m_gizmo_active_layer == GizmoLayer::AUDIO
+                    || self.m_gizmo_active_layer == GizmoLayer::ALL
+                    || self.m_audio_dragging;
+                let active_handle = self.m_audio_dragging
+                    ? self.m_audio_drag_handle
+                    | self.m_audio_hover_handle;
+
+                func project(p: vec3)=> vec2
+                {
+                    return gizmoWorldToScreen(view_proj, p, rmin, rsize);
+                }
+
+                func screenEdge(
+                    a: vec3, b: vec3, color: Color32RGBA, thickness: real)=> void
+                {
+                    let sa = project(a);
+                    let sb = project(b);
+                    if ((sa - sb)->length < 1.2)
+                        return;
+                    dl->AddLine(
+                        (sa[0], sa[1]), (sb[0], sb[1]),
+                        color, thickness);
+                }
+
+                func drawBox(
+                    center: vec3, rotation: quat, half: vec3,
+                    color: Color32RGBA)=> void
+                {
+                    let corners = audioBoxCorners(center, rotation, half);
+                    let edges = [
+                        (0, 1), (1, 2), (2, 3), (3, 0),
+                        (4, 5), (5, 6), (6, 7), (7, 4),
+                        (0, 4), (1, 5), (2, 6), (3, 7),
+                    ];
+                    for (let (a, b) : edges)
+                        screenEdge(corners[a], corners[b], color, 1.2);
+                }
+
+                func drawArrow(
+                    from: vec3, to: vec3, color: Color32RGBA,
+                    thickness: real)=> void
+                {
+                    let s0 = project(from);
+                    let s1 = project(to);
+                    let d = s1 - s0;
+                    let len = d->length;
+                    if (len < 1.5)
+                        return;
+
+                    dl->AddLine(
+                        (s0[0], s0[1]), (s1[0], s1[1]),
+                        color, thickness);
+
+                    let n = d / len;
+                    let side = (-n[1], n[0]) as vec2;
+                    let base = s1 - n * 7.;
+                    let left = base + side * 3.5;
+                    let right = base - side * 3.5;
+                    dl->AddTriangleFilled(
+                        (s1[0], s1[1]),
+                        (left[0], left[1]),
+                        (right[0], right[1]), color);
+                }
+
+                func drawHandle(
+                    pos: vec3, active: bool, color: Color32RGBA,
+                    square: bool)=> void
+                {
+                    let s = project(pos);
+                    let c = active ? AUDIO_HOVER_COLOR | color;
+
+                    if (square)
+                        dl->AddRectFilled(
+                            (s[0] - 4., s[1] - 4.),
+                            (s[0] + 4., s[1] + 4.), c);
+                    else
+                        dl->AddCircleFilled((s[0], s[1]), 4.5, c);
+                }
+
+                func drawCircleXY(
+                    center: vec3, rotation: quat, radius: real,
+                    color: Color32RGBA)=> void
+                {
+                    let segments = 32;
+                    let mut prev = center + rotation * (
+                        (radius, 0., 0.) as vec3);
+
+                    for (let mut i = 1; i <= segments; i += 1)
+                    {
+                        let a = 2. * mathf::PI
+                            * (i as real / segments as real);
+                        let p = center + rotation * (
+                            (mathf::cos(a) * radius,
+                                mathf::sin(a) * radius, 0.) as vec3);
+
+                        screenEdge(prev, p, color, 1.);
+                        prev = p;
+                    }
+                }
+
+                // 虚线圆环：距离范围的外圈用它，和实线的参考距离圈区分
+                func drawCircleXYDashed(
+                    center: vec3, rotation: quat, radius: real,
+                    color: Color32RGBA)=> void
+                {
+                    let segments = 48;
+                    for (let mut i = 0; i < segments; i += 2)
+                    {
+                        let a0 = 2. * mathf::PI
+                            * (i as real / segments as real);
+                        let a1 = 2. * mathf::PI
+                            * ((i + 1) as real / segments as real);
+
+                        let p0 = center + rotation * (
+                            (mathf::cos(a0) * radius,
+                                mathf::sin(a0) * radius, 0.) as vec3);
+                        let p1 = center + rotation * (
+                            (mathf::cos(a1) * radius,
+                                mathf::sin(a1) * radius, 0.) as vec3);
+
+                        screenEdge(p0, p1, color, 1.2);
+                    }
+                }
+
+                func wireColor(kind: int, selected: bool)=> Color32RGBA
+                {
+                    let base = audioKindColor(kind);
+                    return (base.0, base.1, base.2,
+                        selected ? AUDIO_WIRE_ALPHA | AUDIO_DIM_ALPHA);
+                }
+
+                for (let e : self.m_audio_entity_selector)
+                {
+                    do try!{
+                        try! trans =
+                            e->towoo::get_component:<Transform::Translation>();
+                        try! euid = e->internal::get_entity_uid;
+
+                        let pos = trans->get_global_pos;
+                        if ((pos - cam_pos)->dot(cam_forward) <= 0.)
+                            return_value!;
+
+                        let selected = self->euidIsSelected(euid);
+                        let mut icon_hovered = false;
+                        match (self.m_icon_gizmo_hover)
+                        {
+                            none?;
+                            value(hovered_euid)?
+                                icon_hovered = hovered_euid == euid;
+                        }
+                        let hot = selected || icon_hovered;
+                        let rotation = trans->get_global_rot;
+                        let scale = trans->get_local_scale;
+
+                        // ---- 组件徽标 ----
+                        let kinds = audioComponentKinds(e);
+                        let kind_count = kinds->len;
+
+                        if (kind_count == 0)
+                            return_value!;
+
+                        let listener_on_camera =
+                            e->towoo::get_component:<Camera::Projection>()->is_value;
+
+                        let mut index = 0;
+                        for (let kind : kinds)
+                        {
+                            let mut center = project(pos);
+
+                            if (kind == 1 && listener_on_camera)
+                                center = center + ((AUDIO_ICON_PX * 1.4,
+                                    0.) as vec2);
+                            else if (kind_count > 1)
+                                center = center + ((0.,
+                                    (index as real
+                                        - (kind_count as real - 1.) * 0.5)
+                                        * (AUDIO_ICON_PX + 2.)) as vec2);
+
+                            let mut enabled = true;
+                            if (kind == 4)
+                            {
+                                try! portal =
+                                    e->towoo::get_component:<Audio::Portal>();
+                                enabled = portal.enabled->get;
+                            }
+
+                            drawAudioBadge(
+                                dl, (center[0], center[1]), kind,
+                                audioKindColor(kind),
+                                selected, icon_hovered, enabled);
+
+                            if (hot)
+                                drawAudioLabel(dl, center, e, kind);
+
+                            index += 1;
+                        }
+
+                        // ---- 区域线框（房间/遮挡/门洞） ----
+                        // 区域体积始终绘制，不依赖当前编辑层与选中状态；
+                        // 未选中淡显，选中高亮，便于随时看清声学场景布局
+                        {
+                            match (e->towoo::get_component:<Audio::Occluder>())
+                            {
+                                value(occ)?
+                                {
+                                    let half = audioHalfExtent(
+                                        occ.size->get, scale);
+                                    drawBox(pos, rotation, half,
+                                        wireColor(2, selected));
+                                }
+                                none?;
+                            }
+
+                            match (e->towoo::get_component:<Audio::ReverbZone>())
+                            {
+                                value(zone)?
+                                {
+                                    let half = audioHalfExtent(
+                                        zone.size->get, scale);
+                                    drawBox(pos, rotation, half,
+                                        wireColor(3, selected));
+
+                                    let fade = zone.fade->get;
+                                    if (fade > 0.0001)
+                                    {
+                                        let fade_half = (
+                                            half[0] + fade,
+                                            half[1] + fade,
+                                            half[2] + fade) as vec3;
+                                        let base = audioKindColor(3);
+                                        drawBox(pos, rotation, fade_half,
+                                            (base.0, base.1, base.2,
+                                                selected ? 130 | 70));
+                                    }
+                                }
+                                none?;
+                            }
+
+                            match (e->towoo::get_component:<Audio::Portal>())
+                            {
+                                value(portal)?
+                                {
+                                    let enabled = portal.enabled->get;
+                                    let half = audioHalfExtent(
+                                        portal.size->get, scale);
+
+                                    let mut wire = wireColor(4, selected);
+                                    if (!enabled)
+                                        wire = (140, 142, 148, 120);
+
+                                    drawBox(pos, rotation, half, wire);
+
+                                    // 开口矩形（局部 XY 平面）
+                                    let o0 = pos + rotation * (
+                                        (-half[0], -half[1], 0.) as vec3);
+                                    let o1 = pos + rotation * (
+                                        (half[0], -half[1], 0.) as vec3);
+                                    let o2 = pos + rotation * (
+                                        (half[0], half[1], 0.) as vec3);
+                                    let o3 = pos + rotation * (
+                                        (-half[0], half[1], 0.) as vec3);
+
+                                    screenEdge(o0, o1, wire, 1.4);
+                                    screenEdge(o1, o2, wire, 1.4);
+                                    screenEdge(o2, o3, wire, 1.4);
+                                    screenEdge(o3, o0, wire, 1.4);
+
+                                    let arrow_len =
+                                        (half[1] > 0.5) ? half[1] | 0.5;
+                                    let normal =
+                                        audioPortalNormalWorld(rotation, portal);
+
+                                    drawArrow(pos,
+                                        pos + normal * (arrow_len * 1.6),
+                                        wire, 1.4);
+                                }
+                                none?;
+                            }
+                        }
+
+                        // ---- 选中实体的辅助线与手柄 ----
+                        if (selected && audio_layer_active)
+                        {
+                            let kind = audioPrimaryKind(e);
+                            let base = audioKindColor(kind);
+                            let hot_color =
+                                (base.0, base.1, base.2, 220);
+
+                            if (kind == 0)
+                            {
+                                try! source =
+                                    e->towoo::get_component:<Audio::Source>();
+                                let spatial_on =
+                                    e->towoo::get_component:<Audio::Spatial>
+                                        ->is_value;
+                                let max_distance = source.max_distance->get;
+                                let ref_distance =
+                                    source.reference_distance->get;
+
+                                // 距离范围圈：参考距离实线（亮黄）、最大距离
+                                // 虚线（源色）。非空间音源的距离参数不参与
+                                // 衰减，但手柄仍可编辑，范围圈画淡一些以示
+                                // “当前不生效”；悬停/拖拽对应手柄时高亮该圈。
+                                let max_ring = (base.0, base.1, base.2,
+                                    spatial_on ? 190 | 70);
+                                let ref_ring = (
+                                    AUDIO_REF_RANGE_COLOR.0,
+                                    AUDIO_REF_RANGE_COLOR.1,
+                                    AUDIO_REF_RANGE_COLOR.2,
+                                    spatial_on ? 235 | 110);
+
+                                if (max_distance > 0.0001)
+                                    drawCircleXYDashed(pos, rotation,
+                                        max_distance,
+                                        active_handle == AUDIO_HANDLE_SOURCE_MAX
+                                            ? AUDIO_HOVER_COLOR | max_ring);
+                                if (ref_distance > 0.0001)
+                                    drawCircleXY(pos, rotation,
+                                        ref_distance,
+                                        active_handle == AUDIO_HANDLE_SOURCE_REF
+                                            ? AUDIO_HOVER_COLOR | ref_ring);
+
+                                if (spatial_on)
+                                {
+                                    let dir =
+                                        audioSourceDirectionWorld(rotation, source);
+                                    let arrow_len = (max_distance > 1.)
+                                        ? max_distance * 0.35 | 1.;
+                                    drawArrow(pos, pos + dir * arrow_len,
+                                        hot_color, 1.4);
+                                }
+                            }
+                            else if (kind == 1)
+                            {
+                                try! listener =
+                                    e->towoo::get_component:<Audio::Listener>();
+                                let face =
+                                    audioListenerFaceWorld(rotation, listener);
+                                drawArrow(pos, pos + face * 1.2,
+                                    hot_color, 1.4);
+                            }
+
+                            let points = audioHandlePoints(e);
+                            for (let (handle, p) : points)
+                            {
+                                let square = handle >= AUDIO_HANDLE_FACE_BASE
+                                    && handle < 6;
+                                drawHandle(p,
+                                    handle == active_handle,
+                                    audioHandleColor(e, handle),
+                                    square);
+                            }
+                        }
+
+                        return_value!;
+                    };
+                }
+
+                // 手柄悬停/拖拽名称（与其它 gizmo 的鼠标旁提示一致）
+                let mut label = "";
+                if (self.m_audio_dragging)
+                    label = audioHandleLabel(self.m_audio_drag_handle);
+                else if (self.m_audio_hover_handle != GIZMO_HANDLE_NONE)
+                    label = audioHandleLabel(self.m_audio_hover_handle);
+
+                if (label != "")
+                {
+                    let mouse = GetMousePos();
+                    let size = CalcTextSize(label);
+                    dl->AddRectFilled(
+                        (mouse.0 + 10., mouse.1 - 24.),
+                        (mouse.0 + 18. + size.0, mouse.1 - 20. + size.1),
+                        (18, 19, 23, 200));
+                    dl->AddText(
+                        (mouse.0 + 14., mouse.1 - 20.),
+                        GIZMO_LABEL_COLOR, label);
+                }
+
+                PopClipRect();
+            }
+        }
+    }
+}

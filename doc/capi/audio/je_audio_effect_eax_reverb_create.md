@@ -1,9 +1,9 @@
-# je_audio_effect_eaxreverb_create
+# je_audio_effect_eax_reverb_create
 
 ## 函数签名
 
 ```cpp
-JE_API je_audio_effect_eax_reverb_t* je_audio_effect_eaxreverb_create();
+JE_API je_audio_effect_eax_reverb_t* je_audio_effect_eax_reverb_create();
 ```
 
 ## 描述

@@ -598,12 +598,12 @@ namespace Audio
     {
         extern("libjoyecs", "wojeapi_towoo_audio_source_get_source")
             public func get_source(self: Source)=> je::audio::source;
-    }
-    namespace Playing
-    {
-        extern("libjoyecs", "wojeapi_towoo_audio_playing_set_buffer")
-            public func set_buffer(self: Playing, buf: je::audio::buffer)=> void;
-        extern("libjoyecs", "wojeapi_towoo_audio_playing_get_buffer")
-            public func get_buffer(self: Playing)=> option<je::audio::buffer>;
+        extern("libjoyecs", "wojeapi_towoo_audio_source_set_buffer")
+            public func set_buffer(self: Source, buf: je::audio::buffer)=> void;
+        extern("libjoyecs", "wojeapi_towoo_audio_source_get_buffer")
+            public func get_buffer(self: Source)=> option<je::audio::buffer>;
+        // 以该音源的参数与实体位置播放一次事件音（不改变持久声部的播放）
+        extern("libjoyecs", "wojeapi_towoo_audio_source_play_oneshot")
+            public func play_oneshot(self: Source, buf: je::audio::buffer)=> bool;
     }
 }

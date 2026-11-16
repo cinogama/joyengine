@@ -52,6 +52,8 @@ namespace JEEditor::Editor::WorldEditorViewport
         typeinfo::load("Animation::AnimatorSystem")->unwrap;
     let PARTICLE_SYSTEM_TYPE =
         typeinfo::load("Particle::ParticleSystem")->unwrap;
+    let AUDIO_SYSTEM_TYPE =
+        typeinfo::load("Audio::AudioUpdatingSystem")->unwrap;
         
     // 确保世界中存在编辑器调试摄像机（带 Editor::Invisible 标记的透视摄像机），
     // 没有则创建默认的一个。调试摄像机是编辑器内部实体，不会随世界文件保存
@@ -130,6 +132,9 @@ namespace JEEditor::Editor::WorldEditorViewport
                 value(_)?
                 {
                     world_viewport->addRuntimeSystem(ANIMATION_SYSTEM_TYPE);
+                    // 音频系统只在调试运行/导出时启用：编辑态不常驻播放，
+                    // 需要试听时开始运行即可
+                    world_viewport->addRuntimeSystem(AUDIO_SYSTEM_TYPE);
                     break;
                 }
             }
@@ -182,9 +187,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                     Singleton::Universe::getUniverse(),
                     wdat);
                 ensureDebugCamera(w);
-                // 旧世界文件未保存粒子系统：补挂一次，保证发射器在编辑态
-                // 可预览（已存在时 add_system 无事发生）
-                do w->add_system(PARTICLE_SYSTEM_TYPE);
                 w->set_enable(true);
                 
                 // “调试执行/导出时才启用”的系统以类型名保存，此处解析为

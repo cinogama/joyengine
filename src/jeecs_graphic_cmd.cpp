@@ -8,12 +8,22 @@
 #include <cstring>
 #include <vector>
 
+#ifndef NDEBUG
+#   include <mutex>
+#   include <tuple>
+#   include <utility>
+#endif
+
 // Render API (v2): backend-agnostic command recording.
 //
 // Recording happens on any thread and only touches CPU memory. Commit runs on
 // the owning graphic thread, prepares resources lazily and dispatches a compact
-// command stream to the backend render vtable. All state validation is done
-// with asserts; invalid usage is a programming error, not a recoverable case.
+// command stream to the backend render vtable. Structural misuse of the
+// recording API is caught with asserts. Debug builds additionally validate
+// user-authored material data (a shader attached to a vertex layout it cannot
+// be fed from, a texture bound to a pass declared as another kind): the draw is
+// dropped with an error log instead of aborting. Release builds skip that
+// validation to keep the per-draw path free.
 
 using namespace jeecs::graphic;
 
@@ -124,15 +134,15 @@ namespace
         }
     }
 
-    bool _jegl_vertex_layout_matches(
+    // A shader consumes a prefix of the vertex attributes. Models may carry
+    // extra attributes (normal/tangent/...) that the shader ignores, so only
+    // that prefix has to match. Returns the index of the first shader input the
+    // vertex layout cannot satisfy, or SIZE_MAX when the layout is compatible.
+    size_t _jegl_vertex_layout_mismatch(
         const je_gl_vertex_t* vertex, const je_gl_shader_t* shader)
     {
-        // A shader consumes a prefix of the vertex attributes. Models may
-        // carry extra attributes (normal/tangent/...) that the shader ignores;
-        // the pipeline input layout is built from the shader's vin, so only
-        // that prefix has to match.
         if (shader->m_vertex_in_count > vertex->m_format_count)
-            return false;
+            return vertex->m_format_count;
 
         for (size_t i = 0; i < shader->m_vertex_in_count; ++i)
         {
@@ -175,13 +185,73 @@ namespace
                 base_type = JE_GL_VERTEX_DATA_TYPE_INT32;
                 break;
             default:
-                return false;
+                return i;
             }
 
             if (vertex->m_formats[i].m_count != count
                 || vertex->m_formats[i].m_type != base_type)
+                return i;
+        }
+        return SIZE_MAX;
+    }
+
+    const char* _jegl_texture_kind_name(je_gl_texture_kind_t kind)
+    {
+        switch (kind)
+        {
+        case je_gl_texture_kind_t::TEXTURE_2D: return "texture2d";
+        case je_gl_texture_kind_t::TEXTURE_3D: return "texture3d";
+        case je_gl_texture_kind_t::TEXTURE_ARRAY: return "texture2darray";
+        case je_gl_texture_kind_t::TEXTURE_CUBE: return "texturecube";
+        case je_gl_texture_kind_t::TEXTURE_MSAA: return "texture2dmsaa";
+        default: return "unknown texture";
+        }
+    }
+
+    const char* _jegl_shader_name(const je_gl_shader_t* shader)
+    {
+        return shader->m_handle.m_path_may_null_if_builtin != nullptr
+            ? shader->m_handle.m_path_may_null_if_builtin
+            : "<builtin>";
+    }
+
+    // Material data comes from user-authored scenes and the editor, so an
+    // incompatible shader/vertex/texture combination can last for many frames
+    // and would otherwise flood the log on every recorded draw. Report each
+    // (pipeline, vertex, kind) combination once — the kind is part of the key
+    // so a vertex-layout report does not silence a later texture-kind report
+    // for the same pair; the draw itself is dropped every time.
+    // Freed resources can have their addresses reused, which at worst silences
+    // the message for a later pair; the drop itself is not affected.
+    enum incompatible_draw_kind
+    {
+        INCOMPATIBLE_DRAW_VERTEX_LAYOUT,
+        INCOMPATIBLE_DRAW_TEXTURE_KIND,
+    };
+
+    std::mutex g_incompatible_draw_report_mx;
+    std::vector<std::tuple<uintptr_t, uintptr_t, int>>
+        g_incompatible_draw_reports;
+
+    bool _jegl_report_incompatible_draw_once(
+        const je_gl_pipeline_t* pipeline,
+        const je_gl_vertex_t* vertex,
+        int kind)
+    {
+        const uintptr_t pipeline_ptr = reinterpret_cast<uintptr_t>(pipeline);
+        const uintptr_t vertex_ptr = reinterpret_cast<uintptr_t>(vertex);
+
+        std::lock_guard<std::mutex> guard(g_incompatible_draw_report_mx);
+        for (const auto& reported : g_incompatible_draw_reports)
+        {
+            if (std::get<0>(reported) == pipeline_ptr
+                && std::get<1>(reported) == vertex_ptr
+                && std::get<2>(reported) == kind)
                 return false;
         }
+
+        g_incompatible_draw_reports.emplace_back(
+            pipeline_ptr, vertex_ptr, kind);
         return true;
     }
 #endif
@@ -444,18 +514,40 @@ struct je_gl_command_buffer_t
         m_has_last_uniform_block = false;
     }
 
-    void validate_draw_state() const
+#ifndef NDEBUG
+    // Structural misuse (no pipeline/vertex bound, topology mismatch) stays an
+    // assert: it is a bug in the recording code. Shader/vertex/texture
+    // mismatches can come from user-authored material data instead, so debug
+    // builds report them and drop the draw rather than aborting. Release builds
+    // skip these checks entirely to keep the per-draw path free.
+    bool check_draw_state() const
     {
         assert(m_has_pipeline);
         assert(m_has_vertex);
 
         const auto* shader = m_pipeline->m_shader;
-#ifndef NDEBUG
+
         je_gl_topology_t topology;
         assert(_jegl_topology_of_vertex(m_vertex, &topology));
         assert(topology == m_pipeline->m_state.m_topology);
-        assert(_jegl_vertex_layout_matches(m_vertex, shader));
-#endif
+
+        const size_t mismatch = _jegl_vertex_layout_mismatch(m_vertex, shader);
+        if (mismatch != SIZE_MAX)
+        {
+            if (_jegl_report_incompatible_draw_once(m_pipeline, m_vertex,
+                    INCOMPATIBLE_DRAW_VERTEX_LAYOUT))
+            {
+                jeecs::debug::logerr(
+                    "Draw skipped: shader '%s' expects a vertex layout the bound "
+                    "vertex cannot provide (shader input #%zu mismatches; the "
+                    "shader needs %zu input(s), the vertex has %zu attribute(s)).",
+                    _jegl_shader_name(shader),
+                    mismatch,
+                    shader->m_vertex_in_count,
+                    m_vertex->m_format_count);
+            }
+            return false;
+        }
 
         for (size_t i = 0; i < m_texture_binding_count; ++i)
         {
@@ -465,15 +557,31 @@ struct je_gl_command_buffer_t
                 if (shader->m_textures[j].m_pass == binding.m_pass
                     && shader->m_textures[j].m_kind != binding.m_kind)
                 {
-                    assert(!"Texture kind does not match the shader declaration.");
+                    if (_jegl_report_incompatible_draw_once(m_pipeline, m_vertex,
+                            INCOMPATIBLE_DRAW_TEXTURE_KIND))
+                    {
+                        jeecs::debug::logerr(
+                            "Draw skipped: shader '%s' declares texture pass %u as "
+                            "%s, but a %s is bound to it.",
+                            _jegl_shader_name(shader),
+                            binding.m_pass,
+                            _jegl_texture_kind_name(shader->m_textures[j].m_kind),
+                            _jegl_texture_kind_name(binding.m_kind));
+                    }
+                    return false;
                 }
             }
         }
+        return true;
     }
+#endif
 
     void emit_draw(jegl_cmd_op op, uint32_t a, uint32_t b, uint32_t c)
     {
-        validate_draw_state();
+#ifndef NDEBUG
+        if (!check_draw_state())
+            return;
+#endif
 
         uint32_t uniform_offset = 0;
         uint32_t uniform_size = m_uniform_staging_size;
