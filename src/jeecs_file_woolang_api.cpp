@@ -161,15 +161,16 @@ WOORT_API woort_api wojeapi_cache_binary_append_buffer(void)
     return woort_ret_bool(je_cache_binary_append_buffer(file, buf, buflen));
 }
 
-// 无类型标记的裸字节区（文档之前的裸数据，如音频 PCM）。
-WOORT_API woort_api wojeapi_cache_binary_append_raw_buffer(void)
+// 裸字节直写（je_cache_file_write 直通）：不经 je_cache_binary_* 文档
+// 标记，用于文档之外的裸数据区（如音频 PCM 及其 uint64 长度前缀）。
+WOORT_API woort_api wojeapi_cache_file_write(void)
 {
     auto* file = static_cast<je_writing_cache_file_t*>(woort_pointer(0));
 
     size_t buflen = 0;
     const void* buf = woort_buffer(1, &buflen);
 
-    return woort_ret_bool(je_cache_binary_append_raw_buffer(file, buf, buflen));
+    return woort_ret_bool(buflen == je_cache_file_write(buf, 1, buflen, file));
 }
 
 // FIMG resource-pack writer

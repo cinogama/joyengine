@@ -45,11 +45,11 @@ namespace je::cache
         extern("libjoyecs", "wojeapi_cache_binary_append_buffer")
             public func append_buffer(self: binary_writer, buf: buffer)=> bool;
 
-        // 无类型标记的裸字节区（写入 uint64 长度与内容），用于文档之前的
-        // 裸数据区（如音频 PCM）。读取方可以直接按偏移访问，便于流式读取；
-        // 只能写在 append_document 之前。
-        extern("libjoyecs", "wojeapi_cache_binary_append_raw_buffer")
-            public func append_raw_buffer(self: binary_writer, buf: buffer)=> bool;
+        // 裸字节直写（C 侧 je_cache_file_write 直通），不经 je_cache_binary_*
+        // 的文档标记；用于文档之外的裸数据区（如音频 PCM 及其 uint64 长度
+        // 前缀），只能写在 append_document 之前。
+        extern("libjoyecs", "wojeapi_cache_file_write")
+            public func write(self: binary_writer, buf: buffer)=> bool;
     }
 
     // 确保 path 指向的 .je4animation TOML 已有可用的 .je4cache；缺失或

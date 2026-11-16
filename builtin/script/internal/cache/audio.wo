@@ -10,7 +10,8 @@
 // 音频经 je::file::readall 读取字节、pkg::audio 解码
 //（audio::frombuffer，保持 @/!/fimg 的引擎路径解析），再按配置经
 // wav::pcm_as 转换为目标编码（声道数与帧数不变，样本值钳制到 [-1, 1]），
-// 经 binary_writer::append_raw_buffer 写入。仅支持单声道/立体声（OpenAL 的
+// 经 binary_writer::write（je_cache_file_write）连同长度前缀直写。仅支持
+// 单声道/立体声（OpenAL 的
 // 缓冲格式约束）；其它声道数在生成期报错，不写缓存。
 //
 // 缓存布局（文件头之后），与 src/jeecs_audio_impl_openal.cpp 的读取逻辑
@@ -148,9 +149,10 @@ extern func generate(
         none? return false;
     }
 
-    // 先写裸 PCM 区（uint64 长度 + 波形），再写描述解码信息的文档。
+    // 先写裸 PCM 区（uint64 长度 + 波形，经 je_cache_file_write 直写，
+    // 不经 je_cache_binary_* 标记），再写描述解码信息的文档。
     let pcm = wav->pcm_as(bits, is_float);
-    if (!cache->append_raw_buffer(pcm))
+    if (!cache->write(buffer::createi64(pcm->len)) || !cache->write(pcm))
         return false;
 
     if (!cache->append_document())
