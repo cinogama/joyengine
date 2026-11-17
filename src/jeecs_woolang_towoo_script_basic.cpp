@@ -7,7 +7,6 @@
 #include "jeecs/file.hpp"
 #include "jeecs/game.hpp"
 #include "jeecs/graphic.hpp"
-#include "jeecs/graphic.hpp"
 #include "jeecs/logging.hpp"
 #include "jeecs/math.hpp"
 #include "jeecs/prefix.hpp"
@@ -566,12 +565,7 @@ namespace jeecs::woolang_runtime::towoo
 
         vector<const je_type_info_t*> _gather_all_registed_types()
         {
-            auto** alltypes = debug::get_all_registered_types();
-            vector<const je_type_info_t*> all_registed_types;
-            for (auto* idx = alltypes; *idx != nullptr; ++idx)
-                all_registed_types.push_back(*idx);
-            je_mem_free(alltypes);
-            return all_registed_types;
+            return debug::get_all_registered_types();
         }
 
         string _generate_type_decl(

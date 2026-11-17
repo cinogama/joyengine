@@ -22,30 +22,26 @@
 #include "jeecs/logging.hpp"
 #include "jeecs/typing.hpp"
 
+#include <vector>
+
 namespace jeecs::debug
 {
-    // 返回 universe 中所有存活的世界（以 nullptr 结尾的数组），
-    // 结果用 je_mem_free 释放
-    je_game_world_t** get_all_worlds(je_game_universe_t* universe);
+    // 返回 universe 中所有存活的世界
+    std::vector<je_game_world_t*> get_all_worlds(je_game_universe_t* universe);
 
-    // 释放 get_all_entities 返回的实体包装
-    void free_entity(je_game_entity_t* entity);
+    // 返回世界中所有处于 READY 态的实体句柄快照（按值返回，无须释放）。
+    // 句柄是 (chunk, 槽位 id, 版本) 三元组，在该实体槽位下一次结构变化
+    // 前有效；Woolang 侧如需长期持有，由绑定层装箱成 GC 管理的副本
+    std::vector<je_game_entity_t> get_all_entities(je_game_world_t* world);
 
-    // 返回世界中所有实体（get_all_worlds 的实体版：元素是新建的实体
-    // 包装，须逐个用 free_entity 释放，数组本身用 je_mem_free 释放）
-    je_game_entity_t** get_all_entities(je_game_world_t* world);
+    // 返回实体当前持有的全部组件类型（按类型 id 排序）
+    std::vector<const je_type_info_t*> get_all_components_of_entity(const je_game_entity_t* entity);
 
-    // 返回实体当前持有的全部组件类型（以 nullptr 结尾，按类型 id 排序），
-    // 结果用 je_mem_free 释放
-    const je_type_info_t** get_all_components_of_entity(const je_game_entity_t* entity);
+    // 返回类型管理器中已注册的全部类型
+    std::vector<const je_type_info_t*> get_all_registered_types();
 
-    // 返回类型管理器中已注册的全部类型（以 nullptr 结尾），
-    // 结果用 je_mem_free 释放
-    const je_type_info_t** get_all_registered_types();
-
-    // 返回世界挂载的全部系统类型（以 nullptr 结尾），
-    // 结果用 je_mem_free 释放
-    const je_type_info_t** get_all_attached_systems(je_game_world_t* world);
+    // 返回世界挂载的全部系统类型
+    std::vector<const je_type_info_t*> get_all_attached_systems(je_game_world_t* world);
 
     // 实体调试 EID（je_debug_eid_t，0 为无效值）：实体缺少 Editor::EntityId
     // 组件时 get 会补挂组件并返回 0；set 在缺少组件时先创建再设置

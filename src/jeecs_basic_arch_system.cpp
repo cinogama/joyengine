@@ -3078,31 +3078,19 @@ bool je_ecs_world_slice_dependence_query(
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
 namespace jeecs::debug
 {
-    je_game_world_t** get_all_worlds(je_game_universe_t* _universe)
+    vector<je_game_world_t*> get_all_worlds(je_game_universe_t* _universe)
     {
         Universe* universe = static_cast<Universe*>(_universe);
         auto result = universe->_get_all_worlds();
 
-        je_game_world_t** out_result = (je_game_world_t**)je_mem_alloc(sizeof(je_game_world_t*) * (result.size() + 1));
-
-        je_game_world_t** write_place = out_result;
-        for (auto* worlds : result)
-            *(write_place++) = worlds;
-        *write_place = nullptr;
-
-        return out_result;
+        return vector<je_game_world_t*>(result.begin(), result.end());
     }
 
-    void free_entity(je_game_entity_t* _entity_list)
-    {
-        delete _entity_list;
-    }
-
-    je_game_entity_t** get_all_entities(je_game_world_t* _world)
+    vector<je_game_entity_t> get_all_entities(je_game_world_t* _world)
     {
         World* world = static_cast<World*>(_world);
 
-        vector<je_game_entity_t*> out_entities;
+        vector<je_game_entity_t> out_entities;
 
         auto&& archs = world->_get_arch_mgr()._get_all_arch_types();
         for (auto& arch : archs)
@@ -3116,10 +3104,10 @@ namespace jeecs::debug
                 {
                     if (entity_meta_arr[i].m_stat == JE_ENTITY_STAT_READY)
                     {
-                        je_game_entity_t* entity = new je_game_entity_t{};
-                        entity->_m_in_chunk = chunk;
-                        entity->_m_id = (je_entity_id_in_chunk_t)i;
-                        entity->_m_version = entity_meta_arr[i].m_version;
+                        je_game_entity_t entity{};
+                        entity._m_in_chunk = chunk;
+                        entity._m_id = (je_entity_id_in_chunk_t)i;
+                        entity._m_version = entity_meta_arr[i].m_version;
 
                         out_entities.push_back(entity);
                     }
@@ -3127,31 +3115,19 @@ namespace jeecs::debug
                 chunk = chunk->last;
             }
         }
-        je_game_entity_t** out_result = (je_game_entity_t**)je_mem_alloc(sizeof(je_game_entity_t*) * (out_entities.size() + 1));
-        memcpy(out_result, out_entities.data(), out_entities.size() * sizeof(je_game_entity_t*));
-        out_result[out_entities.size()] = nullptr;
-
-        return out_result;
+        return out_entities;
     }
 
-    const je_type_info_t** get_all_components_of_entity(const je_game_entity_t* _entity)
+    vector<const je_type_info_t*> get_all_components_of_entity(const je_game_entity_t* _entity)
     {
         const auto* cur_chunk = static_cast<ArchType::arch_chunk*>(_entity->_m_in_chunk);
         auto& cur_arch_type_infos = cur_chunk->get_arch_type()->get_type_infos();
 
-        const je_type_info_t** outresult = (const je_type_info_t**)
-            je_mem_alloc(
-                sizeof(const je_type_info_t*) * (cur_arch_type_infos.size() + 1));
-
-        auto write_result = outresult;
-        for (auto* typeinfo : cur_arch_type_infos)
-        {
-            *(write_result++) = typeinfo;
-        }
-        *write_result = nullptr;
+        vector<const je_type_info_t*> outresult(
+            cur_arch_type_infos.begin(), cur_arch_type_infos.end());
 
         // Sort by id.
-        sort(outresult, write_result,
+        sort(outresult.begin(), outresult.end(),
             [](const je_type_info_t* a, const je_type_info_t* b)
             {
                 return a->m_id < b->m_id;
@@ -3160,7 +3136,7 @@ namespace jeecs::debug
         return outresult;
     }
 
-    const je_type_info_t** get_all_attached_systems(je_game_world_t* _world)
+    vector<const je_type_info_t*> get_all_attached_systems(je_game_world_t* _world)
     {
         World* world = static_cast<World*>(_world);
         auto& syss = world->get_system_instances();
@@ -3171,13 +3147,7 @@ namespace jeecs::debug
         for (auto& attached_sys : syss)
             attached_result.push_back(attached_sys.first);
 
-        size_t bufsz = attached_result.size() * sizeof(const je_type_info_t*);
-        const je_type_info_t** result = (const je_type_info_t**)je_mem_alloc(bufsz + sizeof(const je_type_info_t*));
-
-        memcpy(result, attached_result.data(), bufsz);
-        result[attached_result.size()] = nullptr;
-
-        return result;
+        return attached_result;
     }
 }
 

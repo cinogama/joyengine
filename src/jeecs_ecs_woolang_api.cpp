@@ -135,16 +135,11 @@ WOORT_API woort_api wojeapi_get_all_worlds_in_universe(void)
 
     woort_set_vec(out_array);
 
-    auto result = debug::get_all_worlds(universe);
+    for (je_game_world_t* world : debug::get_all_worlds(universe))
     {
-        auto worldlist = result;
-        while (*worldlist)
-        {
-            woort_set_box_pointer(elem, *(worldlist++));
-            woort_vec_push(out_array, elem);
-        }
+        woort_set_box_pointer(elem, world);
+        woort_vec_push(out_array, elem);
     }
-    je_mem_free(result);
     return woort_ret_value(out_array);
 }
 
@@ -220,7 +215,7 @@ WOORT_API woort_api wojeapi_world_get_all_systems(void)
     extern("libjoyecs", "wojeapi_world_get_all_systems")
     private func _get_systems_from_world(self: world, out_result: array<typeinfo>)=> array<typeinfo>;
     */
-    const je_type_info_t** types =
+    const auto types =
         debug::get_all_attached_systems(
             static_cast<je_game_world_t*>(woort_pointer(0)));
 
@@ -234,13 +229,11 @@ WOORT_API woort_api wojeapi_world_get_all_systems(void)
 
     woort_set_vec(result);
 
-    auto* cur_type = types;
-    while (*cur_type)
+    for (const je_type_info_t* type : types)
     {
-        woort_set_box_pointer(elem, (void*)*(cur_type++));
+        woort_set_box_pointer(elem, (void*)type);
         woort_vec_push(result, elem);
     }
-    je_mem_free(types);
 
     return woort_ret_value(result);
 }
@@ -349,26 +342,21 @@ WOORT_API woort_api wojeapi_world_get_all_entities(void)
 
     void* world_instance = woort_pointer(0);
 
-    auto entities = debug::get_all_entities(
-        static_cast<je_game_world_t*>(world_instance));
-
-    auto entity_iter = entities;
-
-    while (*entity_iter)
+    for (const auto& current_e : debug::get_all_entities(
+        static_cast<je_game_world_t*>(world_instance)))
     {
-        auto* current_e = *(entity_iter++);
+        // Woolang 侧经 GC 句柄长期持有实体包装，这里装箱一份副本
         woort_set_gchandle(
             elem,
-            current_e,
+            new je_game_entity_t(current_e),
             WOORT_IGNORE,
             [](void* entity_ptr)
             {
-                debug::free_entity((je_game_entity_t*)entity_ptr);
+                delete (je_game_entity_t*)entity_ptr;
             },
             nullptr);
         woort_vec_push(out_arr, elem);
     }
-    je_mem_free(entities);
 
     return woort_ret_value(out_arr);
 }
@@ -744,14 +732,12 @@ WOORT_API woort_api wojeapi_get_all_components_types_from_entity(void)
     woort_set_vec(out_arr);
 
     auto types = debug::get_all_components_of_entity(entity);
-    auto typeindex = types;
 
-    while (*typeindex)
+    for (const je_type_info_t* type : types)
     {
-        woort_set_box_pointer(elem, (void*)*(typeindex++));
+        woort_set_box_pointer(elem, (void*)type);
         woort_vec_push(out_arr, elem);
     }
-    je_mem_free(types);
 
     return woort_ret_value(out_arr);
 }

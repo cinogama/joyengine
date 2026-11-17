@@ -68,12 +68,9 @@ static void _je_dynamic_parser_refresh(woort_value tmp)
 {
     _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
 
-    auto** types = debug::get_all_registered_types();
-
-    auto** cur_type = types;
-    while (*cur_type)
+    for (const je_type_info_t* type : debug::get_all_registered_types())
     {
-        auto* script_parser = typing::get_script_parser(*cur_type);
+        auto* script_parser = typing::get_script_parser(type);
         if (script_parser != nullptr)
         {
             string script_woolang_typename = script_parser->m_woolang_typename;
@@ -119,14 +116,10 @@ static void _je_dynamic_parser_refresh(woort_value tmp)
             {
                 p->m_script_parser = script_parser;
                 _je_dynamic_parser_global_context._je_dynamic_parser_impls.emplace(
-                    (*cur_type)->m_id, std::move(p));
+                    type->m_id, std::move(p));
             }
         }
-
-        ++cur_type;
     }
-
-    je_mem_free(types);
 }
 
 static optional<string> _je_dynamic_parser_update_script(

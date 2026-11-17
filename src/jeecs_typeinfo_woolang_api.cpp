@@ -52,16 +52,12 @@ WOORT_API woort_api wojeapi_get_all_registed_types(void)
 
     woort_set_vec(out_array);
 
-    auto** types = debug::get_all_registered_types();
-
-    auto** cur_type = types;
-    while (*cur_type)
+    for (const je_type_info_t* type : debug::get_all_registered_types())
     {
-        woort_set_box_pointer(elem, (void*)*(cur_type++));
+        woort_set_box_pointer(elem, (void*)type);
         woort_vec_push(out_array, elem);
     }
 
-    je_mem_free(types);
     return woort_ret_value(out_array);
 }
 

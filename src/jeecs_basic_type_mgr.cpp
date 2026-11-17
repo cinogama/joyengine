@@ -564,14 +564,9 @@ void je_typing_system_updater_register(
 
 namespace jeecs::debug
 {
-    const je_type_info_t** get_all_registered_types()
+    vector<const je_type_info_t*> get_all_registered_types()
     {
-        auto&& types = FactoryHolder::holder()->get_all_registed_types();
-        auto result = (const je_type_info_t**)je_mem_alloc(sizeof(const je_type_info_t*) * (types.size() + 1));
-        result[types.size()] = nullptr;
-
-        memcpy(result, types.data(), types.size() * sizeof(const je_type_info_t*));
-
-        return result;
+        auto types = FactoryHolder::holder()->get_all_registed_types();
+        return vector<const je_type_info_t*>(types.begin(), types.end());
     }
 }
