@@ -11,6 +11,9 @@ import pkg::thread;
 import pkg::toml;
 
 import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Icons;
+import builtin::editor::GUI::Theme;
+import builtin::editor::GUI::Widgets;
 import builtin::editor::GUI::Forms::MsgBox;
 
 import ResourcePath;
@@ -47,6 +50,8 @@ namespace JEEditor::Editor
         m_quality: mut real,
         m_info: mut option<je::audio::buffer::buffer_data_t>,
         m_status: mut string,
+        // 有尚未保存的改动：页脚在“已保存”提示的位置显示未保存提醒
+        m_dirty: mut bool,
         // 缓存生成结果（后台线程写入，GUI 线程每帧轮询）；none = 进行中
         m_cache_ready: mutable<option<bool>>,
     }
@@ -74,6 +79,7 @@ namespace JEEditor::Editor
                 m_quality = mut loadQuality(path),
                 m_info = mut option::none: option<je::audio::buffer::buffer_data_t>,
                 m_status = mut "",
+                m_dirty = mut false,
                 m_cache_ready = cache_ready,
             };
         }
@@ -203,7 +209,7 @@ namespace JEEditor::Editor
         }
         public func getSizeConstraints(_: AudioProperties)=> SizeConstraints
         {
-            return SizeConstraints::Limited(((420., 320.), (960., 720.)));
+            return SizeConstraints::Limited(((460., 480.), (1000., 900.)));
         }
         // 把当前播放方式写入 <音频路径>.je4audio；属性源文件是唯一真相，
         // 校验码随之改变，引擎会在下次加载时重建音频缓存。失败时弹窗并
@@ -241,6 +247,67 @@ namespace JEEditor::Editor
                 }
             }
         }
+        // 任一设置被改动：标记未保存，并清掉上一次“已保存”的提示。
+        func markDirty(self: AudioProperties)=> void
+        {
+            self.m_dirty = true;
+            self.m_status = "";
+        }
+        // 音频信息卡片：深色底 + 细描边，键值两列对齐。行内容用绘制列表
+        // 直接排版（先画底再画字），卡片高度由行数与行高算出，不依赖
+        // ImGui 的控件布局。
+        func drawInfoCard(rows: array<(string, string)>)=> void
+        {
+            let pad = 10.;
+            let label_w = 78.;
+            let row_step = GetTextLineHeight() + 3.;
+            let card_h = pad * 2. + rows->len as real * row_step - 3.;
+
+            let (sx, sy) = GetCursorScreenPos();
+            let card_w = GetContentRegionAvail().0;
+            let draw = GetWindowDrawList();
+            draw->AddRectFilled((sx, sy), (sx + card_w, sy + card_h),
+                Theme::CARD_BG);
+            draw->AddRect((sx, sy), (sx + card_w, sy + card_h),
+                Theme::BORDER, 1.);
+
+            for (let mut i = 0; i < rows->len; i += 1)
+            {
+                let (label, value) = rows[i];
+                let row_y = sy + pad + i as real * row_step;
+                draw->AddText((sx + pad, row_y), Theme::TEXT_MUTED, label);
+                draw->AddText((sx + pad + label_w, row_y), Theme::TEXT, value);
+            }
+
+            Dummy((card_w, card_h));
+        }
+        // 载入中的占位卡片：高度按信息行的最大行数预留。窗口只在创建的
+        // 头两帧自适应尺寸，信息晚到若改变内容高度会永久留下滚动条，
+        // 因此占位卡片与满载信息卡片同高（信息行更少时只是下方留白）。
+        func drawLoadingCard()=> void
+        {
+            let pad = 10.;
+            let card_h = pad * 2. + 5. * (GetTextLineHeight() + 3.) - 3.;
+
+            let (start_x, start_y) = GetCursorPos();
+            let (sx, sy) = GetCursorScreenPos();
+            let card_w = GetContentRegionAvail().0;
+            let draw = GetWindowDrawList();
+            draw->AddRectFilled((sx, sy), (sx + card_w, sy + card_h),
+                Theme::CARD_BG);
+            draw->AddRect((sx, sy), (sx + card_w, sy + card_h),
+                Theme::BORDER, 1.);
+
+            // 加载动画在卡片内垂直居中
+            let spinner_h = GetTextLineHeight();
+            SetCursorPos((start_x + pad + 4., start_y + (card_h - spinner_h) * 0.5));
+            Widgets::drawBusySpinner("正在读取音频信息……");
+
+            // 复位到卡片起点后用占位项把布局推到卡片底边
+            SetCursorPos((start_x, start_y));
+            Dummy((card_w, card_h));
+        }
+        // 音频解码信息：缓存生成中显示占位卡片，读出后整理成信息卡片。
         func drawInfo(self: AudioProperties)=> void
         {
             match (self.m_cache_ready->get)
@@ -248,7 +315,7 @@ namespace JEEditor::Editor
                 // 后台还在生成缓存：显示占位，完成后的下一帧填入信息
                 none?
                 {
-                    TextDisabled("正在读取音频信息……");
+                    do drawLoadingCard();
                     return;
                 }
                 value(cache_ok)?
@@ -269,47 +336,83 @@ namespace JEEditor::Editor
             match (self.m_info)
             {
                 none?
-                    TextDisabled("无法加载音频（文件缺失、缓存不可用或格式不支持）");
+                    Theme::emptyState("无法读取音频信息",
+                        "文件缺失、缓存不可用或格式不支持。");
                 value(info)?
                 {
-                    Text(F"解码格式: {formatName(info.format)}    编码: {codecDisplayName(info.codec)}    采样率: {info.sample_rate} Hz");
+                    let mut rows = []: array<(string, string)>;
+                    rows = rows->append(("解码格式", formatName(info.format)));
+                    rows = rows->append(("编码", codecDisplayName(info.codec)));
+                    rows = rows->append(("采样率", F"{info.sample_rate} Hz"));
                     if (info.byte_rate > 0)
                     {
                         // 整数运算算到百分位秒，避免浮点显示精度问题。
                         let seconds = info.size / info.byte_rate;
                         let centis = (info.size % info.byte_rate) * 100 / info.byte_rate;
-                        Text(F"时长: {seconds}.{centis} 秒    解码大小: {info.size} 字节");
+                        rows = rows->append(("时长", F"{seconds}.{centis} 秒"));
+                        rows = rows->append(("解码大小", prettyByteSize(info.size)));
                     }
+                    do drawInfoCard(rows);
                 }
             }
         }
+        // 播放方式二选一：整段载入 / 流式播放。用分段按钮直显两种模式，
+        // 激活项带橙色浅底，下方说明当前模式的取舍。
         func drawStreaming(self: AudioProperties)=> void
         {
-            Text("播放方式");
-            match (CheckBox("流式播放", self.m_streaming))
+            let avail = GetContentRegionAvail().0;
+            let seg_w = (avail - 8.) * 0.5;
+
+            Theme::pushToolbarToggleStyle(!self.m_streaming);
+            let load_all_clicked = ButtonSize("整段载入", (seg_w, 0.));
+            Theme::popToolbarToggleStyle();
+
+            SameLine();
+
+            Theme::pushToolbarToggleStyle(self.m_streaming);
+            let streaming_clicked = ButtonSize("流式播放", (seg_w, 0.));
+            Theme::popToolbarToggleStyle();
+
+            if (load_all_clicked && self.m_streaming)
             {
-                none?;
-                value(checked)? self.m_streaming = checked;
+                self.m_streaming = false;
+                self->markDirty();
             }
-            if (IsItemHovered())
-                do SetTooltip(
-                    "流式播放：按需分块读取波形数据，适用于时长较长的音频（如背景音乐）；关闭时整段解码进内存，适用于短促的音效。");
+            if (streaming_clicked && !self.m_streaming)
+            {
+                self.m_streaming = true;
+                self->markDirty();
+            }
+
+            // 当前方式的说明
+            if (self.m_streaming)
+                Widgets::hintText("按需分块读取波形数据：长音频打开更快、占用内存更少。");
+            else
+                Widgets::hintText("整段解码进内存（默认）：短促音效播放时无需解压等待。");
         }
+        // 缓存格式：编码下拉框 + 当前编码的说明；Vorbis 追加质量滑杆。
         func drawFormat(self: AudioProperties)=> void
         {
-            Text("缓存格式");
             let labels = [
-                "8位整数（无压缩，默认，体积最小）",
+                "8位整数（无压缩）",
                 "16位整数（无压缩）",
-                "32位浮点（无压缩，精度最高）",
-                "ADPCM（有损，约 4:1，16位）",
-                "Vorbis（有损，约 8-12:1，32位浮点）",
+                "32位浮点（无压缩）",
+                "ADPCM（有损压缩）",
+                "Vorbis（有损压缩）",
             ];
+            SetNextItemWidth(GetContentRegionAvail().0);
             match (Combo("##audio_cache_format", labels,
                     option::value(self.m_format)))
             {
                 none?;
-                value(index)? self.m_format = index;
+                value(index)?
+                {
+                    if (index != self.m_format)
+                    {
+                        self.m_format = index;
+                        self->markDirty();
+                    }
+                }
             }
             if (IsItemHovered())
                 do SetTooltip(
@@ -318,50 +421,76 @@ namespace JEEditor::Editor
                     + "体积更小且质量可调，适合音乐/长音频。源音频任何编码"
                     + "（含24位/整数32位/64位浮点）都会先解码再转换。");
 
+            Widgets::hintText(cacheFormatSummary(self.m_format));
+
             if (self.m_format == 4)
             {
-                Text("Vorbis 压缩质量");
+                Spacing();
+                TextDisabled("压缩质量");
+                SetNextItemWidth(GetContentRegionAvail().0);
                 match (SliderFloatFormat("##audio_vorbis_quality",
-                        self.m_quality, 0., 1., "%.2f"))
+                        self.m_quality * 100., 0., 100., "%.0f%%"))
                 {
                     none?;
-                    value(quality)? self.m_quality = quality;
+                    value(percent)?
+                    {
+                        // 滑杆按整数百分比取值；与保存值比较整数百分比，
+                        // 避免浮点往返误标为“有改动”
+                        let percent_int = percent as int;
+                        if (percent_int != (self.m_quality * 100.) as int)
+                        {
+                            self.m_quality = percent_int as real / 100.;
+                            self->markDirty();
+                        }
+                    }
                 }
-                if (IsItemHovered())
-                    do SetTooltip(
-                        "Vorbis 质量：0.0 约 64 kbps 立体声，1.0 约 500 kbps；"
-                        + "越大音质越好、缓存越大。默认 0.5。");
+                Widgets::hintText(
+                    "质量越高音质越好、缓存越大：0% 约 64 kbps 立体声，"
+                    + "100% 约 500 kbps，默认 50%。");
             }
         }
-        public func run(self: AudioProperties)=> bool
+        // 页脚：主操作保存 + 状态/未保存提醒。
+        func drawActions(self: AudioProperties)=> void
         {
-            Text(F"文件: {filename(self.m_path)}");
-            TextDisabled(self.m_path->to_string);
-            if (IsItemHovered())
-                do SetTooltip(self.m_path->to_string);
-
-            Separator();
-
-            self->drawInfo();
-            Separator();
-
-            self->drawStreaming();
-            Separator();
-
-            self->drawFormat();
-            Separator();
-
-            if (Button("保存"))
+            if (Theme::primaryButton("保存", (-1., 0.)))
             {
                 if (self->saveSettings())
                 {
                     // 磁盘缓存按校验码在下次加载时自动重建。
-                    self.m_status = "已保存。已加载的音频需重新加载后生效。";
+                    self.m_dirty = false;
+                    self.m_status = "已保存，已加载的音频需重新加载后生效。";
                 }
             }
 
             if (self.m_status->len > 0)
-                TextDisabled(self.m_status);
+                TextColored(Theme::SUCCESS, self.m_status);
+            else if (self.m_dirty)
+                TextColored(Theme::WARNING, "有未保存的修改");
+            else
+                // 状态行位置恒定占一行：保存后出现提示时窗口不会再次
+                // 长高（窗口只在头两帧自适应尺寸）
+                Dummy((0., GetTextLineHeight()));
+        }
+        public func run(self: AudioProperties)=> bool
+        {
+            Theme::assetFileHeader(Icons::MUSIC,
+                filename(self.m_path), self.m_runtime_path,
+                self.m_path->to_string);
+
+            Theme::sectionLabel("音频信息");
+            self->drawInfo();
+            Spacing();
+
+            Theme::sectionLabel("播放方式");
+            self->drawStreaming();
+            Spacing();
+
+            Theme::sectionLabel("缓存格式");
+            self->drawFormat();
+            Spacing();
+
+            Separator();
+            self->drawActions();
 
             return true;
         }
@@ -391,5 +520,29 @@ namespace JEEditor::Editor
         if (codec == je::audio::buffer::codec::VORBIS)
             return "Vorbis";
         return "无压缩";
+    }
+
+    // 缓存格式选项的说明文本（下拉框下方的一行取舍提示）。
+    func cacheFormatSummary(index: int)=> string
+    {
+        if (index == 1)
+            return "无损：按 16 位整数存储波形，音质与体积均衡。";
+        if (index == 2)
+            return "无损：按 32 位浮点存储波形，精度最高、体积也最大。";
+        if (index == 3)
+            return "有损：ADPCM 约 4:1，解码开销极低，适合高频短音效。";
+        if (index == 4)
+            return "有损：Vorbis 约 8-12:1，体积最小，适合音乐与长音频。";
+        return "无损：按 8 位整数存储波形，体积最小（默认）。";
+    }
+
+    // 字节数的友好显示（B/KB/MB，整数运算，与「关于」窗口一致）。
+    func prettyByteSize(bytes: int)=> string
+    {
+        if (bytes < 1024)
+            return F"{bytes} B";
+        if (bytes < 1024 * 1024)
+            return F"{bytes / 1024} KB";
+        return F"{bytes / 1024 / 1024} MB";
     }
 }

@@ -2,10 +2,12 @@ import pkg::std;
 
 import je;
 import je::gui;
+import je::graphic;
 
 using std;
 using je;
 using je::gui;
+using je::graphic;
 
 // 编辑器统一视觉主题。
 //
@@ -338,6 +340,53 @@ namespace JEEditor::GUI::Theme
     }
 
     // ---- 标题 / 分组 / 空状态 ----
+
+    // 资源属性窗口的头部：类型图标 + 文件名 + 弱化路径，底部一条橙色细线
+    // （与 panelHeader 同款分隔）。图标由调用方按资源类型传入
+    //（GUI::Icons 中的文件类型图标），文件名与图标垂直居中，路径缩进到
+    // 文件名下方并在过长时折行；悬停路径显示 full_path（如真实磁盘路径，
+    // 展示用的 path 通常是较短的运行时形式）。
+    // 图标是可缺失的（GUI::Icons 由纹理加载而来）：缺失时头部退化为
+    // 纯文字的标题与路径，排版不塌。
+    public func assetFileHeader(
+        icon: option<texture2d>, title: string,
+        path: string, full_path: string)=> void
+    {
+        let icon_size = 24.;
+        let text_gap = 8.;
+        let (start_x, start_y) = GetCursorPos();
+        let title_h = CalcTextSize(title).1;
+
+        let mut text_x = start_x;
+        let mut block_h = title_h;
+        match (icon)
+        {
+            none?;
+            value(tex)?
+            {
+                ImageSize(tex, icon_size, icon_size);
+                text_x = start_x + icon_size + text_gap;
+                block_h = icon_size;
+            }
+        }
+
+        // 文件名与图标垂直居中
+        SetCursorPos((text_x, start_y + (block_h - title_h) * 0.5));
+        TextColored(ACCENT_TEXT, title);
+
+        // 路径与文件名同列，排在图标下方
+        SetCursorPos((text_x, start_y + block_h + 2.));
+        PushTextWrapPos(0.);
+        TextDisabled(path);
+        PopTextWrapPos();
+        if (IsItemHovered())
+            do SetTooltip(full_path);
+
+        PushStyleColor(ImGuiCol::ImGuiCol_Separator, ACCENT_SOFT_ACTIVE);
+        Separator();
+        PopStyleColor(1);
+        Spacing();
+    }
 
     // 面板标题：橙色主标题 + 右侧弱化说明，底部一条橙色细线。
     public func panelHeader(title: string, detail: string)=> void

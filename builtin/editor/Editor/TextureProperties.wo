@@ -7,9 +7,13 @@ import je::internal;
 
 import pkg::fsys;
 import pkg::interface;
+import pkg::math;
 import pkg::toml;
 
 import builtin::editor::GUI::Windows;
+import builtin::editor::GUI::Icons;
+import builtin::editor::GUI::Theme;
+import builtin::editor::GUI::Widgets;
 import builtin::editor::GUI::Forms::MsgBox;
 import builtin::editor::Singleton::Universe;
 
@@ -41,6 +45,8 @@ namespace JEEditor::Editor
         m_color_space: mut texture_color_space,
         m_preview: mut option<texture2d>,
         m_status: mut string,
+        // 有尚未保存的改动：页脚在“已保存”提示的位置显示未保存提醒
+        m_dirty: mut bool,
     }
     {
         public func create(path: path_t)=> TextureProperties
@@ -54,6 +60,7 @@ namespace JEEditor::Editor
                 m_preview = mut texture2d::load(
                     option::value(Singleton::Universe::getUniverse()), runtime_path),
                 m_status = mut "",
+                m_dirty = mut false,
             };
         }
         // 读取 <图片路径>.je4texture 中保存的颜色空间：属性源文件不存在、
@@ -100,7 +107,7 @@ namespace JEEditor::Editor
         }
         public func getSizeConstraints(_: TextureProperties)=> SizeConstraints
         {
-            return SizeConstraints::Limited(((420., 300.), (960., 900.)));
+            return SizeConstraints::Limited(((460., 520.), (1000., 1000.)));
         }
         // 属性改变后失效共享纹理缓存并重新加载预览。已经绑定到场景实体的
         // 旧纹理句柄不会自动替换，重新打开世界/视口后生效。
@@ -145,48 +152,148 @@ namespace JEEditor::Editor
                 }
             }
         }
-        func drawPreview(self: TextureProperties)=> void
+        // 任一设置被改动：标记未保存，并清掉上一次“已保存”的提示。
+        func markDirty(self: TextureProperties)=> void
         {
-            let avail = GetContentRegionAvail();
-            if (BeginChildSizeFlags("##texture_preview", avail.0, 320.,
-                    WindowsAttribute::ImGuiWindowFlags_None))
+            self.m_dirty = true;
+            self.m_status = "";
+        }
+        // 预览区中央的弱化提示（无法绘制预览时）
+        func drawPreviewLabel(
+            sx: real, sy: real, width: real, height: real, text: string)=> void
+        {
+            let text_size = CalcTextSize(text);
+            let draw = GetWindowDrawList();
+            draw->AddText(
+                (sx + (width - text_size.0) * 0.5,
+                    sy + (height - text_size.1) * 0.5),
+                Theme::TEXT_MUTED, text);
+        }
+        // 预览区：深色棋盘格底板（透明区域可辨）+ 居中的等比缩放图片。
+        // 高度固定：窗口只在创建的头两帧自适应尺寸，按剩余空间取比例会让
+        // 内容高度反过来影响窗口尺寸，打开时反复长高。返回
+        // (宽, 高, 显示比例) 供下方说明。
+        func drawPreview(self: TextureProperties)=> option<(int, int, real)>
+        {
+            let preview_h = 300.;
+            let panel_w = GetContentRegionAvail().0;
+            let (sx, sy) = GetCursorScreenPos();
+            let draw = GetWindowDrawList();
+
+            // 棋盘格：两色交替的暗色格，格边裁剪在预览区内
+            let cell = 16.;
+            let dark_cell = Theme::mixColor(Theme::PANEL_BG, (0, 0, 0, 255), 0.30, 255);
+            let light_cell = Theme::mixColor(Theme::PANEL_BG, (255, 255, 255, 255), 0.05, 255);
+            let cells_x = (panel_w / cell) as int + 1;
+            let cells_y = (preview_h / cell) as int + 1;
+            for (let mut gy = 0; gy < cells_y; gy += 1)
             {
-                match (self.m_preview)
+                for (let mut gx = 0; gx < cells_x; gx += 1)
                 {
-                    none?
-                        TextDisabled("无法加载图片预览");
-                    value(tex)?
+                    let x0 = sx + gx as real * cell;
+                    let y0 = sy + gy as real * cell;
+                    let x1 = math::min(x0 + cell, sx + panel_w);
+                    let y1 = math::min(y0 + cell, sy + preview_h);
+                    draw->AddRectFilled((x0, y0), (x1, y1),
+                        ((gx + gy) % 2 == 0) ? dark_cell | light_cell);
+                }
+            }
+
+            let mut result = option::none: option<(int, int, real)>;
+            match (self.m_preview)
+            {
+                none?
+                    drawPreviewLabel(sx, sy, panel_w, preview_h,
+                        "无法加载图片预览");
+                value(tex)?
+                {
+                    let (tw, th) = tex->size;
+                    if (tw <= 0 || th <= 0)
+                        drawPreviewLabel(sx, sy, panel_w, preview_h,
+                            "图片尺寸无效");
+                    else
                     {
-                        let (tw, th) = tex->size;
-                        if (tw <= 0 || th <= 0)
-                            TextDisabled("图片尺寸无效");
-                        else
-                        {
-                            let panel = GetContentRegionAvail();
-                            let scale_w = panel.0 / tw as real;
-                            let scale_h = panel.1 / th as real;
-                            let mut scale = (scale_w < scale_h)
-                                ? scale_w | scale_h;
-                            if (scale > 1.)
-                                scale = 1.;
-                            ImageSize(tex,
-                                tw as real * scale, th as real * scale);
-                        }
+                        // 等比缩放适配预览区（最多 1:1），居中摆放
+                        let pad = 12.;
+                        let mut scale = math::min(
+                            (panel_w - pad * 2.) / tw as real,
+                            (preview_h - pad * 2.) / th as real);
+                        if (scale > 1.)
+                            scale = 1.;
+                        let dw = tw as real * scale;
+                        let dh = th as real * scale;
+                        let dx = sx + (panel_w - dw) * 0.5;
+                        let dy = sy + (preview_h - dh) * 0.5;
+                        draw->AddImageUV((dx, dy), (dx + dw, dy + dh),
+                            (0., 0.), (1., 1.), tex, (255, 255, 255, 255));
+                        result = option::value((tw, th, scale));
                     }
                 }
             }
-            EndChild();
+
+            draw->AddRect((sx, sy), (sx + panel_w, sy + preview_h),
+                Theme::BORDER_STRONG, 1.);
+            Dummy((panel_w, preview_h));
+            return result;
+        }
+        // 颜色空间的取舍说明
+        func drawColorSpaceHint(self: TextureProperties)=> void
+        {
+            if (self.m_color_space == texture_color_space::LINEAR)
+                Widgets::hintText(
+                    "非颜色数据：法线、遮罩、高度等按线性数值直接采样。");
+            else
+                Widgets::hintText(
+                    "颜色贴图：采样时由硬件把 8 位 sRGB 数据转换为线性。");
+        }
+        // 页脚：主操作保存 + 重新加载预览 + 状态/未保存提醒。
+        func drawActions(self: TextureProperties)=> void
+        {
+            let avail = GetContentRegionAvail().0;
+            let save_w = avail * 0.58;
+
+            if (Theme::primaryButton("保存", (save_w, 0.)))
+            {
+                if (self->saveSettings())
+                {
+                    self.m_dirty = false;
+                    self->reloadPreview();
+                    self.m_status = "已保存，已打开视口中的纹理需重新加载后生效。";
+                }
+            }
+            SameLine();
+            if (Theme::ghostButton("重新加载预览", (avail - save_w - 8., 0.)))
+            {
+                self->reloadPreview();
+                self.m_status = "预览已重新加载。";
+            }
+
+            if (self.m_status->len > 0)
+                TextColored(Theme::SUCCESS, self.m_status);
+            else if (self.m_dirty)
+                TextColored(Theme::WARNING, "有未保存的修改");
+            else
+                // 状态行位置恒定占一行：保存后出现提示时窗口不会再次
+                // 长高（窗口只在头两帧自适应尺寸）
+                Dummy((0., GetTextLineHeight()));
         }
         public func run(self: TextureProperties)=> bool
         {
-            Text(F"文件: {filename(self.m_path)}");
-            TextDisabled(self.m_path->to_string);
-            if (IsItemHovered())
-                do SetTooltip(self.m_path->to_string);
+            Theme::assetFileHeader(Icons::TEXTURE,
+                filename(self.m_path), self.m_runtime_path,
+                self.m_path->to_string);
 
-            Separator();
+            Theme::sectionLabel("预览");
+            match (self->drawPreview())
+            {
+                none?;
+                value((tw, th, scale))?
+                    TextDisabled(F"{tw} × {th} 像素 · 显示比例 {(scale * 100.) as int}%");
+            }
+            Spacing();
 
-            Text("颜色空间");
+            Theme::sectionLabel("颜色空间");
+            SetNextItemWidth(GetContentRegionAvail().0);
             let labels = [
                 "sRGB（默认，颜色贴图）",
                 "Linear（非颜色数据）",
@@ -196,35 +303,25 @@ namespace JEEditor::Editor
             {
                 none?;
                 value(index)?
-                    self.m_color_space = (index == 1)
+                {
+                    let color_space = (index == 1)
                         ? texture_color_space::LINEAR
                         | texture_color_space::SRGB;
+                    if (color_space != self.m_color_space)
+                    {
+                        self.m_color_space = color_space;
+                        self->markDirty();
+                    }
+                }
             }
             if (IsItemHovered())
                 do SetTooltip(
                     "sRGB：硬件在采样时把 8 位 sRGB 数据转换为线性；Linear：按线性数值直接采样，适用于法线图、遮罩等非颜色数据。");
+            self->drawColorSpaceHint();
+            Spacing();
 
             Separator();
-            self->drawPreview();
-            Separator();
-
-            if (Button("保存"))
-            {
-                if (self->saveSettings())
-                {
-                    self->reloadPreview();
-                    self.m_status = "已保存。已打开视口中的纹理需重新加载后生效。";
-                }
-            }
-            SameLine();
-            if (Button("重新加载预览"))
-            {
-                self->reloadPreview();
-                self.m_status = "预览已重新加载。";
-            }
-
-            if (self.m_status->len > 0)
-                TextDisabled(self.m_status);
+            self->drawActions();
 
             return true;
         }

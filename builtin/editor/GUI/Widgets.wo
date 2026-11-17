@@ -66,6 +66,15 @@ namespace JEEditor::GUI::Widgets
         PopTextWrapPos();
     }
 
+    // 说明性文本：弱化灰字并折行到窗口右缘（长句不撑宽窗口，也不会在
+    // 自适应弹窗里制造宽度与折行互相依赖的收缩）
+    public func hintText(text: string)=> void
+    {
+        PushTextWrapPos(0.);
+        TextDisabled(text);
+        PopTextWrapPos();
+    }
+
     // ============================================================
     // 检视面板成员编辑的两列布局辅助
     // （JEEditor::Editor::Inspector.wo 与 builtin/script/editor.wo 共用）
