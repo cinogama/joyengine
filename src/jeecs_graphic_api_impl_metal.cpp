@@ -1307,7 +1307,48 @@ namespace jeecs::graphic::api::metal
         if ((texture->m_format & JE_GL_TEXTURE_FORMAT_FRAMEBUF)
             || texture->m_initial_pixels == nullptr)
         {
-            // GPU 侧纹理 / 无创建期像素：不执行初始上传
+            // GPU 侧纹理 / 无创建期像素：不执行初始上传。
+            // 渲染目标纹理（StorageModePrivate，无法 replaceRegion 初始化）内容
+            // 未定义，macOS 会把未初始化显存显示成品红：新纹理可能在被首个渲染
+            // pass 写入前就被采样（如编辑器视口 resize 后，GUI 同帧先于相机 pass
+            // 采样新附件），闪一帧品红。这里创建即提交一个清屏 pass，保证内容从
+            // 创建起有定义；同队列命令缓冲按提交序执行，先于后续对该纹理的使用。
+            if (is_framebuf || is_msaa)
+            {
+                // 可能从游戏线程调用（GUI 录制期的 wojeapi prepare），用局部
+                // autorelease 池兜住本分支产生的 autorelease 对象。
+                NS::AutoreleasePool* clear_pool = NS::AutoreleasePool::alloc()->init();
+
+                MTL::RenderPassDescriptor* clear_desc =
+                    MTL::RenderPassDescriptor::renderPassDescriptor();
+
+                if (is_depth)
+                {
+                    clear_desc->depthAttachment()->setTexture(texture_instance);
+                    clear_desc->depthAttachment()->setLoadAction(MTL::LoadActionClear);
+                    clear_desc->depthAttachment()->setStoreAction(MTL::StoreActionStore);
+                    clear_desc->depthAttachment()->setClearDepth(1.0);
+                }
+                else
+                {
+                    clear_desc->colorAttachments()->object(0)->setTexture(texture_instance);
+                    clear_desc->colorAttachments()->object(0)->setLoadAction(
+                        MTL::LoadActionClear);
+                    clear_desc->colorAttachments()->object(0)->setStoreAction(
+                        MTL::StoreActionStore);
+                    clear_desc->colorAttachments()->object(0)->setClearColor(
+                        MTL::ClearColor{ 0.0, 0.0, 0.0, 1.0 });
+                }
+
+                MTL::CommandBuffer* init_clear_buffer =
+                    metal_context->m_command_queue->commandBuffer();
+                MTL::RenderCommandEncoder* init_clear_encoder =
+                    init_clear_buffer->renderCommandEncoder(clear_desc);
+                init_clear_encoder->endEncoding();
+                init_clear_buffer->commit();
+
+                clear_pool->release();
+            }
         }
         else
         {
@@ -1397,7 +1438,7 @@ namespace jeecs::graphic::api::metal
             vertex->m_index_count,
             vertex->m_data_size_per_point);
     }
-    void init_framebuffer(je_graphic_impl_context_t ctx, je_gl_frame_buffer_t* fbuffer)
+    void init_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t* fbuffer)
     {
         metal_framebuffer* framebuf = new metal_framebuffer(
             fbuffer->m_width,
@@ -1454,33 +1495,8 @@ namespace jeecs::graphic::api::metal
                 ++color_attachment_count;
             }
         }
-
-        // 附件为 StorageModePrivate，创建时内容未定义（无法 replaceRegion 初始化），
-        // macOS 会把未初始化显存显示成品红：若新纹理在被首个渲染 pass 写入前就被
-        // 采样（如编辑器视口 resize 后的同帧 UI 绘制），会闪一帧品红。
-        // 这里立即提交一个清屏 pass（clearColor/clearDepth 已是上方设置的默认值），
-        // 保证纹理内容从创建起有定义；同队列命令缓冲按提交序执行，因此先于
-        // 本帧后续对该 framebuffer 的渲染。
-        for (size_t i = 0; i < color_attachment_count; ++i)
-        {
-            framebuf->m_render_pass_descriptor->colorAttachments()->object(i)
-                ->setLoadAction(MTL::LoadActionClear);
-        }
-        if (framebuf->m_has_depth_attachment)
-        {
-            framebuf->m_render_pass_descriptor->depthAttachment()
-                ->setLoadAction(MTL::LoadActionClear);
-        }
-
-        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
-        MTL::CommandBuffer* init_clear_buffer =
-            metal_context->m_command_queue->commandBuffer();
-        MTL::RenderCommandEncoder* init_clear_encoder =
-            init_clear_buffer->renderCommandEncoder(
-                framebuf->m_render_pass_descriptor);
-        init_clear_encoder->endEncoding();
-        init_clear_buffer->commit();
-
+        // 附件纹理的内容已在 init_texture 创建期清屏（见其"无初始上传"分支），
+        // 这里无需再处理未初始化显存问题。
         fbuffer->m_handle.m_ptr = framebuf;
     }
     void init_ubuffer(je_graphic_impl_context_t ctx, je_gl_uniform_buffer_t* ubuffer)
