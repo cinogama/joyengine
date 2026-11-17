@@ -651,10 +651,14 @@ namespace jeecs::graphic::api::gl3
 
         // 没有硬件 sRGB 写入控制时，整帧（包括 ImGui）先渲染到线性离屏
         // framebuffer，最后再统一编码到真正的默认帧缓冲。
+        //
+        // 帧结束时读写绑定都归位到默认帧缓冲：macOS 的 swap（flushBuffer）
+        // 在窗口几何变化时会沿当前 READ 绑定处理 drawable/IOSurface，离屏 FBO
+        // 残留在 GL_READ_FRAMEBUFFER 上会让驱动在 gldUpdateReadFramebuffer 崩溃。
         if (encode_pass)
             _gl_bind_srgb_encode_target(context);
         else
-            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         jegui_update_gl330();
 
