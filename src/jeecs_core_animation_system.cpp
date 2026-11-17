@@ -221,27 +221,10 @@ namespace jeecs::animation
             }
         }
 
-        struct sample_entry
-        {
-            uint8_t m_kind;
-            bool m_additive;
-
-            const je_type_info_t* m_component_type;
-            const je_member_info_t* m_member_info;
-            const char* m_uniform_name;  // 指向动画资源，生命周期随资源
-
-            je_animation_value_t m_value;
-            float m_weight;  // 叠加条目不使用
-        };
+        // 采样累加缓冲 sample_buffer 与条目 sample_entry 的定义已随采样
+        // 原语一同内部化到 jeecs_core_animation_system.hpp
     }
 }
-
-// 采样累加缓冲（C API 中的不透明类型，定义须位于全局作用域），
-// 见 jeecs.hpp 的 je_animation_sample_buffer_t 注释
-struct je_animation_sample_buffer_t
-{
-    std::vector<jeecs::animation::sample_entry> m_entries;
-};
 
 using namespace jeecs;
 
@@ -389,7 +372,7 @@ namespace jeecs::animation
             const je_animation_action_data_t* action,
             float time,
             float weight,
-            je_animation_sample_buffer_t* buffer)
+            sample_buffer* buffer)
         {
             for (size_t i = 0; i < action->m_track_count; ++i)
             {
@@ -579,7 +562,7 @@ namespace jeecs::animation
         void _apply_buffer_to_entity(
             const je_game_entity_t& raw_entity,
             /* OPTIONAL */ Renderer::Shaders* shaders,
-            const je_animation_sample_buffer_t& buffer)
+            const sample_buffer& buffer)
         {
             for (const sample_entry& entry : buffer.m_entries)
             {
@@ -633,7 +616,7 @@ namespace jeecs::animation
             if (state.m_paused)
             {
                 // 暂停时冻结在当前姿态
-                je_animation_sample_buffer_t buffer;
+                sample_buffer buffer;
                 _sample_action_into_buffer(
                     current_action, (float)state.m_time, 1.f, &buffer);
                 _apply_buffer_to_entity(e._m_raw, shaders, buffer);
@@ -680,7 +663,7 @@ namespace jeecs::animation
                 }
             }
 
-            je_animation_sample_buffer_t buffer;
+            sample_buffer buffer;
             _sample_action_into_buffer(
                 current_action, (float)state.m_time, 1.f - fade_weight, &buffer);
             if (fading_action != nullptr && fade_weight > 0.f)
@@ -744,51 +727,54 @@ namespace jeecs::animation
     }
 }
 
-// ===== C API：采样 =====
+// ===== 采样原语（jeecs::animation，声明见 jeecs_core_animation_system.hpp）=====
 
-je_animation_sample_buffer_t* je_animation_sample_buffer_create(void)
+namespace jeecs::animation
 {
-    return new je_animation_sample_buffer_t();
-}
+    sample_buffer* create_sample_buffer()
+    {
+        return new sample_buffer();
+    }
 
-void je_animation_sample_buffer_destroy(je_animation_sample_buffer_t* buffer)
-{
-    assert(buffer != nullptr);
-    delete buffer;
-}
+    void destroy_sample_buffer(sample_buffer* buffer)
+    {
+        assert(buffer != nullptr);
+        delete buffer;
+    }
 
-void je_animation_sample_buffer_clear(je_animation_sample_buffer_t* buffer)
-{
-    assert(buffer != nullptr);
-    buffer->m_entries.clear();
-}
+    void clear_sample_buffer(sample_buffer* buffer)
+    {
+        assert(buffer != nullptr);
+        buffer->m_entries.clear();
+    }
 
-void je_animation_action_sample(
-    const je_animation_action_data_t* action,
-    float time,
-    float weight,
-    je_animation_sample_buffer_t* buffer)
-{
-    assert(action != nullptr);
-    assert(buffer != nullptr);
+    void sample_action(
+        const je_animation_action_data_t* action,
+        float time,
+        float weight,
+        sample_buffer* buffer)
+    {
+        assert(action != nullptr);
+        assert(buffer != nullptr);
 
-    if (weight <= 0.f)
-        return;
+        if (weight <= 0.f)
+            return;
 
-    jeecs::animation::_sample_action_into_buffer(action, time, weight, buffer);
-}
+        _sample_action_into_buffer(action, time, weight, buffer);
+    }
 
-void je_animation_sample_buffer_apply(
-    const je_game_entity_t* entity,
-    je_animation_sample_buffer_t* buffer)
-{
-    assert(entity != nullptr);
-    assert(buffer != nullptr);
+    void apply_sample_buffer(
+        const je_game_entity_t* entity,
+        sample_buffer* buffer)
+    {
+        assert(entity != nullptr);
+        assert(buffer != nullptr);
 
-    auto* shaders = (Renderer::Shaders*)je_ecs_world_entity_component_get(
-        entity, jeecs::typing::id<Renderer::Shaders>());
+        auto* shaders = (Renderer::Shaders*)je_ecs_world_entity_component_get(
+            entity, jeecs::typing::id<Renderer::Shaders>());
 
-    jeecs::animation::_apply_buffer_to_entity(*entity, shaders, *buffer);
+        _apply_buffer_to_entity(*entity, shaders, *buffer);
+    }
 }
 
 // ===== C API：播放控制 =====

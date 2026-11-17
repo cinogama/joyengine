@@ -12,6 +12,7 @@
 #include "jeecs_basic_bootup.hpp"
 #include "jeecs_graphic_render_internal.hpp"
 #include "jeecs_basic_cache_version.hpp"
+#include "jeecs_basic_internal_scripts.hpp"
 #include "jeecs_graphic_shader_wrapper.hpp"
 
 #include "wo.h"
@@ -32,6 +33,7 @@
 #include <future>
 #include <stack>
 #include <queue>
+#include <string>
 
 namespace jeecs::graphic {}
 
@@ -1973,24 +1975,27 @@ void je_graphic_thread_reboot(je_gl_context_t* thread_handle, /* OPTIONAL: nullp
     thread_handle->_m_thread_notifier->m_graphic_reboot = true;
 }
 
-bool je_graphic_shared_resources_mark_outdated(
-    je_gl_context_t* context, const char* path)
+namespace jeecs::graphic
 {
-    lock_guard g1(context->_m_thread_notifier->_m_outdated_resource_blobs_mx);
-    if (context->_m_thread_notifier->_m_outdated_resource_blobs.emplace(path).second)
+    bool mark_shared_resources_outdated(
+        je_gl_context_t* context, const char* path)
     {
-        lock_guard g2(context->_m_thread_notifier->_m_cached_resources_mx);
-
-        auto fnd = context->_m_thread_notifier->_m_cached_resources.find(path);
-        if (fnd != context->_m_thread_notifier->_m_cached_resources.end())
+        lock_guard g1(context->_m_thread_notifier->_m_outdated_resource_blobs_mx);
+        if (context->_m_thread_notifier->_m_outdated_resource_blobs.emplace(path).second)
         {
-            fnd->second.m_resource.drop_resource();
-            context->_m_thread_notifier->_m_cached_resources.erase(fnd);
-        }
+            lock_guard g2(context->_m_thread_notifier->_m_cached_resources_mx);
 
-        return true;
+            auto fnd = context->_m_thread_notifier->_m_cached_resources.find(path);
+            if (fnd != context->_m_thread_notifier->_m_cached_resources.end())
+            {
+                fnd->second.m_resource.drop_resource();
+                context->_m_thread_notifier->_m_cached_resources.erase(fnd);
+            }
+
+            return true;
+        }
+        return false;
     }
-    return false;
 }
 
 void je_graphic_shader_close(je_gl_shader_t* shader)
@@ -2423,6 +2428,25 @@ void je_graphic_resource_handle_share(je_gl_resource_handle_t* resource_handle)
     ++resource_handle->m_raw_ref_count->m_binding_count;
 }
 
+namespace jeecs::graphic
+{
+    /* OPTIONAL */ je_file_t* open_or_create_image_texture_cache(const char* path)
+    {
+        // The cache carries both the image pixels and the color space from the
+        // optional <path>.je4texture source, so the key chains both files: a
+        // change to either invalidates it. With neither file present (exported
+        // runtimes ship only the cache) the key is 0 and validation is skipped.
+        const uint64_t crc64_key = je_file_crc64(
+            (string(path) + ".je4texture").c_str(),
+            je_file_crc64(path, 0));
+
+        if (je_file_t* file = je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, crc64_key))
+            return file;
+
+        return internal_script::regenerate_image_texture_cache(path, crc64_key);
+    }
+}
+
 // Opens the texture cache <path>.je4cache of an image. The cache is
 // (re)generated only when the image itself exists; without it an existing
 // cache is read as is: exported runtimes carry only the cache, and probing an
@@ -2432,7 +2456,7 @@ static /* OPTIONAL */ je_file_t* _jegl_open_image_texture_cache(const char* path
     if (je_file_t* image = je_file_open(path))
     {
         je_file_close(image);
-        return je_image_texture_cache_open_or_create(path);
+        return graphic::open_or_create_image_texture_cache(path);
     }
     return je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, 0);
 }

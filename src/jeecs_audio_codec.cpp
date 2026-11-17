@@ -1,10 +1,11 @@
 #define JE_IMPL
-#define JE_ENABLE_DEBUG_API
 #include "jeecs/audio.hpp"
 #include "jeecs/cache.hpp"
 #include "jeecs/file.hpp"
 #include "jeecs/logging.hpp"
 #include "jeecs_audio_codec.hpp"
+#include "jeecs_basic_cache_version.hpp"
+#include "jeecs_basic_internal_scripts.hpp"
 
 #include <ogg/ogg.h>
 #include <vorbis/codec.h>
@@ -16,6 +17,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -1296,63 +1298,80 @@ namespace jeecs::audio::codec
         *out_size = size;
         return true;
     }
+
+    bool audio_cache_payload_write(
+        je_writing_cache_file_t* file,
+        const void* pcm,
+        size_t pcm_len,
+        int32_t channels,
+        int32_t sample_rate,
+        int32_t bits,
+        bool is_float,
+        je_audio_codec_t codec,
+        float quality)
+    {
+        if (file == nullptr || (pcm == nullptr && pcm_len > 0))
+            return false;
+        if (channels != 1 && channels != 2)
+        {
+            debug::logerr("Unsupported audio cache channel count: %d.", (int)channels);
+            return false;
+        }
+        if (sample_rate <= 0)
+        {
+            debug::logerr("Invalid audio cache sample rate: %d.", (int)sample_rate);
+            return false;
+        }
+        if (bits <= 0 || bits % 8 != 0)
+        {
+            debug::logerr("Invalid audio cache bit depth: %d.", (int)bits);
+            return false;
+        }
+
+        const size_t frame_bytes
+            = static_cast<size_t>(channels) * static_cast<size_t>(bits / 8);
+        if (pcm_len % frame_bytes != 0)
+        {
+            debug::logerr("Audio cache PCM length is not frame-aligned.");
+            return false;
+        }
+
+        switch (codec)
+        {
+        case JE_AUDIO_CODEC_PCM:
+            return write_u32(file, JE_AUDIO_CODEC_PCM)
+                && write_u64(file, static_cast<uint64_t>(pcm_len))
+                && write_exact(file, pcm, pcm_len);
+
+        case JE_AUDIO_CODEC_ADPCM:
+            return adpcm_encode_payload(file, pcm, pcm_len, channels, bits, is_float);
+
+        case JE_AUDIO_CODEC_VORBIS:
+            return vorbis_encode_payload(
+                file, pcm, pcm_len, channels, sample_rate, bits, is_float, quality);
+        }
+
+        debug::logerr("Unsupported audio cache codec: %d.", (int)codec);
+        return false;
+    }
 }
 
-bool je_audio_cache_payload_write(
-    je_writing_cache_file_t* file,
-    const void* pcm,
-    size_t pcm_len,
-    int32_t channels,
-    int32_t sample_rate,
-    int32_t bits,
-    bool is_float,
-    je_audio_codec_t codec,
-    float quality)
+namespace jeecs::audio
 {
-    using namespace jeecs;
-    using namespace jeecs::audio::codec;
-
-    if (file == nullptr || (pcm == nullptr && pcm_len > 0))
-        return false;
-    if (channels != 1 && channels != 2)
+    /* OPTIONAL */ je_file_t* open_or_create_cache(const char* path)
     {
-        debug::logerr("Unsupported audio cache channel count: %d.", (int)channels);
-        return false;
-    }
-    if (sample_rate <= 0)
-    {
-        debug::logerr("Invalid audio cache sample rate: %d.", (int)sample_rate);
-        return false;
-    }
-    if (bits <= 0 || bits % 8 != 0)
-    {
-        debug::logerr("Invalid audio cache bit depth: %d.", (int)bits);
-        return false;
-    }
+        // The cache carries both the decoded PCM and the streaming flag from
+        // the optional <path>.je4audio source, so the key chains both files:
+        // a change to either invalidates it. With neither file present
+        // (exported runtimes ship only the cache) the key is 0 and validation
+        // is skipped.
+        const uint64_t crc64_key = je_file_crc64(
+            (std::string(path) + ".je4audio").c_str(),
+            je_file_crc64(path, 0));
 
-    const size_t frame_bytes
-        = static_cast<size_t>(channels) * static_cast<size_t>(bits / 8);
-    if (pcm_len % frame_bytes != 0)
-    {
-        debug::logerr("Audio cache PCM length is not frame-aligned.");
-        return false;
+        if (je_file_t* file = je_cache_file_load(path, AUDIO_CACHE_VERSION, crc64_key))
+            return file;
+
+        return internal_script::regenerate_audio_cache(path, crc64_key);
     }
-
-    switch (codec)
-    {
-    case JE_AUDIO_CODEC_PCM:
-        return write_u32(file, JE_AUDIO_CODEC_PCM)
-            && write_u64(file, static_cast<uint64_t>(pcm_len))
-            && write_exact(file, pcm, pcm_len);
-
-    case JE_AUDIO_CODEC_ADPCM:
-        return adpcm_encode_payload(file, pcm, pcm_len, channels, bits, is_float);
-
-    case JE_AUDIO_CODEC_VORBIS:
-        return vorbis_encode_payload(
-            file, pcm, pcm_len, channels, sample_rate, bits, is_float, quality);
-    }
-
-    debug::logerr("Unsupported audio cache codec: %d.", (int)codec);
-    return false;
 }

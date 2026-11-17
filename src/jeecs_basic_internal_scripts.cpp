@@ -9,6 +9,7 @@
 #include "jeecs/tilemap.hpp"
 #include "jeecs_basic_bootup.hpp"
 #include "jeecs_basic_cache_version.hpp"
+#include "jeecs_basic_internal_scripts.hpp"
 
 #include "wo.h"
 
@@ -331,88 +332,62 @@ namespace jeecs::internal_script
     }
 }
 
-/* OPTIONAL */ je_file_t* je_animation_cache_open_or_create(const char* path)
+namespace jeecs::internal_script
 {
-    if (je_file_t* file = je_cache_file_load(path, ANIMATION_CACHE_VERSION, 0))
-        return file;
+    /* OPTIONAL */ je_file_t* regenerate_animation_cache(const char* path)
+    {
+        if (cache_builder_of_animation.has_value())
+            return generate_cache(
+                path,
+                ANIMATION_CACHE_VERSION,
+                cache_builder_of_animation.value(),
+                0);
+        return nullptr;
+    }
 
-    if (cache_builder_of_animation.has_value())
-        return generate_cache(
-            path,
-            ANIMATION_CACHE_VERSION,
-            cache_builder_of_animation.value(),
-            0);
-    return nullptr;
-}
+    /* OPTIONAL */ je_file_t* regenerate_tilemap_cache(const char* path)
+    {
+        if (cache_builder_of_tilemap.has_value())
+            return generate_cache(
+                path,
+                TILEMAP_CACHE_VERSION,
+                cache_builder_of_tilemap.value(),
+                0);
+        return nullptr;
+    }
 
-/* OPTIONAL */ je_file_t* je_tilemap_cache_open_or_create(const char* path)
-{
-    if (je_file_t* file = je_cache_file_load(path, TILEMAP_CACHE_VERSION, 0))
-        return file;
+    /* OPTIONAL */ je_file_t* regenerate_tileset_cache(const char* path)
+    {
+        if (cache_builder_of_tileset.has_value())
+            return generate_cache(
+                path,
+                TILESET_CACHE_VERSION,
+                cache_builder_of_tileset.value(),
+                0);
+        return nullptr;
+    }
 
-    if (cache_builder_of_tilemap.has_value())
-        return generate_cache(
-            path,
-            TILEMAP_CACHE_VERSION,
-            cache_builder_of_tilemap.value(),
-            0);
-    return nullptr;
-}
+    /* OPTIONAL */ je_file_t* regenerate_image_texture_cache(
+        const char* path, uint64_t crc64_key)
+    {
+        if (cache_builder_of_image_texture.has_value())
+            return generate_cache(
+                path,
+                IMAGE_TEXTURE_CACHE_VERSION,
+                cache_builder_of_image_texture.value(),
+                crc64_key);
+        return nullptr;
+    }
 
-/* OPTIONAL */ je_file_t* je_tileset_cache_open_or_create(const char* path)
-{
-    if (je_file_t* file = je_cache_file_load(path, TILESET_CACHE_VERSION, 0))
-        return file;
-
-    if (cache_builder_of_tileset.has_value())
-        return generate_cache(
-            path,
-            TILESET_CACHE_VERSION,
-            cache_builder_of_tileset.value(),
-            0);
-    return nullptr;
-}
-
-/* OPTIONAL */ je_file_t* je_image_texture_cache_open_or_create(const char* path)
-{
-    // The cache carries both the image pixels and the color space from the
-    // optional <path>.je4texture source, so the key chains both files: a
-    // change to either invalidates it. With neither file present (exported
-    // runtimes ship only the cache) the key is 0 and validation is skipped.
-    const uint64_t crc64_key = je_file_crc64(
-        (string(path) + ".je4texture").c_str(),
-        je_file_crc64(path, 0));
-
-    if (je_file_t* file = je_cache_file_load(path, IMAGE_TEXTURE_CACHE_VERSION, crc64_key))
-        return file;
-
-    if (cache_builder_of_image_texture.has_value())
-        return generate_cache(
-            path,
-            IMAGE_TEXTURE_CACHE_VERSION,
-            cache_builder_of_image_texture.value(),
-            crc64_key);
-    return nullptr;
-}
-
-/* OPTIONAL */ je_file_t* je_audio_cache_open_or_create(const char* path)
-{
-    // The cache carries both the decoded PCM and the streaming flag from the
-    // optional <path>.je4audio source, so the key chains both files: a change
-    // to either invalidates it. With neither file present (exported runtimes
-    // ship only the cache) the key is 0 and validation is skipped.
-    const uint64_t crc64_key = je_file_crc64(
-        (string(path) + ".je4audio").c_str(),
-        je_file_crc64(path, 0));
-
-    if (je_file_t* file = je_cache_file_load(path, AUDIO_CACHE_VERSION, crc64_key))
-        return file;
-
-    if (cache_builder_of_audio.has_value())
-        return generate_cache(
-            path,
-            AUDIO_CACHE_VERSION,
-            cache_builder_of_audio.value(),
-            crc64_key);
-    return nullptr;
+    /* OPTIONAL */ je_file_t* regenerate_audio_cache(
+        const char* path, uint64_t crc64_key)
+    {
+        if (cache_builder_of_audio.has_value())
+            return generate_cache(
+                path,
+                AUDIO_CACHE_VERSION,
+                cache_builder_of_audio.value(),
+                crc64_key);
+        return nullptr;
+    }
 }

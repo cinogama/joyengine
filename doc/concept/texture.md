@@ -156,11 +156,11 @@ if (auto* textures = entity.get_component<Renderer::Textures2D>())
 `je_graphic_texture_2d_load(context, path)`：
 
 1. context 非空时先查共享资源缓存（`_jegl_try_load_shared_resource`），命中则增加引用计数并返回同一实例；
-2. 打开图片缓存：图片文件存在时调用 `je_image_texture_cache_open_or_create`——校验码是图片与 `.je4texture` 内容连续计算的 CRC64，缺失或失效时运行生成器脚本重建；图片不存在时直接读取现有缓存（导出的运行时只携带缓存，也避免 `@/icon.png` 这类可选探测刷出生成失败日志）；
+2. 打开图片缓存：图片文件存在时调用 `graphic::open_or_create_image_texture_cache`——校验码是图片与 `.je4texture` 内容连续计算的 CRC64，缺失或失效时运行生成器脚本重建；图片不存在时直接读取现有缓存（导出的运行时只携带缓存，也避免 `@/icon.png` 这类可选探测刷出生成失败日志）；
 3. 解析缓存文档的 `width` / `height` / `color_space` / `pixels`（RGBA8，自底向上，宽 × 高 × 4 字节）；缓存存在却无法解析视为损坏并记录错误，单纯缺失只记录 info；
 4. 以 `RGBA` 格式建立纹理，颜色空间为 sRGB 时追加 `SRGB` 标志，最后经 `_jegl_try_update_shared_resource` 登记进共享缓存（若同一瞬间已有同路径资源登记，丢弃新建的实例，返回已缓存的那份）。
 
-生成器 `texture.wo` 用 `pkg::image` 解码图片、用 `pkg::toml` 读取颜色空间，按 `je_cache_binary_*` 文档格式写出。编辑器的热重载走 `je_graphic_shared_resources_mark_outdated`：把路径移出共享缓存并标记其 GPU blob 过时，之后的加载会重新读取，已加载的实例不受影响。
+生成器 `texture.wo` 用 `pkg::image` 解码图片、用 `pkg::toml` 读取颜色空间，按 `je_cache_binary_*` 文档格式写出。编辑器的热重载走 `graphic::mark_shared_resources_outdated`：把路径移出共享缓存并标记其 GPU blob 过时，之后的加载会重新读取，已加载的实例不受影响。
 
 ### 上传：创建期快照与持久区段上传
 

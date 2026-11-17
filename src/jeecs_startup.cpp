@@ -1,5 +1,4 @@
 #define JE_IMPL
-#define JE_ENABLE_DEBUG_API
 #include "jeecs/cache.hpp"
 #include "jeecs/core.hpp"
 #include "jeecs/entry.hpp"

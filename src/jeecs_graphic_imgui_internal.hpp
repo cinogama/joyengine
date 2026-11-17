@@ -80,4 +80,13 @@ namespace jeecs::graphic::gui
 
     extern basic::atomic_list<WoolangJobCoroutine> _wo_job_list;
     extern basic::atomic_list<WoolangJobCoroutine> _wo_new_job_list;
+
+    // 指定 je_gui_backend_init 时使用的字体与字号（原
+    // je_gui_backend_font_set C API 的内部化版本）：general_font_path 为
+    // null 时使用默认字体，latin_font_path 为拉丁字符集追加的字体。
+    // 仅在 je_gui_backend_init 之前调用生效。
+    void specify_font(
+        /* OPTIONAL */ const char* general_font_path,
+        /* OPTIONAL */ const char* latin_font_path,
+        size_t size);
 }

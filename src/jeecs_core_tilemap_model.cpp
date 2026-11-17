@@ -4,6 +4,8 @@
 // jeecs_core_tilemap_model.hpp（各函数的契约注释也在该头文件）。
 
 #include "jeecs_core_tilemap_model.hpp"
+#include "jeecs_basic_cache_version.hpp"
+#include "jeecs_basic_internal_scripts.hpp"
 
 #include <cassert>
 #include <cstring>
@@ -472,9 +474,24 @@ namespace jeecs
         }
 
         // ==================== 文档加载 ====================
+
+        /* OPTIONAL */ je_file_t* open_or_create_tileset_cache(const char* path)
+        {
+            if (je_file_t* file = je_cache_file_load(path, TILESET_CACHE_VERSION, 0))
+                return file;
+            return jeecs::internal_script::regenerate_tileset_cache(path);
+        }
+
+        /* OPTIONAL */ je_file_t* open_or_create_map_cache(const char* path)
+        {
+            if (je_file_t* file = je_cache_file_load(path, TILEMAP_CACHE_VERSION, 0))
+                return file;
+            return jeecs::internal_script::regenerate_tilemap_cache(path);
+        }
+
         std::optional<std::shared_ptr<TilesetDocument>> load_tileset_from(const std::string& path)
         {
-            je_file_t* cache = je_tileset_cache_open_or_create(path.c_str());
+            je_file_t* cache = open_or_create_tileset_cache(path.c_str());
             if (cache == nullptr)
                 return std::nullopt;
 
@@ -797,7 +814,7 @@ namespace jeecs
 
         std::optional<std::shared_ptr<MapDocument>> load_map_from(const std::string& path)
         {
-            je_file_t* cache = je_tilemap_cache_open_or_create(path.c_str());
+            je_file_t* cache = open_or_create_map_cache(path.c_str());
             if (cache == nullptr)
                 return std::nullopt;
 

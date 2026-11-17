@@ -1,7 +1,5 @@
 #define JE_IMPL
-#define JE_ENABLE_DEBUG_API
 #include "jeecs/components.hpp"
-#include "jeecs/debug.hpp"
 #include "jeecs/ecs.hpp"
 #include "jeecs/entry.hpp"
 #include "jeecs/graphic.hpp"
@@ -18,6 +16,7 @@
 #include "jeecs_core_audio_system.hpp"
 #include "jeecs_core_input_system.hpp"
 #include "jeecs_core_tilemap_system.hpp"
+#include "jeecs_basic_debug.hpp"
 
 using namespace jeecs;
 
@@ -60,56 +59,60 @@ namespace jeecs::core_components_and_systems
     }
 }
 
-// ===== C API：实体名称与调试 EID =====
+// ===== 编辑器/调试支撑：实体名称与调试 EID（jeecs::debug，声明见
+// jeecs_basic_debug.hpp）=====
 
-const char* je_ecs_entity_name_get(const je_game_entity_t* entity)
+namespace jeecs::debug
 {
-    auto* c_name = (Editor::Name*)je_ecs_world_entity_component_get(
-        entity, typing::id<Editor::Name>());
-    if (c_name)
-        return c_name->name.c_str();
-    return "";
-}
-
-const char* je_ecs_entity_name_set(const je_game_entity_t* entity, const char* name)
-{
-    auto* c_name = (Editor::Name*)je_ecs_world_entity_component_get(
-        entity, typing::id<Editor::Name>());
-    if (!c_name)
-        c_name = (Editor::Name*)je_ecs_world_entity_component_add(
+    const char* get_entity_name(const je_game_entity_t* entity)
+    {
+        auto* c_name = (Editor::Name*)je_ecs_world_entity_component_get(
             entity, typing::id<Editor::Name>());
-
-    if (c_name)
-        return (c_name->name = name).c_str();
-    return "";
-}
-
-je_debug_eid_t je_debug_entity_uid_get(const je_game_entity_t* e)
-{
-    auto* eid = static_cast<Editor::EntityId*>(
-        je_ecs_world_entity_component_get(
-            e, typing::id<Editor::EntityId>()));
-    if (eid == nullptr)
-    {
-        (void)je_ecs_world_entity_component_add(
-            e, typing::id<Editor::EntityId>());
-        return 0 /* invalid */;
+        if (c_name)
+            return c_name->name.c_str();
+        return "";
     }
-    return eid->eid;
-}
 
-void je_debug_entity_uid_set(const je_game_entity_t* e, je_debug_eid_t uid)
-{
-    auto* eid = static_cast<Editor::EntityId*>(
-        je_ecs_world_entity_component_get(
-            e, typing::id<Editor::EntityId>()));
-
-    if (eid == nullptr)
+    const char* set_entity_name(const je_game_entity_t* entity, const char* name)
     {
-        eid = static_cast<Editor::EntityId*>(
-            je_ecs_world_entity_component_add(
+        auto* c_name = (Editor::Name*)je_ecs_world_entity_component_get(
+            entity, typing::id<Editor::Name>());
+        if (!c_name)
+            c_name = (Editor::Name*)je_ecs_world_entity_component_add(
+                entity, typing::id<Editor::Name>());
+
+        if (c_name)
+            return (c_name->name = name).c_str();
+        return "";
+    }
+
+    je_debug_eid_t get_entity_uid(const je_game_entity_t* e)
+    {
+        auto* eid = static_cast<Editor::EntityId*>(
+            je_ecs_world_entity_component_get(
                 e, typing::id<Editor::EntityId>()));
+        if (eid == nullptr)
+        {
+            (void)je_ecs_world_entity_component_add(
+                e, typing::id<Editor::EntityId>());
+            return 0 /* invalid */;
+        }
+        return eid->eid;
     }
 
-    eid->eid = uid;
+    void set_entity_uid(const je_game_entity_t* e, je_debug_eid_t uid)
+    {
+        auto* eid = static_cast<Editor::EntityId*>(
+            je_ecs_world_entity_component_get(
+                e, typing::id<Editor::EntityId>()));
+
+        if (eid == nullptr)
+        {
+            eid = static_cast<Editor::EntityId*>(
+                je_ecs_world_entity_component_add(
+                    e, typing::id<Editor::EntityId>()));
+        }
+
+        eid->eid = uid;
+    }
 }

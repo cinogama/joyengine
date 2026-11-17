@@ -1,10 +1,10 @@
 #define JE_IMPL
-#define JE_ENABLE_DEBUG_API
 #include "jeecs/core.hpp"
-#include "jeecs/debug.hpp"
 #include "jeecs/file.hpp"
 #include "jeecs/prefix.hpp"
 #include "jeecs/typing.hpp"
+
+#include "jeecs_basic_debug.hpp"
 
 #include "wo.h"
 
@@ -68,7 +68,7 @@ static void _je_dynamic_parser_refresh(woort_value tmp)
 {
     _je_dynamic_parser_global_context._je_dynamic_parser_impls.clear();
 
-    auto** types = je_debug_types_registered_get_all();
+    auto** types = debug::get_all_registered_types();
 
     auto** cur_type = types;
     while (*cur_type)

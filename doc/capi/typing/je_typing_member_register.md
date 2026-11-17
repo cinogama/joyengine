@@ -84,10 +84,8 @@ je_typing_member_register(
 
 - 使用本地 typeinfo，而非全局通用 typeinfo
 - 成员偏移量应使用 `offsetof` 宏计算
-- 调用 `je_typing_reset` 会清除之前注册的成员信息
 
 ## 相关接口
 
 - [je_typing_register](je_typing_register.md) - 注册类型
-- [je_typing_reset](je_typing_reset.md) - 重置类型信息
 - [je_typing_script_parser_register](je_typing_script_parser_register.md) - 注册脚本转换方法

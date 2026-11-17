@@ -81,6 +81,24 @@ namespace jeecs::graphic
         je_gl_resource_handle_t* resource_handle,
         const char* path_may_null_if_builtin);
 
+    // Defined in jeecs_graphic_api_basic.cpp. Opens the texture cache
+    // <path>.je4cache of an image; a missing/outdated cache is rebuilt via
+    // the internal generator (internal_script::regenerate_image_texture_cache).
+    // The cache carries the color space and decoded RGBA8 pixels, keyed by
+    // crc64(image file bytes chained with the optional <path>.je4texture
+    // bytes). Returns a read-only handle the caller closes (je_file_close);
+    // nullptr if it cannot be generated (e.g. exported runtimes without the
+    // generator). The graphic-domain policy wrapper that only rebuilds when
+    // the image itself exists is _jegl_open_image_texture_cache.
+    /* OPTIONAL */ je_file_t* open_or_create_image_texture_cache(const char* path);
+
+    // Defined in jeecs_graphic_api_basic.cpp. Marks the shared-resource cache
+    // entry of `path` outdated and drops the loaded instance; returns true if
+    // it was newly marked (previously cached and not outdated). Already loaded
+    // resources are unaffected; the next load of the path re-reads the source.
+    // (Internalized from the je_graphic_shared_resources_mark_outdated C API.)
+    bool mark_shared_resources_outdated(je_gl_context_t* context, const char* path);
+
     // Patch the built-in JE_NDC_SCALE uniform inside an already-copied CPU
     // uniform block. DX11/Metal flip y for offscreen targets; Vulkan flips it
     // only for the sRGB encode pass.

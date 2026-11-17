@@ -14,9 +14,6 @@
 #ifndef JE_IMPL
 #   define JE_IMPL
 #endif
-#ifndef JE_ENABLE_DEBUG_API
-#   define JE_ENABLE_DEBUG_API
-#endif
 #include "jeecs/basic.hpp"
 #include "jeecs/cache.hpp"
 #include "jeecs/file.hpp"
@@ -498,6 +495,14 @@ namespace jeecs
         // je_file_open 支持 fimg 包）
         std::string resolve_runtime_prefix(const std::string& path);
 
+        // 打开瓦片集/瓦片地图缓存 <path>.je4cache：缓存有效时直接返回，
+        // 缺失或失效时经内置生成器重建
+        //（internal_script::regenerate_tileset_cache / regenerate_tilemap_cache，
+        // 按源 TOML 文件字节推导校验码）。返回的句柄由调用方负责关闭
+        //（见 je_file_close）；无法生成时为 nullptr。
+        /* OPTIONAL */ je_file_t* open_or_create_tileset_cache(const char* path);
+        /* OPTIONAL */ je_file_t* open_or_create_map_cache(const char* path);
+
         // 从缓存加载文档（失败返回 nullopt；由 documents 注册表经
         // resolve 调用，也可直接使用）
         std::optional<std::shared_ptr<TilesetDocument>>
@@ -584,7 +589,7 @@ namespace jeecs
 
             // 编辑器已把 TOML 源写入 path：把文档的路径登记迁移到 path。
             // 不写盘、不生成缓存——<path>.je4cache 由下次加载经
-            // je_tilemap_cache_open_or_create 按源 CRC 自然重建。
+            // internal_script::open_or_create_tilemap_cache 按源 CRC 自然重建。
             // 重绑路径索引（另一文档对同路径的既有绑定被顶替 ——
             // "最后一次保存者获胜"，与编辑器另存语义一致）。调用方须
             // 持有外部引用（无账目即契约外使用，按失败返回）。

@@ -134,20 +134,6 @@ JE_API const je_type_info_t* je_typing_register(
     je_move_construct_func_t _move_constructor);
 
 /*
-je_typing_reset [基本接口]
-被设计用于重置指定类型的大小、对齐、成员和构造函数等
-    * 成员字段将被重置，请重新注册
-*/
-JE_API void je_typing_reset(
-    const je_type_info_t* _tinfo,
-    size_t _size,
-    size_t _align,
-    je_construct_func_t _constructor,
-    je_destruct_func_t _destructor,
-    je_copy_construct_func_t _copy_constructor,
-    je_move_construct_func_t _move_constructor);
-
-/*
 je_typing_info_get_by_id [基本接口]
 通过类型id获取类型信息，若给定的id不合法，返回nullptr
 请参见：

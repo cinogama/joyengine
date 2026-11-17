@@ -181,13 +181,6 @@ typedef struct je_animation_t
 } je_animation_t;
 
 /*
-je_animation_sample_buffer_t [类型]
-动画采样的累加缓冲，用于把一个或多个动作的加权采样结果混合后写入实体。
-由 je_animation_sample_buffer_create 创建、destroy 释放
-*/
-typedef struct je_animation_sample_buffer_t je_animation_sample_buffer_t;
-
-/*
 je_animation_open [基本接口]
 加载 path 指向的动画集：
     * 读取 <path>.je4cache；缓存缺失/失效时先调用
@@ -211,58 +204,6 @@ je_animation_action_find [基本接口]
 JE_API /* OPTIONAL */ const je_animation_action_data_t* je_animation_action_find(
     const je_animation_t* animation,
     const char* name);
-
-/*
-je_animation_cache_open_or_create [基本接口]
-打开指定的动画集缓存文件；缓存缺失或失效时调用内置缓存生成器重建
-    * 返回的句柄由调用方负责关闭（见 je_file_close）；无法生成时返回 nullptr
-请参见：
-    je_cache_file_load
-    je_file_close
-*/
-JE_API /* OPTIONAL */ je_file_t* je_animation_cache_open_or_create(const char* path);
-
-/*
-je_animation_sample_buffer_create [基本接口]
-创建一个采样累加缓冲，用毕以 je_animation_sample_buffer_destroy 释放
-*/
-JE_API je_animation_sample_buffer_t* je_animation_sample_buffer_create(void);
-
-/*
-je_animation_sample_buffer_destroy [基本接口]
-释放 je_animation_sample_buffer_create 创建的缓冲
-*/
-JE_API void je_animation_sample_buffer_destroy(je_animation_sample_buffer_t* buffer);
-
-/*
-je_animation_sample_buffer_clear [基本接口]
-清空缓冲中的全部采样结果，开始新一轮累加
-*/
-JE_API void je_animation_sample_buffer_clear(je_animation_sample_buffer_t* buffer);
-
-/*
-je_animation_action_sample [基本接口]
-按权重把 action 在 time 时刻的采样结果累加进 buffer：
-    * 多次采样的同一目标按权重加权平均（QUAT4 为 slerp），
-      叠加轨道按 value*weight 累加
-    * weight <= 0 时忽略本次采样
-    * time 超出首/尾关键帧范围时钳制到端点值，不做循环回绕
-*/
-JE_API void je_animation_action_sample(
-    const je_animation_action_data_t* action,
-    float time,
-    float weight,
-    je_animation_sample_buffer_t* buffer);
-
-/*
-je_animation_sample_buffer_apply [基本接口]
-把缓冲中的采样结果写入实体：
-    * 组件成员轨道要求实体持有对应组件，否则该轨道无效果
-    * uniform 轨道要求实体持有 Renderer::Shaders 组件
-*/
-JE_API void je_animation_sample_buffer_apply(
-    const je_game_entity_t* entity,
-    je_animation_sample_buffer_t* buffer);
 
 /*
 je_animation_entity_play [基本接口]
@@ -330,7 +271,6 @@ typedef je_animation_track_t je_AnimationTrack;
 typedef je_animation_event_t je_AnimationEvent;
 typedef je_animation_action_data_t je_AnimationActionData;
 typedef je_animation_t je_Animation;
-typedef je_animation_sample_buffer_t je_AnimationSampleBuffer;
 
 JE_FORCE_CAPI_END
 #ifdef __cplusplus

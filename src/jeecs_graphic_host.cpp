@@ -2,7 +2,6 @@
 // 图形线程中间管理器
 
 #define JE_IMPL
-#define JE_ENABLE_DEBUG_API
 #include "jeecs/ecs.hpp"
 #include "jeecs/game.hpp"
 #include "jeecs/graphic.hpp"

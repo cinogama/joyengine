@@ -96,4 +96,32 @@ namespace jeecs::audio::codec
         const audio_payload_info_t& info,
         int32_t channels,
         size_t frame_bytes);
+
+    // 把整段已按目标位深转换的 PCM 按 codec 编码并写入缓存载荷区
+    //（文件头之后、je_cache_binary_* 文档之前），供内置缓存生成脚本
+    //（wojeapi_audio_cache_payload_write）调用；一次调用写完整个载荷区，
+    // 调用方随后照常追加文档。原 je_audio_cache_payload_write C API 的
+    // 内部化版本。quality 仅对 VORBIS 生效（0.0~1.0，越大音质越好、
+    // 体积越大）；编码失败返回 false，调用方应中止缓存生成。
+    bool audio_cache_payload_write(
+        je_writing_cache_file_t* file,
+        const void* pcm,
+        size_t pcm_len,
+        int32_t channels,
+        int32_t sample_rate,
+        int32_t bits,
+        bool is_float,
+        je_audio_codec_t codec,
+        float quality);
+}
+
+namespace jeecs::audio
+{
+    // 打开音频缓存 <path>.je4cache（载荷区布局见文件头注释）：缓存有效时
+    // 直接返回，缺失或失效时经内置生成器重建
+    //（internal_script::regenerate_audio_cache；校验码为音频文件与可选的
+    // <path>.je4audio 内容连续计算的 CRC64）。返回的句柄由调用方负责关闭
+    //（见 je_file_close）；无法生成时为 nullptr。
+    // 实现位于 jeecs_audio_codec.cpp。
+    /* OPTIONAL */ je_file_t* open_or_create_cache(const char* path);
 }

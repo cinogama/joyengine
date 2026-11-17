@@ -1,9 +1,7 @@
 #define JE_IMPL
-#define JE_ENABLE_DEBUG_API
 #include "jeecs/clock.hpp"
 #include "jeecs/components.hpp"
 #include "jeecs/core.hpp"
-#include "jeecs/debug.hpp"
 #include "jeecs/ecs.hpp"
 #include "jeecs/game.hpp"
 #include "jeecs/logging.hpp"
@@ -13,6 +11,7 @@
 #include "wo.h"
 
 #include "jeecs_core_editor_components.hpp"
+#include "jeecs_basic_debug.hpp"
 
 #include <list>
 #include <optional>
@@ -136,7 +135,7 @@ WOORT_API woort_api wojeapi_get_all_worlds_in_universe(void)
 
     woort_set_vec(out_array);
 
-    auto result = je_debug_universe_worlds_get_all(universe);
+    auto result = debug::get_all_worlds(universe);
     {
         auto worldlist = result;
         while (*worldlist)
@@ -222,7 +221,7 @@ WOORT_API woort_api wojeapi_world_get_all_systems(void)
     private func _get_systems_from_world(self: world, out_result: array<typeinfo>)=> array<typeinfo>;
     */
     const je_type_info_t** types =
-        je_debug_world_systems_attached_get_all(
+        debug::get_all_attached_systems(
             static_cast<je_game_world_t*>(woort_pointer(0)));
 
     woort_value s;
@@ -350,7 +349,7 @@ WOORT_API woort_api wojeapi_world_get_all_entities(void)
 
     void* world_instance = woort_pointer(0);
 
-    auto entities = je_debug_world_entities_get_all(
+    auto entities = debug::get_all_entities(
         static_cast<je_game_world_t*>(world_instance));
 
     auto entity_iter = entities;
@@ -364,7 +363,7 @@ WOORT_API woort_api wojeapi_world_get_all_entities(void)
             WOORT_IGNORE,
             [](void* entity_ptr)
             {
-                je_debug_entity_free((je_game_entity_t*)entity_ptr);
+                debug::free_entity((je_game_entity_t*)entity_ptr);
             },
             nullptr);
         woort_vec_push(out_arr, elem);
@@ -598,7 +597,7 @@ WOORT_API woort_api wojeapi_get_world_from_entity(void)
 WOORT_API woort_api wojeapi_get_entity_uid(void)
 {
     je_game_entity_t* entity = (je_game_entity_t*)woort_gcpointer(0);
-    je_debug_eid_t uid = je_debug_entity_uid_get(entity);
+    je_debug_eid_t uid = debug::get_entity_uid(entity);
 
     if (uid != 0)
         return woort_ret_option_int((woort_Int)uid);
@@ -608,7 +607,7 @@ WOORT_API woort_api wojeapi_get_entity_uid(void)
 WOORT_API woort_api wojeapi_set_entity_uid(void)
 {
     je_game_entity_t* entity = (je_game_entity_t*)woort_gcpointer(0);
-    je_debug_entity_uid_set(entity, static_cast<je_debug_eid_t>(woort_int(1)));
+    debug::set_entity_uid(entity, static_cast<je_debug_eid_t>(woort_int(1)));
     return woort_ret_void();
 }
 
@@ -693,13 +692,13 @@ WOORT_API woort_api wojeapi_set_parent_with_uid(void)
 WOORT_API woort_api wojeapi_get_entity_name(void)
 {
     je_game_entity_t* entity = (je_game_entity_t*)woort_gcpointer(0);
-    return woort_ret_string(je_ecs_entity_name_get(entity));
+    return woort_ret_string(debug::get_entity_name(entity));
 }
 
 WOORT_API woort_api wojeapi_set_entity_name(void)
 {
     je_game_entity_t* entity = (je_game_entity_t*)woort_gcpointer(0);
-    je_ecs_entity_name_set(entity, woort_string(1));
+    debug::set_entity_name(entity, woort_string(1));
     return woort_ret_void();
 }
 
@@ -744,7 +743,7 @@ WOORT_API woort_api wojeapi_get_all_components_types_from_entity(void)
 
     woort_set_vec(out_arr);
 
-    auto types = je_debug_entity_components_get_all(entity);
+    auto types = debug::get_all_components_of_entity(entity);
     auto typeindex = types;
 
     while (*typeindex)

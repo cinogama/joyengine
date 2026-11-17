@@ -166,12 +166,12 @@ auto anim = graphic::animation::load("@/resource/hero.je4animation");      // �
 
 引擎启动时（`jeecs::internal_script::bootup`）加载 `!/builtin/script/internal/cache/` 下的 `animation.wo`、`tilemap.wo`、`tileset.wo`、`texture.wo`、`audio.wo` 五个生成脚本；这些脚本自身的编译产物也以 `INTERNAL_SCRIPT_CACHE_VERSION` 缓存，缓存损坏时回退到源码编译。
 
-`je_animation_cache_open_or_create` 等五个 `*_cache_open_or_create` 接口的流程一致：先 `je_cache_file_load`；失败且生成器可用时进入 `generate_cache`——创建缓存文件，新建一个 VM 调用脚本的 `generate(cache, source)`，以其返回值作为 `finished` 关闭缓存，最后**重新** `je_cache_file_load` 一次再返回，生成结果同样要经过完整校验。生成器不可用（导出的运行时）时缓存失效即返回 nullptr。
+各域的 `open_or_create_*_cache`（`jeecs::animation` / `jeecs::Tilemap` / `jeecs::graphic` / `jeecs::audio`，共五个）流程一致：先 `je_cache_file_load`；失败且生成器可用时经 `internal_script::regenerate_*_cache` 进入 `generate_cache`——创建缓存文件，新建一个 VM 调用脚本的 `generate(cache, source)`，以其返回值作为 `finished` 关闭缓存，最后**重新** `je_cache_file_load` 一次再返回，生成结果同样要经过完整校验。生成器不可用（导出的运行时）时缓存失效即返回 nullptr。
 
 另外两条路径不经过生成脚本：
 
 * **着色器**：`je_graphic_shader_load` 先尝试缓存，失败则执行着色器脚本生成各后端源码，并由 `_jegl_create_shader_cache` 用 `je_cache_file_write` 直接写出（不使用二进制文档）。源码编译需要构建时开启 `JE4_ENABLE_SHADER_WRAP_GENERATOR`，否则只能读取缓存（日志 `Shader generator has been disabled.`）；
-* **纹理**：`_jegl_open_image_texture_cache` 只在图片本身存在时才调用 `je_image_texture_cache_open_or_create`；图片不存在时直接以键 0 读取已有缓存，不触发生成器，避免探测 `@/icon.png` 这类可选图片时刷出生成失败日志。
+* **纹理**：`_jegl_open_image_texture_cache` 只在图片本身存在时才调用 `graphic::open_or_create_image_texture_cache`；图片不存在时直接以键 0 读取已有缓存，不触发生成器，避免探测 `@/icon.png` 这类可选图片时刷出生成失败日志。
 
 ### 编辑器主脚本的缓存
 

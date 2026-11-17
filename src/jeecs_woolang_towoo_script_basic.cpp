@@ -1,10 +1,8 @@
 #define JE_IMPL
-#define JE_ENABLE_DEBUG_API
 #include "jeecs/animation.hpp"
 #include "jeecs/basic.hpp"
 #include "jeecs/components.hpp"
 #include "jeecs/core.hpp"
-#include "jeecs/debug.hpp"
 #include "jeecs/ecs.hpp"
 #include "jeecs/file.hpp"
 #include "jeecs/game.hpp"
@@ -16,6 +14,8 @@
 #include "jeecs/ray.hpp"
 #include "jeecs/typing.hpp"
 #include "jeecs_basic_bootup.hpp"
+#include "jeecs_basic_debug.hpp"
+#include "jeecs_basic_type_mgr.hpp"
 #include "jeecs_core_script_system.hpp"
 #include "jeecs_woolang_value.hpp"
 
@@ -566,7 +566,7 @@ namespace jeecs::woolang_runtime::towoo
 
         vector<const je_type_info_t*> _gather_all_registed_types()
         {
-            auto** alltypes = je_debug_types_registered_get_all();
+            auto** alltypes = debug::get_all_registered_types();
             vector<const je_type_info_t*> all_registed_types;
             for (auto* idx = alltypes; *idx != nullptr; ++idx)
                 all_registed_types.push_back(*idx);
@@ -1316,7 +1316,7 @@ WOORT_API woort_api wojeapi_towoo_update_component_data(void)
     }
     else
     {
-        je_typing_reset(
+        typing::reset_type(
             towoo_component_tinfo,
             component_size,
             component_align,

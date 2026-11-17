@@ -124,7 +124,7 @@ C++ 没有绘制界面的封装。`jeecs/gui.hpp` 只提供把 ImGui 接入图�
 2. `ImGui::CreateContext()`，开启停靠（Docking）；仅在窗口模式且未使用 EGL 时开启多视口（Viewports）；布局保存在 `<宿主路径>/builtin/imgui.ini.je4cache`；
 3. 加载字体：通用字体缺省为 `HarmonyOS_Sans_SC_Regular.ttf`，拉丁字体缺省为 `JetBrainsMono_Regular.ttf`，缺省字号 18。拉丁字体按默认字符区间载入，通用字体以合并模式补齐 CJK 标点、假名、半角与 CJK 表意字符；拉丁字体缺失时改用通用字体的完整中文区间。
 
-`je_gui_backend_font_set` 只把路径与字号写进静态上下文，由下一次 init 读取——这就是“仅在 init 前调用生效”的原因（图形接口重启时 init 会再次执行）。
+`graphic::gui::specify_font` 只把路径与字号写进静态上下文，由下一次 init 读取——这就是“仅在 init 前调用生效”的原因（图形接口重启时 init 会再次执行）。
 
 ### 每帧更新：`je_gui_backend_update`
 

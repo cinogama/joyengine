@@ -80,7 +80,7 @@ namespace je::cache
     extern("libjoyecs", "wojeapi_audio_cache_ensure")
         public func generate_audio_cache(path: string)=> bool;
 
-    // 音频缓存载荷区写入（C 侧 je_audio_cache_payload_write）：把已按目标
+    // 音频缓存载荷区写入（C 侧 audio::codec::audio_cache_payload_write）：把已按目标
     // 位深转换的整段 PCM 编码后写入载荷区（PCM 透传 / ADPCM / Vorbis，
     // codec 取 je::audio::buffer::codec 枚举值；quality 仅对 Vorbis 生效，
     // 0.0~1.0）。只能写在 append_document 之前，由

@@ -201,7 +201,7 @@ v2 不兼容也不迁移旧版本：缓存生成器与动画编辑器都只接�
 
 ### 采样缓冲
 
-`je_animation_sample_buffer_t` 按（轨道种类, 是否叠加, 组件类型 + 成员 / uniform 名）合并条目：赋值条目做加权平均——新值以 w / (W + w) 混入已累计的值（QUAT4 为 slerp），W 随之累加；叠加条目累加 value × weight。权重只在同一目标的多个条目之间起作用：只出现在其中一个动作里的轨道没有混合对象，会按其采样值原样写入。
+`jeecs::animation::sample_buffer` 按（轨道种类, 是否叠加, 组件类型 + 成员 / uniform 名）合并条目：赋值条目做加权平均——新值以 w / (W + w) 混入已累计的值（QUAT4 为 slerp），W 随之累加；叠加条目累加 value × weight。权重只在同一目标的多个条目之间起作用：只出现在其中一个动作里的轨道没有混合对象，会按其采样值原样写入。
 
 写回时成员轨道按“组件地址 + 成员偏移”直接写内存（实体缺该组件则跳过，`math::color` 成员单独处理），uniform 轨道对实体 `Renderer::Shaders` 的全部 pass 调用 `set_uniform`（不支持 QUAT4）。C API 把同一套缓冲暴露给需要自定义混合的调用方：`create` / `clear` / `action_sample`（权重 ≤ 0 忽略，时刻钳制、不回绕）/ `apply` / `destroy`。
 
@@ -209,7 +209,7 @@ v2 不兼容也不迁移旧版本：缓存生成器与动画编辑器都只接�
 
 ### 加载与缓存
 
-`graphic::animation::load(path)` → `je_animation_open`：空路径返回不含动作的空动画；否则经 `je_animation_cache_open_or_create` 取得缓存文件。缓存以格式版本（`ANIMATION_CACHE_VERSION`）与源文件内容的 CRC64 校验，未通过时在新建的 VM 中调用生成器脚本的 `generate(cache, source)` 重写；生成成功、`je_cache_file_close(..., true)` 回写主版本号后缓存才生效。
+`graphic::animation::load(path)` → `je_animation_open`：空路径返回不含动作的空动画；否则经 `jeecs::animation::open_or_create_cache` 取得缓存文件。缓存以格式版本（`ANIMATION_CACHE_VERSION`）与源文件内容的 CRC64 校验，未通过时在新建的 VM 中调用生成器脚本的 `generate(cache, source)` 重写；生成成功、`je_cache_file_close(..., true)` 回写主版本号后缓存才生效。
 
 加载器解析 `je_cache_binary_*` 文档：按名字查找组件类型与成员、校验值类型与成员类型，无效条目逐条记录日志并跳过；关键帧按时间稳定排序；结果是不含 C++ 容器、只读的 `je_animation_t` 连续数组，由 `je_animation_close` 释放。加载失败时 `graphic::animation::load` 回退为空动画，因此 `Animator::m_animation_resource` 永远有效。
 

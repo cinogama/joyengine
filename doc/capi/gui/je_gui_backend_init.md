@@ -56,10 +56,8 @@ je_gui_backend_init(gl_context, my_image_loader, my_sampler_loader);
 ## 注意事项
 
 - 此接口仅适合用于对接自定义渲染 API 时使用
-- 必须在 `je_gui_backend_font_set` 之后调用（如果需要自定义字体）
 
 ## 相关接口
 
-- [je_gui_backend_font_set](je_gui_backend_font_set.md) - 设置字体
 - [je_gui_backend_update](je_gui_backend_update.md) - 更新 ImGUI
 - [je_gui_backend_shutdown](je_gui_backend_shutdown.md) - 关闭 ImGUI

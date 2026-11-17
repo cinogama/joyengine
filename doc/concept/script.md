@@ -229,7 +229,7 @@ prebuild 把 `je/` 拷贝到构建目录时**刻意排除**这两个文件：Woo
 
 ⚠️ 注意：任一工作函数调用异常中止（如 panic）后，实例的 VM 即被关闭——该系统实例仍留在世界中，但此后不再执行任何更新。另外，脚本全局变量位于代码环境的静态存储，被同一系统类型的**所有实例共享**，而不同世界中的实例是并行执行的，因此实例状态必须放在上下文里。
 
-脚本组件由 `_init_towoo_component(name)`（`je/towoo/component.wo`）把 `component!` 收集到的成员表交给 `wojeapi_towoo_update_component_data`：以 `ToWooBaseComponent` 为头部按对齐计算布局，首次注册时以哈希 `_towoo_component_<名字>` 调用 `je_typing_register`，已注册时改用 `je_typing_reset` 原地更新布局；若同名类型已存在而哈希不同（即原生组件），则 panic 拒绝注册。`woolang` 成员保存为 GC 固定的 Woolang 值。
+脚本组件由 `_init_towoo_component(name)`（`je/towoo/component.wo`）把 `component!` 收集到的成员表交给 `wojeapi_towoo_update_component_data`：以 `ToWooBaseComponent` 为头部按对齐计算布局，首次注册时以哈希 `_towoo_component_<名字>` 调用 `je_typing_register`，已注册时改用 `typing::reset_type` 原地更新布局；若同名类型已存在而哈希不同（即原生组件），则 panic 拒绝注册。`woolang` 成员保存为 GC 固定的 Woolang 值。
 
 ### 关键源码位置
 

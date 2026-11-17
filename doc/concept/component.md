@@ -178,12 +178,12 @@ C++ 侧的类型哈希是 `typeid(T).hash_code()`（`basic::type_hash<T>()`）�
 
 1. 若同名类型已存在但哈希不等于 `hash_compile_time("_towoo_component_" + name)`，说明与原生组件重名，直接 panic；
 2. 计算布局：以 `ToWooBaseComponent`（只有一个指向自身类型信息的 `m_type` 指针）为头部，成员按各自对齐依次排布，总尺寸按最大对齐取整；
-3. 新组件走 `je_typing_register`（类别 `JE_COMPONENT`，四个生命周期函数均来自 `ToWooBaseComponent`）；已存在则走 `je_typing_reset` 原地改写尺寸、对齐与函数并清空成员；
+3. 新组件走 `je_typing_register`（类别 `JE_COMPONENT`，四个生命周期函数均来自 `ToWooBaseComponent`）；已存在则走 `jeecs::typing::reset_type` 原地改写尺寸、对齐与函数并清空成员；
 4. 逐个 `je_typing_member_register` 登记成员，Woolang 值成员额外记录脚本类型名与固定（pin）住的初值。
 
 `ToWooBaseComponent` 的构造、拷贝、移动、析构都按成员链表逐个委托给成员类型的对应函数；Woolang 值成员（`PinValue`）在构造后从初值复制一份。
 
-⚠️ 注意 `je_typing_reset` 原地修改了类型信息，而已存在的原型是按旧尺寸计算的列偏移。因此**脚本组件的重载必须在没有该组件实例存活时进行**——编辑器的做法是先冻结全部世界并保存快照，更新完成后再用快照重建世界（`builtin/editor/Editor/WorldEditorViewport/FreezeWorlds.wo`）。
+⚠️ 注意 `typing::reset_type` 原地修改了类型信息，而已存在的原型是按旧尺寸计算的列偏移。因此**脚本组件的重载必须在没有该组件实例存活时进行**——编辑器的做法是先冻结全部世界并保存快照，更新完成后再用快照重建世界（`builtin/editor/Editor/WorldEditorViewport/FreezeWorlds.wo`）。
 
 ### towoo 声明文件的生成
 

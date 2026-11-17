@@ -116,7 +116,7 @@ namespace jeecs::audio
 
         // The payload of an audio cache, as written by
         // builtin/script/internal/cache/audio.wo through
-        // je_audio_cache_payload_write: a codec-prefixed compressed/raw region
+        // audio::codec::audio_cache_payload_write: a codec-prefixed compressed/raw region
         // followed by the decode metadata document. m_pcm is malloc'ed and
         // owned by the caller; it is nullptr for a streaming buffer, whose PCM
         // is decoded on demand from the cache file instead.
@@ -2802,7 +2802,7 @@ namespace jeecs::audio
                 if (je_file_t* source = je_file_open(path))
                 {
                     je_file_close(source);
-                    cache_file = je_audio_cache_open_or_create(path);
+                    cache_file = audio::open_or_create_cache(path);
                 }
                 else
                     cache_file = je_cache_file_load(path, AUDIO_CACHE_VERSION, 0);

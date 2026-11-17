@@ -1,5 +1,4 @@
 #define JE_IMPL
-#define JE_ENABLE_DEBUG_API
 #include "jeecs/animation.hpp"
 #include "jeecs/basic.hpp"
 #include "jeecs/components.hpp"
@@ -17,6 +16,8 @@
 #include "wo.h"
 
 #include "jeecs_graphic_shader_wrapper.hpp"
+#include "jeecs_graphic_render_internal.hpp"
+#include "jeecs_core_animation_system.hpp"
 
 #include <list>
 #include <optional>
@@ -32,7 +33,7 @@ WOORT_API woort_api wojeapi_mark_shared_glresource_outdated(void)
 {
     auto* uhost = je_graphic_uhost_get_or_create_for_universe(static_cast<je_game_universe_t*>(woort_pointer(0)), nullptr);
     return woort_ret_bool(
-        je_graphic_shared_resources_mark_outdated(
+        graphic::mark_shared_resources_outdated(
             je_graphic_uhost_get_context(uhost),
             woort_string(1)));
 }
@@ -1510,7 +1511,7 @@ WOORT_API woort_api wojeapi_image_texture_cache_ensure(void)
 {
     const string path = woort_string(0);
 
-    je_file_t* cache = je_image_texture_cache_open_or_create(path.c_str());
+    je_file_t* cache = graphic::open_or_create_image_texture_cache(path.c_str());
     if (cache != nullptr)
     {
         je_file_close(cache);
@@ -1893,7 +1894,7 @@ WOORT_API woort_api wojeapi_animation_cache_ensure(void)
 {
     const string path = woort_string(0);
 
-    je_file_t* cache = je_animation_cache_open_or_create(path.c_str());
+    je_file_t* cache = animation::open_or_create_cache(path.c_str());
     if (nullptr != cache)
     {
         je_file_close(cache);

@@ -1,9 +1,7 @@
 #define JE_IMPL
-#define JE_ENABLE_DEBUG_API
 #include "jeecs/basic.hpp"
 #include "jeecs/clock.hpp"
 #include "jeecs/core.hpp"
-#include "jeecs/debug.hpp"
 #include "jeecs/ecs.hpp"
 #include "jeecs/game.hpp"
 #include "jeecs/logging.hpp"
@@ -11,6 +9,7 @@
 #include "jeecs/prefix.hpp"
 #include "jeecs/typing.hpp"
 #include "jeecs_basic_bootup.hpp"
+#include "jeecs_basic_debug.hpp"
 
 #include <list>
 #include <thread>
@@ -3077,106 +3076,109 @@ bool je_ecs_world_slice_dependence_query(
 }
 
 //////////////////// FOLLOWING IS DEBUG EDITOR API ////////////////////
-je_game_world_t** je_debug_universe_worlds_get_all(je_game_universe_t* _universe)
+namespace jeecs::debug
 {
-    Universe* universe = static_cast<Universe*>(_universe);
-    auto result = universe->_get_all_worlds();
-
-    je_game_world_t** out_result = (je_game_world_t**)je_mem_alloc(sizeof(je_game_world_t*) * (result.size() + 1));
-
-    je_game_world_t** write_place = out_result;
-    for (auto* worlds : result)
-        *(write_place++) = worlds;
-    *write_place = nullptr;
-
-    return out_result;
-}
-
-void je_debug_entity_free(je_game_entity_t* _entity_list)
-{
-    delete _entity_list;
-}
-
-je_game_entity_t** je_debug_world_entities_get_all(je_game_world_t* _world)
-{
-    World* world = static_cast<World*>(_world);
-
-    vector<je_game_entity_t*> out_entities;
-
-    auto&& archs = world->_get_arch_mgr()._get_all_arch_types();
-    for (auto& arch : archs)
+    je_game_world_t** get_all_worlds(je_game_universe_t* _universe)
     {
-        auto* chunk = arch->get_head_chunk();
-        while (chunk)
+        Universe* universe = static_cast<Universe*>(_universe);
+        auto result = universe->_get_all_worlds();
+
+        je_game_world_t** out_result = (je_game_world_t**)je_mem_alloc(sizeof(je_game_world_t*) * (result.size() + 1));
+
+        je_game_world_t** write_place = out_result;
+        for (auto* worlds : result)
+            *(write_place++) = worlds;
+        *write_place = nullptr;
+
+        return out_result;
+    }
+
+    void free_entity(je_game_entity_t* _entity_list)
+    {
+        delete _entity_list;
+    }
+
+    je_game_entity_t** get_all_entities(je_game_world_t* _world)
+    {
+        World* world = static_cast<World*>(_world);
+
+        vector<je_game_entity_t*> out_entities;
+
+        auto&& archs = world->_get_arch_mgr()._get_all_arch_types();
+        for (auto& arch : archs)
         {
-            size_t entity_count_in_chunk = chunk->get_entity_count_in_chunk();
-            auto* entity_meta_arr = chunk->get_entity_meta();
-            for (size_t i = 0; i < entity_count_in_chunk; ++i)
+            auto* chunk = arch->get_head_chunk();
+            while (chunk)
             {
-                if (entity_meta_arr[i].m_stat == JE_ENTITY_STAT_READY)
+                size_t entity_count_in_chunk = chunk->get_entity_count_in_chunk();
+                auto* entity_meta_arr = chunk->get_entity_meta();
+                for (size_t i = 0; i < entity_count_in_chunk; ++i)
                 {
-                    je_game_entity_t* entity = new je_game_entity_t{};
-                    entity->_m_in_chunk = chunk;
-                    entity->_m_id = (je_entity_id_in_chunk_t)i;
-                    entity->_m_version = entity_meta_arr[i].m_version;
+                    if (entity_meta_arr[i].m_stat == JE_ENTITY_STAT_READY)
+                    {
+                        je_game_entity_t* entity = new je_game_entity_t{};
+                        entity->_m_in_chunk = chunk;
+                        entity->_m_id = (je_entity_id_in_chunk_t)i;
+                        entity->_m_version = entity_meta_arr[i].m_version;
 
-                    out_entities.push_back(entity);
+                        out_entities.push_back(entity);
+                    }
                 }
+                chunk = chunk->last;
             }
-            chunk = chunk->last;
         }
+        je_game_entity_t** out_result = (je_game_entity_t**)je_mem_alloc(sizeof(je_game_entity_t*) * (out_entities.size() + 1));
+        memcpy(out_result, out_entities.data(), out_entities.size() * sizeof(je_game_entity_t*));
+        out_result[out_entities.size()] = nullptr;
+
+        return out_result;
     }
-    je_game_entity_t** out_result = (je_game_entity_t**)je_mem_alloc(sizeof(je_game_entity_t*) * (out_entities.size() + 1));
-    memcpy(out_result, out_entities.data(), out_entities.size() * sizeof(je_game_entity_t*));
-    out_result[out_entities.size()] = nullptr;
 
-    return out_result;
-}
-
-const je_type_info_t** je_debug_entity_components_get_all(const je_game_entity_t* _entity)
-{
-    const auto* cur_chunk = static_cast<ArchType::arch_chunk*>(_entity->_m_in_chunk);
-    auto& cur_arch_type_infos = cur_chunk->get_arch_type()->get_type_infos();
-
-    const je_type_info_t** outresult = (const je_type_info_t**)
-        je_mem_alloc(
-            sizeof(const je_type_info_t*) * (cur_arch_type_infos.size() + 1));
-
-    auto write_result = outresult;
-    for (auto* typeinfo : cur_arch_type_infos)
+    const je_type_info_t** get_all_components_of_entity(const je_game_entity_t* _entity)
     {
-        *(write_result++) = typeinfo;
-    }
-    *write_result = nullptr;
+        const auto* cur_chunk = static_cast<ArchType::arch_chunk*>(_entity->_m_in_chunk);
+        auto& cur_arch_type_infos = cur_chunk->get_arch_type()->get_type_infos();
 
-    // Sort by id.
-    sort(outresult, write_result,
-        [](const je_type_info_t* a, const je_type_info_t* b)
+        const je_type_info_t** outresult = (const je_type_info_t**)
+            je_mem_alloc(
+                sizeof(const je_type_info_t*) * (cur_arch_type_infos.size() + 1));
+
+        auto write_result = outresult;
+        for (auto* typeinfo : cur_arch_type_infos)
         {
-            return a->m_id < b->m_id;
-        });
+            *(write_result++) = typeinfo;
+        }
+        *write_result = nullptr;
 
-    return outresult;
-}
+        // Sort by id.
+        sort(outresult, write_result,
+            [](const je_type_info_t* a, const je_type_info_t* b)
+            {
+                return a->m_id < b->m_id;
+            });
 
-const je_type_info_t** je_debug_world_systems_attached_get_all(je_game_world_t* _world)
-{
-    World* world = static_cast<World*>(_world);
-    auto& syss = world->get_system_instances();
+        return outresult;
+    }
 
-    vector<const je_type_info_t*> attached_result;
-    attached_result.reserve(syss.size());
+    const je_type_info_t** get_all_attached_systems(je_game_world_t* _world)
+    {
+        World* world = static_cast<World*>(_world);
+        auto& syss = world->get_system_instances();
 
-    for (auto& attached_sys : syss)
-        attached_result.push_back(attached_sys.first);
+        vector<const je_type_info_t*> attached_result;
+        attached_result.reserve(syss.size());
 
-    size_t bufsz = attached_result.size() * sizeof(const je_type_info_t*);
-    const je_type_info_t** result = (const je_type_info_t**)je_mem_alloc(bufsz + sizeof(const je_type_info_t*));
+        for (auto& attached_sys : syss)
+            attached_result.push_back(attached_sys.first);
 
-    memcpy(result, attached_result.data(), bufsz);
-    result[attached_result.size()] = nullptr;
+        size_t bufsz = attached_result.size() * sizeof(const je_type_info_t*);
+        const je_type_info_t** result = (const je_type_info_t**)je_mem_alloc(bufsz + sizeof(const je_type_info_t*));
 
-    return result;
+        memcpy(result, attached_result.data(), bufsz);
+        result[attached_result.size()] = nullptr;
+
+        return result;
+    }
 }
 
 void je_ecs_universe_pre_for_worlds_job_register(je_game_universe_t* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))

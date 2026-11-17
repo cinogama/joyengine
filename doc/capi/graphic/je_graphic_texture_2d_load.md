@@ -54,5 +54,4 @@ if (texture != nullptr) {
 
 - [je_graphic_texture_2d_create](je_graphic_texture_2d_create.md) - 创建纹理
 - [je_graphic_texture_2d_close](je_graphic_texture_2d_close.md) - 关闭纹理
-- [je_image_texture_cache_open_or_create](je_image_texture_cache_open_or_create.md) - 打开或生成图片纹理缓存
 - [je_file_open](../file/je_file_open.md) - 打开文件

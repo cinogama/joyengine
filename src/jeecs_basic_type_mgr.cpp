@@ -3,13 +3,13 @@
 // Here will store the typing & factory informations
 
 #define JE_IMPL
-#define JE_ENABLE_DEBUG_API
 #include "jeecs/basic.hpp"
 #include "jeecs/core.hpp"
-#include "jeecs/debug.hpp"
 #include "jeecs/logging.hpp"
 #include "jeecs/prefix.hpp"
 #include "jeecs/typing.hpp"
+#include "jeecs_basic_debug.hpp"
+#include "jeecs_basic_type_mgr.hpp"
 
 #include <shared_mutex>
 #include <vector>
@@ -450,23 +450,26 @@ const je_type_info_t* je_typing_register(
         _move_constructor);
 }
 
-void je_typing_reset(
-    const je_type_info_t* _tinfo,
-    size_t _size,
-    size_t _align,
-    je_construct_func_t _constructor,
-    je_destruct_func_t _destructor,
-    je_copy_construct_func_t _copy_constructor,
-    je_move_construct_func_t _move_constructor)
+namespace jeecs::typing
 {
-    return FactoryHolder::holder()->reset_type(
-        _tinfo,
-        _size,
-        _align,
-        _constructor,
-        _destructor,
-        _copy_constructor,
-        _move_constructor);
+    void reset_type(
+        const je_type_info_t* _tinfo,
+        size_t _size,
+        size_t _align,
+        je_construct_func_t _constructor,
+        je_destruct_func_t _destructor,
+        je_copy_construct_func_t _copy_constructor,
+        je_move_construct_func_t _move_constructor)
+    {
+        return FactoryHolder::holder()->reset_type(
+            _tinfo,
+            _size,
+            _align,
+            _constructor,
+            _destructor,
+            _copy_constructor,
+            _move_constructor);
+    }
 }
 
 /* OPTIONAL: If _id is invalid or unregistered */ const je_type_info_t* je_typing_info_get_by_id(
@@ -559,14 +562,16 @@ void je_typing_system_updater_register(
 
 ///////////////////////////////////////////////////////////////////////////
 
-// NOTE: need free the return result by 'je_mem_free'
-const je_type_info_t** je_debug_types_registered_get_all(void)
+namespace jeecs::debug
 {
-    auto&& types = FactoryHolder::holder()->get_all_registed_types();
-    auto result = (const je_type_info_t**)je_mem_alloc(sizeof(const je_type_info_t*) * (types.size() + 1));
-    result[types.size()] = nullptr;
+    const je_type_info_t** get_all_registered_types()
+    {
+        auto&& types = FactoryHolder::holder()->get_all_registed_types();
+        auto result = (const je_type_info_t**)je_mem_alloc(sizeof(const je_type_info_t*) * (types.size() + 1));
+        result[types.size()] = nullptr;
 
-    memcpy(result, types.data(), types.size() * sizeof(const je_type_info_t*));
+        memcpy(result, types.data(), types.size() * sizeof(const je_type_info_t*));
 
-    return result;
+        return result;
+    }
 }

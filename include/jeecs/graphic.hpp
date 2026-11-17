@@ -1707,7 +1707,6 @@ je_graphic_texture_2d_load [基本接口]
         资源将被释放
 请参见：
     je_file_open
-    je_image_texture_cache_open_or_create
     jegl_share_resource
     je_graphic_texture_2d_close
 */
@@ -2001,17 +2000,6 @@ JE_API const jeecs::graphic::character* je_font_char_get(
     je_font_t* font,
     float size,
     char32_t unicode32_char);
-
-/*
-je_graphic_shared_resources_mark_outdated [基本接口]
-将指定路径对应的共享资源缓存标记为过时的，若成功标记，返回true
-    * 标记成功：指的是之前此资源存在，并非过时的，在此次操作之后被标记
-    * 这将使得下次加载此资源时更新资源，对于已经加载的资源没有影响
-请参见：
-    je_graphic_shared_resources_mark_outdated
-*/
-JE_API bool je_graphic_shared_resources_mark_outdated(
-    je_gl_context_t* context, const char* path);
 
 /*
 je_gl_graphic_api_entry_t [类型]
@@ -2737,8 +2725,6 @@ je_image_texture_color_space_t [类型]
     * LINEAR —— 8 位 RGB 数据按线性数值直接采样（法线图、遮罩等非颜色数据）
 取值来自属性源文件 <图片路径>.je4texture（TOML，例如 color_space = "linear"），
 随像素一同写入图片纹理缓存
-请参见：
-    je_image_texture_cache_open_or_create
 */
 enum je_image_texture_color_space_t
 {
@@ -2746,22 +2732,6 @@ enum je_image_texture_color_space_t
     JE_IMAGE_TEXTURE_COLOR_SPACE_LINEAR = 1,
 };
 
-/*
-je_image_texture_cache_open_or_create [基本接口]
-打开指定图片的纹理缓存 <path>.je4cache；缓存缺失或失效时调用内置缓存生成器重建
-    * path 为图片路径；缓存包含纹理的颜色空间和解码后的 RGBA8 像素数据，
-      加载纹理时可直接使用而无需再解码图片
-    * 校验码为图片文件与属性源文件 <path>.je4texture 内容连续计算的 CRC64，
-      两者任一改变都会使缓存失效；属性源文件是可选的
-    * 图片与属性源文件都不存在（如导出的运行时只携带缓存）时跳过校验
-    * 返回的句柄由调用方负责关闭（见 je_file_close）；无法生成时返回 nullptr
-请参见：
-    je_cache_file_load
-    je_file_close
-    je_graphic_texture_2d_load
-*/
-JE_API /* OPTIONAL */ je_file_t* je_image_texture_cache_open_or_create(
-    const char* path);
 typedef je_image_texture_color_space_t je_ImageTextureColorSpace;
 typedef je_graphic_api_register_func_t je_GraphicApiRegisterFunc;
 typedef je_graphic_sync_callback_func_t je_GraphicSyncCallbackFunc;

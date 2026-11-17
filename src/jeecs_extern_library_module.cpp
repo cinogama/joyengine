@@ -1,5 +1,4 @@
 #define JE_IMPL
-#define JE_ENABLE_DEBUG_API
 #include "jeecs/prefix.hpp"
 #include "jeecs_basic_bootup.hpp"
 

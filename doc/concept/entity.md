@@ -161,7 +161,7 @@ h->hp = 100;       // 同理
 | `JE_ENTITY_STAT_READY` | 正常实体 |
 | `JE_ENTITY_STAT_PREFAB` | 预制体（见[预制体](prefab.md)） |
 
-C++ 切片、towoo 系统、`entity_selector` 的遍历，以及编辑器枚举世界实体用的 `je_debug_world_entities_get_all`，都**只认 `READY`**——新实体当帧不可见、预制体永远不可见，都是在这里实现的。
+C++ 切片、towoo 系统、`entity_selector` 的遍历，以及编辑器枚举世界实体用的 `debug::get_all_entities`，都**只认 `READY`**——新实体当帧不可见、预制体永远不可见，都是在这里实现的。
 
 ### 创建流程
 
@@ -195,7 +195,7 @@ C++ 切片、towoo 系统、`entity_selector` 的遍历，以及编辑器枚举�
 
 * C++ `game_entity` 的方法都是对 C ABI 的薄封装：组件操作以 `typing::id<T>()` 调用对应接口；`close()` 在 `_m_in_chunk` 为空时直接返回，否则经所属世界的 `remove_entity` 提交销毁；`==` 比较三元组的全部字段。
 * Woolang `je::entity` 是 `gchandle`，持有一份堆上的 `je_game_entity_t` 拷贝，由 GC 释放；其 `==` 比较的是 `chunkinfo()` 字符串（`[chunk:槽位v版本]`）。
-* 实体名的读写（`je_ecs_entity_name_get` / `je_ecs_entity_name_set`）直接返回 `Editor::Name` 中字符串的地址；缺少该组件时，`set` 先 `add_component`，名字写在命令缓冲的临时实例上。
+* 实体名的读写（`debug::get_entity_name` / `debug::set_entity_name`）直接返回 `Editor::Name` 中字符串的地址；缺少该组件时，`set` 先 `add_component`，名字写在命令缓冲的临时实例上。
 
 ### 关键源码位置
 

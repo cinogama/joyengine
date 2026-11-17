@@ -135,7 +135,7 @@ match (JEGaming::Loading::Entity::loadPrefab(w, "@/prefabs/bullet.je4entity"))
 
 ### 三条约定的实现
 
-* **切片不可见**：C++ 切片、towoo 系统与 `entity_selector` 遍历时只接受 `JE_ENTITY_STAT_READY` 的槽位；编辑器枚举世界实体用的 `je_debug_world_entities_get_all` 同样只收集 `READY`，因此预制体也不会出现在编辑器的实体列表里。
+* **切片不可见**：C++ 切片、towoo 系统与 `entity_selector` 遍历时只接受 `JE_ENTITY_STAT_READY` 的槽位；编辑器枚举世界实体用的 `debug::get_all_entities` 同样只收集 `READY`，因此预制体也不会出现在编辑器的实体列表里。
 * **不能增删组件**：`CommandBuffer::update` 先应用实体的目标状态，再检查状态是否为 `PREFAB`；若是，则为每个增删请求记录错误日志（`Cannot add component ... to prefab` / `Cannot remove component ... from prefab`），并析构释放临时组件实例。由于目标状态先于检查应用，**在创建预制体的同一帧提交的增删请求同样会被拒绝**。
 * **句柄持久**：预制体的组件构成不会变化，因此永远不会换原型；碎片整理只搬运 `READY` 的实体，`PREFAB` 槽位原地不动（源码注释：预设体与尚未提交的实体“必须保证实体的数据保持在原地”）。槽位版本不变，句柄也就一直有效。
 

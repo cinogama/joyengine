@@ -78,4 +78,3 @@ if (buffer != nullptr) {
 
 - [je_audio_buffer_close](je_audio_buffer_close.md) - 释放音频缓冲区
 - [je_audio_buffer_create](je_audio_buffer_create.md) - 从原始数据创建缓冲区
-- [je_audio_cache_open_or_create](je_audio_cache_open_or_create.md) - 打开/生成音频缓存

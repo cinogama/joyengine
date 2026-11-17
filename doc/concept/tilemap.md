@@ -141,7 +141,7 @@ if (auto map = tilemap::map_document::open("@/maps/level1.je4tilemap"))
 ### TOML → je4cache 管线
 
 1. **写出**：编辑器的 `TilemapEditor/Serialize.wo` 从引擎文档读取当前状态，构造 TOML 树并自行写盘，再调用 `je_tilemap_map_path_bind` / `je_tilemap_tileset_path_bind` 把路径登记给文档。**引擎既不写盘，也不生成缓存。**
-2. **校验**：加载文档时 `load_map_from` 调用 `je_tilemap_cache_open_or_create`，后者先以 `je_cache_file_load(path, TILEMAP_CACHE_VERSION, 0)` 打开 `<path>.je4cache`，依次校验缓存管理器主版本、格式版本与源文件内容的 CRC64（源文件不存在时跳过 CRC 校验，导出包即走这条路径）。
+2. **校验**：加载文档时 `load_map_from` 调用 `Tilemap::open_or_create_map_cache`，后者先以 `je_cache_file_load(path, TILEMAP_CACHE_VERSION, 0)` 打开 `<path>.je4cache`，依次校验缓存管理器主版本、格式版本与源文件内容的 CRC64（源文件不存在时跳过 CRC 校验，导出包即走这条路径）。
 3. **生成**：校验失败时 `generate_cache` 以 `je_cache_file_create` 写入文件头（主版本留空占位），在临时 VM 中调用生成器脚本的 `generate(cache, source)`——脚本用 `pkg::toml` 解析源文件，以 `je_cache_binary_*` 写出二进制文档；成功后 `je_cache_file_close(file, true)` 回写主版本使缓存生效，再重新加载。生成器脚本在引擎启动时作为内部脚本编译，本身也带缓存。
 
 格式版本常量 `TILEMAP_CACHE_VERSION` / `TILESET_CACHE_VERSION` 位于 `src/jeecs_basic_cache_version.hpp`。

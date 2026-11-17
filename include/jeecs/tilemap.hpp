@@ -1233,16 +1233,6 @@ JE_API bool je_tilemap_tile_property_get(je_tileset_document_t* tileset,
     je_tile_id_t tile_id, const char* name, je_property_type_t type,
     /* OPTIONAL */ void* out_value);
 
-/*
-je_tileset_cache_open_or_create [基本接口]
-打开指定的瓦片集缓存文件；缓存缺失或失效时调用内置缓存生成器重建
-    * 返回的句柄由调用方负责关闭（见 je_file_close）；无法生成时返回 nullptr
-请参见：
-    je_tilemap_cache_open_or_create
-    je_file_close
-*/
-JE_API /* OPTIONAL */ je_file_t* je_tileset_cache_open_or_create(const char* path);
-
 // ---- 单元格渲染信息（编辑器预览用，与实际渲染一致） ----
 
 /*
@@ -1268,16 +1258,6 @@ JE_API bool je_tilemap_cell_quad(je_tilemap_document_t* map, je_layer_id_t layer
     /* OPTIONAL */ const char** texture_path,
     /* OPTIONAL */ float* u0, /* OPTIONAL */ float* v0, /* OPTIONAL */ float* u1, /* OPTIONAL */ float* v1,
     /* OPTIONAL */ int32_t* qx, /* OPTIONAL */ int32_t* qy, /* OPTIONAL */ int32_t* qcols);
-
-/*
-je_tilemap_cache_open_or_create [基本接口]
-打开指定的瓦片地图缓存文件；缓存缺失或失效时调用内置缓存生成器重建
-    * 返回的句柄由调用方负责关闭（见 je_file_close）；无法生成时返回 nullptr
-请参见：
-    je_tileset_cache_open_or_create
-    je_file_close
-*/
-JE_API /* OPTIONAL */ je_file_t* je_tilemap_cache_open_or_create(const char* path);
 typedef je_tilemap_document_t je_TilemapDocument;
 typedef je_tileset_document_t je_TilesetDocument;
 typedef je_layer_id_t je_LayerId;

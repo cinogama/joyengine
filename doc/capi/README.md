@@ -21,7 +21,7 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 ### [typing/](typing/) - 类型系统
 组件和系统类型的注册与查询。
 
-- `je_typing_register` / `je_typing_unregister` / `je_typing_reset` - 类型注册
+- `je_typing_register` / `je_typing_unregister` - 类型注册
 - `je_typing_info_get_by_*` - 类型查询
 - `je_typing_member_register` / `je_typing_script_parser_register` / `je_typing_system_updater_register` - 成员注册
 - `je_towoo_*` - Woolang 脚本系统支持
@@ -49,14 +49,10 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 - `je_cache_file_*` / `je_cache_binary_*` - 缓存文件与二进制缓存文档
 
 ### [animation/](animation/) - 动画（轨道/关键帧）
-动画集资源（v2 轨道/关键帧模型）、采样与实体播放控制。
+动画集资源（v2 轨道/关键帧模型）与实体播放控制。
 
 - `je_animation_open` / `je_animation_close` - 打开与关闭动画集
 - `je_animation_action_find` - 按名称查找动作
-- `je_animation_cache_open_or_create` - 打开或生成动画集缓存
-- `je_animation_sample_buffer_create` / `_destroy` / `_clear` - 采样累加缓冲管理
-- `je_animation_action_sample` - 按权重采样动作（支持多动作混合）
-- `je_animation_sample_buffer_apply` - 把采样结果写入实体
 - `je_animation_entity_play` / `_crossfade` / `_stop` / `_pause` / `_resume` - 实体播放控制（crossfade 淡入淡出）
 - `je_animation_entity_is_playing` / `_action_get` / `_duration_get` / `_progress_get` - 播放状态查询
 - `je_animation_entity_events_get` - 获取本帧触发的动画事件
@@ -70,14 +66,13 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 - `je_graphic_cmd_update_*` / `je_graphic_cmd_upload_texture_*` / `je_graphic_branch_new_update_command` - 资源更新（本帧内容 + 持久纹理上传），见 [render_api_v2.md](graphic/render_api_v2.md)
 - `je_graphic_branch_*` / `je_graphic_uhost_*` / `je_graphic_sync_*` - 绘制组、图形上下文与同步
 - `je_graphic_using_*_apis` - 图形 API 选择
-- `je_image_texture_*` - 图片纹理缓存（颜色空间 + 解码后的像素）
+- `je_image_texture_color_space_t` - 图片纹理颜色空间
 - `je_font_*` - 字体管理
 
 ### [gui/](gui/) - GUI 接口
 图形用户界面支持。
 
 - `je_gui_backend_init` / `je_gui_backend_update` / `je_gui_backend_shutdown` - GUI 生命周期
-- `je_gui_backend_font_set` - 字体设置
 
 ### [io/](io/) - 输入输出
 键盘、鼠标、手柄等输入设备管理。
@@ -91,8 +86,6 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 
 - `je_audio_source_*` - 音频源管理（含音量总线绑定）
 - `je_audio_buffer_*` - 音频数据
-- `je_audio_cache_open_or_create` - 打开或生成音频缓存
-- `je_audio_cache_payload_write` - 生成脚本写入编码后的缓存载荷区（PCM/ADPCM/Vorbis）
 - `je_audio_bus_*` - 预设分组的音量总线
 - `je_audio_oneshot_play` - 一次性播放（事件音）
 - `je_audio_effect_*` - 音频效果
@@ -103,8 +96,7 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 地图/瓦片集文档、图层、瓦片、源与逐格属性的读写。
 
 - `je_tilemap_map_*` / `je_tilemap_layer_*` / `je_tilemap_tile_*` - 地图、图层与瓦片操作
-- `je_tilemap_tileset_*` / `je_tileset_*` - 瓦片集与瓦片集缓存
-- `je_tilemap_cache_open_or_create` - 打开或生成地图缓存
+- `je_tilemap_tileset_*` - 瓦片集操作
 
 ### [module/](module/) - 模块加载
 动态库加载与函数调用。
@@ -117,7 +109,7 @@ C-API 是 JoyEngine 的外部实现与引擎核心的交互接口。出于规避
 
 命名格式为 `je_<domain>_<subject...>_<action>`：
 
-- `domain` 是子系统，必须最先出现，例如 `ecs`、`tilemap`、`graphic`、`audio`、`io`、`file`、`cache`、`typing`、`debug`。
+- `domain` 是子系统，必须最先出现，例如 `ecs`、`tilemap`、`graphic`、`audio`、`io`、`file`、`cache`、`typing`。
 - `subject` 是对象/模块路径，从大到小排列，例如 `ecs_world_entity`、`cache_file`、`graphic_texture_2d`。
 - `action` 收尾，例如 `je_cache_file_load`、`je_tilemap_layer_texture_get`。
 - 纯名词访问器保持名词形式（如 `je_tilemap_layer_z`）；谓词使用 `_is_*`（如 `je_io_gamepad_is_active`）。

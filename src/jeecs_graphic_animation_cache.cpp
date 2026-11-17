@@ -6,6 +6,8 @@
 #include "jeecs/math.hpp"
 #include "jeecs/typing.hpp"
 #include "jeecs_basic_cache_version.hpp"
+#include "jeecs_basic_internal_scripts.hpp"
+#include "jeecs_core_animation_system.hpp"
 
 #include "wo.h"
 
@@ -514,7 +516,7 @@ namespace jeecs::animation
         bool _load_animation_actions(
             const char* path, vector<ActionData>* out_actions)
         {
-            je_file_t* cache_file = je_animation_cache_open_or_create(path);
+            je_file_t* cache_file = open_or_create_cache(path);
             if (cache_file == nullptr)
             {
                 debug::logerr(
@@ -749,6 +751,13 @@ namespace jeecs::animation
             je_file_close(cache_file);
             return true;
         }
+    }
+
+    /* OPTIONAL */ je_file_t* open_or_create_cache(const char* path)
+    {
+        if (je_file_t* file = je_cache_file_load(path, ANIMATION_CACHE_VERSION, 0))
+            return file;
+        return internal_script::regenerate_animation_cache(path);
     }
 }
 

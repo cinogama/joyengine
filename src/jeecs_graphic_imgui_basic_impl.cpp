@@ -45,17 +45,17 @@ namespace jeecs::graphic::gui
 
     basic::atomic_list<WoolangJobCoroutine> _wo_job_list;
     basic::atomic_list<WoolangJobCoroutine> _wo_new_job_list;
-}
 
-void je_gui_backend_font_set(
-    /* OPTIONAL */ const char* general_font_path,
-    /* OPTIONAL */ const char* latin_font_path,
-    size_t size)
-{
-    _je_gui_static_ctx._jegui_specify_font_path = general_font_path ? optional(general_font_path) : nullopt;
-    _je_gui_static_ctx._jegui_specify_latin_font_path = latin_font_path ? optional(latin_font_path) : nullopt;
+    void specify_font(
+        /* OPTIONAL */ const char* general_font_path,
+        /* OPTIONAL */ const char* latin_font_path,
+        size_t size)
+    {
+        _je_gui_static_ctx._jegui_specify_font_path = general_font_path ? optional(general_font_path) : nullopt;
+        _je_gui_static_ctx._jegui_specify_latin_font_path = latin_font_path ? optional(latin_font_path) : nullopt;
 
-    _je_gui_static_ctx._jegui_specify_font_size = size;
+        _je_gui_static_ctx._jegui_specify_font_size = size;
+    }
 }
 
 

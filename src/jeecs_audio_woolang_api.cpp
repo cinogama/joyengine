@@ -1,9 +1,10 @@
 #define JE_IMPL
-#define JE_ENABLE_DEBUG_API
 #include "jeecs/audio.hpp"
 #include "jeecs/basic.hpp"
 #include "jeecs/file.hpp"
 #include "jeecs/prefix.hpp"
+
+#include "jeecs_audio_codec.hpp"
 
 #include "wo.h"
 
@@ -58,7 +59,7 @@ WOORT_API woort_api wojeapi_audio_cache_ensure(void)
 {
     const string path = woort_string(0);
 
-    je_file_t* cache = je_audio_cache_open_or_create(path.c_str());
+    je_file_t* cache = audio::open_or_create_cache(path.c_str());
     if (cache != nullptr)
     {
         je_file_close(cache);
@@ -68,9 +69,9 @@ WOORT_API woort_api wojeapi_audio_cache_ensure(void)
     return woort_ret_bool(false);
 }
 
-// 音频缓存载荷区写入（je_audio_cache_payload_write）：把整段已按目标位深
-// 转换的 PCM 按 codec 编码后写入缓存（PCM 透传 / ADPCM / Vorbis），
-// quality 仅对 Vorbis 生效。只能写在 append_document 之前。
+// 音频缓存载荷区写入（audio::codec::audio_cache_payload_write）：把整段
+// 已按目标位深转换的 PCM 按 codec 编码后写入缓存（PCM 透传 / ADPCM /
+// Vorbis），quality 仅对 Vorbis 生效。只能写在 append_document 之前。
 WOORT_API woort_api wojeapi_audio_cache_payload_write(void)
 {
     auto* file = static_cast<je_writing_cache_file_t*>(woort_pointer(0));
@@ -78,7 +79,7 @@ WOORT_API woort_api wojeapi_audio_cache_payload_write(void)
     size_t pcm_len = 0;
     const void* pcm = woort_buffer(1, &pcm_len);
 
-    return woort_ret_bool(je_audio_cache_payload_write(
+    return woort_ret_bool(audio::codec::audio_cache_payload_write(
         file,
         pcm,
         pcm_len,

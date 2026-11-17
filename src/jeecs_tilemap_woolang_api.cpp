@@ -1256,7 +1256,7 @@ WOORT_API woort_api wojeapi_tilemap_cell_quad(void)
 // ======================================================================
 WOORT_API woort_api wojeapi_tileset_cache_ensure(void)
 {
-    je_file_t* cache = je_tileset_cache_open_or_create(woort_string(0));
+    je_file_t* cache = jeecs::Tilemap::open_or_create_tileset_cache(woort_string(0));
     if (cache == nullptr)
         return woort_ret_bool(false);
 
@@ -1265,7 +1265,7 @@ WOORT_API woort_api wojeapi_tileset_cache_ensure(void)
 }
 WOORT_API woort_api wojeapi_tilemap_cache_ensure(void)
 {
-    je_file_t* cache = je_tilemap_cache_open_or_create(woort_string(0));
+    je_file_t* cache = jeecs::Tilemap::open_or_create_map_cache(woort_string(0));
     if (cache == nullptr)
         return woort_ret_bool(false);
 

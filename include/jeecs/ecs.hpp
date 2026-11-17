@@ -595,33 +595,6 @@ JE_API bool je_ecs_world_slice_dependence_query(
     jeecs::game_system* system_instance,
     je_type_hash_t slice_type_hash,
     je_requirement_collection_t** out_collection);
-
-// ATTENTION: Following 2 functions have no thread-safe-promise:
-/*
-je_ecs_entity_name_get [基本接口]
-获取实体的名称，一般只用于调试使用，不建议使用在实际项目中
-若实体不包含 Editor::Name 或实体索引是`无效值`或已失效，则返回空字符串
-从实体中取出的名称必须立即复制到其他位置或使用完毕，此函数直接
-返回 Editor::Name 组件中的字符串地址，这意味着如果实体发生更新、重命名
-或者其他操作，取出的字符串可能失效
-*/
-JE_API const char* je_ecs_entity_name_get(
-    const je_game_entity_t* entity);
-
-/*
-je_ecs_entity_name_set [基本接口]
-设置实体的名称，一般只用于调试使用，不建议使用在实际项目中
-若实体索引是`无效值`或已失效，则返回空字符串，否则返回设置完成之后的新名称
-实体的名称被储存在内置组件 Editor::Name 中，这意味着给实体命名将可能
-使得实体索引失效
-另外，从实体中取出的名称必须立即复制到其他位置或使用完毕，此函数直接
-返回 Editor::Name 组件中的字符串地址，这意味着如果实体发生更新、重命名
-或者其他操作，取出的字符串可能失效
-若实体不包含 Editor::Name，则创建后再进行设置
-*/
-JE_API const char* je_ecs_entity_name_set(
-    const je_game_entity_t* entity,
-    const char* name);
 typedef je_game_universe_t je_GameUniverse;
 typedef je_game_world_t je_GameWorld;
 typedef je_archtype_t je_Archtype;
