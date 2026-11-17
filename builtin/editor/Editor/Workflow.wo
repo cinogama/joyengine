@@ -8,9 +8,7 @@ import pkg::iterator;
 import pkg::toml;
 import pkg::try;
 import pkg::worst;
-import pkg::buffer;
 import pkg::interface;
-import pkg::filestream;
 import pkg::dumpling;
 
 import builtin::statements;
@@ -107,17 +105,11 @@ namespace JEEditor::Editor
                 self.m_graph,
                 self.m_graph_editor);
 
-            match (filestream::open(self.m_workflow_path, filestream::mode::write))
+            match (toml::save(root, self.m_workflow_path))
             {
-                none?
-                    throw! F"无法保存 Workflow 文件到 {self.m_workflow_path->to_string}";
-                value(fs)?
-                {
-                    defer do fs->close();
-                    let content = root->to_toml();
-                    if (!fs->write(content as buffer, 0, content->byte_len))
-                        throw! F"无法保存 Workflow 文件到 {self.m_workflow_path->to_string()}";
-                }
+                ok(_)?;
+                err(message)?
+                    throw! F"无法保存 Workflow 文件到 {self.m_workflow_path->to_string}: {message}";
             }
             return_ok!;
         }
