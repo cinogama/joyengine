@@ -1397,7 +1397,7 @@ namespace jeecs::graphic::api::metal
             vertex->m_index_count,
             vertex->m_data_size_per_point);
     }
-    void init_framebuffer(je_graphic_impl_context_t, je_gl_frame_buffer_t* fbuffer)
+    void init_framebuffer(je_graphic_impl_context_t ctx, je_gl_frame_buffer_t* fbuffer)
     {
         metal_framebuffer* framebuf = new metal_framebuffer(
             fbuffer->m_width,
@@ -1454,6 +1454,33 @@ namespace jeecs::graphic::api::metal
                 ++color_attachment_count;
             }
         }
+
+        // 附件为 StorageModePrivate，创建时内容未定义（无法 replaceRegion 初始化），
+        // macOS 会把未初始化显存显示成品红：若新纹理在被首个渲染 pass 写入前就被
+        // 采样（如编辑器视口 resize 后的同帧 UI 绘制），会闪一帧品红。
+        // 这里立即提交一个清屏 pass（clearColor/clearDepth 已是上方设置的默认值），
+        // 保证纹理内容从创建起有定义；同队列命令缓冲按提交序执行，因此先于
+        // 本帧后续对该 framebuffer 的渲染。
+        for (size_t i = 0; i < color_attachment_count; ++i)
+        {
+            framebuf->m_render_pass_descriptor->colorAttachments()->object(i)
+                ->setLoadAction(MTL::LoadActionClear);
+        }
+        if (framebuf->m_has_depth_attachment)
+        {
+            framebuf->m_render_pass_descriptor->depthAttachment()
+                ->setLoadAction(MTL::LoadActionClear);
+        }
+
+        auto* metal_context = static_cast<jegl_metal_context*>(ctx);
+        MTL::CommandBuffer* init_clear_buffer =
+            metal_context->m_command_queue->commandBuffer();
+        MTL::RenderCommandEncoder* init_clear_encoder =
+            init_clear_buffer->renderCommandEncoder(
+                framebuf->m_render_pass_descriptor);
+        init_clear_encoder->endEncoding();
+        init_clear_buffer->commit();
+
         fbuffer->m_handle.m_ptr = framebuf;
     }
     void init_ubuffer(je_graphic_impl_context_t ctx, je_gl_uniform_buffer_t* ubuffer)
