@@ -190,7 +190,10 @@ if (JE4_ENABLE_VULKAN120_GAPI)
  
     if (APPLE)
         # Use MoltenVK for macOS/iOS.
-        target_include_directories(joyengine_core_configs INTERFACE 
+        target_compile_definitions(joyengine_core_configs INTERFACE
+            -DJE_VULKAN_BY_MOLTENVK)
+
+        target_include_directories(joyengine_core_configs INTERFACE
             "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/moltenvk/MoltenVK/include")
 
         # Find static lib in ../3rd/moltenvk/MoltenVK/static    

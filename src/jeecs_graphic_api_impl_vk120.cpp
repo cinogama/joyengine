@@ -5342,10 +5342,13 @@ namespace jeecs::graphic::api::vk120
             input_assembly_state.pNext = nullptr;
             input_assembly_state.flags = 0;
             input_assembly_state.topology = vk_topology;
+#ifdef JE_VULKAN_BY_MOLTENVK
             // Metal 无法关闭 primitive restart（对 VK_FALSE MoltenVK 会报
-            // VK_ERROR_FEATURE_NOT_PRESENT 告警）；引擎从不写入 restart index，
-            // 显式开启与各平台实际行为一致。
+            // VK_ERROR_FEATURE_NOT_PRESENT 告警）；显式开启与 Metal 实际行为一致。
             input_assembly_state.primitiveRestartEnable = VK_TRUE;
+#else
+            input_assembly_state.primitiveRestartEnable = VK_FALSE;
+#endif
 
             VkPipelineRasterizationStateCreateInfo rasterization_state = {};
             rasterization_state.sType =
