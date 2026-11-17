@@ -27,14 +27,14 @@
 
 音频缓冲从 **WAV** 文件加载，支持 8/16 位整数 PCM 与 32 位浮点、单声道或立体声；C++ 侧也可以由原始采样数据直接创建。
 
-加载走与纹理相同的缓存管线：引擎按 `<音频路径>.je4cache` 缓存加载（裸 PCM 波形区开头，后跟解码信息与配置文档），缓存缺失或失效时经 **pkg::audio** 解码源文件并生成；可选的 `<音频路径>.je4audio`（TOML，编辑器“音频属性”窗口编辑）可配置 `streaming`（流式播放，见下文）与 `format`（缓存格式 "i8" 缺省 / "i16" / "f32"，PCM 转换后存储——因此任何源编码的单/双声道 WAV 都能加载）。相同路径的重复加载共享同一个缓冲区实例（引用计数），缓存内容变化后重新加载会得到新实例，因此播放同一音效的多个实体不会重复占用内存。
+加载走与纹理相同的缓存管线：引擎按 `<音频路径>.je4cache` 缓存加载（编码载荷区开头，后跟解码信息与配置文档），缓存缺失或失效时经 **pkg::audio** 解码源文件并生成；可选的 `<音频路径>.je4audio`（TOML，编辑器“音频属性”窗口编辑）可配置 `streaming`（流式播放，见下文）、`format`（PCM 档位深 "i8" 缺省 / "i16" / "f32"，PCM 转换后存储——因此任何源编码的单/双声道 WAV 都能加载）与 `codec`（压缩编码 `"none"` 缺省 / `"adpcm"` / `"vorbis"`）。PCM 档是不压缩的无损档；ADPCM（约 4:1，解码为 16 位整数）与 Vorbis（约 8-12:1，解码为 32 位浮点）是有损压缩档，Vorbis 还可用 `quality`（0.0~1.0，缺省 0.5）选择压缩质量。相同路径的重复加载共享同一个缓冲区实例（引用计数），缓存内容变化后重新加载会得到新实例，因此播放同一音效的多个实体不会重复占用内存。
 
 ### 流式播放
 
 默认情况下音频整段解码进内存。对时长较长的音频（如背景音乐），可在编辑器“音频属性”窗口勾选“流式播放”（或直接编辑 `<音频路径>.je4audio` 的 `streaming = true`）：
 
-* 整段 PCM 不驻留内存：缓冲区只保持 `.je4cache` 打开，声源播放时按需分块读取（每块约 0.25 秒，每个声源排队 4 块，约 1 秒余量），内存占用与音频时长无关；
-* 循环、暂停/继续、停止、跳转与整段载入的缓冲区表现一致，进度接口返回的仍是 PCM 字节偏移；
+* 整段 PCM 不驻留内存：缓冲区只保持 `.je4cache` 打开，声源播放时按需分块解码读取（每块约 0.25 秒，每个声源排队 4 块，约 1 秒余量），内存占用与音频时长无关；ADPCM 按块独立解码，Vorbis 通过 vorbisfile 精确 seek/循环；
+* 循环、暂停/继续、停止、跳转与整段载入的缓冲区表现一致，进度接口返回的仍是解码后 PCM 的字节偏移；
 * 同一路径的重复加载共享同一个流式缓冲区（因而共享同一个缓存文件句柄）；缓冲区用毕仍用 `je_audio_buffer_close`（Woolang 的 `buffer::close`）释放，最后一份引用释放时缓存文件随之关闭。
 
 短促音效一般不必开启流式播放：分块读取会带来额外的磁盘 I/O，且每个播放中的声源各占一份 4 块的缓冲。
@@ -446,11 +446,11 @@ audio::play_oneshot(desc);
 
 ### 流式播放（实现）
 
-`je_audio_buffer_load` 解析缓存文档后，`streaming` 为 true 的缓冲区不读入 PCM：`m_data` 为 `nullptr`，`m_stream_instance` 持有已打开的 `.je4cache` 与 PCM 区偏移，`m_size` 仍是 PCM 总字节数（时长信息不变）。`je_audio_buffer_create` 创建的缓冲区始终整段载入。
+`je_audio_buffer_load` 解析缓存载荷后，`streaming` 为 true 的缓冲区不读入 PCM：`m_data` 为 `nullptr`，`m_stream_instance` 持有已打开的 `.je4cache`、载荷信息与声道/帧大小，`m_size` 仍是解码后 PCM 总字节数（时长信息不变）。`je_audio_buffer_create` 创建的缓冲区始终整段载入。
 
-播放时每个声源维护一个 4 块的 OpenAL 缓冲队列（块大小 ≈ `byte_rate / 4`，按样本帧对齐）：
+每个声源持有一个 `audio_stream_decoder_t`（PCM / ADPCM / Vorbis 三种实现，见 `src/jeecs_audio_codec.hpp`），播放时维护一个 4 块的 OpenAL 缓冲队列（块大小 ≈ `byte_rate / 4`，按样本帧对齐）：
 
-* 播放/跳转（游戏线程）与设备更新线程都从 PCM 区按偏移 `je_file_seek` + `je_file_read` 读块，`alBufferData` 后 `alSourceQueueBuffers` 入队；
+* 播放/跳转（游戏线程）与设备更新线程都调用解码器的 `seek_to_pcm_byte` + `read` 取得解码后的块，`alBufferData` 后 `alSourceQueueBuffers` 入队；PCM 直接按偏移读，ADPCM 按块表解码，Vorbis 用 vorbisfile 解码并 `ov_pcm_seek` 定位；
 * 设备更新线程每 100ms 检查所有流式声源：出队 `AL_BUFFERS_PROCESSED` 的块并累计已播字节，再补读后续块；队列空且未播完时 `alSourcePlay` 重新开始（欠载恢复），流自然播完时清除播放意图；
 * 流式声源不使用 `AL_LOOPING`（openal-soft 对 looping source 不报告 `AL_BUFFERS_PROCESSED`、也禁止 unqueue），循环由读位置回绕实现；
 * 播放进度 = 已出队字节 + `AL_BYTE_OFFSET`（openal-soft 的 offset 相对当前队列头），循环时对总长取模；跳转会停源、清空队列并从新偏移补块；
@@ -515,11 +515,12 @@ audio::play_oneshot(desc);
 | 音频组件（Source/Listener/Occluder/ReverbZone/Portal） | `include/jeecs/components.hpp`（`namespace Audio`） |
 | C ABI、效果器参数与默认值、C++ 封装 | `include/jeecs/audio.hpp`（逐函数说明见 [doc/capi/audio](../capi/audio/)） |
 | OpenAL 后端（设备、热插拔、EFX、总线、一次性声部、缓存加载） | `src/jeecs_audio_impl_openal.cpp` |
+| 缓存载荷编解码（PCM/ADPCM/Vorbis 编码、解析与流式解码器） | `src/jeecs_audio_codec.hpp/.cpp` |
 | 缓存生成器脚本（pkg::audio 解码） | `builtin/script/internal/cache/audio.wo` |
 | 组件同步、2D 空间、遮挡、混响与播放状态机 | `src/jeecs_core_audio_system.cpp` |
 | 音频环境图、路径表（运行时实时构建） | `src/jeecs_core_audio_environment.hpp/.cpp` |
 | 瓦片属性解析与遮挡遍历支持 | `src/jeecs_core_tilemap_model.hpp/.cpp` |
 | Woolang 绑定 | `je/audio.wo`、`src/jeecs_audio_woolang_api.cpp` |
 | 组件辅助函数（towoo） | `je/towoo/towoo.wo`、`src/jeecs_woolang_towoo_script_basic.cpp` |
-| 打开/生成音频缓存 | `je/cache.wo`（`generate_audio_cache`） |
+| 打开/生成音频缓存、编码载荷区写入 | `je/cache.wo`（`generate_audio_cache` / `write_audio_payload`） |
 | openal-soft 构建配置 | `CMakeLists.txt`（`JE4_SPECIFY_OPENAL_LIB_NAME`）、`3rd/openal-soft` |

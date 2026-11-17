@@ -13,6 +13,7 @@ JE_FORCE_CAPI
 
 // Audio
 typedef struct je_audio_native_play_device_instance_t je_audio_native_play_device_instance_t;
+typedef struct je_writing_cache_file_t je_writing_cache_file_t;
 typedef struct je_audio_play_device_t
 {
     je_audio_native_play_device_instance_t*
@@ -67,6 +68,24 @@ enum je_audio_format_t
     JE_AUDIO_FORMAT_STEREO32F,
 };
 
+/*
+je_audio_codec_t [类型]
+音频缓存载荷区的压缩编码，与 je_audio_cache_payload_write /
+<音频路径>.je4audio 的 "codec" 键对应
+    * PCM 无压缩（无损档）：i8/i16/f32 位深档直接存储（缺省）
+    * ADPCM IMA-ADPCM 有损压缩（约 4:1，解码为 16 位整数）：每块自带
+      解码状态，任意块可独立解码，解码成本极低，适合高频短音效
+    * VORBIS Vorbis 有损压缩（约 8-12:1，解码为 32 位浮点），质量
+      由 je_audio_cache_payload_write 的 quality 参数决定
+后续无损压缩档位在此追加，不改变缓存布局
+*/
+enum je_audio_codec_t
+{
+    JE_AUDIO_CODEC_PCM,
+    JE_AUDIO_CODEC_ADPCM,
+    JE_AUDIO_CODEC_VORBIS,
+};
+
 typedef struct je_audio_native_buffer_instance_t je_audio_native_buffer_instance_t;
 typedef struct je_audio_native_stream_instance_t je_audio_native_stream_instance_t;
 typedef struct je_audio_buffer_t
@@ -85,6 +104,7 @@ typedef struct je_audio_buffer_t
     size_t m_sample_size;
     size_t m_byte_rate;
     je_audio_format_t m_format;
+    je_audio_codec_t m_codec; // 载荷区的压缩编码；m_data / m_size 始终是解码后的 PCM
     bool m_streaming; // 是否流式播放（来自 <音频路径>.je4audio，缺省 false）；true 时 PCM 不驻留内存
 } je_audio_buffer_t;
 
@@ -524,16 +544,18 @@ JE_API /* OPTIONAL: If format is invalid or buffer_data_len is not aligned to sa
 /*
 je_audio_buffer_load [基本接口]
 加载一个音频文件（按其 <音频路径>.je4cache 缓存，缓存缺失或失效时经
-pkg::audio 解码源文件并生成；流式播放配置与缓存格式取自可选的
-<音频路径>.je4audio，PCM 一律转换为缓存格式存储，缺省 8 位整数）
+pkg::audio 解码源文件并生成；流式播放与缓存格式/压缩编码取自可选的
+<音频路径>.je4audio，缺省 8 位整数、无压缩）
     * path 是音频文件的引擎路径（@/ 或 !/）
     * 相同路径、且缓存版本（缓存头的 crc64，随 wav 与 .je4audio 内容变化）
       相同的重复加载共享同一个缓冲区实例：每次加载持有该实例的一份引用，
       je_audio_buffer_close 只释放本次加载持有的引用，最后一份引用释放时
       缓冲区才真正关闭（缓存条目随之移除，再次加载会重新解码）
+    * 压缩缓存（ADPCM / Vorbis）在 m_codec 中记录编码；整段载入时解码进
+      内存，m_data 始终是解码后的 PCM
     * 流式播放配置为 true 时 PCM 不驻留内存：缓存文件在缓冲区生命周期内
-      保持打开，声源播放时按块读取（m_data 为 nullptr，m_size 仍为 PCM
-      总字节数），调用 je_audio_buffer_close 时关闭
+      保持打开，声源播放时按块解码读取（m_data 为 nullptr，m_size 仍为
+      解码后 PCM 总字节数），调用 je_audio_buffer_close 时关闭
     * 返回值是一个指向音频缓冲区的指针
 使用完毕后需要调用 je_audio_buffer_close 释放资源
 如果加载失败（文件/缓存不可用或格式不支持），返回值为 nullptr
@@ -552,16 +574,56 @@ je_audio_cache_open_or_create [基本接口]
     * 仅支持单声道/立体声源（OpenAL 缓冲格式约束），生成期校验
     * 缓存格式 format = "i8"（缺省）/"i16"/"f32"，PCM 经 pkg::audio
       转换后存储（任何源编码都可落成 OpenAL 可用的缓存）
+    * 压缩 codec = "none"（缺省）/"adpcm"/"vorbis"；adpcm 解码为 16 位
+      整数、vorbis 解码为 32 位浮点并可用 .je4audio 的 "quality"
+      （0.0~1.0，缺省 0.5）选择压缩质量
 缓存布局（文件头之后）：
-    [uint64 pcm_size][pcm 字节] —— 裸数据区，不套 je_cache_binary_* 值标记，
-                                  可直接按偏移访问（流式播放按块读取）
+    [uint32 codec] —— 载荷区始终以编码 id 开头（je_audio_codec_t）
+    codec == PCM：[uint64 pcm_size][pcm 字节] —— 裸数据区，不套
+        je_cache_binary_* 值标记，可直接按偏移访问
+    codec == ADPCM：解码总长/总帧数/块参数 + 块表 + 逐块独立解码的数据
+    codec == VORBIS：解码总长/总帧数/长度 + 内嵌 Ogg Vorbis 流
     DOCUMENT channels / samplerate / bits -> INT32，is_float / streaming -> BOOL
+    （bits / is_float 描述解码后的 PCM）
 返回值是缓存文件的只读句柄（用毕 je_file_close 关闭），失败返回 nullptr
 参见：
     je_audio_buffer_load
+    je_audio_cache_payload_write
     je_cache_file_load
 */
 JE_API /* OPTIONAL */ je_file_t* je_audio_cache_open_or_create(const char* path);
+
+/*
+je_audio_cache_payload_write [基本接口]
+把整段已按目标位深转换的 PCM 编码并写入音频缓存载荷区（文件头之后、
+je_cache_binary_* 文档之前），供内置生成脚本调用；一次调用写完整个
+载荷区，调用方随后照常追加文档
+    * file 是 je_cache_file_create 返回的写入器
+    * pcm / pcm_len 是 pkg::audio 按目标位深转换后的交错 PCM
+    * codec 与 (bits, is_float) 的组合约束：PCM 任意位深；ADPCM 必须
+      16 位整数；VORBIS 必须 32 位浮点（解码后 PCM 即该位深）
+    * quality 是 VORBIS 的压缩质量，取值 0.0~1.0（越大音质越好、体积
+      越大）；其它编码忽略此参数
+    * ADPCM 的载荷为 块参数 + 块表 + 逐块数据：块表每项
+      { u64 块偏移(相对载荷起点), u64 块首解码帧号, u32 数据字节数,
+      u32 保留 }，任意块可独立解码
+    * VORBIS 的载荷为解码总长/总帧数/流长 + 一段完整的 Ogg Vorbis
+      流，流式播放用 ov_pcm_seek 精确定位
+返回值指示写入是否成功（编码失败时为 false，调用方应中止缓存生成）
+参见：
+    je_audio_cache_open_or_create
+    je_cache_file_write
+*/
+JE_API bool je_audio_cache_payload_write(
+    je_writing_cache_file_t* file,
+    const void* pcm,
+    size_t pcm_len,
+    int32_t channels,
+    int32_t sample_rate,
+    int32_t bits,
+    bool is_float,
+    je_audio_codec_t codec,
+    float quality);
 
 /*
 je_audio_buffer_close [基本接口]
@@ -933,6 +995,7 @@ typedef je_audio_native_play_device_instance_t je_AudioNativePlayDeviceInstance;
 typedef je_audio_play_device_t je_AudioPlayDevice;
 typedef je_audio_state_t je_AudioState;
 typedef je_audio_format_t je_AudioFormat;
+typedef je_audio_codec_t je_AudioCodec;
 typedef je_audio_native_buffer_instance_t je_AudioNativeBufferInstance;
 typedef je_audio_native_stream_instance_t je_AudioNativeStreamInstance;
 typedef je_audio_buffer_t je_AudioBuffer;

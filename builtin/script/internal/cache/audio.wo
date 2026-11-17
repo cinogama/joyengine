@@ -1,6 +1,7 @@
-// 音频缓存生成器：把音频文件解码后的 PCM 波形数据转换为 .je4audio 指定的
-// 缓存格式（缺省 8 位整数），与流式播放配置一同写入引擎可直接使用的缓存
-// 文件（文件头之后为裸 PCM 区 + je_cache_binary_* 二进制文档）。
+// 音频缓存生成器：把音频文件解码后的 PCM 波形数据按 .je4audio 指定的
+// 缓存格式与压缩编码（缺省 8 位整数、不压缩），与流式播放配置一同写入
+// 引擎可直接使用的缓存文件（文件头之后为载荷区 + je_cache_binary_*
+// 二进制文档）。
 //
 // 由引擎在 <音频路径>.je4cache 缺失或失效时加载，调用 generate：
 //   cache  —— C 侧创建好的缓存写入器（文件头已写入，校验码为音频文件与
@@ -10,15 +11,17 @@
 // 音频经 je::file::readall 读取字节、pkg::audio 解码
 //（audio::frombuffer，保持 @/!/fimg 的引擎路径解析），再按配置经
 // wav::pcm_as 转换为目标编码（声道数与帧数不变，样本值钳制到 [-1, 1]），
-// 经 binary_writer::write（je_cache_file_write）连同长度前缀直写。仅支持
-// 单声道/立体声（OpenAL 的
-// 缓冲格式约束）；其它声道数在生成期报错，不写缓存。
+// 经 je::cache::write_audio_payload 交由引擎编码写入载荷区。仅支持
+// 单声道/立体声（OpenAL 的缓冲格式约束）；其它声道数在生成期报错，
+// 不写缓存。
 //
-// 缓存布局（文件头之后），与 src/jeecs_audio_impl_openal.cpp 的读取逻辑
+// 缓存布局（文件头之后），与 src/jeecs_audio_codec.hpp 的解析逻辑
 // 一一对应：
-//   [uint64 PCM 长度][PCM 字节]   —— 裸数据区，不套 je_cache_binary_* 标记，
-//                                    读取方可以直接按偏移访问（流式播放）
-//   DOCUMENT                      —— 解码信息（bits / is_float 描述转换后
+//   [uint32 codec]               —— 载荷区编码 id（0=PCM 1=ADPCM 2=VORBIS）
+//   PCM:  [uint64 PCM 长度][PCM 字节]
+//   ADPCM: 解码总长/总帧数/块参数 + 块表 + 逐块独立解码的块数据
+//   VORBIS: 解码总长/总帧数 + 内嵌 Ogg Vorbis 流
+//   DOCUMENT                      —— 解码信息（bits / is_float 描述解码后
 //                                    实际存储的 PCM）
 //     "channels"   -> INT32
 //     "samplerate" -> INT32
@@ -32,6 +35,7 @@ import pkg::audio;
 import pkg::toml;
 
 import je;
+import je::audio;
 import je::cache;
 
 using std;
@@ -41,15 +45,22 @@ using toml;
 // 读取 <音频路径>.je4audio 的配置：
 //   streaming —— 流式播放（bool，缺省 false）
 //   format    —— 缓存格式 "i8" / "i16" / "f32"（缺省 "i8"，优先 8 位音频）
-// 属性源文件是可选的：文件不存在或键缺失时用默认值；文件无法解析或
-// format 取值未知时返回 none（配置错误应中止生成，而不是悄悄降级）。
-func load_settings(source: string)=> option<(bool, int, bool)>
+//   codec     —— 压缩编码 "none" / "adpcm" / "vorbis"（缺省 "none" 不压缩；
+//                adpcm 解码为 16 位整数、vorbis 解码为 32 位浮点，选择后
+//                覆盖 format 决定的位深）
+//   quality   —— Vorbis 压缩质量（real，0.0~1.0，缺省 0.5；其它编码忽略）
+// 属性源文件是可选的：文件不存在或键缺失时用默认值；文件无法解析、
+// format/codec 取值未知或 quality 越界时返回 none（配置错误应中止生成，
+// 而不是悄悄降级）。
+func load_settings(source: string)=> option<(bool, int, bool, je::audio::buffer::codec, real)>
 {
     let settings_path = source + ".je4audio";
 
     let mut streaming = false;
     let mut bits = 8;
     let mut is_float = false;
+    let mut codec = je::audio::buffer::codec::PCM;
+    let mut quality = 0.5;
 
     match (je::file::readall(settings_path))
     {
@@ -86,6 +97,44 @@ func load_settings(source: string)=> option<(bool, int, bool)>
                         }
                         none?;
                     }
+
+                    match (root["codec"]->as_string)
+                    {
+                        value(name)?
+                        {
+                            if (name->lower == "adpcm")
+                            {
+                                codec = je::audio::buffer::codec::ADPCM;
+                                bits = 16;
+                                is_float = false;
+                            }
+                            else if (name->lower == "vorbis")
+                            {
+                                codec = je::audio::buffer::codec::VORBIS;
+                                bits = 32;
+                                is_float = true;
+                            }
+                            else if (name->lower != "none")
+                            {
+                                je::logerr(F"未知的音频压缩编码 {name}（{settings_path}，应为 none/adpcm/vorbis）");
+                                return option::none;
+                            }
+                        }
+                        none?;
+                    }
+
+                    match (root["quality"]->as_float)
+                    {
+                        value(value)? quality = value;
+                        none?
+                        {
+                            match (root["quality"]->as_int)
+                            {
+                                value(value)? quality = value as real;
+                                none?;
+                            }
+                        }
+                    }
                 }
                 err(msg)?
                 {
@@ -96,7 +145,13 @@ func load_settings(source: string)=> option<(bool, int, bool)>
         }
         none?;
     }
-    return option::value((streaming, bits, is_float));
+
+    if (quality < 0. || quality > 1.)
+    {
+        je::logerr(F"无效的音频压缩质量（{settings_path}，应为 0.0~1.0）");
+        return option::none;
+    }
+    return option::value((streaming, bits, is_float, codec, quality));
 }
 
 extern func generate(
@@ -137,22 +192,29 @@ extern func generate(
     let mut streaming = false;
     let mut bits = 8;
     let mut is_float = false;
+    let mut codec = je::audio::buffer::codec::PCM;
+    let mut quality = 0.5;
     match (load_settings(source))
     {
         value(settings)?
         {
-            let (setting_streaming, setting_bits, setting_is_float) = settings;
+            let (setting_streaming, setting_bits, setting_is_float,
+                setting_codec, setting_quality) = settings;
             streaming = setting_streaming;
             bits = setting_bits;
             is_float = setting_is_float;
+            codec = setting_codec;
+            quality = setting_quality;
         }
         none? return false;
     }
 
-    // 先写裸 PCM 区（uint64 长度 + 波形，经 je_cache_file_write 直写，
-    // 不经 je_cache_binary_* 标记），再写描述解码信息的文档。
+    // 载荷区整体交由引擎编码写入（PCM 透传 / ADPCM / Vorbis 压缩），
+    // 再写描述解码信息的文档。
     let pcm = wav->pcm_as(bits, is_float);
-    if (!cache->write(buffer::createi64(pcm->len)) || !cache->write(pcm))
+    if (!je::cache::write_audio_payload(cache, pcm,
+            wav->channels, wav->samplerate, bits, is_float,
+            codec as int, quality))
         return false;
 
     if (!cache->append_document())

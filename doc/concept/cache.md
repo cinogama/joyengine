@@ -164,9 +164,9 @@ auto anim = graphic::animation::load("@/resource/hero.je4animation");      // �
 
 ### 生成器调度
 
-引擎启动时（`jeecs::internal_script::bootup`）加载 `!/builtin/script/internal/cache/` 下的 `animation.wo`、`tilemap.wo`、`tileset.wo`、`texture.wo` 四个生成脚本；这些脚本自身的编译产物也以 `INTERNAL_SCRIPT_CACHE_VERSION` 缓存，缓存损坏时回退到源码编译。
+引擎启动时（`jeecs::internal_script::bootup`）加载 `!/builtin/script/internal/cache/` 下的 `animation.wo`、`tilemap.wo`、`tileset.wo`、`texture.wo`、`audio.wo` 五个生成脚本；这些脚本自身的编译产物也以 `INTERNAL_SCRIPT_CACHE_VERSION` 缓存，缓存损坏时回退到源码编译。
 
-`je_animation_cache_open_or_create` 等四个 `*_cache_open_or_create` 接口的流程一致：先 `je_cache_file_load`；失败且生成器可用时进入 `generate_cache`——创建缓存文件，新建一个 VM 调用脚本的 `generate(cache, source)`，以其返回值作为 `finished` 关闭缓存，最后**重新** `je_cache_file_load` 一次再返回，生成结果同样要经过完整校验。生成器不可用（导出的运行时）时缓存失效即返回 nullptr。
+`je_animation_cache_open_or_create` 等五个 `*_cache_open_or_create` 接口的流程一致：先 `je_cache_file_load`；失败且生成器可用时进入 `generate_cache`——创建缓存文件，新建一个 VM 调用脚本的 `generate(cache, source)`，以其返回值作为 `finished` 关闭缓存，最后**重新** `je_cache_file_load` 一次再返回，生成结果同样要经过完整校验。生成器不可用（导出的运行时）时缓存失效即返回 nullptr。
 
 另外两条路径不经过生成脚本：
 

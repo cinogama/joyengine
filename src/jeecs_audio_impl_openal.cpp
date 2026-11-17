@@ -6,6 +6,7 @@
 #include "jeecs/prefix.hpp"
 #include "jeecs_basic_bootup.hpp"
 #include "jeecs_basic_cache_version.hpp"
+#include "jeecs_audio_codec.hpp"
 
 #include <AL/al.h>
 #include <AL/alc.h>
@@ -19,6 +20,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <chrono>
+#include <utility>
 
 #define JE_AL_DEVICE(p) reinterpret_cast<ALCdevice *>(p)
 #define AL_JE_DEVICE(p) reinterpret_cast<je_audio_native_play_device_instance_t *>(p)
@@ -113,10 +115,11 @@ namespace jeecs::audio
         }
 
         // The payload of an audio cache, as written by
-        // builtin/script/internal/cache/audio.wo: a raw PCM region followed
-        // by the decode metadata document. m_pcm is malloc'ed and owned by the
-        // caller; it is nullptr for a streaming buffer, whose PCM is read on
-        // demand from the cache file instead.
+        // builtin/script/internal/cache/audio.wo through
+        // je_audio_cache_payload_write: a codec-prefixed compressed/raw region
+        // followed by the decode metadata document. m_pcm is malloc'ed and
+        // owned by the caller; it is nullptr for a streaming buffer, whose PCM
+        // is decoded on demand from the cache file instead.
         struct audio_cache_content_t
         {
             int32_t m_channels;
@@ -124,39 +127,25 @@ namespace jeecs::audio
             int32_t m_bits;
             bool m_is_float;
             bool m_streaming;
+            je_audio_codec_t m_codec;
+            codec::audio_payload_info_t m_payload;
             void* m_pcm;
             size_t m_pcm_size;
-            size_t m_pcm_offset;
         };
 
-        // Reads the payload of an audio cache: a raw [uint64 pcm_size][pcm
-        // bytes] region followed by the binary cache document with the decode
-        // metadata. The raw region carries no value tag, so it can later be
-        // accessed by offset without parsing the document; streaming buffers
-        // skip reading it entirely. *out is written only on success.
+        // Reads the payload header and the trailing binary cache document with
+        // the decode metadata. Streaming buffers only parse the payload (the
+        // codec data is decoded on demand); whole-loaded buffers decode the
+        // complete payload here. *out is written only on success.
         static bool read_audio_cache_content(
             je_file_t* cache, audio_cache_content_t* out)
         {
-            uint64_t pcm_size = 0;
-            if (1 != je_file_read(&pcm_size, sizeof(pcm_size), 1, cache))
-                return false;
+            audio_cache_content_t content;
 
-            const size_t pcm_offset = je_file_tell(cache);
-            const size_t file_size = je_file_size(cache);
-            if (pcm_offset > file_size
-                || pcm_size > (uint64_t)(file_size - pcm_offset))
-                return false;
-
-            // Skip the raw PCM region to parse the decode metadata document;
-            // only whole-loaded buffers seek back and read the waveform below.
-            if (!je_file_seek(
-                    cache,
-                    (int64_t)(pcm_offset + (size_t)pcm_size),
-                    JE_READ_FILE_SEEK_SET))
+            if (!codec::audio_cache_payload_parse(cache, &content.m_payload))
                 return false;
 
             je_cache_binary_document_t root;
-            audio_cache_content_t content;
 
             if (!je_cache_binary_document_open(cache, &root)
                 || !je_cache_binary_document_index(
@@ -181,30 +170,54 @@ namespace jeecs::audio
                 return false;
             }
 
+            // The document describes the decoded PCM: ADPCM is always 16-bit
+            // integer, Vorbis is always 32-bit float.
+            if (content.m_payload.m_codec == JE_AUDIO_CODEC_ADPCM)
+            {
+                if (content.m_bits != 16 || content.m_is_float)
+                    return false;
+            }
+            else if (content.m_payload.m_codec == JE_AUDIO_CODEC_VORBIS)
+            {
+                if (content.m_bits != 32 || !content.m_is_float)
+                    return false;
+            }
+
+            const size_t frame_bytes = static_cast<size_t>(content.m_channels)
+                * static_cast<size_t>(content.m_bits / 8);
+            if (content.m_payload.m_decoded_pcm_size % frame_bytes != 0)
+                return false;
+
+            if (content.m_payload.m_codec != JE_AUDIO_CODEC_PCM
+                && content.m_payload.m_decoded_pcm_size
+                    != content.m_payload.m_total_frames * frame_bytes)
+            {
+                return false;
+            }
+
+            content.m_codec = content.m_payload.m_codec;
             content.m_pcm = nullptr;
-            content.m_pcm_size = (size_t)pcm_size;
-            content.m_pcm_offset = pcm_offset;
+            content.m_pcm_size = static_cast<size_t>(
+                content.m_payload.m_decoded_pcm_size);
 
             if (!content.m_streaming)
             {
-                // Keep a valid allocation even for an empty region; the format
-                // checks below decide whether such a cache is usable.
-                void* const pcm_data = malloc(pcm_size > 0 ? (size_t)pcm_size : 1);
-                if (pcm_data == nullptr)
-                    return false;
-
-                if (!je_file_seek(
-                        cache, (int64_t)pcm_offset, JE_READ_FILE_SEEK_SET)
-                    || (size_t)pcm_size != je_file_read(
-                        pcm_data, sizeof(uint8_t), (size_t)pcm_size, cache))
+                size_t decoded_size = 0;
+                if (!codec::audio_payload_decode_all(
+                        cache,
+                        content.m_payload,
+                        content.m_channels,
+                        frame_bytes,
+                        &content.m_pcm,
+                        &decoded_size)
+                    || decoded_size != content.m_pcm_size)
                 {
-                    free(pcm_data);
+                    free(content.m_pcm);
                     return false;
                 }
-                content.m_pcm = pcm_data;
             }
 
-            *out = content;
+            *out = std::move(content);
             return true;
         }
 
@@ -324,12 +337,14 @@ struct je_audio_native_buffer_instance_t
     };
     optional<dump_data_t> m_dump;
 };
-// 流式缓冲区的数据源：缓存文件在缓冲区生命周期内保持打开，PCM 位于文件内
-// [m_pcm_offset, m_pcm_offset + m_size) 的裸数据区，播放时由声源按块读取。
+// 流式缓冲区的数据源：缓存文件在缓冲区生命周期内保持打开，载荷区由
+// 声源按块解码读取。
 struct je_audio_native_stream_instance_t
 {
     je_file_t* m_cache_file;
-    size_t m_pcm_offset;
+    codec::audio_payload_info_t m_payload;
+    int32_t m_channels;
+    size_t m_frame_bytes;
 };
 struct je_audio_native_source_instance_t
 {
@@ -356,13 +371,15 @@ struct je_audio_native_source_instance_t
         size_t m_chunk_head;
         size_t m_queued_count;
         size_t m_chunk_size;
-        size_t m_position;       // 下一个待读取的 PCM 字节偏移
+        size_t m_position;       // 下一个待读取的解码后 PCM 字节偏移
         size_t m_consumed_bytes; // 已播完并出队的字节数
         bool m_initialized;
         bool m_should_play;
         bool m_paused;
         bool m_ended;
         vector<uint8_t> m_scratch;
+        jeecs::audio::codec::audio_stream_decoder_t* m_decoder;
+        const je_audio_buffer_t* m_decoder_buffer;
     };
     streaming_state_t m_streaming_state;
 
@@ -413,6 +430,8 @@ static void reset_streaming_state(
     state->m_should_play = false;
     state->m_paused = false;
     state->m_ended = false;
+    state->m_decoder = nullptr;
+    state->m_decoder_buffer = nullptr;
 }
 
 namespace jeecs::audio
@@ -1263,8 +1282,11 @@ namespace jeecs::audio
                 size_t buffer_data_len,
                 size_t sample_rate,
                 je_audio_format_t format,
+                je_audio_codec_t codec,
                 /* OPTIONAL: non-null for streaming buffers */ je_file_t* stream_cache_file,
-                size_t stream_pcm_offset)
+                /* OPTIONAL: non-null for streaming buffers */ const codec::audio_payload_info_t* stream_payload,
+                int32_t stream_channels,
+                size_t stream_frame_bytes)
             {
                 size_t byte_per_sample;
                 auto al_format = je_al_format(format, &byte_per_sample);
@@ -1280,6 +1302,10 @@ namespace jeecs::audio
                     return nullptr;
                 }
 
+                assert(stream_cache_file == nullptr || stream_payload != nullptr);
+                assert(stream_cache_file == nullptr
+                    || stream_frame_bytes == byte_per_sample);
+
                 je_audio_buffer_t* audio_buffer = new je_audio_buffer_t;
 
                 audio_buffer->m_buffer_instance = nullptr;
@@ -1289,7 +1315,9 @@ namespace jeecs::audio
                 {
                     audio_buffer->m_stream_instance = new je_audio_native_stream_instance_t;
                     audio_buffer->m_stream_instance->m_cache_file = stream_cache_file;
-                    audio_buffer->m_stream_instance->m_pcm_offset = stream_pcm_offset;
+                    audio_buffer->m_stream_instance->m_payload = *stream_payload;
+                    audio_buffer->m_stream_instance->m_channels = stream_channels;
+                    audio_buffer->m_stream_instance->m_frame_bytes = stream_frame_bytes;
                 }
 
                 audio_buffer->m_references = 1;
@@ -1298,6 +1326,7 @@ namespace jeecs::audio
                 audio_buffer->m_sample_rate = sample_rate;
                 audio_buffer->m_sample_size = byte_per_sample;
                 audio_buffer->m_format = format;
+                audio_buffer->m_codec = codec;
                 audio_buffer->m_streaming = audio_buffer->m_stream_instance != nullptr;
                 audio_buffer->m_byte_rate = byte_per_sample * audio_buffer->m_sample_rate;
 
@@ -1673,7 +1702,7 @@ namespace jeecs::audio
                 update_source_lockfree(source);
                 return true;
             }
-            // 释放流式块缓冲名（属于当前设备上下文），读取进度保留。
+            // 释放流式块缓冲名（属于当前设备上下文）与解码器，读取进度保留。
             static void release_streaming_chunk_buffers(
                 je_audio_native_source_instance_t* instance)
             {
@@ -1685,6 +1714,10 @@ namespace jeecs::audio
                 }
                 stream.m_chunk_head = 0;
                 stream.m_queued_count = 0;
+
+                delete stream.m_decoder;
+                stream.m_decoder = nullptr;
+                stream.m_decoder_buffer = nullptr;
             }
 
             // 停止声源并丢弃整个块队列。openal-soft 在 AL_INITIAL 下不报告
@@ -1728,6 +1761,20 @@ namespace jeecs::audio
                     stream.m_initialized = true;
                 }
 
+                if (stream.m_decoder == nullptr || stream.m_decoder_buffer != buffer)
+                {
+                    delete stream.m_decoder;
+                    stream.m_decoder = codec::create_audio_stream_decoder(
+                        buffer->m_stream_instance->m_cache_file,
+                        buffer->m_stream_instance->m_payload,
+                        buffer->m_stream_instance->m_channels,
+                        buffer->m_stream_instance->m_frame_bytes);
+                    stream.m_decoder_buffer = buffer;
+
+                    if (stream.m_decoder == nullptr)
+                        debug::logerr("Failed to create the audio cache stream decoder.");
+                }
+
                 size_t chunk_size = buffer->m_byte_rate / STREAMING_CHUNK_DIVISOR;
                 chunk_size -= chunk_size % buffer->m_sample_size;
                 if (chunk_size < buffer->m_sample_size)
@@ -1757,6 +1804,14 @@ namespace jeecs::audio
                 if (!stream.m_should_play || stream.m_paused)
                     return;
 
+                if (stream.m_decoder == nullptr)
+                {
+                    debug::logerr("Audio cache stream decoder is unavailable.");
+                    stream.m_should_play = false;
+                    stream.m_ended = true;
+                    return;
+                }
+
                 ALint processed = 0;
                 alGetSourcei(instance->m_source_id, AL_BUFFERS_PROCESSED, &processed);
                 while (processed > 0 && stream.m_queued_count > 0)
@@ -1772,9 +1827,6 @@ namespace jeecs::audio
                     --processed;
                 }
 
-                je_file_t* const cache_file = buffer->m_stream_instance->m_cache_file;
-                const size_t pcm_offset = buffer->m_stream_instance->m_pcm_offset;
-
                 while (stream.m_queued_count < STREAMING_CHUNK_COUNT
                     && !stream.m_ended)
                 {
@@ -1788,15 +1840,12 @@ namespace jeecs::audio
                         break;
                     }
 
-                    if (!je_file_seek(
-                            cache_file,
-                            (int64_t)(pcm_offset + stream.m_position),
-                            JE_READ_FILE_SEEK_SET)
-                        || want != je_file_read(
-                            stream.m_scratch.data(), sizeof(uint8_t), want, cache_file))
+                    if (!stream.m_decoder->seek_to_pcm_byte(stream.m_position)
+                        || want != stream.m_decoder->read(
+                            stream.m_scratch.data(), want))
                     {
                         debug::logerr(
-                            "Failed to read audio cache while streaming (%u bytes at %u).",
+                            "Failed to decode audio cache while streaming (%u bytes at %u).",
                             (unsigned)want,
                             (unsigned)stream.m_position);
                         stream.m_ended = true;
@@ -2739,7 +2788,10 @@ namespace jeecs::audio
                     buffer_data_len,
                     sample_rate,
                     format,
+                    JE_AUDIO_CODEC_PCM,
                     nullptr,
+                    nullptr,
+                    0,
                     0);
             }
             const je_audio_buffer_t* load_buffer(const char* path)
@@ -2825,13 +2877,19 @@ namespace jeecs::audio
                 }
 
                 // 流式缓冲区接管缓存文件句柄，在缓冲区生命周期内保持打开。
+                const size_t frame_bytes = static_cast<size_t>(content.m_channels)
+                    * static_cast<size_t>(content.m_bits / 8);
+
                 const je_audio_buffer_t* buffer = instance_buffer(
                     content.m_pcm,
                     content.m_pcm_size,
                     (size_t)content.m_samplerate,
                     format,
+                    content.m_codec,
                     content.m_streaming ? cache_file : nullptr,
-                    content.m_pcm_offset);
+                    content.m_streaming ? &content.m_payload : nullptr,
+                    content.m_channels,
+                    frame_bytes);
 
                 if (buffer == nullptr)
                 {

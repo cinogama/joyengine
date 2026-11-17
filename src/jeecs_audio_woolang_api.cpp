@@ -37,7 +37,7 @@ WOORT_API woort_api wojeapi_audio_buffer_info(void)
     basic::resource<audio::buffer>* buffer =
         static_cast<basic::resource<audio::buffer> *>(woort_gcpointer(0));
 
-    woort_set_struct(WOORT_RETURN_SLOT, 6);
+    woort_set_struct(WOORT_RETURN_SLOT, 7);
     auto* buffer_instance = (*buffer)->handle();
 
     woort_struct_set_int(WOORT_RETURN_SLOT, 0, (woort_Int)buffer_instance->m_size);
@@ -45,7 +45,8 @@ WOORT_API woort_api wojeapi_audio_buffer_info(void)
     woort_struct_set_int(WOORT_RETURN_SLOT, 2, (woort_Int)buffer_instance->m_sample_size);
     woort_struct_set_int(WOORT_RETURN_SLOT, 3, (woort_Int)buffer_instance->m_byte_rate);
     woort_struct_set_int(WOORT_RETURN_SLOT, 4, (woort_Int)buffer_instance->m_format);
-    woort_struct_set_bool(WOORT_RETURN_SLOT, 5, buffer_instance->m_streaming);
+    woort_struct_set_int(WOORT_RETURN_SLOT, 5, (woort_Int)buffer_instance->m_codec);
+    woort_struct_set_bool(WOORT_RETURN_SLOT, 6, buffer_instance->m_streaming);
 
     return woort_ret();
 }
@@ -65,6 +66,28 @@ WOORT_API woort_api wojeapi_audio_cache_ensure(void)
     }
 
     return woort_ret_bool(false);
+}
+
+// 音频缓存载荷区写入（je_audio_cache_payload_write）：把整段已按目标位深
+// 转换的 PCM 按 codec 编码后写入缓存（PCM 透传 / ADPCM / Vorbis），
+// quality 仅对 Vorbis 生效。只能写在 append_document 之前。
+WOORT_API woort_api wojeapi_audio_cache_payload_write(void)
+{
+    auto* file = static_cast<je_writing_cache_file_t*>(woort_pointer(0));
+
+    size_t pcm_len = 0;
+    const void* pcm = woort_buffer(1, &pcm_len);
+
+    return woort_ret_bool(je_audio_cache_payload_write(
+        file,
+        pcm,
+        pcm_len,
+        (int32_t)woort_int(2),
+        (int32_t)woort_int(3),
+        (int32_t)woort_int(4),
+        woort_bool(5),
+        (je_audio_codec_t)woort_int(6),
+        (float)woort_real(7)));
 }
 
 /*
