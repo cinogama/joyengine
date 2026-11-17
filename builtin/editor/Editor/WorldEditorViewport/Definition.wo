@@ -667,11 +667,12 @@ namespace JEEditor::Editor
         protected let mut s_play_last_focused_index =
             option::none: option<int>;
 
-        // 冻结已切实生效（快照采集完成、世界全部暂停、视口窗口全关）
-        // 直至恢复协程结束。与 isWorldsFrozen 的“请求已受理”相区别：
-        // 请求已受理但尚未生效期间，正在进行的停止运行过渡可先行完成，
-        // 冻结协程随后再采集其结果（DebugRun 的停止流程据此等待，避免
-        // 与冻结协程互相等待的死锁）。
+        // 冻结已切实生效（快照采集完成、世界全部暂停、视口窗口全关，
+        // 随后旧世界在 launchFreezeEngagement 中销毁、job 结束后经
+        // restoreAllWorlds 重建）直至恢复协程结束。与 isWorldsFrozen 的
+        // “请求已受理”相区别：请求已受理但尚未生效期间，正在进行的停止
+        // 运行过渡可先行完成，冻结协程随后再采集其结果（DebugRun 的停止
+        // 流程据此等待，避免与冻结协程互相等待的死锁）。
         protected let mut s_worlds_frozen_engaged = false;
 
         // 冻结受理→采集完成的过渡标志：FreezeWorldsTodo 的 job 线程据此

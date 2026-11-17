@@ -3,8 +3,13 @@
 // 先进入冻结（锁定）状态使所有视口创建操作失败，从 universe 枚举所有
 // 世界，把各自的世界快照与编辑器上下文（有视口的附带，无视口的仅世界
 // 数据）存入 SavedEditorWorldContext 单例的 m_frozen_saved 槽位，暂停所有
-// 世界实例（保留不关闭），关闭全部视口窗口，再执行 job，最后用快照重建
-// 世界、为有编辑器上下文的条目重建视口窗口并解除冻结。
+// 世界实例，关闭全部视口窗口，随即销毁全部世界实例并等待销毁落地，再
+// 执行 job，最后用快照重建世界、为有编辑器上下文的条目重建视口窗口并
+// 解除冻结。
+//
+// 世界的销毁必须发生在 job 之前（如卸载/重载原生模块）：旧世界的
+// archetype 与系统表缓存着模块注册类型的 tinfo 裸指针，模块卸载会将其
+// 释放并卸出代码，组件与系统的析构只能在模块代码仍然有效时进行。
 //
 // 快照带 eid（save 的 save_eid 传 true）：重建后实体沿用原调试 EUID，
 // 编辑历史（撤销/重做）与选中态迁移到重建的视口上依然有效。
@@ -137,11 +142,13 @@ namespace JEEditor::Editor::WorldEditorViewport
     //  冻结 / 恢复
     // ==========================
 
-    // 关闭全部世界视口窗口（保留各世界实例不关闭）：先从注册表移除并从
-    // Project 的已打开世界记账移除（重建视口时 onCreate 会重新登记，避免
-    // 其 map insert 断言失败），再以 CLOSE_BUT_KEEP_WORLD 请求程序化关闭。
-    // 窗口须在非沉浸的一帧里泵到 run 才会真正关闭（调用方负责时序，见
-    // DebugRun::startDebugRun）。
+    // 关闭全部世界视口窗口（世界实例交由调用方处置）：先从注册表移除并
+    // 从 Project 的已打开世界记账移除（重建视口时 onCreate 会重新登记，
+    // 避免其 map insert 断言失败），再以 CLOSE_BUT_KEEP_WORLD 请求程序化
+    // 关闭。窗口须在非沉浸的一帧里泵到 run 才会真正关闭（调用方负责时序，
+    // 见 DebugRun::startDebugRun）。冻结路径随后销毁世界是安全的：置过
+    // m_close 的窗口 run 直接短路不再渲染世界，onClose 在
+    // CLOSE_BUT_KEEP_WORLD 下也不触碰世界。
     public func closeAllViewportWindows()=> void
     {
         for (let vp : getAllViewports())
@@ -154,8 +161,8 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
 
     // 冻结生效的实际工作（协程体，不含让出帧）：采集快照入 m_frozen_saved、
-    // 暂停所有世界实例（保留不关闭：模块重载期间不可继续步进）、关闭全部
-    // 视口窗口
+    // 暂停所有世界实例（不可继续步进，且旧实例不能活过 job 的模块卸载，
+    // 随后由 launchFreezeEngagement 销毁）、关闭全部视口窗口
     func engageAllWorldsFreeze()=> void
     {
         let (saved, focused_index) = collectAllWorldSavedContexts();
@@ -189,8 +196,23 @@ namespace JEEditor::Editor::WorldEditorViewport
 
                 engageAllWorldsFreeze();
 
-                s_worlds_freeze_in_progress = false;
+                // 先标记冻结已生效再销毁世界：销毁期间到达的停止运行请求
+                //（stopDebugRun 据此拒绝）若放行，其恢复协程会与本次冻结
+                // 的重建流程并发叠加出双份世界。
                 s_worlds_frozen_engaged = true;
+
+                // 快照采集完成后立刻销毁全部旧世界并等待销毁切实落地
+                //（实际销毁在下一逻辑更新生效，Universe 当帧移除世界）。
+                // 必须赶在 job（如卸载/重载原生模块）之前完成：旧世界的
+                // archetype 与系统表缓存着模块类型的 tinfo 指针，模块卸载
+                // 后这些指针悬垂，析构只能在模块代码仍然有效时进行。
+                for (let w : Singleton::Universe::getUniverse()->get_all_worlds)
+                    do w->close;
+
+                while (Singleton::Universe::getUniverse()->get_all_worlds->len > 0)
+                    yield();
+
+                s_worlds_freeze_in_progress = false;
             });
     }
 
@@ -230,12 +252,19 @@ namespace JEEditor::Editor::WorldEditorViewport
                 //（等待帧数 + job），采集 1~2 帧内完成，受理中的冻结不可能
                 // 撞上恢复启动
                 //
-                // 关闭现存所有世界（模块重载后的旧实例已陈旧；实际销毁在
-                // 下一逻辑更新生效，让出帧后再重建，避免新旧世界短暂共存
-                // 导致 eid 撞号）
+                // 兜底关闭：冻结期间世界创建应已被封锁，若有漏网世界在此
+                // 关闭并让出帧待其销毁落地（实际销毁在下一逻辑更新生效），
+                // 避免与重建的新世界短暂共存导致 eid 撞号。正常情况下旧
+                // 世界已在冻结 engage 阶段（job 执行前）全部销毁，此循环为空
+                let mut closing_any_world = false;
                 for (let w : Singleton::Universe::getUniverse()->get_all_worlds)
+                {
                     do w->close;
-                yield();
+                    closing_any_world = true;
+                }
+
+                if (closing_any_world)
+                    yield();
 
                 // 先在单例锁内取出快照条目并清空槽位，锁外再重建：
                 // 重建会访问 universe / 窗口系统等其他单例，嵌套 apply
