@@ -1177,6 +1177,62 @@ namespace jeecs::graphic::api::gl3
         }
     }
 
+    // 渲染目标纹理的创建期清屏：无创建期像素的纹理内容按 GL 规范是未定义的。
+    // 与 Metal/DX11 后端保持行为一致——创建即清一次（颜色黑 α1 / 深度 1.0），
+    // 保证被采样前内容有定义（如编辑器视口 resize 后，GUI 同帧先于相机 pass
+    // 采样新附件）。glTexImage2DMultisample 无法带初始数据，统一走临时 FBO
+    // 附加 + glClearBufferfv（不触碰全局 clearColor/clearDepth 状态）。
+    // 纹理 init 发生在命令回放（图形线程），可能在 pass 中途被调用，因此
+    // 这里触碰到的所有 GL 状态都要保存并恢复。
+    static void _gl3_clear_render_texture(
+        GLuint texture_id, GLenum texture_target, bool is_depth)
+    {
+        GLint prev_draw_fbo = 0;
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_draw_fbo);
+        const GLboolean prev_scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
+        GLboolean prev_color_mask[4] = {};
+        glGetBooleanv(GL_COLOR_WRITEMASK, prev_color_mask);
+        GLboolean prev_depth_mask = GL_TRUE;
+        glGetBooleanv(GL_DEPTH_WRITEMASK, &prev_depth_mask);
+
+        GLuint fbo = 0;
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
+        glFramebufferTexture2D(
+            GL_DRAW_FRAMEBUFFER,
+            is_depth ? GL_DEPTH_ATTACHMENT : GL_COLOR_ATTACHMENT0,
+            texture_target,
+            texture_id,
+            0);
+
+        // 清屏受 scissor 与写掩码约束，先解除再清
+        glDisable(GL_SCISSOR_TEST);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        if (is_depth)
+        {
+            glDepthMask(GL_TRUE);
+            const GLfloat one = 1.f;
+            glClearBufferfv(GL_DEPTH, 0, &one);
+        }
+        else
+        {
+            const GLfloat black[4] = { 0.f, 0.f, 0.f, 1.f };
+            glClearBufferfv(GL_COLOR, 0, black);
+        }
+
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)prev_draw_fbo);
+        glDeleteFramebuffers(1, &fbo);
+
+        if (prev_scissor_enabled)
+            glEnable(GL_SCISSOR_TEST);
+        else
+            glDisable(GL_SCISSOR_TEST);
+        glColorMask(
+            prev_color_mask[0], prev_color_mask[1],
+            prev_color_mask[2], prev_color_mask[3]);
+        glDepthMask(prev_depth_mask);
+    }
+
     void texture_2d_init(
         je_graphic_impl_context_t,
         je_gl_resource_blob_t,
@@ -1222,6 +1278,9 @@ namespace jeecs::graphic::api::gl3
                 is_16bit ? GL_FLOAT : GL_UNSIGNED_BYTE,
                 resource->m_initial_pixels);
         }
+
+        if (0 != (resource->m_format & JE_GL_TEXTURE_FORMAT_FRAMEBUF))
+            _gl3_clear_render_texture(texture, GL_TEXTURE_2D, is_depth);
 
         resource->m_handle.m_ptr = new jegl_gl3_texture(
             texture, GL_TEXTURE_2D, resource->m_format, resource->m_width, resource->m_height);
@@ -1393,6 +1452,10 @@ namespace jeecs::graphic::api::gl3
             (GLsizei)resource->m_width,
             (GLsizei)resource->m_height,
             GL_TRUE);
+
+        // MSAA 纹理无法在分配时携带初始数据，创建即清屏保证内容有定义
+        _gl3_clear_render_texture(
+            texture, GL_TEXTURE_2D_MULTISAMPLE, is_depth);
 
         resource->m_handle.m_ptr = new jegl_gl3_texture(
             texture, GL_TEXTURE_2D_MULTISAMPLE, resource->m_format, resource->m_width, resource->m_height);

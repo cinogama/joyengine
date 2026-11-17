@@ -1315,10 +1315,8 @@ namespace jeecs::graphic::api::metal
             // 创建起有定义；同队列命令缓冲按提交序执行，先于后续对该纹理的使用。
             if (is_framebuf || is_msaa)
             {
-                // 可能从游戏线程调用（GUI 录制期的 wojeapi prepare），用局部
-                // autorelease 池兜住本分支产生的 autorelease 对象。
-                NS::AutoreleasePool* clear_pool = NS::AutoreleasePool::alloc()->init();
-
+                // init_texture 只在图形线程命令回放期执行（pre_update 建立的帧
+                // autorelease 池内），autorelease 对象随帧池释放。
                 MTL::RenderPassDescriptor* clear_desc =
                     MTL::RenderPassDescriptor::renderPassDescriptor();
 
@@ -1346,8 +1344,6 @@ namespace jeecs::graphic::api::metal
                     init_clear_buffer->renderCommandEncoder(clear_desc);
                 init_clear_encoder->endEncoding();
                 init_clear_buffer->commit();
-
-                clear_pool->release();
             }
         }
         else

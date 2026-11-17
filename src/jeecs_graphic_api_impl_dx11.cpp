@@ -1512,6 +1512,42 @@ namespace jeecs::graphic::api::dx11
                 ? resource->m_handle.m_path_may_null_if_builtin
                 : "_builtin_texture_") + "_View");
 
+        // 无创建期像素的渲染目标纹理内容未定义：与 Metal 后端一致，创建即清屏
+        //（黑 α1 / 深度 1.0），保证被采样前内容有定义（如编辑器视口 resize 后，
+        // GUI 同帧先于相机 pass 采样新附件）。清屏通过临时视图完成，不改动
+        // 当前绑定的渲染目标。
+        if (resource->m_initial_pixels == nullptr && (is_depth || is_framebuf))
+        {
+            if (is_depth)
+            {
+                D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_describe;
+                depth_view_describe.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+                depth_view_describe.ViewDimension = is_msaa
+                    ? D3D11_DSV_DIMENSION_TEXTURE2DMS
+                    : D3D11_DSV_DIMENSION_TEXTURE2D;
+                depth_view_describe.Texture2D.MipSlice = 0;
+                depth_view_describe.Flags = 0;
+
+                jegl_dx11_context::MSWRLComPtr<ID3D11DepthStencilView> depth_view;
+                JERCHECK(context->m_dx_device->CreateDepthStencilView(
+                    jedx11_texture_res->texture_resource(),
+                    &depth_view_describe,
+                    depth_view.GetAddressOf()));
+                context->m_dx_context->ClearDepthStencilView(
+                    depth_view.Get(), D3D11_CLEAR_DEPTH, 1.f, 0);
+            }
+            else
+            {
+                jegl_dx11_context::MSWRLComPtr<ID3D11RenderTargetView> target_view;
+                JERCHECK(context->m_dx_device->CreateRenderTargetView(
+                    jedx11_texture_res->texture_resource(),
+                    nullptr,
+                    target_view.GetAddressOf()));
+                context->m_dx_context->ClearRenderTargetView(
+                    target_view.Get(), { 0.f, 0.f, 0.f, 1.f });
+            }
+        }
+
         return jedx11_texture_res;
     }
 

@@ -172,6 +172,8 @@ namespace jeecs::graphic::api::vk120
     VK_API_DECL(vkCmdSetViewport);                          \
     VK_API_DECL(vkCmdSetScissor);                           \
     VK_API_DECL(vkCmdClearAttachments);                     \
+    VK_API_DECL(vkCmdClearColorImage);                      \
+    VK_API_DECL(vkCmdClearDepthStencilImage);               \
     VK_API_DECL(vkCmdBindDescriptorSets);                   \
     VK_API_DECL(vkCmdCopyBufferToImage);                    \
     VK_API_DECL(vkCmdPipelineBarrier);                      \
@@ -3894,7 +3896,7 @@ namespace jeecs::graphic::api::vk120
                     samples,
                     0,
                     VK_IMAGE_VIEW_TYPE_2D);
-                transition_image_layout(
+                clear_framebuf_texture_content(
                     texture, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
             }
             else
@@ -3911,11 +3913,11 @@ namespace jeecs::graphic::api::vk120
                     samples,
                     0,
                     VK_IMAGE_VIEW_TYPE_2D);
-                transition_image_layout(
+                clear_framebuf_texture_content(
                     texture,
                     samples == VK_SAMPLE_COUNT_1_BIT
-                    ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-                    : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                        ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                        : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
             }
 
             return texture;
@@ -4015,6 +4017,73 @@ namespace jeecs::graphic::api::vk120
             end_temp_command_buffer_record(command_buffer);
 
             texture->m_current_layout = new_layout;
+        }
+
+        // 渲染目标图像的创建期清屏：无创建期像素的图像内容按规范未定义。与
+        // Metal/DX11/OpenGL 后端保持行为一致——在进入最终布局前经
+        // TRANSFER_DST 布局 vkCmdClear*Image 清一次（颜色黑 α1 / 深度模板
+        // 1.0/0），保证被采样前内容有定义（如编辑器视口 resize 后，GUI 同帧
+        // 先于相机 pass 采样新附件）。要求图像带 TRANSFER_DST 用途位。转换→
+        // 清屏→转换回终态布局记录在同一个临时命令缓冲里，与单独一次
+        // transition_image_layout 的提交开销相同。
+        void clear_framebuf_texture_content(
+            jevk12_texture* texture, VkImageLayout final_layout)
+        {
+            assert(texture != nullptr);
+            assert(texture->m_vk_texture_image != VK_NULL_HANDLE);
+
+            const bool is_depth =
+                0 != (texture->m_aspect & VK_IMAGE_ASPECT_DEPTH_BIT);
+
+            VkCommandBuffer command_buffer = begin_temp_command_buffer_records();
+
+            record_transition_barrier(
+                command_buffer, texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            texture->m_current_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+            VkImageSubresourceRange clear_range = {};
+            clear_range.aspectMask = is_depth
+                ? (texture->m_aspect
+                    & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT))
+                : VK_IMAGE_ASPECT_COLOR_BIT;
+            clear_range.baseMipLevel = 0;
+            clear_range.levelCount = 1;
+            clear_range.baseArrayLayer = 0;
+            clear_range.layerCount = texture->m_layers;
+
+            if (is_depth)
+            {
+                VkClearDepthStencilValue clear_value = {};
+                clear_value.depth = 1.f;
+                clear_value.stencil = 0;
+                vkCmdClearDepthStencilImage(
+                    command_buffer,
+                    texture->m_vk_texture_image,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    &clear_value,
+                    1,
+                    &clear_range);
+            }
+            else
+            {
+                VkClearColorValue clear_value = {};
+                clear_value.float32[0] = 0.f;
+                clear_value.float32[1] = 0.f;
+                clear_value.float32[2] = 0.f;
+                clear_value.float32[3] = 1.f;
+                vkCmdClearColorImage(
+                    command_buffer,
+                    texture->m_vk_texture_image,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    &clear_value,
+                    1,
+                    &clear_range);
+            }
+
+            record_transition_barrier(command_buffer, texture, final_layout);
+            texture->m_current_layout = final_layout;
+
+            end_temp_command_buffer_record(command_buffer);
         }
 
         void record_image_layout_transition(
@@ -4378,11 +4447,11 @@ namespace jeecs::graphic::api::vk120
                     0,
                     VK_IMAGE_VIEW_TYPE_2D);
 
-                transition_image_layout(
+                clear_framebuf_texture_content(
                     texture,
                     is_depth
-                    ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-                    : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                        ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                        : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
                 return texture;
             }
@@ -5273,7 +5342,10 @@ namespace jeecs::graphic::api::vk120
             input_assembly_state.pNext = nullptr;
             input_assembly_state.flags = 0;
             input_assembly_state.topology = vk_topology;
-            input_assembly_state.primitiveRestartEnable = VK_FALSE;
+            // Metal 无法关闭 primitive restart（对 VK_FALSE MoltenVK 会报
+            // VK_ERROR_FEATURE_NOT_PRESENT 告警）；引擎从不写入 restart index，
+            // 显式开启与各平台实际行为一致。
+            input_assembly_state.primitiveRestartEnable = VK_TRUE;
 
             VkPipelineRasterizationStateCreateInfo rasterization_state = {};
             rasterization_state.sType =
