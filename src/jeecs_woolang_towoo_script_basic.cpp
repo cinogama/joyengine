@@ -2050,8 +2050,11 @@ WOORT_API woort_api wojeapi_towoo_audio_source_play_oneshot(void)
 {
     auto& source = wo_component<Audio::Source>(0, WOORT_RETURN_SLOT);
 
+    auto* spatial =
+        wo_option_component<Audio::Spatial>(1, WOORT_RETURN_SLOT);
+
     auto* buf =
-        static_cast<basic::resource<audio::buffer>*>(woort_gcpointer(1));
+        static_cast<basic::resource<audio::buffer>*>(woort_gcpointer(2));
 
     je_audio_oneshot_desc_t desc;
 
@@ -2059,18 +2062,35 @@ WOORT_API woort_api wojeapi_towoo_audio_source_play_oneshot(void)
 
     desc.m_bus = source.bus;
 
-    desc.m_spatial = source.spatial_active;
+    // 位置、遮挡增益/闷音与衰减参数都来自 Audio::Spatial 的运行时状态；
+    // 没有空间化组件时按相对听众播放。
+    desc.m_spatial = spatial != nullptr && spatial->active;
 
-    desc.m_location[0] = source.last_world_position.x;
-    desc.m_location[1] = source.last_world_position.y;
-    desc.m_location[2] = source.last_world_position.z;
+    if (spatial != nullptr)
+    {
+        desc.m_location[0] = spatial->last_world_position.x;
+        desc.m_location[1] = spatial->last_world_position.y;
+        desc.m_location[2] = spatial->last_world_position.z;
+    }
+    else
+    {
+        desc.m_location[0] = 0.0f;
+        desc.m_location[1] = 0.0f;
+        desc.m_location[2] = 0.0f;
+    }
 
-    desc.m_gain = source.volume * source.current_occlusion_gain;
+    desc.m_gain = source.volume
+        * (spatial != nullptr ? spatial->current_occlusion_gain : 1.0f);
     desc.m_pitch = source.pitch;
-    desc.m_reference_distance = source.reference_distance;
-    desc.m_max_distance = source.max_distance;
-    desc.m_rolloff = source.rolloff;
-    desc.m_lowpass_hf = source.current_occlusion_hf;
+
+    desc.m_reference_distance =
+        spatial != nullptr ? spatial->reference_distance : 1.0f;
+    desc.m_max_distance =
+        spatial != nullptr ? spatial->max_distance : 32.0f;
+    desc.m_rolloff =
+        spatial != nullptr ? spatial->rolloff : 1.0f;
+    desc.m_lowpass_hf =
+        spatial != nullptr ? spatial->current_occlusion_hf : 1.0f;
 
     return woort_ret_bool(je_audio_oneshot_play(&desc));
 }

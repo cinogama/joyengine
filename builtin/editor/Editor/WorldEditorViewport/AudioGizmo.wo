@@ -200,9 +200,9 @@ namespace JEEditor::Editor::WorldEditorViewport
     }
 
     protected func audioSourceDirectionWorld(
-        rotation: quat, source: Audio::Source)=> vec3
+        rotation: quat, spatial: Audio::Spatial)=> vec3
     {
-        let d = rotation * source.direction->get;
+        let d = rotation * spatial.direction->get;
         if (d->length < 0.00001)
             return (0., 1., 0.) as vec3;
         return d->unit;
@@ -275,13 +275,21 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
             else if (kind == 0)
             {
-                try! source = e->towoo::get_component:<Audio::Source>();
-                points->add((AUDIO_HANDLE_SOURCE_MAX,
-                    center + rotation * (
-                        (source.max_distance->get, 0., 0.) as vec3)));
-                points->add((AUDIO_HANDLE_SOURCE_REF,
-                    center + rotation * (
-                        (0., source.reference_distance->get, 0.) as vec3)));
+                // 距离范围只属于空间化音源：非空间音源没有衰减概念，
+                // 因此没有最大/参考距离手柄。
+                match (e->towoo::get_component:<Audio::Spatial>())
+                {
+                    none?;
+                    value(spatial)?
+                    {
+                        points->add((AUDIO_HANDLE_SOURCE_MAX,
+                            center + rotation * (
+                                (spatial.max_distance->get, 0., 0.) as vec3)));
+                        points->add((AUDIO_HANDLE_SOURCE_REF,
+                            center + rotation * (
+                                (0., spatial.reference_distance->get, 0.) as vec3)));
+                    }
+                }
             }
             else if (kind == 1)
             {
@@ -365,7 +373,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             }
             else if (kind == 0)
             {
-                component = "Audio::Source";
+                component = "Audio::Spatial";
                 member = (handle == AUDIO_HANDLE_SOURCE_MAX)
                     ? "max_distance" | "reference_distance";
             }
@@ -508,7 +516,7 @@ namespace JEEditor::Editor::WorldEditorViewport
             else if ((handle == AUDIO_HANDLE_SOURCE_MAX
                     || handle == AUDIO_HANDLE_SOURCE_REF) && kind == 0)
             {
-                try! source = e->towoo::get_component:<Audio::Source>();
+                try! spatial = e->towoo::get_component:<Audio::Spatial>();
                 try! param = gizmoClosestAxisParam(
                     center, self.m_audio_drag_axis, ray_origin, ray_dir);
 
@@ -520,17 +528,17 @@ namespace JEEditor::Editor::WorldEditorViewport
 
                 if (handle == AUDIO_HANDLE_SOURCE_MAX)
                 {
-                    let ref_distance = source.reference_distance->get;
+                    let ref_distance = spatial.reference_distance->get;
                     if (distance < ref_distance)
                         distance = ref_distance;
-                    source.max_distance->set(distance);
+                    spatial.max_distance->set(distance);
                 }
                 else
                 {
-                    let max_distance = source.max_distance->get;
+                    let max_distance = spatial.max_distance->get;
                     if (distance > max_distance)
                         distance = max_distance;
-                    source.reference_distance->set(distance);
+                    spatial.reference_distance->set(distance);
                 }
             }
 
@@ -717,12 +725,16 @@ namespace JEEditor::Editor::WorldEditorViewport
             {
                 value(source)?
                 {
-                    let spatial =
-                        e->towoo::get_component:<Audio::Spatial>->is_value
-                            ? "空间" | "非空间";
                     let playing =
                         source.play->get ? "播放" | "暂停";
-                    return F"音源  {spatial}  {playing}  最大 {source.max_distance->get}";
+                    // 只有空间化音源才有衰减范围
+                    match (e->towoo::get_component:<Audio::Spatial>())
+                    {
+                        value(spatial)?
+                            return F"音源  空间  {playing}  最大 {spatial.max_distance->get}";
+                        none?;
+                    }
+                    return F"音源  非空间  {playing}";
                 }
                 none?;
             }
@@ -1181,46 +1193,48 @@ namespace JEEditor::Editor::WorldEditorViewport
 
                             if (kind == 0)
                             {
-                                try! source =
-                                    e->towoo::get_component:<Audio::Source>();
-                                let spatial_on =
-                                    e->towoo::get_component:<Audio::Spatial>
-                                        ->is_value;
-                                let max_distance = source.max_distance->get;
-                                let ref_distance =
-                                    source.reference_distance->get;
-
-                                // 距离范围圈：参考距离实线（亮黄）、最大距离
-                                // 虚线（源色）。非空间音源的距离参数不参与
-                                // 衰减，但手柄仍可编辑，范围圈画淡一些以示
-                                // “当前不生效”；悬停/拖拽对应手柄时高亮该圈。
-                                let max_ring = (base.0, base.1, base.2,
-                                    spatial_on ? 190 | 70);
-                                let ref_ring = (
-                                    AUDIO_REF_RANGE_COLOR.0,
-                                    AUDIO_REF_RANGE_COLOR.1,
-                                    AUDIO_REF_RANGE_COLOR.2,
-                                    spatial_on ? 235 | 110);
-
-                                if (max_distance > 0.0001)
-                                    drawCircleXYDashed(pos, rotation,
-                                        max_distance,
-                                        active_handle == AUDIO_HANDLE_SOURCE_MAX
-                                            ? AUDIO_HOVER_COLOR | max_ring);
-                                if (ref_distance > 0.0001)
-                                    drawCircleXY(pos, rotation,
-                                        ref_distance,
-                                        active_handle == AUDIO_HANDLE_SOURCE_REF
-                                            ? AUDIO_HOVER_COLOR | ref_ring);
-
-                                if (spatial_on)
+                                // 距离范围圈/朝向箭头只属于空间化音源：
+                                // 非空间音源（没有 Audio::Spatial）没有衰减
+                                // 范围与锥形指向，只显示图标本身。
+                                match (e->towoo::get_component:<Audio::Spatial>())
                                 {
-                                    let dir =
-                                        audioSourceDirectionWorld(rotation, source);
-                                    let arrow_len = (max_distance > 1.)
-                                        ? max_distance * 0.35 | 1.;
-                                    drawArrow(pos, pos + dir * arrow_len,
-                                        hot_color, 1.4);
+                                    none?;
+                                    value(spatial)?
+                                    {
+                                        let max_distance =
+                                            spatial.max_distance->get;
+                                        let ref_distance =
+                                            spatial.reference_distance->get;
+
+                                        // 距离范围圈：参考距离实线（亮黄）、
+                                        // 最大距离虚线（源色）；悬停/拖拽对应
+                                        // 手柄时高亮该圈。
+                                        let max_ring = (base.0, base.1,
+                                            base.2, 190);
+                                        let ref_ring = (
+                                            AUDIO_REF_RANGE_COLOR.0,
+                                            AUDIO_REF_RANGE_COLOR.1,
+                                            AUDIO_REF_RANGE_COLOR.2,
+                                            235);
+
+                                        if (max_distance > 0.0001)
+                                            drawCircleXYDashed(pos, rotation,
+                                                max_distance,
+                                                active_handle == AUDIO_HANDLE_SOURCE_MAX
+                                                    ? AUDIO_HOVER_COLOR | max_ring);
+                                        if (ref_distance > 0.0001)
+                                            drawCircleXY(pos, rotation,
+                                                ref_distance,
+                                                active_handle == AUDIO_HANDLE_SOURCE_REF
+                                                    ? AUDIO_HOVER_COLOR | ref_ring);
+
+                                        let dir =
+                                            audioSourceDirectionWorld(rotation, spatial);
+                                        let arrow_len = (max_distance > 1.)
+                                            ? max_distance * 0.35 | 1.;
+                                        drawArrow(pos, pos + dir * arrow_len,
+                                            hot_color, 1.4);
+                                    }
                                 }
                             }
                             else if (kind == 1)

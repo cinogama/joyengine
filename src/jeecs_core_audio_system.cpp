@@ -733,39 +733,47 @@ namespace jeecs::audio
         };
 
         // ==================== 4. 音源 ====================
-        // Audio::Spatial 是 flag 组件：配对它的 Source 才空间化（还需
-        // Transform）；否则相对听者播放（UI 提示、环境声）。
+        // Audio::Spatial 既是空间化标记又承载距离/锥形/空气吸收等空间参数：
+        // 配对它的 Source 才空间化（还需 Transform）；否则相对听者播放
+        // （UI 提示、环境声），没有衰减范围可言，提交默认参数即可。
+        const Audio::Spatial default_spatial_params;
+
         for (auto&& [source, spatial, trans] : query<
             view typesof(Audio::Source&, Audio::Spatial*, Transform::Translation*)
         >())
         {
             const bool spatial_active = spatial != nullptr && trans != nullptr;
+            const Audio::Spatial& spatial_params =
+                spatial != nullptr ? *spatial : default_spatial_params;
 
             math::vec3 position(0.0f, 0.0f, 0.0f);
             math::vec3 velocity(0.0f, 0.0f, 0.0f);
 
-            if (spatial_active)
+            if (spatial != nullptr)
             {
-                position = trans->world_position;
-
-                const float delta = std::max(deltatime(), 0.0001f);
-                if (source.has_last_position)
-                    velocity = (position - source.last_position) / delta;
-
-                source.last_position = position;
-                source.has_last_position = true;
-
-                if (listener_present && listener_2d)
+                if (spatial_active)
                 {
-                    position.z = 0.0f;
-                    velocity.z = 0.0f;
-                }
-            }
-            else
-                source.has_last_position = false;
+                    position = trans->world_position;
 
-            source.spatial_active = spatial_active;
-            source.last_world_position = position;
+                    const float delta = std::max(deltatime(), 0.0001f);
+                    if (spatial->has_last_position)
+                        velocity = (position - spatial->last_position) / delta;
+
+                    spatial->last_position = position;
+                    spatial->has_last_position = true;
+
+                    if (listener_present && listener_2d)
+                    {
+                        position.z = 0.0f;
+                        velocity.z = 0.0f;
+                    }
+                }
+                else
+                    spatial->has_last_position = false;
+
+                spatial->active = spatial_active;
+                spatial->last_world_position = position;
+            }
 
             occlusion_result occlusion{ 1.0f, 1.0f };
 
@@ -803,60 +811,66 @@ namespace jeecs::audio
                         tilemap, listener_position, position, occlusion);
             }
 
-                // 遮挡值做时间平滑：射线在遮挡体边缘是硬切换，直接应用到增益/
-                // 闷音会在跨过边缘的瞬间突变。首帧/重新进入空间化时直接对齐，
-                // 之后指数逼近目标——进入遮挡稍快、离开遮挡稍慢。增益与闷音
-                // 各自按自己的变化方向选时间常数：只闷不变轻的遮挡按闷音的
-                // “进入”速率变闷，不会跟着增益的“离开”速率慢慢拖。
-            if (!spatial_active || !listener_present)
+            // 遮挡值做时间平滑：射线在遮挡体边缘是硬切换，直接应用到增益/
+            // 闷音会在跨过边缘的瞬间突变。首帧/重新进入空间化时直接对齐，
+            // 之后指数逼近目标——进入遮挡稍快、离开遮挡稍慢。增益与闷音
+            // 各自按自己的变化方向选时间常数：只闷不变轻的遮挡按闷音的
+            // “进入”速率变闷，不会跟着增益的“离开”速率慢慢拖。
+            // 平滑状态属于空间化运行时，跟着 Audio::Spatial 走。
+            if (spatial != nullptr)
             {
-                source.current_occlusion_gain = 1.0f;
-                source.current_occlusion_hf = 1.0f;
-                source.occlusion_smoothed = false;
-            }
-            else if (!source.occlusion_smoothed)
-            {
-                source.current_occlusion_gain = occlusion.m_gain;
-                source.current_occlusion_hf = occlusion.m_hf;
-                source.occlusion_smoothed = true;
-            }
-            else
-            {
-                const float dt = std::max(deltatime(), 0.0f);
-
-                auto smooth_occlusion =
-                    [dt](float current, float target, float tau)
+                if (!spatial_active || !listener_present)
                 {
-                    if (current == target)
-                        return target;
+                    spatial->current_occlusion_gain = 1.0f;
+                    spatial->current_occlusion_hf = 1.0f;
+                    spatial->occlusion_smoothed = false;
+                }
+                else if (!spatial->occlusion_smoothed)
+                {
+                    spatial->current_occlusion_gain = occlusion.m_gain;
+                    spatial->current_occlusion_hf = occlusion.m_hf;
+                    spatial->occlusion_smoothed = true;
+                }
+                else
+                {
+                    const float dt = std::max(deltatime(), 0.0f);
 
-                    const float alpha = 1.0f - std::exp(-dt / tau);
-                    const float next = current + (target - current) * alpha;
+                    auto smooth_occlusion =
+                        [dt](float current, float target, float tau)
+                    {
+                        if (current == target)
+                            return target;
 
-                    if (std::fabs(next - target) < OCCLUSION_SMOOTH_EPSILON)
-                        return target;
-                    return next;
-                };
+                        const float alpha = 1.0f - std::exp(-dt / tau);
+                        const float next = current + (target - current) * alpha;
 
-                // 每个通道按自己的变化方向选时间常数：变小（进入遮挡）
-                // 用 attack，变大（离开遮挡）用 release
-                const float gain_tau =
-                    occlusion.m_gain < source.current_occlusion_gain
-                    ? OCCLUSION_ATTACK_SECONDS
-                    : OCCLUSION_RELEASE_SECONDS;
-                const float hf_tau =
-                    occlusion.m_hf < source.current_occlusion_hf
-                    ? OCCLUSION_ATTACK_SECONDS
-                    : OCCLUSION_RELEASE_SECONDS;
+                        if (std::fabs(next - target) < OCCLUSION_SMOOTH_EPSILON)
+                            return target;
+                        return next;
+                    };
 
-                source.current_occlusion_gain = smooth_occlusion(
-                    source.current_occlusion_gain, occlusion.m_gain, gain_tau);
-                source.current_occlusion_hf = smooth_occlusion(
-                    source.current_occlusion_hf, occlusion.m_hf, hf_tau);
+                    // 每个通道按自己的变化方向选时间常数：变小（进入遮挡）
+                    // 用 attack，变大（离开遮挡）用 release
+                    const float gain_tau =
+                        occlusion.m_gain < spatial->current_occlusion_gain
+                        ? OCCLUSION_ATTACK_SECONDS
+                        : OCCLUSION_RELEASE_SECONDS;
+                    const float hf_tau =
+                        occlusion.m_hf < spatial->current_occlusion_hf
+                        ? OCCLUSION_ATTACK_SECONDS
+                        : OCCLUSION_RELEASE_SECONDS;
+
+                    spatial->current_occlusion_gain = smooth_occlusion(
+                        spatial->current_occlusion_gain, occlusion.m_gain,
+                        gain_tau);
+                    spatial->current_occlusion_hf = smooth_occlusion(
+                        spatial->current_occlusion_hf, occlusion.m_hf,
+                        hf_tau);
+                }
+
+                occlusion.m_gain = spatial->current_occlusion_gain;
+                occlusion.m_hf = spatial->current_occlusion_hf;
             }
-
-            occlusion.m_gain = source.current_occlusion_gain;
-            occlusion.m_hf = source.current_occlusion_hf;
 
             // 音量总线：变化时提交到声源
             if (source.bus_applied != source.bus)
@@ -865,24 +879,26 @@ namespace jeecs::audio
                 source.source->set_bus(source.bus);
             }
 
-            // 遮挡闷音：按需创建低通滤波器并绑定
-            if (occlusion.m_hf < 0.999f)
+            // 遮挡闷音：按需创建低通滤波器并绑定。滤波器属于空间化运行时
+            // （occlusion.m_hf < 1 只可能来自 Audio::Spatial 的平滑状态），
+            // 绑定标记留在声源上，Spatial 移除后仍能解除绑定。
+            if (spatial != nullptr && occlusion.m_hf < 0.999f)
             {
-                if (!source.occlusion_filter.has_value())
-                    source.occlusion_filter.emplace(filter::create());
+                if (!spatial->occlusion_filter.has_value())
+                    spatial->occlusion_filter.emplace(filter::create());
 
                 const bool occlusion_hf_changed =
-                    source.applied_occlusion_hf != occlusion.m_hf;
+                    spatial->applied_occlusion_hf != occlusion.m_hf;
 
                 if (occlusion_hf_changed)
                 {
-                    source.occlusion_filter.value()->update(
+                    spatial->occlusion_filter.value()->update(
                         [&](je_audio_filter_t* filter_data)
                         {
                             filter_data->m_gain_hf = occlusion.m_hf;
                         });
 
-                    source.applied_occlusion_hf = occlusion.m_hf;
+                    spatial->applied_occlusion_hf = occlusion.m_hf;
                 }
 
                 // 同发送滤波器：OpenAL 在绑定时拷贝滤波器参数，只改滤波器
@@ -891,7 +907,7 @@ namespace jeecs::audio
                 {
                     source.source->set_filter(
                         std::optional<basic::resource<filter>>(
-                            source.occlusion_filter.value()));
+                            spatial->occlusion_filter.value()));
                     source.occlusion_filter_bound = true;
                 }
             }
@@ -1053,75 +1069,96 @@ namespace jeecs::audio
                 }
             }
 
-            for (size_t send_index = 0;
-                send_index < Audio::Source::REVERB_SEND_COUNT;
-                ++send_index)
+            // 发送状态属于空间化运行时（Audio::Spatial）。没有 Spatial 时
+            // 声部上可能还挂着上一次空间化时的发送：解除一次即可，之后
+            // 不再每帧重复解除。
+            if (spatial == nullptr)
             {
-                Audio::Source::reverb_send_state& send =
-                    source.reverb_sends[send_index];
-
-                if ((int)send_index >= reverb_candidate_count)
+                if (source.reverb_sends_bound)
                 {
-                    if (send.filter_bound)
-                    {
+                    for (size_t send_index = 0;
+                        send_index < Audio::Spatial::REVERB_SEND_COUNT;
+                        ++send_index)
                         source.source->bind_effect_slot(
                             send_index, std::nullopt, std::nullopt);
-                        send.filter_bound = false;
-                    }
-                    send.room_id = 0;
-                    continue;
+
+                    source.reverb_sends_bound = false;
                 }
-
-                const reverb_candidate& candidate =
-                    reverb_candidates[send_index];
-
-                reverb_room_runtime& room =
-                    ensure_reverb_room(*candidate.m_room);
-
-                if (!send.filter.has_value())
-                    send.filter.emplace(filter::create());
-
-                // EFX 没有 per-send gain：用该路发送的低通滤波器 gain 代替。
-                // 声源整体增益已经包含遮挡增益，这里只补房间权重、门洞路径
-                // 衰减与高频闷音。
-                const bool send_gain_changed =
-                    send.applied_gain != candidate.m_weight
-                    || send.applied_hf != candidate.m_hf;
-
-                if (send_gain_changed)
+            }
+            else
+            {
+                for (size_t send_index = 0;
+                    send_index < Audio::Spatial::REVERB_SEND_COUNT;
+                    ++send_index)
                 {
-                    send.applied_gain = candidate.m_weight;
-                    send.applied_hf = candidate.m_hf;
+                    Audio::Spatial::reverb_send_state& send =
+                        spatial->reverb_sends[send_index];
 
-                    send.filter.value()->update(
-                        [&](je_audio_filter_t* filter_data)
+                    if ((int)send_index >= reverb_candidate_count)
+                    {
+                        if (send.filter_bound)
                         {
-                            filter_data->m_type =
-                                JE_AUDIO_FILTER_LOWPASS;
-                            filter_data->m_gain = candidate.m_weight;
-                            filter_data->m_gain_hf = candidate.m_hf;
-                        });
+                            source.source->bind_effect_slot(
+                                send_index, std::nullopt, std::nullopt);
+                            send.filter_bound = false;
+                        }
+                        send.room_id = 0;
+                        continue;
+                    }
+
+                    const reverb_candidate& candidate =
+                        reverb_candidates[send_index];
+
+                    reverb_room_runtime& room =
+                        ensure_reverb_room(*candidate.m_room);
+
+                    if (!send.filter.has_value())
+                        send.filter.emplace(filter::create());
+
+                    // EFX 没有 per-send gain：用该路发送的低通滤波器 gain 代替。
+                    // 声源整体增益已经包含遮挡增益，这里只补房间权重、门洞路径
+                    // 衰减与高频闷音。
+                    const bool send_gain_changed =
+                        send.applied_gain != candidate.m_weight
+                        || send.applied_hf != candidate.m_hf;
+
+                    if (send_gain_changed)
+                    {
+                        send.applied_gain = candidate.m_weight;
+                        send.applied_hf = candidate.m_hf;
+
+                        send.filter.value()->update(
+                            [&](je_audio_filter_t* filter_data)
+                            {
+                                filter_data->m_type =
+                                    JE_AUDIO_FILTER_LOWPASS;
+                                filter_data->m_gain = candidate.m_weight;
+                                filter_data->m_gain_hf = candidate.m_hf;
+                            });
+                    }
+
+                    // OpenAL 在 alSource3i(AL_AUXILIARY_SEND_FILTER) 时把滤波器的
+                    // gain/gain_hf 拷贝进 voice；之后单独改滤波器不会生效。所以
+                    // 发送权重变化时也必须重新绑定发送。
+                    if (!send.filter_bound
+                        || send_gain_changed
+                        || send.room_id != candidate.m_room->m_id
+                        || send.room_epoch != room.m_slot_epoch)
+                    {
+                        source.source->bind_effect_slot(
+                            send_index,
+                            std::optional<basic::resource<effect_slot>>(
+                                room.m_slot.value()),
+                            std::optional<basic::resource<filter>>(
+                                send.filter.value()));
+
+                        send.room_id = candidate.m_room->m_id;
+                        send.room_epoch = room.m_slot_epoch;
+                        send.filter_bound = true;
+                    }
                 }
 
-                // OpenAL 在 alSource3i(AL_AUXILIARY_SEND_FILTER) 时把滤波器的
-                // gain/gain_hf 拷贝进 voice；之后单独改滤波器不会生效。所以
-                // 发送权重变化时也必须重新绑定发送。
-                if (!send.filter_bound
-                    || send_gain_changed
-                    || send.room_id != candidate.m_room->m_id
-                    || send.room_epoch != room.m_slot_epoch)
-                {
-                    source.source->bind_effect_slot(
-                        send_index,
-                        std::optional<basic::resource<effect_slot>>(
-                            room.m_slot.value()),
-                        std::optional<basic::resource<filter>>(
-                            send.filter.value()));
-
-                    send.room_id = candidate.m_room->m_id;
-                    send.room_epoch = room.m_slot_epoch;
-                    send.filter_bound = true;
-                }
+                source.reverb_sends_bound = reverb_candidate_count > 0;
             }
 
             // 提交空间参数
@@ -1145,7 +1182,7 @@ namespace jeecs::audio
                         data->m_velocity[2] = velocity.z;
 
                         math::vec3 direction =
-                            trans->world_rotation * source.direction;
+                            trans->world_rotation * spatial_params.direction;
 
                         if (direction.length() > 1e-6f)
                             direction = direction.unit();
@@ -1171,18 +1208,18 @@ namespace jeecs::audio
                         data->m_direction[2] = 1.0f;
                     }
 
-                    data->m_reference_distance = source.reference_distance;
-                    data->m_max_distance = source.max_distance;
-                    data->m_rolloff = source.rolloff;
+                    data->m_reference_distance = spatial_params.reference_distance;
+                    data->m_max_distance = spatial_params.max_distance;
+                    data->m_rolloff = spatial_params.rolloff;
 
-                    data->m_min_gain = source.min_gain;
-                    data->m_max_gain = source.max_gain;
+                    data->m_min_gain = spatial_params.min_gain;
+                    data->m_max_gain = spatial_params.max_gain;
 
-                    data->m_cone_inner_angle = source.cone_inner_angle;
-                    data->m_cone_outer_angle = source.cone_outer_angle;
-                    data->m_cone_outer_gain = source.cone_outer_gain;
+                    data->m_cone_inner_angle = spatial_params.cone_inner_angle;
+                    data->m_cone_outer_angle = spatial_params.cone_outer_angle;
+                    data->m_cone_outer_gain = spatial_params.cone_outer_gain;
 
-                    data->m_air_absorption = source.air_absorption;
+                    data->m_air_absorption = spatial_params.air_absorption;
                 });
 
             // 播放状态机

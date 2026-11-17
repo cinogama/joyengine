@@ -602,8 +602,9 @@ namespace Audio
             public func set_buffer(self: Source, buf: je::audio::buffer)=> void;
         extern("libjoyecs", "wojeapi_towoo_audio_source_get_buffer")
             public func get_buffer(self: Source)=> option<je::audio::buffer>;
-        // 以该音源的参数与实体位置播放一次事件音（不改变持久声部的播放）
+        // 以该音源的参数与实体位置播放一次事件音（不改变持久声部的播放）；
+        // 距离衰减参数来自配对的 Audio::Spatial（none = 非空间化，不衰减）
         extern("libjoyecs", "wojeapi_towoo_audio_source_play_oneshot")
-            public func play_oneshot(self: Source, buf: je::audio::buffer)=> bool;
+            public func play_oneshot(self: Source, spatial: option<Spatial>, buf: je::audio::buffer)=> bool;
     }
 }

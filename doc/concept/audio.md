@@ -51,6 +51,23 @@
 | `play` | true | 播放/暂停开关：false 暂停，再 true 从暂停处继续 |
 | `loop` | true | 是否循环 |
 | `bus` | `SE` | 音量总线分组（BGM/BGS/ME/SE/VOICE + 自定义槽位）；`NONE` = 不经过总线 |
+
+`play` 的行为约定：
+
+* `play` 相当于播放/暂停开关：置为 false 时**暂停**，再置为 true 时从暂停处继续；
+* **非循环播放结束后，`play` 会被自动置回 false**，想再播一次只需重新置为 true；
+* 更换 `buffer` 会先停止当前播放，若 `play` 为 true 则从头播放新音频；`buffer` 为空时停止播放。
+
+⚠️ `play` 与 `loop` 默认都是 true：一个设置了 `buffer` 的新 `Source` 会立即开始循环播放。一次性音效请把 `loop` 设为 false，或改用一次性播放接口。
+
+### 空间化：`Audio::Spatial`
+
+实体配对 `Audio::Source` + `Audio::Spatial` 才是**空间化音源**——受听者位置、距离衰减与遮挡/混响影响；没有 `Spatial` 的 `Source` 按“相对听者”播放（不做距离衰减、不做左右声像），适合挂在 UI 实体上的音效与环境声。空间化还需要实体带 `Transform::Translation`（没有时同样退回相对听者）。编辑器“添加组件 → 音频 → 音源”预设会同时挂上 `Spatial`；做 UI 音效时把 `Spatial` 组件移除即可。
+
+距离衰减、锥形指向与空气吸收等**空间参数同样属于 `Spatial`**：非空间音源没有衰减范围的概念，`Source` 上不再有这些成员。移除 `Spatial` 时随组件一起丢弃这些参数，重新挂上时取默认值。
+
+| 成员 | 默认值 | 说明 |
+| --- | --- | --- |
 | `reference_distance` | 1 | 参考距离：此距离内为满增益（钳制模型） |
 | `max_distance` | 32 | 最大距离：线性钳制模型下衰减到此距离归零 |
 | `rolloff` | 1 | 衰减率 |
@@ -64,17 +81,7 @@
 
 锥形指向默认内外角都是 360°，即无方向性；要模拟喇叭、声源朝向明显的角色时再设置。2D 场景里使用锥形时，请把 `direction` 设成 XY 平面内的方向（例如 `(1, 0, 0)`），否则默认的 +Z 朝向在 XY 平面上没有意义。
 
-`play` 的行为约定：
-
-* `play` 相当于播放/暂停开关：置为 false 时**暂停**，再置为 true 时从暂停处继续；
-* **非循环播放结束后，`play` 会被自动置回 false**，想再播一次只需重新置为 true；
-* 更换 `buffer` 会先停止当前播放，若 `play` 为 true 则从头播放新音频；`buffer` 为空时停止播放。
-
-⚠️ `play` 与 `loop` 默认都是 true：一个设置了 `buffer` 的新 `Source` 会立即开始循环播放。一次性音效请把 `loop` 设为 false，或改用一次性播放接口。
-
-### 空间化开关：`Audio::Spatial`
-
-`Audio::Spatial` 是 flag 组件：实体配对 `Audio::Source` + `Audio::Spatial` 才是**空间化音源**——受听者位置、距离衰减与遮挡/混响影响；没有 `Spatial` 的 `Source` 按“相对听者”播放（不做距离衰减、不做左右声像），适合挂在 UI 实体上的音效与环境声。空间化还需要实体带 `Transform::Translation`（没有时同样退回相对听者）。编辑器“添加组件 → 音频 → 音源”预设会同时挂上 `Spatial`；做 UI 音效时把 `Spatial` 组件移除即可。
+空间化的运行时状态（位置缓存、遮挡平滑、直达声闷音滤波器、混响发送槽）同样挂在 `Spatial` 上，不反射、不存档、也不随组件拷贝；移除 `Spatial` 即丢弃这些状态，重新挂上时从默认值开始。声部自身的播放状态机与总线提交状态留在 `Audio::Source` 上。
 
 ### 2D 与 3D：`Audio::Listener`
 
@@ -120,8 +127,8 @@
 1. **事件音**（脚步、金币、弹壳、受击等）：用一次性播放接口，不创建实体、不需要声源句柄。脚本预加载 buffer 后反复播放：
    `je::audio::play_once_at(buf, x, y)`（2D）或 `play_once_at_3d(buf, x, y, z)`（3D）。
 2. **持久/循环音**（BGM、机器嗡鸣、环境声）：每个实体一个 `Audio::Source`；需要多个同时循环时，用子实体（ECS 标准做法，父变换自动跟随）。
-3. 角色可以只挂一个 `Audio::Source` 作为“该实体的声音参数模板”，再调用
-   `source->play_oneshot(buffer)`：用组件的 `bus`/音量/距离参数 + 实体当前世界位置发起一次性播放，并自动套用该实体上一帧的遮挡增益与闷音。
+3. 角色可以只挂一个 `Audio::Source`（与 `Audio::Spatial`）作为“该实体的声音参数模板”，再调用
+   `source->play_oneshot(spatial, buffer)`：用 `Source` 的 `bus`/音量、`Spatial` 的距离参数 + 实体当前世界位置发起一次性播放，并自动套用该实体上一帧的遮挡增益与闷音。`spatial` 传 `option::none` 时按非空间化播放（不衰减）。
 
 一次性播放由引擎分配临时声部并在播放结束后自动回收，同时最多 32 个，超出时回收最早创建的。它还会在 `lowpass_hf < 1` 时自动挂低通滤波器模拟闷音。全局一次性播放接口（`play_once*`）不知道场景遮挡与混响，只播放直达声；需要遮挡/混响的场景音请用实体 `Audio::Source`。
 
@@ -273,14 +280,14 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 
 | 组件 | 图标 | 选中后的辅助线与手柄 |
 | --- | --- | --- |
-| `Audio::Source` | 音箱 + 声波 | 最大距离/参考距离圆环与距离手柄、朝向箭头 |
+| `Audio::Source` + `Audio::Spatial` | 音箱 + 声波 | 最大距离/参考距离圆环与距离手柄、朝向箭头；非空间音源（无 `Spatial`）没有衰减范围，只显示图标 |
 | `Audio::Listener` | 耳机 | 听者朝向箭头与朝向手柄 |
 | `Audio::Occluder` | 砖墙 | 盒子线框与 ±X/±Y/±Z 六面尺寸手柄 |
 | `Audio::ReverbZone` | 房间 + 混响弧 | 盒子线框、`fade` 外扩线框与尺寸/淡出距离手柄 |
 | `Audio::Portal` | 门框 + 门扇 + 法线箭头 | 盒子线框、开口矩形、法线箭头与尺寸/法线手柄 |
 
 * 工具栏的编辑层选择在选中音频实体时出现「音频」按钮（快捷键 `5`）；「全部」模式同时显示音频线框，选中实体显示亮色线框与手柄。
-* 拖拽手柄直接写回组件成员：遮挡/房间/门洞的 `size`、房间的 `fade`、门洞的 `normal`、音源的 `max_distance`/`reference_distance`、听者的 `face`。按住 `Ctrl` 按 0.1 吸附。
+* 拖拽手柄直接写回组件成员：遮挡/房间/门洞的 `size`、房间的 `fade`、门洞的 `normal`、`Audio::Spatial` 的 `max_distance`/`reference_distance`、听者的 `face`。按住 `Ctrl` 按 0.1 吸附。
 * 一次拖拽在松开时发布为一条 `ModifyComponentMember` 撤销记录；数值的完整编辑仍可在 Inspector 中进行。
 * 纯音频实体没有渲染形状，图标同时作为点击拾取目标，因此可以在视口内直接选中。
 
@@ -289,12 +296,14 @@ C/C++：`je_audio_bus_gain_set` / `je_audio_bus_gain_get`，总线取 `JE_AUDIO_
 1. 新建世界时会把 `Audio::AudioUpdatingSystem` 加入该视口的运行时系统（仅调试运行/导出时启用，编辑态不常驻播放）；打开已有世界不会自动附加；
 2. “添加组件 → 音频”提供五个预设：**音源**（`Audio::Source`）、**音频监听器**（`Audio::Listener`）、**声音遮挡**（`Audio::Occluder`）、**混响区域**（`Audio::ReverbZone`）、**音频门洞**（`Audio::Portal`）；
 3. 把 `Audio::Listener` 挂到摄像机实体，`use_2d` 保持默认 true 即可用于横板/俯视角；
-4. 音源实体拖入 `.wav`，按需调整 `bus`、`reference_distance`、`max_distance`；
+4. 音源实体拖入 `.wav`，按需调整 `bus`；需要距离衰减/锥形时在 `Audio::Spatial` 上调整 `reference_distance`、`max_distance` 等参数；
 5. 在瓦片地图编辑器的瓦片面板中设置“音频遮挡/闷音”；
 6. 需要混响的房间/洞穴放一个 `Audio::ReverbZone`，调整尺寸覆盖房间；在 Inspector 里选一个预设（`room`/`cave`/`hallway` 等），按需调整 `fade` 与 `send_gain`。多个区域可以重叠，系统会按权重交叉淡化；
 7. 在两个房间/室外之间的门口放 `Audio::Portal`，`size` 覆盖开口，`normal` 指向穿透方向；用 `transmission`/`muffle` 调整通过声能与高频损失。
 
 旧版本的 `Audio::Playing` 已移除，旧世界中的音源需要把 `buffer`/`play`/`loop` 重新配置到 `Audio::Source` 上。
+
+距离/锥形/空气吸收参数已从 `Audio::Source` 移到 `Audio::Spatial`：旧世界存档里写在 `Audio::Source` 下的这些成员会被忽略，空间化音源需要重新在 `Spatial` 上设置（不设置时取默认值，与原来的默认值一致）。
 
 > 项目模板说明：`Audio::Listener::distance_model` 是一个脚本枚举，序列化/编辑器解析器位于
 > `builtin/script/types.wo` 与 `builtin/script/editor.wo`。用旧模板创建、且没有
@@ -325,12 +334,12 @@ system! bgm(src: Audio::Source)
     src.play->set(true);
 }
 
-// 用角色的音源参数播放任意事件音
-system! voice(src: Audio::Source, hurt: Audio::HurtFlag)
+// 用角色的音源参数播放任意事件音（spatial 为 none 时按非空间化播放）
+system! voice(src: Audio::Source, spatial: Audio::Spatial?, hurt: Audio::HurtFlag)
 {
     let scream = je::audio::buffer::load("@/sounds/hurt.wav")->unwrap;
     if (hurt.value->get)
-        do src->play_oneshot(scream);
+        do src->play_oneshot(spatial, scream);
 }
 
 // 总线音量
@@ -482,7 +491,8 @@ audio::play_oneshot(desc);
 2. **音频环境**：收集 `Audio::ReverbZone + Translation`（房间）与 `Audio::Portal + Translation`（门洞，跳过 `enabled = false`）的组件快照；房间/门洞图始终由组件实时构建（输入签名变化时才重建），不写缓存。图包含房间 OBB、门洞连接和全房间对路径表；区域效果槽不在这里创建，而是等声源真正用到时按需创建。
 3. **遮挡快照**：收集所有 `Audio::Occluder + Translation`；瓦片地图按 `map_stamp` 平整化成网格缓存（编辑时重建），遮挡全部逐帧实时测试。
 4. **Source + Translation（可选）**：
-   * 没有 `Audio::Spatial` 或没有 Translation → relative，位置/速度写 0；
+   * 没有 `Audio::Spatial` 或没有 Translation → relative，位置/速度写 0，空间参数提交默认值；
+   * 空间参数（`reference_distance` / `max_distance` / `rolloff` / `min_gain` / `max_gain` / `direction` / `cone_*` / `air_absorption`）来自实体的 `Audio::Spatial`；
    * 2D 听者下把声源位置/速度的 z 归零；
    * 对每个空间化声源计算遮挡：逐遮挡体 2D 矩形/3D OBB 测试 + 瓦片地图 DDA，得到 `occlusion.m_gain` 与 `occlusion.m_hf`；
    * `m_gain = volume × occlusion.m_gain`；`occlusion.m_hf < 1` 时按需创建/更新 per-source 低通滤波器并绑定（`AL_DIRECT_FILTER`），恢复时解绑；
@@ -500,7 +510,7 @@ audio::play_oneshot(desc);
 | 播放中 | 缓冲刚被更换（底层已自动停止） | 若 `play` 为 true 立即重新播放 |
 | 播放中 | 声源暂停 / 播放中 | 按 `play` 恢复或暂停 |
 
-`loop` 每帧写入镜像，因此运行中切换循环立即生效。缓冲的绑定每帧都会调用 `set_playing_buffer`，底层只有在缓冲真正改变时才停止播放并返回 true。`Audio::Source` 的拷贝构造创建新的 AL 声源，所以由预制体实例化出的实体都拥有独立的播放状态；运行时状态（上次位置、遮挡滤波器、总线缓存、混响发送槽等）不反射、不存档。
+`loop` 每帧写入镜像，因此运行中切换循环立即生效。缓冲的绑定每帧都会调用 `set_playing_buffer`，底层只有在缓冲真正改变时才停止播放并返回 true。`Audio::Source` 的拷贝构造创建新的 AL 声源，所以由预制体实例化出的实体都拥有独立的播放状态。运行时状态按归属拆分：空间化状态（上次位置、遮挡平滑、闷音滤波器、混响发送槽）在 `Audio::Spatial` 上，播放状态机与总线提交状态在 `Audio::Source` 上；两者都不反射、不存档，也不随组件拷贝。`Audio::Source` 另保留两个声部级绑定标记（`occlusion_filter_bound` / `reverb_sends_bound`），用于 `Audio::Spatial` 被移除后解除声部上的滤波器与混响发送绑定。
 
 ### 瓦片遮挡遍历
 
@@ -512,7 +522,7 @@ audio::play_oneshot(desc);
 
 | 内容 | 位置 |
 | --- | --- |
-| 音频组件（Source/Listener/Occluder/ReverbZone/Portal） | `include/jeecs/components.hpp`（`namespace Audio`） |
+| 音频组件（Source/Spatial/Listener/Occluder/ReverbZone/Portal） | `include/jeecs/components.hpp`（`namespace Audio`） |
 | C ABI、效果器参数与默认值、C++ 封装 | `include/jeecs/audio.hpp`（逐函数说明见 [doc/capi/audio](../capi/audio/)） |
 | OpenAL 后端（设备、热插拔、EFX、总线、一次性声部、缓存加载） | `src/jeecs_audio_impl_openal.cpp` |
 | 缓存载荷编解码（PCM/ADPCM/Vorbis 编码、解析与流式解码器） | `src/jeecs_audio_codec.hpp/.cpp` |
