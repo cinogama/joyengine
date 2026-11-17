@@ -258,8 +258,7 @@ namespace JEEditor::Editor
         // 为新项目准备资源目录：在项目根目录下创建 resource/，再把宿主
         // builtin/shader 下的公开着色器拷贝成 resource/shader，便于项目
         // 直接引用或改造；internal/ 是引擎内部管线私有着色器，不随项目
-        // 拷贝。最后按 project.gitignore / project.gitattribute 模板在项目
-        // 根写入 .gitignore 与 .gitattributes。
+        // 拷贝。最后按 project.gitignore 模板在项目根写入 .gitignore。
         // 任一步失败都返回错误描述，调用方据此提示，
         // 此时尚未写入项目文件，目录不会被当作有效项目打开。
         func initProjectResources(project_dir: path_t)=> result<void, string>
@@ -298,7 +297,7 @@ namespace JEEditor::Editor
             try! _ = copy(type_script_path / "types.wo", editor_scripts)
                 -> or_map(\e = F"拷贝 types.wo 到 \"{editor_scripts->to_string}\" 失败：{e}";);
 
-            // 把模板内容写到 dst（项目根的 .gitignore / .gitattributes），
+            // 把模板内容写到 dst（项目根的 .gitignore），
             // 模板缺失、创建文件、写盘任一步失败都转为错误描述。
             func writeRootTemplateFile(
                 t: Template::Type, template_name: string, dst: path_t)=> result<void, string>
@@ -321,10 +320,6 @@ namespace JEEditor::Editor
             try! _ = writeRootTemplateFile(
                 Template::Type::PROJECT_GITIGNORE,
                 "project.gitignore", project_dir / ".gitignore");
-
-            try! _ = writeRootTemplateFile(
-                Template::Type::PROJECT_GITATTRIBUTE,
-                "project.gitattribute", project_dir / ".gitattributes");
 
             return_ok!;
         }
