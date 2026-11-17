@@ -890,24 +890,6 @@ WOORT_API woort_api wojeapi_get_components_member(void)
         return woort_ret_option_none();
 }
 
-// Entity architecture info
-WOORT_API woort_api wojeapi_get_entity_arch_information(void)
-{
-    je_game_entity_t* entity = (je_game_entity_t*)woort_gcpointer(0);
-    size_t chunk_size = 0, entity_size = 0, entity_count = 0;
-
-    je_debug_entity_arch_information_get(entity, &chunk_size, &entity_size, &entity_count);
-
-    woort_set_struct(WOORT_RETURN_SLOT, 3);
-
-    woort_struct_set_int(WOORT_RETURN_SLOT, 0, (woort_Int)chunk_size);
-    woort_struct_set_int(WOORT_RETURN_SLOT, 1, (woort_Int)entity_size);
-    woort_struct_set_int(WOORT_RETURN_SLOT, 2, (woort_Int)entity_count);
-
-    return woort_ret();
-}
-
-
 // Entity prefab path (editor)
 WOORT_API woort_api wojeapi_entity_get_prefab_path(void)
 {

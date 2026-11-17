@@ -314,29 +314,6 @@ je_tilemap_map_unload [基本接口]
 JE_API int32_t je_tilemap_map_unload(je_tilemap_document_t* map);
 
 /*
-je_tilemap_loaded_map_count [基本接口]
-返回进程内已注册的地图文档数量（含未保存的新建文档）
-    * 文档实例销毁后其枚举槽位置空，计数不变但 je_tilemap_loaded_map
-      在该下标返回 nullptr；计数也含仍被引用、但已被 je_tilemap_map_reload
-      弃用的旧实例（其路径已清空、不再被任何世界使用）
-请参见：
-    je_tilemap_loaded_map
-*/
-JE_API int32_t je_tilemap_loaded_map_count(void);
-
-/*
-je_tilemap_loaded_map [基本接口]
-按枚举下标取已注册地图文档的实例指针，与 je_tilemap_loaded_map_count 配套遍历
-    * 下标从 0 起、小于 je_tilemap_loaded_map_count；越界或该槽位实例
-      已销毁返回 nullptr
-    * 枚举下标不是文档指针：文档指针稳定不变，而打开/新建文档会使后续
-      枚举下标位移，遍历中不应再打开/新建文档
-请参见：
-    je_tilemap_loaded_map_count
-*/
-JE_API /* OPTIONAL: If index is out of range or the slot is empty */ je_tilemap_document_t* je_tilemap_loaded_map(int32_t index);
-
-/*
 je_tilemap_map_resize [基本接口]
 调整地图文档的网格尺寸，越界格子的逐格属性覆盖将被丢弃
     * 新尺寸不合法（<=0 或超过 65536）时不做任何修改

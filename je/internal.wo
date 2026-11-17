@@ -157,9 +157,6 @@ namespace je
         // 多个钩子各自排空互不影响。
         extern("libjoyecs", "wojeapi_get_all_logs")
             public func getlogs(i: handle)=> array<(loglevel, string)>;
-            
-        extern("libjoyecs", "wojeapi_get_entity_arch_information")
-            public func get_entity_arch_information(e: entity)=> (int, int, int); // chunk_size, entity_size, entity_count
     }
     namespace input::internal
     {

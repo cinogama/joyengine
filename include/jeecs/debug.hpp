@@ -38,12 +38,6 @@ JE_API je_debug_eid_t je_debug_entity_uid_get(const je_game_entity_t* e);
 
 JE_API void je_debug_entity_uid_set(const je_game_entity_t* e, je_debug_eid_t uid);
 
-JE_API void je_debug_entity_arch_information_get(
-    je_game_entity_t* _entity,
-    size_t* _out_chunk_size,
-    size_t* _out_entity_size,
-    size_t* _out_all_entity_count_in_chunk);
-
 #endif
 
 JE_FORCE_CAPI_END

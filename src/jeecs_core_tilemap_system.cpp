@@ -1359,16 +1359,6 @@ uint64_t je_tilemap_map_version(je_tilemap_document_t* doc)
 {
     return doc->version;
 }
-int32_t je_tilemap_loaded_map_count(void)
-{
-    return jeecs::Tilemap::documents::inst().map_count();
-}
-/* OPTIONAL: If index is out of range or the slot is empty */ je_tilemap_document_t* je_tilemap_loaded_map(int32_t index)
-{
-    // 调用期间由 map_at 锁内的持有保活，用毕即弃、不占外部引用
-    auto doc = jeecs::Tilemap::documents::inst().map_at(index);
-    return doc.has_value() ? doc->get() : nullptr;
-}
 void je_tilemap_map_resize(je_tilemap_document_t* doc, int32_t new_w, int32_t new_h)
 {
     if (new_w <= 0 || new_h <= 0 || new_w > 65536 || new_h > 65536)

@@ -559,14 +559,6 @@ namespace jeecs
 
             // ---- 地图文档 ----
 
-            // 已注册地图文档枚举（热更新等遍历用）：数量与按枚举下标
-            //（0 起，非句柄）取实例。枚举表只增不删，实例销毁后该槽位
-            // 解析为 nullopt。count 与 at 两 call 之间注册表可能变化
-            //（并发打开/销毁）；at 返回的持有在调用期间保活实例，用毕
-            // 即弃、不占外部引用。需要稳定集合时用 snapshot_maps。
-            int32_t map_count() const;
-            std::optional<std::shared_ptr<MapDocument>> map_at(int32_t index) const;
-
             // 快照枚举：返回当前全部存活地图文档，每个各带 1 个外部
             // 引用（调用方用毕须 unload，Woolang 侧即 gchandle 终结器
             // 路径）。在一次持锁内完成"收集 + 计引用"，避免逐个
@@ -807,8 +799,8 @@ namespace jeecs
                 table.failed.erase(key);
             }
 
-            // 注册表互斥锁。mutable：map_count/map_at/map_stamp 等只读
-            // 接口亦须持锁（表被并发解析/释放改动）。
+            // 注册表互斥锁。mutable：map_stamp 等只读接口亦须持锁
+            //（表被并发解析/释放改动）。
             mutable std::mutex m_mutex;
 
             doc_table<MapDocument> m_maps;

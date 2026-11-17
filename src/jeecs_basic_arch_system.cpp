@@ -3179,19 +3179,6 @@ const je_type_info_t** je_debug_world_systems_attached_get_all(je_game_world_t* 
     return result;
 }
 
-void je_debug_entity_arch_information_get(
-    je_game_entity_t* _entity,
-    size_t* _out_chunk_size,
-    size_t* _out_entity_size,
-    size_t* _out_all_entity_count_in_chunk)
-{
-    auto* chunkaddr = static_cast<ArchType::arch_chunk*>(_entity->_m_in_chunk);
-
-    *_out_chunk_size = CHUNK_SIZE;
-    *_out_entity_size = chunkaddr->get_entity_size_in_chunk();
-    *_out_all_entity_count_in_chunk = chunkaddr->get_entity_count_in_chunk();
-}
-
 void je_ecs_universe_pre_for_worlds_job_register(je_game_universe_t* universe, je_job_for_worlds_t job, /* OPTIONAL */ void* data, /* OPTIONAL */ void (*freefunc)(void*))
 {
     static_cast<Universe*>(universe)->register_pre_for_worlds_job(job, data, freefunc);

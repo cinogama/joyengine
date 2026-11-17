@@ -1049,20 +1049,6 @@ namespace jeecs
         }
 
         // ==================== 文档注册表 ====================
-        int32_t documents::map_count() const
-        {
-            std::lock_guard lock(m_mutex);
-            return (int32_t)m_maps.all.size();
-        }
-
-        std::optional<std::shared_ptr<MapDocument>> documents::map_at(int32_t index) const
-        {
-            std::lock_guard lock(m_mutex);
-            if (index < 0 || index >= (int32_t)m_maps.all.size())
-                return std::nullopt;
-            return live(m_maps.all[(size_t)index]);
-        }
-
         std::vector<MapDocument*> documents::snapshot_maps()
         {
             std::lock_guard lock(m_mutex);
