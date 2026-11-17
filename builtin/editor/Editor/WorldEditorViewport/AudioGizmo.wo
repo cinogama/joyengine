@@ -17,6 +17,7 @@ import je::towoo;
 import je::towoo::types;
 import je::towoo::components;
 
+import pkg::math;
 import pkg::try;
 
 import builtin::editor::GUI::Icons;
@@ -716,6 +717,32 @@ namespace JEEditor::Editor::WorldEditorViewport
         }
     }
 
+    // 浮点标签值：四舍五入到百分位后拼字符串。WooLang 的 real 转字符串
+    // 使用 %.17g，直接插值会把二进制误差原样带出来（如 0.99999999999999989），
+    // 这里按整数定点拼并去掉尾随零。
+    protected func audioNumber(value: real)=> string
+    {
+        let scaled = math::round(value * 100.);
+        let mut n = scaled;
+        let mut sign = "";
+        if (n < 0)
+        {
+            sign = "-";
+            n = -n;
+        }
+
+        let whole = n / 100;
+        let frac = n % 100;
+
+        if (frac == 0)
+            return F"{sign}{whole}";
+        if (frac % 10 == 0)
+            return F"{sign}{whole}.{frac / 10}";
+        if (frac < 10)
+            return F"{sign}{whole}.0{frac}";
+        return F"{sign}{whole}.{frac}";
+    }
+
     // 选中/悬停实体的组件状态标签
     protected func audioLabelText(e: entity, kind: int)=> string
     {
@@ -731,7 +758,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                     match (e->towoo::get_component:<Audio::Spatial>())
                     {
                         value(spatial)?
-                            return F"音源  空间  {playing}  最大 {spatial.max_distance->get}";
+                            return F"音源  空间  {playing}  最大 {audioNumber(spatial.max_distance->get)}";
                         none?;
                     }
                     return F"音源  非空间  {playing}";
@@ -746,7 +773,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 value(listener)?
                 {
                     let mode = listener.use_2d->get ? "2D" | "3D";
-                    return F"听者  {mode}  音量 {listener.volume->get}";
+                    return F"听者  {mode}  音量 {audioNumber(listener.volume->get)}";
                 }
                 none?;
             }
@@ -758,7 +785,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 value(occ)?
                 {
                     let size = occ.size->get;
-                    return F"声音遮挡  {size[0]}x{size[1]}x{size[2]}  遮挡 {occ.occlusion->get}  闷音 {occ.muffle->get}";
+                    return F"声音遮挡  {audioNumber(size[0])}x{audioNumber(size[1])}x{audioNumber(size[2])}  遮挡 {audioNumber(occ.occlusion->get)}  闷音 {audioNumber(occ.muffle->get)}";
                 }
                 none?;
             }
@@ -770,7 +797,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 value(zone)?
                 {
                     let size = zone.size->get;
-                    return F"混响区域  {size[0]}x{size[1]}x{size[2]}  淡出 {zone.fade->get}";
+                    return F"混响区域  {audioNumber(size[0])}x{audioNumber(size[1])}x{audioNumber(size[2])}  淡出 {audioNumber(zone.fade->get)}";
                 }
                 none?;
             }
@@ -782,7 +809,7 @@ namespace JEEditor::Editor::WorldEditorViewport
                 value(portal)?
                 {
                     let state = portal.enabled->get ? "启用" | "禁用";
-                    return F"门洞  {state}  透射 {portal.transmission->get}  闷音 {portal.muffle->get}";
+                    return F"门洞  {state}  透射 {audioNumber(portal.transmission->get)}  闷音 {audioNumber(portal.muffle->get)}";
                 }
                 none?;
             }
@@ -791,11 +818,12 @@ namespace JEEditor::Editor::WorldEditorViewport
         return audioKindName(kind);
     }
 
-    // 选中/悬停实体的组件摘要（多行一块背景），挂在徽标列正下方。
-    // anchor = 徽标列左下角。不能挂在徽标右侧：变换游标的 +X/+Y 轴与
-    // 音源的最大/参考距离手柄都在徽标右/上方向，右侧文本会压住它们。
+    // 选中/悬停实体的组件摘要（多行一块背景），固定在世界视口左下角，
+    // 不再跟随徽标/游标，避免遮挡实体附近的手柄。左下角只有未保存
+    // 标记的小圆点（drawUnsavedMark），摘要块排在它上方。
     protected func drawAudioLabels(
-        dl: DrawListT, anchor: vec2, labels: array<string>)=> void
+        dl: DrawListT, rmin: vec2, rsize: vec2,
+        labels: array<string>)=> void
     {
         let lines = labels->len;
         if (lines == 0)
@@ -811,12 +839,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                 width = w;
         }
 
-        // 徽标半径 12 + 选中外圈 4.5，留出 9px 间隙后文字才落到
-        // 中央手柄（半边长 8）与 +X 轴之下
-        let x = anchor[0];
-        let y = anchor[1] + 9.;
         let height = line_height * (lines as real)
             + line_gap * ((lines - 1) as real);
+
+        let x = rmin[0] + 8.;
+        let y = rmin[1] + rsize[1] - 8. - GetFrameHeight() - 6. - height;
 
         dl->AddRectFilled(
             (x - 4., y - 3.),
@@ -1008,6 +1035,11 @@ namespace JEEditor::Editor::WorldEditorViewport
                         selected ? AUDIO_WIRE_ALPHA | AUDIO_DIM_ALPHA);
                 }
 
+                // 摘要对象：优先选中实体，其次悬停的组件徽标实体
+                //（try! 闭包内不能重绑外部变量，用容器累积）
+                let selected_summary = []mut: vec<entity>;
+                let hovered_summary = []mut: vec<entity>;
+
                 for (let e : self.m_audio_entity_selector)
                 {
                     do try!{
@@ -1027,7 +1059,10 @@ namespace JEEditor::Editor::WorldEditorViewport
                             value(hovered_euid)?
                                 icon_hovered = hovered_euid == euid;
                         }
-                        let hot = selected || icon_hovered;
+                        if (selected)
+                            selected_summary->add(e);
+                        else if (icon_hovered && hovered_summary->len == 0)
+                            hovered_summary->add(e);
                         let rotation = trans->get_global_rot;
                         let scale = trans->get_local_scale;
 
@@ -1042,9 +1077,6 @@ namespace JEEditor::Editor::WorldEditorViewport
                             e->towoo::get_component:<Camera::Projection>()->is_value;
 
                         let mut index = 0;
-                        let mut hot_labels = []mut: vec<string>;
-                        let mut label_left = 0.;
-                        let mut label_bottom = 0.;
 
                         for (let kind : kinds)
                         {
@@ -1072,33 +1104,8 @@ namespace JEEditor::Editor::WorldEditorViewport
                                 audioKindColor(kind),
                                 selected, icon_hovered, enabled);
 
-                            if (hot)
-                            {
-                                // 摘要块取徽标列的左/下包围：徽标多于一个
-                                // 时纵向堆叠，摘要统一挂在最下方
-                                let half = AUDIO_ICON_PX * 0.5;
-                                if (hot_labels->len == 0)
-                                {
-                                    label_left = center[0] - half;
-                                    label_bottom = center[1] + half;
-                                }
-                                else
-                                {
-                                    if (center[0] - half < label_left)
-                                        label_left = center[0] - half;
-                                    if (label_bottom < center[1] + half)
-                                        label_bottom = center[1] + half;
-                                }
-                                hot_labels->add(audioLabelText(e, kind));
-                            }
-
                             index += 1;
                         }
-
-                        if (hot)
-                            drawAudioLabels(
-                                dl, (label_left, label_bottom) as vec2,
-                                hot_labels->to_array);
 
                         // ---- 区域线框（房间/遮挡/门洞） ----
                         // 区域体积始终绘制，不依赖当前编辑层与选中状态；
@@ -1261,6 +1268,24 @@ namespace JEEditor::Editor::WorldEditorViewport
 
                         return_value!;
                     };
+                }
+
+                // 组件摘要固定在视口左下角：最后绘制，盖在线框与手柄之上
+                let mut summary = hovered_summary->front;
+                if (selected_summary->len > 0)
+                    summary = selected_summary->front;
+                match (summary)
+                {
+                    none?;
+                    value(summary_e)?
+                    {
+                        let kinds = audioComponentKinds(summary_e);
+                        let mut labels = []mut: vec<string>;
+                        for (let kind : kinds)
+                            labels->add(audioLabelText(summary_e, kind));
+                        drawAudioLabels(
+                            dl, rmin, rsize, labels->to_array);
+                    }
                 }
 
                 // 手柄悬停/拖拽名称（与其它 gizmo 的鼠标旁提示一致）
