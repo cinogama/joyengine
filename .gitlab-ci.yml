@@ -349,6 +349,17 @@ package_macos_app:
     - mkdir -p "JoyEngine.app/Contents/MacOS" "JoyEngine.app/Contents/Resources"
     - cp dist/jedriver dist/libjoyecs.dylib dist/libwoo.dylib dist/libwoort.dylib dist/libopenal*.dylib "JoyEngine.app/Contents/MacOS/"
     - cp -R dist/pkg dist/builtin dist/je dist/licenses "JoyEngine.app/Contents/Resources/"
+    # App icon: rendered from the repo's builtin/icon/icon.png (256x256 source;
+    # the 512/1024 variants are upscaled by sips) and packed with iconutil.
+    # Must land in Resources/ before the bundle is sealed by codesign below.
+    - |
+      mkdir -p AppIcon.iconset
+      for px in 16 32 128 256 512; do
+        sips -z $px $px builtin/icon/icon.png --out "AppIcon.iconset/icon_${px}x${px}.png" >/dev/null
+        sips -z $((px*2)) $((px*2)) builtin/icon/icon.png --out "AppIcon.iconset/icon_${px}x${px}@2x.png" >/dev/null
+      done
+      iconutil -c icns AppIcon.iconset
+      mv AppIcon.icns "JoyEngine.app/Contents/Resources/AppIcon.icns"
     - printf 'APPL????' > "JoyEngine.app/Contents/PkgInfo"
     - |
       cat > "JoyEngine.app/Contents/Info.plist" <<EOF
@@ -359,6 +370,7 @@ package_macos_app:
           <key>CFBundleDevelopmentRegion</key><string>en</string>
           <key>CFBundleDisplayName</key><string>JoyEngine</string>
           <key>CFBundleExecutable</key><string>jedriver</string>
+          <key>CFBundleIconFile</key><string>AppIcon</string>
           <key>CFBundleIdentifier</key><string>net.cinogama.joyengine</string>
           <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
           <key>CFBundleName</key><string>JoyEngine</string>
