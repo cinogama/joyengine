@@ -305,19 +305,17 @@ build_macos_metal_opengl_vk:
     - dsymutil build/libjoyecs.dylib -o dsym/libjoyecs.dylib.dSYM
     - dsymutil build/libwoo.dylib -o dsym/libwoo.dylib.dSYM
     - dsymutil build/libwoort.dylib -o dsym/libwoort.dylib.dSYM
+    # Stage the runtime closure for the packaging job. cp -L flattens the
+    # libopenal* symlink chain into real files: artifact archives do not
+    # preserve symlinks (they arrive as 0-byte files, which then break bundle
+    # code signing with "code object is not signed at all").
+    - mkdir -p dist
+    - cp -RL build/jedriver build/libjoyecs.dylib build/libwoo.dylib build/libwoort.dylib build/libopenal*.dylib build/pkg build/builtin build/je build/licenses dist/
   # Raw output, used only as transit artifacts for the packaging job below.
   artifacts:
     name: jeecs-macos-raw-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
     paths:
-      - build/jedriver
-      - build/libjoyecs.dylib
-      - build/libwoo.dylib
-      - build/libwoort.dylib
-      - build/libopenal*.dylib
-      - build/pkg/*
-      - build/builtin/*
-      - build/licenses/*
-      - build/je/*
+      - dist/*
       - dsym/*
     expire_in: 1 day
   cache:
@@ -345,8 +343,8 @@ package_macos_app:
     - build_macos_metal_opengl_vk
   script:
     - mkdir -p "JoyEngine.app/Contents/MacOS"
-    - cp build/jedriver build/libjoyecs.dylib build/libwoo.dylib build/libwoort.dylib build/libopenal*.dylib "JoyEngine.app/Contents/MacOS/"
-    - cp -R build/pkg build/builtin build/je build/licenses "JoyEngine.app/Contents/MacOS/"
+    - cp dist/jedriver dist/libjoyecs.dylib dist/libwoo.dylib dist/libwoort.dylib dist/libopenal*.dylib "JoyEngine.app/Contents/MacOS/"
+    - cp -R dist/pkg dist/builtin dist/je dist/licenses "JoyEngine.app/Contents/MacOS/"
     - printf 'APPL????' > "JoyEngine.app/Contents/PkgInfo"
     - |
       cat > "JoyEngine.app/Contents/Info.plist" <<EOF
