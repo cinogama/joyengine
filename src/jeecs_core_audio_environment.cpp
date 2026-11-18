@@ -10,7 +10,6 @@ namespace jeecs::audio
 {
     namespace
     {
-        constexpr float ROOM_WEIGHT_EPSILON = 1e-4f;
         constexpr float PORTAL_EDGE_EPSILON = 1e-4f;
 
         float room_weight(

@@ -315,7 +315,6 @@ namespace jeecs::audio::codec
             std::vector<std::vector<uint8_t>> blocks;
             blocks.reserve(block_count);
 
-            uint64_t block_data_size = 0;
             for (uint32_t block = 0; block < block_count; ++block)
             {
                 const uint64_t frame_offset = static_cast<uint64_t>(block) * block_frames;
@@ -329,7 +328,6 @@ namespace jeecs::audio::codec
                     channels,
                     encoded);
 
-                block_data_size += encoded.size();
                 blocks.push_back(std::move(encoded));
             }
 
