@@ -1543,8 +1543,9 @@ namespace jeecs::graphic::api::dx11
                     jedx11_texture_res->texture_resource(),
                     nullptr,
                     target_view.GetAddressOf()));
+                const float clear_color[4] = { 0.f, 0.f, 0.f, 1.f };
                 context->m_dx_context->ClearRenderTargetView(
-                    target_view.Get(), { 0.f, 0.f, 0.f, 1.f });
+                    target_view.Get(), clear_color);
             }
         }
 
