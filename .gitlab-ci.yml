@@ -284,8 +284,9 @@ build_macos_metal_opengl_vk:
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
     - cmake ..
-      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
-      -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
+      -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
+      -DJE4_BUILD_SHARED_CORE=ON
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
@@ -296,10 +297,93 @@ build_macos_metal_opengl_vk:
     - if [ ! -d builtin ]; then mkdir builtin; fi
     - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
     - cd ..
+    # dSYM bundles must be extracted in this job: dsymutil follows the debug
+    # maps to the object files, which only exist in the build tree here.
+    # Written to dsym/ (not build/) so the build/* cache stays unaffected.
+    - mkdir -p dsym
+    - dsymutil build/jedriver -o dsym/jedriver.dSYM
+    - dsymutil build/libjoyecs.dylib -o dsym/libjoyecs.dylib.dSYM
+    - dsymutil build/libwoo.dylib -o dsym/libwoo.dylib.dSYM
+    - dsymutil build/libwoort.dylib -o dsym/libwoort.dylib.dSYM
+  # Raw output, used only as transit artifacts for the packaging job below.
+  artifacts:
+    name: jeecs-macos-raw-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
+    paths:
+      - build/jedriver
+      - build/libjoyecs.dylib
+      - build/libwoo.dylib
+      - build/libwoort.dylib
+      - build/libopenal*.dylib
+      - build/pkg/*
+      - build/builtin/*
+      - build/licenses/*
+      - build/je/*
+      - dsym/*
+    expire_in: 1 day
   cache:
     when: on_success
     key: $CI_JOB_NAME-$CI_CONCURRENT_PROJECT_ID
     paths:
         - "build/*"
+  tags:
+    - mac-arm64
+
+# Package the macOS build into a JoyECS.app bundle. Binaries and resource dirs
+# (pkg/builtin/je/licenses) live flat next to jedriver inside Contents/MacOS/,
+# mirroring the win64 layout: the engine resolves resources relative to the
+# executable directory and finds sibling dylibs via @executable_path rpath.
+# The bundle is only ad-hoc signed, so Gatekeeper requires quarantined
+# downloads (browser-fetched artifacts) to be cleared with
+#   xattr -dr com.apple.quarantine JoyECS.app
+package_macos_app:
+  stage: package
+  needs:
+    - build_macos_metal_opengl_vk
+  script:
+    - mkdir -p "JoyECS.app/Contents/MacOS"
+    - cp build/jedriver build/libjoyecs.dylib build/libwoo.dylib build/libwoort.dylib build/libopenal*.dylib "JoyECS.app/Contents/MacOS/"
+    - cp -R build/pkg build/builtin build/je build/licenses "JoyECS.app/Contents/MacOS/"
+    - printf 'APPL????' > "JoyECS.app/Contents/PkgInfo"
+    - |
+      cat > "JoyECS.app/Contents/Info.plist" <<EOF
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
+      <dict>
+          <key>CFBundleDevelopmentRegion</key><string>en</string>
+          <key>CFBundleDisplayName</key><string>JoyECS</string>
+          <key>CFBundleExecutable</key><string>jedriver</string>
+          <key>CFBundleIdentifier</key><string>net.cinogama.joyecs</string>
+          <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+          <key>CFBundleName</key><string>JoyECS</string>
+          <key>CFBundlePackageType</key><string>APPL</string>
+          <key>CFBundleShortVersionString</key><string>0.0.$CI_PIPELINE_IID</string>
+          <key>CFBundleVersion</key><string>$CI_COMMIT_SHORT_SHA</string>
+          <key>LSMinimumSystemVersion</key><string>11.0</string>
+          <key>NSHighResolutionCapable</key><true/>
+      </dict>
+      </plist>
+      EOF
+    - codesign --force --sign - "JoyECS.app"
+  artifacts:
+    name: jeecs-macos-app-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
+    paths:
+      - JoyECS.app
+  tags:
+    - mac-arm64
+
+# Debug symbols (dSYM bundles) of the macOS build, mirroring package_win64_pdb.
+# The bundles are already extracted in the build job (which owns the object
+# files); this job only re-uploads them under their own artifact name.
+package_macos_dsym:
+  stage: package
+  needs:
+    - build_macos_metal_opengl_vk
+  script:
+    - echo "dSYM bundles come from the build job transit artifacts."
+  artifacts:
+    name: jeecs-macos-dsym-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
+    paths:
+      - dsym/*
   tags:
     - mac-arm64
