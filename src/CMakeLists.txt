@@ -288,6 +288,13 @@ set_target_properties(joyecs PROPERTIES PREFIX "")
 # must be 32-bit (see the emoji font merge in je_gui_backend_init).
 target_compile_definitions(joyecs PRIVATE -DIMGUI_USE_WCHAR32)
 
+# When the engine ships inside a macOS .app bundle, data dirs are packaged
+# into Contents/Resources/ and the core resolves resource roots from there,
+# see jeecs_basic_file.cpp (jeecs::file::bootup).
+if (JE4_BUILD_FOR_MACOS_BUNDLE)
+    target_compile_definitions(joyecs PRIVATE -DJE4_BUILD_FOR_MACOS_BUNDLE=1)
+endif()
+
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set_target_properties(joyecs PROPERTIES RELEASE_POSTFIX "")
     set_target_properties(joyecs PROPERTIES DEBUG_POSTFIX "_debug")

@@ -20,6 +20,14 @@ option(JE4_ENABLE_SHADER_WRAP_GENERATOR     "Will use spir-v-cross tool to gener
                                             cache only."                            ON)
 option(JE4_ENABLE_WIN32_CONSOLE             "Enable console in windows."            OFF)
 
+option(JE4_BUILD_FOR_MACOS_BUNDLE           "Resolve engine resources from Contents/\
+                                            Resources/ of a macOS .app bundle\
+                                            instead of the executable directory." OFF)
+
+if (JE4_BUILD_FOR_MACOS_BUNDLE AND NOT APPLE)
+    message(FATAL_ERROR "JE4_BUILD_FOR_MACOS_BUNDLE is only available on Apple platforms.")
+endif()
+
 option(JE4_ENABLE_DX11_GAPI         "Enable DX11 Graphic api"           OFF)
 option(JE4_ENABLE_OPENGL330_GAPI    "Enable OpenGL 3.3 Graphic API"     OFF)
 option(JE4_ENABLE_OPENGLES300_GAPI  "Enable OpenGLES 3.0 Graphic API"   OFF)

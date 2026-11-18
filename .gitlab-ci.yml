@@ -287,6 +287,7 @@ build_macos_metal_opengl_vk:
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
       -DJE4_BUILD_SHARED_CORE=ON
+      -DJE4_BUILD_FOR_MACOS_BUNDLE=ON
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
@@ -326,14 +327,17 @@ build_macos_metal_opengl_vk:
   tags:
     - mac-arm64
 
-# Package the macOS build into a JoyEngine.app bundle. Binaries and resource
-# dirs (pkg/builtin/je/licenses) live flat next to jedriver inside
-# Contents/MacOS/, mirroring the win64 layout: the engine resolves resources
-# relative to the executable directory and finds sibling dylibs via
-# @executable_path rpath.
-# Nested dylibs must be ad-hoc signed BEFORE the bundle itself (linker-signed
-# ad-hoc signatures do not count for nested code), or codesign fails with
+# Package the macOS build into a JoyEngine.app bundle. jedriver and its
+# dylibs live in Contents/MacOS/ (sibling dylibs are found via
+# @executable_path rpath), data dirs (pkg/builtin/je/licenses) live in
+# Contents/Resources/. The build job above compiles the core with
+# JE4_BUILD_FOR_MACOS_BUNDLE=ON, so the engine resolves its resource roots
+# from Contents/Resources/ instead of the executable directory (see
+# jeecs_basic_file.cpp). codesign requires Contents/MacOS/ to contain
+# signed Mach-O code only; any data file there fails bundle signing with
 # "code object is not signed at all".
+# Nested dylibs must be ad-hoc signed BEFORE the bundle itself (linker-signed
+# ad-hoc signatures do not count for nested code).
 # The bundle is only ad-hoc signed, so Gatekeeper requires quarantined
 # downloads (browser-fetched artifacts) to be cleared with
 #   xattr -dr com.apple.quarantine JoyEngine.app
@@ -342,9 +346,9 @@ package_macos_app:
   needs:
     - build_macos_metal_opengl_vk
   script:
-    - mkdir -p "JoyEngine.app/Contents/MacOS"
+    - mkdir -p "JoyEngine.app/Contents/MacOS" "JoyEngine.app/Contents/Resources"
     - cp dist/jedriver dist/libjoyecs.dylib dist/libwoo.dylib dist/libwoort.dylib dist/libopenal*.dylib "JoyEngine.app/Contents/MacOS/"
-    - cp -R dist/pkg dist/builtin dist/je dist/licenses "JoyEngine.app/Contents/MacOS/"
+    - cp -R dist/pkg dist/builtin dist/je dist/licenses "JoyEngine.app/Contents/Resources/"
     - printf 'APPL????' > "JoyEngine.app/Contents/PkgInfo"
     - |
       cat > "JoyEngine.app/Contents/Info.plist" <<EOF
