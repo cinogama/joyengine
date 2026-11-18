@@ -287,7 +287,7 @@ build_macos_metal_opengl_vk:
       -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
       -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
       -DJE4_BUILD_SHARED_CORE=ON
-      -DJE4_BUILD_FOR_MACOS_BUNDLE=ON
+      -DJE4_SPECIFY_HOST_RELATIVE_PATH=../Resources
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
@@ -331,9 +331,9 @@ build_macos_metal_opengl_vk:
 # dylibs live in Contents/MacOS/ (sibling dylibs are found via
 # @executable_path rpath), data dirs (pkg/builtin/je/licenses) live in
 # Contents/Resources/. The build job above compiles the core with
-# JE4_BUILD_FOR_MACOS_BUNDLE=ON, so the engine resolves its resource roots
-# from Contents/Resources/ instead of the executable directory (see
-# jeecs_basic_file.cpp). codesign requires Contents/MacOS/ to contain
+# JE4_SPECIFY_HOST_RELATIVE_PATH=../Resources, so the engine resolves its
+# resource roots from Contents/Resources/ instead of the executable
+# directory (see jeecs_basic_file.cpp). codesign requires Contents/MacOS/ to contain
 # signed Mach-O code only; any data file there fails bundle signing with
 # "code object is not signed at all".
 # Nested dylibs must be ad-hoc signed BEFORE the bundle itself (linker-signed

@@ -125,22 +125,19 @@ namespace jeecs::file
             (void)woort_exe_path(exe_path.data(), need);
         }
 
+#ifdef JE4_SPECIFY_HOST_RELATIVE_PATH
+        // Packaged layout: data (pkg/builtin/je/licenses, fimg archives) lives
+        // at a fixed relative offset from the executable directory, e.g.
+        // Contents/Resources/ in a macOS .app bundle, where binaries stay in
+        // Contents/MacOS/ (sibling dylibs are located through
+        // @executable_path rpath). Entry scripts are resolved via the runtime
+        // path ("@/builtin/main.wo"), builtin resources via the host path
+        // ("!/builtin/...").
+        exe_path += "/" JE4_SPECIFY_HOST_RELATIVE_PATH;
+#endif
         je_file_host_path_set(exe_path.c_str());
         je_file_runtime_path_set(exe_path.c_str());
         je_fimg_default_archive_set(exe_path.c_str());
-
-#ifdef JE4_BUILD_FOR_MACOS_BUNDLE
-        // macOS .app bundle layout: binaries stay in Contents/MacOS/ while
-        // data dirs (pkg/builtin/je/licenses) are packaged into
-        // Contents/Resources/. Both roots must be re-pointed there: entry
-        // scripts are resolved via the runtime path ("@/builtin/main.wo"),
-        // builtin resources via the host path ("!/builtin/..."). Sibling
-        // dylibs are unaffected, they are located through
-        // @executable_path rpath.
-        const string resources_path = exe_path + "/../Resources";
-        je_file_host_path_set(resources_path.c_str());
-        je_file_runtime_path_set(resources_path.c_str());
-#endif
     }
     void shutdown()
     {
