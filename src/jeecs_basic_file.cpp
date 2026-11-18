@@ -1,9 +1,12 @@
 #define JE_IMPL
 #include "jeecs/file.hpp"
 #include "jeecs/prefix.hpp"
+#include "jeecs/logging.hpp"
 
 #include "jeecs_basic_file.hpp"
 #include "jeecs_basic_bootup.hpp"
+
+#include "wo.h"
 
 #include <cstdio>
 #include <string>
@@ -134,6 +137,11 @@ namespace jeecs::file
         // path ("@/builtin/main.wo"), builtin resources via the host path
         // ("!/builtin/...").
         exe_path += "/" JE4_SPECIFY_HOST_RELATIVE_PATH;
+        
+        // Overwrite woort path.
+        if (!woort_set_exe_path(exe_path.c_str()))
+            debug::logwarn("Failed to update woort path.");
+
 #endif
         je_file_host_path_set(exe_path.c_str());
         je_file_runtime_path_set(exe_path.c_str());
