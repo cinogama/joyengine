@@ -164,6 +164,11 @@ namespace jeecs::physics
                 , groups()
             {
             }
+
+            // Releases the b2World slot under the lifecycle mutex (cpp impl),
+            // so worlds dropped at runtime (layer / config removed) free their
+            // slot too — not only at system shutdown.
+            ~PhysicsWorld();
         };
 
         // Active worlds keyed by layerid.

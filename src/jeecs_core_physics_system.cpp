@@ -24,6 +24,12 @@
 #include <unordered_map>
 #include <vector>
 
+namespace physics {};
+
+using namespace std;
+using namespace jeecs;
+using namespace jeecs::physics;
+
 namespace jeecs::physics::physics2d_detail
 {
     namespace
@@ -43,7 +49,7 @@ namespace jeecs::physics::physics2d_detail
         {
             inline size_t operator()(b2ShapeId v) const noexcept
             {
-                return std::hash<uint64_t>{}(b2_shape_to_u64(v));
+                return hash<uint64_t>{}(b2_shape_to_u64(v));
             }
         };
         inline bool b2_body_eq(b2BodyId a, b2BodyId b) noexcept
@@ -71,9 +77,9 @@ namespace jeecs::physics::physics2d_detail
         // only world lifecycle across all Physics2DUpdatingSystem
         // instances; per-world step/setter calls are independent once a
         // world is fully created.
-        inline std::mutex& b2_world_lifecycle_mutex() noexcept
+        inline mutex& b2_world_lifecycle_mutex() noexcept
         {
-            static std::mutex m;
+            static mutex m;
             return m;
         }
 
@@ -139,17 +145,17 @@ namespace jeecs::physics::physics2d_detail
         // Ear-clipping triangulation of a simple polygon (any winding).
         // Returns CCW triangles as index triples; degenerate ears are
         // skipped. An empty result means the outline is not usable.
-        inline std::vector<std::array<int, 3>> triangulate_polygon(
+        inline vector<array<int, 3>> triangulate_polygon(
             const basic::vector<math::vec2>& pts)
         {
-            std::vector<std::array<int, 3>> triangles;
+            vector<array<int, 3>> triangles;
 
             const int n = static_cast<int>(pts.size());
             if (n < 3)
                 return triangles;
 
             // Walk indices so that consecutive turns are left turns (CCW).
-            std::vector<int> index(n);
+            vector<int> index(n);
             if (poly_signed_area(pts) >= 0.f)
                 for (int i = 0; i < n; ++i) index[i] = i;
             else
@@ -225,11 +231,11 @@ namespace jeecs::physics::physics2d_detail
         // small outlines become one polygon shape; anything else is
         // triangulated. Returns an empty vector when the outline is invalid
         // (fewer than 3 points / fully degenerate).
-        inline std::vector<b2ShapeId> create_mesh_shapes(
+        inline vector<b2ShapeId> create_mesh_shapes(
             b2BodyId body, const b2ShapeDef* sdef,
             const basic::vector<math::vec2>& outline)
         {
-            std::vector<b2ShapeId> shapes;
+            vector<b2ShapeId> shapes;
 
             if (outline.size() < 3)
                 return shapes;
@@ -237,7 +243,7 @@ namespace jeecs::physics::physics2d_detail
             if (is_convex_polygon(outline)
                 && outline.size() <= static_cast<size_t>(B2_MAX_POLYGON_VERTICES))
             {
-                std::vector<b2Vec2> pts(outline.size());
+                vector<b2Vec2> pts(outline.size());
                 for (size_t i = 0; i < outline.size(); ++i)
                     pts[i] = b2Vec2{ outline[i].x, outline[i].y };
 
@@ -308,17 +314,17 @@ namespace jeecs::physics::physics2d_detail
         //   (field order is significant) and CollideGroupInfo keeps its
         //   original layout: [filter_components, collide_mask].
         // ============================================================
-        static std::optional<scene_physics_config> load_scene_physics_config_from_path(
-            const std::string& path)
+        static optional<scene_physics_config> load_scene_physics_config_from_path(
+            const string& path)
         {
             je_file_t* fp = je_file_open(path.c_str());
             if (fp == nullptr)
             {
-                jeecs::debug::logerr("Unable to open Physics2D scene config: '%s'.", path.c_str());
-                return std::nullopt;
+                debug::logerr("Unable to open Physics2D scene config: '%s'.", path.c_str());
+                return nullopt;
             }
 
-            std::vector<char> buf(je_file_size(fp));
+            vector<char> buf(je_file_size(fp));
             je_file_read(buf.data(), sizeof(char), buf.size(), fp);
             je_file_close(fp);
 
@@ -326,21 +332,21 @@ namespace jeecs::physics::physics2d_detail
             woort_CodeEnv* const cenv = wo_load_binary(path.c_str(), buf.data(), buf.size(), &cerr);
             if (cenv == nullptr)
             {
-                jeecs::debug::logerr(
+                debug::logerr(
                     "Unable to parse Physics2D scene config '%s':\n%s.",
                     path.c_str(),
                     wo_get_compile_error(cerr, WO_PLAIM));
                 wo_compile_errors_free(cerr);
-                return std::nullopt;
+                return nullopt;
             }
 
             scene_physics_config result{};
             woort_vm* const vmm = woort_vm_create();
             if (vmm == nullptr)
             {
-                jeecs::debug::logerr("Unable to resolve Physics2D scene config: failed to create VM.");
+                debug::logerr("Unable to resolve Physics2D scene config: failed to create VM.");
                 woort_codeenv_drop(cenv);
-                return std::nullopt;
+                return nullopt;
             }
 
             // Run the entire parse under the session guard so the prior VM is
@@ -350,9 +356,9 @@ namespace jeecs::physics::physics2d_detail
             woort_value s;
             if (!woort_push_reserve(9, &s))
             {
-                jeecs::debug::logerr("Unable to resolve Physics2D scene config: stack overflow.");
+                debug::logerr("Unable to resolve Physics2D scene config: stack overflow.");
                 woort_codeenv_drop(cenv);
-                return std::nullopt;
+                return nullopt;
             }
 
             const woort_value result_struct = s + 0; // { layers, collide_groups }
@@ -368,12 +374,12 @@ namespace jeecs::physics::physics2d_detail
             const woort_VmCallStatus status = woort_bootup(result_struct, cenv, false);
             if (status != WOORT_VM_CALL_STATUS_NORMAL)
             {
-                jeecs::debug::logerr(
+                debug::logerr(
                     "Unable to resolve Physics2D scene config '%s': %s.",
                     path.c_str(),
                     woort_vm_get_runtime_error(vmm));
                 woort_codeenv_drop(cenv);
-                return std::nullopt;
+                return nullopt;
             }
 
             // Unpack the two top-level fields of the returned struct.
@@ -404,7 +410,7 @@ namespace jeecs::physics::physics2d_detail
 
             if (result.layers.empty())
             {
-                jeecs::debug::logwarn(
+                debug::logwarn(
                     "Physics2D scene config '%s' declared no layers; at least one is required.",
                     path.c_str());
             }
@@ -413,7 +419,7 @@ namespace jeecs::physics::physics2d_detail
             size_t configed = woort_vec_len(groups_vec);
             if (configed > MAX_GROUP_COUNT)
             {
-                jeecs::debug::logwarn(
+                debug::logwarn(
                     "Physics2D collision groups are limited to %zu; %zu provided in '%s', extras ignored.",
                     MAX_GROUP_COUNT, configed, path.c_str());
                 configed = MAX_GROUP_COUNT;
@@ -497,7 +503,7 @@ namespace jeecs::physics::physics2d_detail
 
     size_t B2BodyKeyHash::operator()(b2BodyId v) const noexcept
     {
-        return std::hash<uint64_t>{}(b2_body_to_u64(v));
+        return hash<uint64_t>{}(b2_body_to_u64(v));
     }
     bool B2BodyKeyEqual::operator()(b2BodyId a, b2BodyId b) const noexcept
     {
@@ -555,23 +561,28 @@ namespace jeecs::physics
     {
     }
 
-    Physics2DUpdatingSystem::~Physics2DUpdatingSystem()
+    Physics2DUpdatingSystem::PhysicsWorld::~PhysicsWorld()
     {
-        for (auto& [_, pw] : m_worlds)
-            if (pw && !physics2d_detail::b2_world_is_null(pw->world))
-            {
-                const std::lock_guard b2_world_lock(
-                    physics2d_detail::b2_world_lifecycle_mutex());
-                b2DestroyWorld(pw->world);
-            }
+        if (!physics2d_detail::b2_world_is_null(world))
+        {
+            const lock_guard b2_world_lock(
+                physics2d_detail::b2_world_lifecycle_mutex());
+            b2DestroyWorld(world);
+        }
     }
 
-    std::unordered_map<size_t, std::unique_ptr<Physics2DUpdatingSystem::PhysicsWorld>> Physics2DUpdatingSystem::phase_sync_worlds()
+    Physics2DUpdatingSystem::~Physics2DUpdatingSystem()
     {
-        std::unordered_map<size_t, std::unique_ptr<PhysicsWorld>> this_frame;
+        // Worlds release their b2 slot in ~PhysicsWorld, which also covers
+        // the runtime-dropped worlds of the phase_sync_worlds map swap.
+    }
+
+    unordered_map<size_t, unique_ptr<Physics2DUpdatingSystem::PhysicsWorld>> Physics2DUpdatingSystem::phase_sync_worlds()
+    {
+        unordered_map<size_t, unique_ptr<PhysicsWorld>> this_frame;
 
         // ---- Resolve the scene config from the (single) Physics2D::Scene entity. ----
-        std::string current_path;
+        string current_path;
         size_t      scene_count = 0;
         for (auto&& [e, scene] :
             query_entity<view typesof(Physics2D::Scene&)>())
@@ -594,7 +605,7 @@ namespace jeecs::physics
         }
         if (scene_count > 1)
         {
-            jeecs::debug::logerr(
+            debug::logerr(
                 "Multiple Physics2D::Scene entities found (%zu); only the first will be used.",
                 scene_count);
         }
@@ -614,7 +625,7 @@ namespace jeecs::physics
                     physics2d_detail::load_scene_physics_config_from_path(current_path);
                 if (loaded.has_value())
                 {
-                    m_scene_config = std::move(loaded.value());
+                    m_scene_config = move(loaded.value());
                     m_config_loaded = true;
                 }
 
@@ -636,16 +647,16 @@ namespace jeecs::physics
 
             if (this_frame.find(lid) != this_frame.end())
             {
-                jeecs::debug::logerr(
+                debug::logerr(
                     "Duplicate Physics2D layer id: %zu, the second declaration is ignored.", lid);
                 continue;
             }
 
             auto prev_it = m_worlds.find(lid);
-            std::unique_ptr<PhysicsWorld> pw;
+            unique_ptr<PhysicsWorld> pw;
             if (prev_it == m_worlds.end())
             {
-                pw = std::make_unique<PhysicsWorld>();
+                pw = make_unique<PhysicsWorld>();
                 b2WorldDef wdef = b2DefaultWorldDef();
                 pw->layerid = lid;
 
@@ -658,7 +669,7 @@ namespace jeecs::physics
                 // races on Box2D's global slot pool when several ECS worlds
                 // boot physics on parallel workers in the same frame.
                 {
-                    const std::lock_guard b2_world_lock(
+                    const lock_guard b2_world_lock(
                         physics2d_detail::b2_world_lifecycle_mutex());
                     pw->world = b2CreateWorld(&wdef);
                     b2World_SetGravity(pw->world, b2Vec2{ layer.gravity.x, layer.gravity.y });
@@ -668,7 +679,7 @@ namespace jeecs::physics
             }
             else
             {
-                pw = std::move(prev_it->second);
+                pw = move(prev_it->second);
                 // (prev_it entry is left empty; m_worlds is replaced at end of frame.)
             }
 
@@ -695,14 +706,14 @@ namespace jeecs::physics
             }
             pw->substeps_snap = layer.substeps;
 
-            this_frame.emplace(lid, std::move(pw));
+            this_frame.emplace(lid, move(pw));
         }
 
         return this_frame;
     }
 
     void Physics2DUpdatingSystem::phase_sync_bodies_in(
-        std::unordered_map<size_t, std::unique_ptr<Physics2DUpdatingSystem::PhysicsWorld>>& this_frame)
+        unordered_map<size_t, unique_ptr<Physics2DUpdatingSystem::PhysicsWorld>>& this_frame)
     {
         for (auto&& [
             e, trans, rb, dyn, kinem, bullet,
@@ -748,7 +759,7 @@ namespace jeecs::physics
             auto world_it = this_frame.find(rb.layerid);
             if (world_it == this_frame.end() || world_it->second == nullptr)
             {
-                jeecs::debug::logerr(
+                debug::logerr(
                     "Rigidbody belongs to layer %zu, but the Physics2D scene config does not "
                     "define a layer with that index (declared layer count: %zu).",
                     rb.layerid, m_scene_config.layers.size());
@@ -765,8 +776,10 @@ namespace jeecs::physics
             b2BodyType want_type = b2_staticBody;
             if (dyn && kinem)
             {
-                jeecs::debug::logerr(
-                    "Entity has both DynamicBody and KinematicBody; treating as Dynamic.");
+                e.remove_component<Physics2D::KinematicBody>();
+                debug::logerr(
+                    "Entity has both DynamicBody and KinematicBody; remove KinematicBody.");
+
                 want_type = b2_dynamicBody;
             }
             else if (dyn)
@@ -799,7 +812,7 @@ namespace jeecs::physics
                 b2BodyId new_body = b2CreateBody(pw->world, &bdef);
                 if (physics2d_detail::b2_body_is_null(new_body))
                 {
-                    jeecs::debug::logerr("b2CreateBody failed for entity on layer %zu.", rb.layerid);
+                    debug::logerr("b2CreateBody failed for entity on layer %zu.", rb.layerid);
                     continue;
                 }
 
@@ -807,7 +820,7 @@ namespace jeecs::physics
                 nr.entity = e;
                 nr.body = new_body;
                 nr.shape = b2_nullShapeId;
-                auto inserted = pw->bodies.emplace(new_body, std::move(nr));
+                auto inserted = pw->bodies.emplace(new_body, move(nr));
                 rec = &inserted.first->second;
             }
             rec->last_seen_frame = m_frame;
@@ -955,8 +968,8 @@ namespace jeecs::physics
                 case PhysicsWorld::BodyRecord::ShapeKind::Box:
                 {
                     b2Polygon box_poly = b2MakeBox(
-                        std::abs(box->size.x) * 0.5f,
-                        std::abs(box->size.y) * 0.5f);
+                        abs(box->size.x) * 0.5f,
+                        abs(box->size.y) * 0.5f);
                     new_shape = b2CreatePolygonShape(body, &sdef, &box_poly);
                     rec->cached_box_size = box->size;
                     break;
@@ -965,15 +978,15 @@ namespace jeecs::physics
                 {
                     b2Circle c;
                     c.center = b2Vec2{ 0.f, 0.f };
-                    c.radius = std::abs(circle->radius);
+                    c.radius = abs(circle->radius);
                     new_shape = b2CreateCircleShape(body, &sdef, &c);
                     rec->cached_circle_r = circle->radius;
                     break;
                 }
                 case PhysicsWorld::BodyRecord::ShapeKind::Capsule:
                 {
-                    const float r = std::abs(capsule->radius) ;
-                    const float h = std::abs(capsule->height) * 0.5f;
+                    const float r = abs(capsule->radius) ;
+                    const float h = abs(capsule->height) * 0.5f;
                     b2Capsule cap;
                     cap.radius = r;
                     // Two center points symmetric about origin; total height = 2h.
@@ -1003,8 +1016,9 @@ namespace jeecs::physics
 
                     rec->mesh_shapes = physics2d_detail::create_mesh_shapes(
                         body, &sdef, outline);
+
                     if (rec->mesh_shapes.empty())
-                        jeecs::debug::logerr(
+                        debug::logerr(
                             "Physics2D::Collider::Mesh: outline with %zu vertices "
                             "could not be converted to any convex shape (need a "
                             "simple polygon with 3+ vertices).",
@@ -1042,16 +1056,16 @@ namespace jeecs::physics
     }
 
     void Physics2DUpdatingSystem::phase_step(
-        std::unordered_map<size_t, std::unique_ptr<Physics2DUpdatingSystem::PhysicsWorld>>& this_frame)
+        unordered_map<size_t, unique_ptr<Physics2DUpdatingSystem::PhysicsWorld>>& this_frame)
     {
-        std::vector<PhysicsWorld*> worlds;
+        vector<PhysicsWorld*> worlds;
         worlds.reserve(this_frame.size());
         for (auto& [_, pw] : this_frame) worlds.push_back(pw.get());
 
         const float    dt = deltatime();
         const uint64_t frame = m_frame;
 
-        ::jeecs::parallel_foreach(
+        ::parallel_foreach(
             worlds.begin(), worlds.end(),
             [dt, frame](PhysicsWorld* pw)
             {
@@ -1247,7 +1261,7 @@ namespace jeecs::physics
         phase_step(this_frame);
 
         // Promote this_frame into m_worlds (drops worlds not seen this frame).
-        m_worlds = std::move(this_frame);
+        m_worlds = move(this_frame);
 
         // Now query against the promoted m_worlds for write-back & contact collection.
         phase_sync_bodies_out();
