@@ -14,6 +14,8 @@
 #include "wo.h"
 
 #include <list>
+#include <string>
+#include <optional>
 
 namespace jeecs::core {}
 
@@ -25,6 +27,8 @@ namespace jeecs::core
 {
     namespace
     {
+        optional<string> specify_main_script_path = nullopt;
+
         /* OPTIONAL */ woort_CodeEnv* _je_open_binary_to_compile_vm(
             const char* vpath, const void* buf, size_t buf_len)
         {
@@ -96,16 +100,33 @@ namespace jeecs::core
             return cenv;
         }
     }
+    void bootup(int argc, char** argv)
+    {
+        for (int i = 1; i < argc - 1; ++i)
+        {
+            if (strcmp(argv[i], "--run-script") == 0
+                || strcmp(argv[i], "-r") == 0)
+            {
+                debug::loginfo("Specify `%s` to run.", argv[i]);
+
+                specify_main_script_path.emplace(argv[i + 1]);
+            }
+        }
+    }
+    void shutdown()
+    {
+        specify_main_script_path = nullopt;
+    }
 }
 
 void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
 {
-    bootup(argc, argv);
+    jeecs::bootup(argc, argv);
 }
 
 void je_core_finish()
 {
-    shutdown();
+    jeecs::shutdown();
 }
 
 bool je_core_main_script_entry()
@@ -113,7 +134,17 @@ bool je_core_main_script_entry()
     bool failed_in_start_script = false;
 
     woort_CodeEnv* cenv = nullptr;
-    if ((cenv = _je_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
+
+    if (specify_main_script_path.has_value())
+    {
+        const char* const specify_main_script =
+            specify_main_script_path.value().c_str();
+
+        cenv = _je_open_file_to_compile_vm(specify_main_script);
+        if (cenv == nullptr)
+            debug::logerr("Unable to load `%s`", specify_main_script);
+    }
+    else if ((cenv = _je_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
     {
         // Load normal entry.
     }
@@ -131,8 +162,8 @@ bool je_core_main_script_entry()
         if (woort_CodeEnv_save_binary(cenv, &buffer, &binary_length))
         {
             auto* const cache = je_cache_file_create(
-                "!/builtin/editor/main.wo", 
-                EDITOR_SCRIPT_CACHE_VERSION, 
+                "!/builtin/editor/main.wo",
+                EDITOR_SCRIPT_CACHE_VERSION,
                 EDITOR_SCRIPT_CACHE_VERSION);
 
             bool succ = false;

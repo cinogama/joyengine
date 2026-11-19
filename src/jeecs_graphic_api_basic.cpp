@@ -1244,32 +1244,33 @@ namespace jeecs::graphic
 
         for (int i = 1; i < argc - 1; ++i)
         {
-            string config = argv[i];
-            string value = argv[i + 1];
-            if (config == "-gapi")
+            if (strcmp(argv[i], "--graphic-api") == 0
+                || strcmp(argv[i], "-g") == 0)
             {
+                const char* const config_value = argv[i + 1];
+
                 if (false)
                     ;
 #if defined(JE_ENABLE_DX11_GAPI)
-                else if (value == "dx11")
+                else if (strcmp(config_value, "dx11") == 0)
                     je_graphic_host_api_set(je_graphic_using_dx11_apis);
 #endif
 #if defined(JE_ENABLE_GL330_GAPI) || defined(JE_ENABLE_GLES300_GAPI) || defined(JE_ENABLE_WEBGL20_GAPI)
-                else if (value == "gl3")
+                else if (strcmp(config_value, "gl3") == 0)
                     je_graphic_host_api_set(je_graphic_using_opengl3_apis);
 #endif
 #if defined(JE_ENABLE_VK120_GAPI)
-                else if (value == "vk120")
+                else if (strcmp(config_value, "vk120") == 0)
                     je_graphic_host_api_set(je_graphic_using_vk120_apis);
 #endif
 #if defined(JE_ENABLE_METAL_GAPI)
-                else if (value == "metal")
+                else if (strcmp(config_value, "metal") == 0)
                     je_graphic_host_api_set(je_graphic_using_metal_apis);
 #endif
-                else if (value == "none")
+                else if (strcmp(config_value, "none") == 0)
                     je_graphic_host_api_set(je_graphic_using_none_apis);
                 else
-                    debug::logwarn("Unknown graphic api named: '%s'.", value.c_str());
+                    debug::logerr("Unknown graphic api named: '%s'.", config_value);
             }
         }
     }
