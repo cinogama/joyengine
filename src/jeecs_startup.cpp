@@ -99,6 +99,51 @@ namespace jeecs::core
             je_file_close(cache);
             return cenv;
         }
+
+        /* OPTIONAL */ woort_CodeEnv* _je_load_editor_script_and_save_cache()
+        {
+            woort_CodeEnv* const cenv = _je_open_file_to_compile_vm(
+                /* NOTE: Use je_file_host_path_get() to make sure woolang can find import target correctly. */
+                (string(je_file_host_path_get()) + "/builtin/editor/main.wo").c_str());
+
+            if (cenv == nullptr)
+                return nullptr;
+
+            size_t binary_length;
+            void* buffer;
+
+            if (woort_CodeEnv_save_binary(cenv, &buffer, &binary_length))
+            {
+                auto* const cache = je_cache_file_create(
+                    "!/builtin/editor/main.wo",
+                    EDITOR_SCRIPT_CACHE_VERSION,
+                    EDITOR_SCRIPT_CACHE_VERSION);
+
+                bool succ = false;
+                if (cache != nullptr) do
+                {
+                    if (!je_cache_binary_append_document(cache))
+                        break;
+                    if (!je_cache_binary_append_string(cache, "content"))
+                        break;
+                    if (!je_cache_binary_append_buffer(cache, buffer, binary_length))
+                        break;
+                    if (!je_cache_binary_append_end(cache))
+                        break;
+
+                    succ = true;
+                } while (0);
+
+                if (!succ)
+                    debug::logwarn("Failed to create editor script binary cache.");
+
+                if (cache != nullptr)
+                    je_cache_file_close(cache, succ);
+
+                woort_free(buffer);
+            }
+            return cenv;
+        }
     }
     void bootup(int argc, char** argv)
     {
@@ -129,6 +174,7 @@ void je_core_finish()
     jeecs::shutdown();
 }
 
+
 bool je_core_main_script_entry()
 {
     bool failed_in_start_script = false;
@@ -143,6 +189,13 @@ bool je_core_main_script_entry()
         cenv = _je_open_file_to_compile_vm(specify_main_script);
         if (cenv == nullptr)
             debug::logerr("Unable to load `%s`", specify_main_script);
+        else
+        {
+            // We need to save binary.
+            woort_CodeEnv* const editor_cenv = _je_load_editor_script_and_save_cache();
+            if (editor_cenv != nullptr)
+                woort_codeenv_drop(editor_cenv);
+        }
     }
     else if ((cenv = _je_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
     {
@@ -152,43 +205,9 @@ bool je_core_main_script_entry()
     {
         // Cache loaded, skip,
     }
-    else if ((cenv = _je_open_file_to_compile_vm(
-        /* NOTE: Use je_file_host_path_get() to make sure woolang can find import target correctly. */
-        (string(je_file_host_path_get()) + "/builtin/editor/main.wo").c_str())) != nullptr)
+    else if ((cenv = _je_load_editor_script_and_save_cache()))
     {
-        size_t binary_length;
-        void* buffer;
-
-        if (woort_CodeEnv_save_binary(cenv, &buffer, &binary_length))
-        {
-            auto* const cache = je_cache_file_create(
-                "!/builtin/editor/main.wo",
-                EDITOR_SCRIPT_CACHE_VERSION,
-                EDITOR_SCRIPT_CACHE_VERSION);
-
-            bool succ = false;
-            if (cache != nullptr) do
-            {
-                if (!je_cache_binary_append_document(cache))
-                    break;
-                if (!je_cache_binary_append_string(cache, "content"))
-                    break;
-                if (!je_cache_binary_append_buffer(cache, buffer, binary_length))
-                    break;
-                if (!je_cache_binary_append_end(cache))
-                    break;
-
-                succ = true;
-            } while (0);
-
-            if (!succ)
-                debug::logwarn("Failed to create editor script binary cache.");
-
-            if (cache != nullptr)
-                je_cache_file_close(cache, succ);
-
-            woort_free(buffer);
-        }
+        // Editor sciprt loaded.
     }
     else
     {

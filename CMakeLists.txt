@@ -338,3 +338,27 @@ target_link_libraries(jedriver PRIVATE
     joyecs
     woolang
     woort)
+
+##############################################################################
+
+# Pregenerate the .je4cache files of the staged texture/shader sources.
+#
+# The engine core can only read texture caches; they are normally produced on
+# demand at runtime, which fails inside a signed, read-only data directory
+# (macOS .app: Contents/Resources). Run this before packaging so build/builtin
+# (and build/pkg) already carries the caches.
+#
+# Usage: cmake --build <build-dir> --target build_bundle
+# NOTE: the driver resolves its data dirs from the executable directory, so
+# this assumes the standard layout (driver next to builtin/pkg/je), i.e. a
+# single-config build. For JE4_SPECIFY_HOST_RELATIVE_PATH builds run the same
+# script from inside the assembled bundle instead.
+add_custom_target(build_bundle
+    COMMAND $<TARGET_FILE:jedriver>
+        --graphic-api none
+        -r "${CMAKE_CURRENT_SOURCE_DIR}/script/build_bundle.wo"
+        --data-root "${CMAKE_CURRENT_SOURCE_DIR}/build"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build"
+    COMMENT "Generating texture/shader caches for the bundle"
+    VERBATIM)
+add_dependencies(build_bundle jedriver)
