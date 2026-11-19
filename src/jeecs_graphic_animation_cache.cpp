@@ -9,8 +9,6 @@
 #include "jeecs_basic_internal_scripts.hpp"
 #include "jeecs_core_animation_system.hpp"
 
-#include "wo.h"
-
 #include <algorithm>
 #include <cassert>
 #include <cstdio>

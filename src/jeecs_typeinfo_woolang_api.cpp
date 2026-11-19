@@ -7,8 +7,6 @@
 
 #include "jeecs_basic_debug.hpp"
 
-#include "wo.h"
-
 #include <list>
 #include <optional>
 #include <unordered_map>

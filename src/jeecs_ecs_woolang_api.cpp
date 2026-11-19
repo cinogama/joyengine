@@ -8,8 +8,6 @@
 #include "jeecs/prefix.hpp"
 #include "jeecs/typing.hpp"
 
-#include "wo.h"
-
 #include "jeecs_core_editor_components.hpp"
 #include "jeecs_basic_debug.hpp"
 

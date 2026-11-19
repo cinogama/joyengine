@@ -6,8 +6,6 @@
 
 #include "jeecs_audio_codec.hpp"
 
-#include "wo.h"
-
 #include <list>
 #include <optional>
 #include <unordered_map>

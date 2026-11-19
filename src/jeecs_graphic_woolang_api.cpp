@@ -13,8 +13,6 @@
 #include "jeecs/prefix.hpp"
 #include "jeecs/typing.hpp"
 
-#include "wo.h"
-
 #include "jeecs_graphic_shader_wrapper.hpp"
 #include "jeecs_graphic_render_internal.hpp"
 #include "jeecs_core_animation_system.hpp"

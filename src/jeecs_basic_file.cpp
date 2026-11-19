@@ -6,8 +6,6 @@
 #include "jeecs_basic_file.hpp"
 #include "jeecs_basic_bootup.hpp"
 
-#include "wo.h"
-
 #include <cstdio>
 #include <string>
 #include <sys/stat.h>
