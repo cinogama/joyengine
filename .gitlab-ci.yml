@@ -157,6 +157,14 @@ build_win64_dx11_opengl_vk:
     - cd build
     - copy RELWITHDEBINFO\*
     - cd ..
+    # Bake the texture/shader caches into build/ before collecting artifacts:
+    # the core can only read .je4cache and an installed runtime may be
+    # read-only, so the caches cannot be produced on first launch. jedriver is
+    # a GUI subsystem executable, hence start /wait (cmd does not wait).
+    - cd build
+    - start /wait "" jedriver.exe --graphic-api none -r "%CI_PROJECT_DIR%\script\build_bundle.wo" --data-root "%CI_PROJECT_DIR%\build"
+    - if not exist "builtin\icon\Warning.png.je4cache" exit /b 1
+    - cd ..
   # Raw output, used only as transit artifacts for the packaging jobs below.
   artifacts:
     name: jeecs-win32-raw-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
@@ -298,6 +306,17 @@ build_macos_metal_opengl_vk:
     - if [ ! -d builtin ]; then mkdir builtin; fi
     - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
     - cd ..
+    # Bake the .je4cache of builtin/ textures and shaders into build/ before
+    # staging dist: a signed .app is read-only at runtime and the core can
+    # only read caches. This build bakes a host path of ../Resources, so the
+    # build-tree driver resolves !/builtin against <repo>/Resources; expose
+    # build/ under that name for this pass only.
+    - ln -sfn build Resources
+    - cd build
+    - ./jedriver --graphic-api none -r "$CI_PROJECT_DIR/script/build_bundle.wo" --data-root "$CI_PROJECT_DIR/build"
+    - test -f builtin/icon/Warning.png.je4cache
+    - cd ..
+    - rm Resources
     # dSYM bundles must be extracted in this job: dsymutil follows the debug
     # maps to the object files, which only exist in the build tree here.
     # Written to dsym/ (not build/) so the build/* cache stays unaffected.
