@@ -15,7 +15,6 @@
 
 #include <list>
 #include <string>
-#include <optional>
 
 namespace jeecs::core {}
 
@@ -27,8 +26,6 @@ namespace jeecs::core
 {
     namespace
     {
-        optional<string> specify_main_script_path = nullopt;
-
         /* OPTIONAL */ woort_CodeEnv* _je_open_binary_to_compile_vm(
             const char* vpath, const void* buf, size_t buf_len)
         {
@@ -99,81 +96,18 @@ namespace jeecs::core
             je_file_close(cache);
             return cenv;
         }
-
-        /* OPTIONAL */ woort_CodeEnv* _je_load_editor_script_and_save_cache()
-        {
-            woort_CodeEnv* const cenv = _je_open_file_to_compile_vm(
-                /* NOTE: Use je_file_host_path_get() to make sure woolang can find import target correctly. */
-                (string(je_file_host_path_get()) + "/builtin/editor/main.wo").c_str());
-
-            if (cenv == nullptr)
-                return nullptr;
-
-            size_t binary_length;
-            void* buffer;
-
-            if (woort_CodeEnv_save_binary(cenv, &buffer, &binary_length))
-            {
-                auto* const cache = je_cache_file_create(
-                    "!/builtin/editor/main.wo",
-                    EDITOR_SCRIPT_CACHE_VERSION,
-                    EDITOR_SCRIPT_CACHE_VERSION);
-
-                bool succ = false;
-                if (cache != nullptr) do
-                {
-                    if (!je_cache_binary_append_document(cache))
-                        break;
-                    if (!je_cache_binary_append_string(cache, "content"))
-                        break;
-                    if (!je_cache_binary_append_buffer(cache, buffer, binary_length))
-                        break;
-                    if (!je_cache_binary_append_end(cache))
-                        break;
-
-                    succ = true;
-                } while (0);
-
-                if (!succ)
-                    debug::logwarn("Failed to create editor script binary cache.");
-
-                if (cache != nullptr)
-                    je_cache_file_close(cache, succ);
-
-                woort_free(buffer);
-            }
-            return cenv;
-        }
-    }
-    void bootup(int argc, char** argv)
-    {
-        for (int i = 1; i < argc - 1; ++i)
-        {
-            if (strcmp(argv[i], "--run-script") == 0
-                || strcmp(argv[i], "-r") == 0)
-            {
-                debug::loginfo("Specify `%s` to run.", argv[i]);
-
-                specify_main_script_path.emplace(argv[i + 1]);
-            }
-        }
-    }
-    void shutdown()
-    {
-        specify_main_script_path = nullopt;
     }
 }
 
 void je_core_init(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
 {
-    jeecs::bootup(argc, argv);
+    bootup(argc, argv);
 }
 
 void je_core_finish()
 {
-    jeecs::shutdown();
+    shutdown();
 }
-
 
 bool je_core_main_script_entry()
 {
@@ -181,23 +115,7 @@ bool je_core_main_script_entry()
 
     woort_CodeEnv* cenv = nullptr;
 
-    if (specify_main_script_path.has_value())
-    {
-        const char* const specify_main_script =
-            specify_main_script_path.value().c_str();
-
-        cenv = _je_open_file_to_compile_vm(specify_main_script);
-        if (cenv == nullptr)
-            debug::logerr("Unable to load `%s`", specify_main_script);
-        else
-        {
-            // We need to save binary.
-            woort_CodeEnv* const editor_cenv = _je_load_editor_script_and_save_cache();
-            if (editor_cenv != nullptr)
-                woort_codeenv_drop(editor_cenv);
-        }
-    }
-    else if ((cenv = _je_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
+    if ((cenv = _je_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
     {
         // Load normal entry.
     }
@@ -205,9 +123,44 @@ bool je_core_main_script_entry()
     {
         // Cache loaded, skip,
     }
-    else if ((cenv = _je_load_editor_script_and_save_cache()))
+    else if ((cenv = _je_open_file_to_compile_vm(
+        /* NOTE: Use je_file_host_path_get() to make sure woolang can find import target correctly. */
+        (string(je_file_host_path_get()) + "/builtin/editor/main.wo").c_str())))
     {
-        // Editor sciprt loaded.
+        // Editor sciprt loaded, saving cache.
+        size_t binary_length;
+        void* buffer;
+
+        if (woort_CodeEnv_save_binary(cenv, &buffer, &binary_length))
+        {
+            auto* const cache = je_cache_file_create(
+                "!/builtin/editor/main.wo",
+                EDITOR_SCRIPT_CACHE_VERSION,
+                EDITOR_SCRIPT_CACHE_VERSION);
+
+            bool succ = false;
+            if (cache != nullptr) do
+            {
+                if (!je_cache_binary_append_document(cache))
+                    break;
+                if (!je_cache_binary_append_string(cache, "content"))
+                    break;
+                if (!je_cache_binary_append_buffer(cache, buffer, binary_length))
+                    break;
+                if (!je_cache_binary_append_end(cache))
+                    break;
+
+                succ = true;
+            } while (0);
+
+            if (!succ)
+                debug::logwarn("Failed to create editor script binary cache.");
+
+            if (cache != nullptr)
+                je_cache_file_close(cache, succ);
+
+            woort_free(buffer);
+        }
     }
     else
     {
