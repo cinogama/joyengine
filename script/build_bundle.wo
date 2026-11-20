@@ -6,7 +6,8 @@
 // Contents/Resources）在签名之后是只读的，运行时无法在旁边补写缓存，
 // 因此需要在打包前把 build 目录里的缓存预先烤好。
 //
-// 由 CMake 目标 build_bundle 调用：
+// 由 CI 出包流程直接调用（.gitlab-ci.yml 的 win64 构建作业与 macOS 的
+// package_macos_app 作业）：
 //   jedriver --graphic-api none -r script/build_bundle.wo --data-root <dir>
 //
 // <dir> 是包含 builtin/ 与 pkg/ 的宿主数据目录（通常是 build/）。脚本递归

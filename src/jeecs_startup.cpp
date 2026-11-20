@@ -195,6 +195,10 @@ bool je_core_main_script_entry()
             woort_CodeEnv* const editor_cenv = _je_load_editor_script_and_save_cache();
             if (editor_cenv != nullptr)
                 woort_codeenv_drop(editor_cenv);
+            else
+                debug::logwarn(
+                    "Failed to load editor script from host path '%s'.",
+                    je_file_host_path_get());
         }
     }
     else if ((cenv = _je_open_file_to_compile_vm("@/builtin/main.wo")) != nullptr)
