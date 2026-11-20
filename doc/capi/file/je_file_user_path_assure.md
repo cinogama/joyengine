@@ -10,7 +10,7 @@ JE_API bool je_file_user_path_assure();
 
 创建用户数据路径及其缺失的上级目录（等价于 `mkdir -p`）。
 
-`je_file_user_path_set` 只记录路径，不会创建目录；确定最终路径后调用此接口创建。路径已存在时直接成功。底层逐级调用 `mkdir`，不依赖 `std::filesystem`。
+`je_file_user_path_set` 只记录路径，不会创建目录；确定最终路径后调用此接口创建。路径已存在时直接成功。底层使用 `std::filesystem::create_directories`，不抛出异常。
 
 ## 参数
 
@@ -41,7 +41,6 @@ if (!je_file_user_path_assure())
 
 - 必须在 `je_file_user_path_set` 之后调用；路径为空时返回 `false`
 - 可以重复调用；已存在的目录不会被视为错误
-- Windows 下可处理盘符前缀（`C:\...`）和 UNC 路径（`\\server\share\...`），不会把盘符当成目录创建
 
 ## 相关接口
 
