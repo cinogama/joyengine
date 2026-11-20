@@ -445,6 +445,9 @@ extern "C" {
         (void)woort_set_exe_path(jni_cstring(env, library_path).c_str());
         je_file_host_path_set(jni_cstring(env, cache_path).c_str());
         je_file_runtime_path_set(jni_cstring(env, asset_path).c_str());
+        // NOTE: cache_dir can be purged by the OS; switch to filesDir here
+        // (and pass it from Java) if user state must survive cache eviction.
+        je_file_user_path_set(jni_cstring(env, cache_path).c_str());
 
         je_fimg_default_archive_set("#");
     }

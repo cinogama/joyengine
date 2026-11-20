@@ -1,0 +1,132 @@
+// 打包期资源缓存生成器。
+//
+// 引擎核心只能读取 .je4cache：图片纹理由
+// builtin/script/internal/cache/texture.wo 生成，着色器由 je::graphic 的
+// shader 源码加载流程生成。发行用的数据目录（例如 macOS .app 的
+// Contents/Resources）在签名之后是只读的，运行时无法在旁边补写缓存，
+// 因此需要在打包前把 build 目录里的缓存预先烤好。
+//
+// 由 CMake 目标 build_bundle 调用：
+//   jedriver --graphic-api none -r script/build_bundle.wo --data-root <dir>
+//
+// <dir> 是包含 builtin/ 与 pkg/ 的宿主数据目录（通常是 build/）。脚本递归
+// 遍历这两个目录：图片生成纹理缓存（<图片>.je4cache），.shader 生成
+// 着色器缓存（<着色器>.je4cache）。缓存写在源文件旁，随数据目录一起进入
+// 发行包。未指定 --data-root 时使用宿主路径（可执行文件所在目录）。
+//
+// 注意：引擎只解析 -r/--run-script 与 --graphic-api，其余命令行参数原样
+// 保留，脚本用 std::cmdlines() 自行读取 --data-root。
+
+import pkg::std;
+import pkg::fsys;
+
+import je;
+import je::cache;
+import je::graphic;
+
+using std;
+using fsys;
+
+// 与 builtin/editor/Editor/ExportProject.wo 的 isImageExtension 保持一致：
+// 这些扩展名都能被 pkg::image（stb_image）解码，属于运行时缓存化加载的
+// 资源，导出流程也只打包它们的缓存。
+func is_image_extension(ext: string)=> bool
+{
+    return ext == ".png"
+        || ext == ".jpg"
+        || ext == ".jpeg"
+        || ext == ".bmp"
+        || ext == ".tga"
+        || ext == ".gif"
+        || ext == ".psd"
+        || ext == ".hdr"
+        || ext == ".pic"
+        || ext == ".pnm"
+        || ext == ".ppm"
+        || ext == ".pgm";
+}
+
+func find_option_value(name: string)=> option<string>
+{
+    let args = std::cmdlines();
+    for (let mut i = 0; i + 1 < args->len; i += 1)
+    {
+        if (args[i] == name)
+            return option::value(args[i + 1]);
+    }
+    return option::none;
+}
+
+func main()
+{
+    let mut data_root = std::host_path();
+    match (find_option_value("--data-root"))
+    {
+        value(root)? data_root = root;
+        none?;
+    }
+
+    let mut total = 0;
+    let mut failed = 0;
+
+    for (let dir_name : ["builtin", "pkg"])
+    {
+        let dir = normalize(data_root) / dir_name;
+        if (!isdir(dir))
+            continue;
+
+        match (allsubpath(dir))
+        {
+            ok(paths)?
+            {
+                for (let p : paths)
+                {
+                    if (!isfile(p))
+                        continue;
+
+                    let ext = extension(p)->lower;
+                    if (is_image_extension(ext))
+                    {
+                        total += 1;
+
+                        if (!je::cache::generate_texture_cache(p->to_string()))
+                        {
+                            je::logerr(F"生成纹理缓存失败：{p->to_string()}");
+                            failed += 1;
+                        }
+                    }
+                    else if (ext == ".shader")
+                    {
+                        total += 1;
+
+                        // shader::load 在缓存缺失时调用 je::shader 的生成器
+                        // 写出 <path>.je4cache；option::none 表示不绑定任何
+                        // universe，不创建图形上下文。
+                        let loaded = je::graphic::shader::load(
+                            option::none, p->to_string());
+                        if (!loaded->is_value)
+                        {
+                            je::logerr(F"生成着色器缓存失败：{p->to_string()}");
+                            failed += 1;
+                        }
+                    }
+                }
+            }
+            err(eno)?
+            {
+                je::logerr(F"无法遍历资源目录 {dir->to_string()}：{eno}");
+                failed += 1;
+            }
+        }
+    }
+
+    std::println(
+        F"build_bundle: 在 {data_root} 下预处理 {total} 个资源，失败 {failed} 个。");
+
+    if (total == 0)
+        std::panic(F"在 {data_root} 下没有找到需要生成缓存的图片或着色器。");
+    if (failed != 0)
+        std::panic(F"有 {failed} 个资源缓存生成失败。");
+}
+
+main();

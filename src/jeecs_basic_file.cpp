@@ -7,6 +7,7 @@
 #include "jeecs_basic_bootup.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <sys/stat.h>
 
@@ -144,6 +145,27 @@ namespace jeecs::file
         je_file_host_path_set(exe_path.c_str());
         je_file_runtime_path_set(exe_path.c_str());
         je_fimg_default_archive_set(exe_path.c_str());
+
+        // User data path: the per-user OS-standard writable directory for
+        // user state (editor window layout, project open history). Install
+        // layouts such as a macOS .app keep the host path read-only, so user
+        // state must never target it. Special platforms (Android/WebGL) do
+        // not use the environment scheme and keep the exe-dir default until
+        // the port overrides it.
+        string user_path = exe_path;
+#if defined(_WIN32)
+        if (const char* appdata = getenv("APPDATA"))
+            user_path = string(appdata) + "/JoyEngine";
+#elif defined(__APPLE__)
+        if (const char* home = getenv("HOME"))
+            user_path = string(home) + "/Library/Application Support/JoyEngine";
+#elif defined(__linux__) && !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+        if (const char* xdg_data_home = getenv("XDG_DATA_HOME"))
+            user_path = string(xdg_data_home) + "/JoyEngine";
+        else if (const char* home = getenv("HOME"))
+            user_path = string(home) + "/.local/share/JoyEngine";
+#endif
+        je_file_user_path_set(user_path.c_str());
     }
     void shutdown()
     {

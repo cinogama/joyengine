@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <sys/stat.h>
 
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -25,6 +26,7 @@ namespace jeecs::file
         mutex _g_path_mutex;
         string _g_host_path;
         string _g_runtime_path;
+        string _g_user_path;
 
         shared_mutex _g_default_archive_mutex;
         shared_ptr<const fimg::Archive> _g_default_archive;
@@ -112,6 +114,23 @@ void je_file_runtime_path_set(const char* path)
     _g_runtime_path = path;
 }
 
+void je_file_user_path_set(const char* path)
+{
+    assert(path != nullptr);
+    lock_guard<mutex> lock(_g_path_mutex);
+    _g_user_path = path;
+
+    // The user path is the engine's writable home for user state (imgui.ini,
+    // project history, ...), so make sure the directory exists as soon as the
+    // path is pointed to. Read-only install layouts (macOS .app) never reach
+    // this directory, only per-user OS locations do.
+    error_code dir_error;
+    filesystem::create_directories(filesystem::path(_g_user_path), dir_error);
+    if (dir_error)
+        debug::logwarn("Failed to create user path directory '%s': %s",
+            _g_user_path.c_str(), dir_error.message().c_str());
+}
+
 const char* je_file_host_path_get()
 {
     lock_guard<mutex> lock(_g_path_mutex);
@@ -122,6 +141,12 @@ const char* je_file_runtime_path_get()
 {
     lock_guard<mutex> lock(_g_path_mutex);
     return _g_runtime_path.c_str();
+}
+
+const char* je_file_user_path_get()
+{
+    lock_guard<mutex> lock(_g_path_mutex);
+    return _g_user_path.c_str();
 }
 
 /* OPTIONAL */ je_file_t* je_file_open(const char* path)

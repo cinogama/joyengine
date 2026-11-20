@@ -66,13 +66,14 @@ namespace JEEditor::Editor
             OPENED_A_PATH,
         }
         
-        // 历史记录文件锚定在宿主路径（exe 所在目录）而非 cwd：
-        // 切换工作目录之后依然读写同一个文件。file::cache 的读写接口会在
-        // 路径后自动追加 ".je4cache" 后缀，因此传入基础名 "history" 即对应
-        // builtin/history.je4cache。
+        // 历史记录是用户状态：锚定在用户数据路径（各操作系统标准位置，
+        // 由引擎启动时推导，见 je_file_user_path_set）而非 cwd 或宿主路径
+        // ——宿主路径在只读安装布局（如 macOS .app）下不可写。file::cache
+        // 的读写接口会在路径后自动追加 ".je4cache" 后缀，因此传入基础名
+        // "history" 即对应用户数据目录下的 history.je4cache。
         func historyFileBase()=> string
         {
-            return (normalize(host_path()) / "builtin" / "history")->to_string;
+            return (normalize(internal::get_user_path()) / "history")->to_string;
         }
         
         // 历史记录格式：每行一个绝对路径（路径中不可能包含换行符），

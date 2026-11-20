@@ -25,6 +25,8 @@ public:
     {
         je_file_host_path_set("/.je4");
         je_file_runtime_path_set("/.je4");
+        // IDBFS mount is the browser's persistent per-user storage.
+        je_file_user_path_set("/.je4");
         je_fimg_default_archive_set("/");
 
         (void)prepare_graphic(true);

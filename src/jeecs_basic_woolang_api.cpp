@@ -70,6 +70,18 @@ WOORT_API woort_api wojeapi_set_runtime_path(void)
     return woort_ret_void();
 }
 
+// User path
+WOORT_API woort_api wojeapi_get_user_path(void)
+{
+    return woort_ret_string(je_file_user_path_get());
+}
+
+WOORT_API woort_api wojeapi_set_user_path(void)
+{
+    je_file_user_path_set(woort_string(0));
+    return woort_ret_void();
+}
+
 // Sleep suppression & toolchain versions & crc
 WOORT_API woort_api wojeapi_set_sleep_suppression(void)
 {

@@ -83,6 +83,22 @@ je_file_runtime_path_set [基本接口]
 JE_API void je_file_runtime_path_set(const char* path);
 
 /*
+je_file_user_path_set [基本接口]
+设置当前引擎的用户数据路径，用于存放用户状态（编辑器窗口布局、
+项目打开历史等）
+    * 这个目录必须是可写的：初始化时引擎会按操作系统标准位置自动
+    推导（Windows: %APPDATA%\JoyEngine；macOS:
+    ~/Library/Application Support/JoyEngine；Linux:
+    $XDG_DATA_HOME/JoyEngine 或 ~/.local/share/JoyEngine），并在设置
+    时尽力创建该目录
+    * 只读的安装布局（如 macOS .app 的 Contents/Resources）不应作为
+    此路径，宿主路径（! 前缀）指向的目录可能只读，用户状态必须落
+    在用户数据路径下
+    * 特殊平台（Android/WebGL）不适用环境推导，由端口自行设置
+*/
+JE_API void je_file_user_path_set(const char* path);
+
+/*
 je_fimg_default_archive_set [基本接口]
 从指定目录加载 fimg 镜像作为默认镜像
     * 以 @/ 或 !/ 开头的路径在实际文件不存在时将从默认镜像读取
@@ -112,6 +128,16 @@ je_file_runtime_path_get [基本接口]
     je_file_runtime_path_set
 */
 JE_API const char* je_file_runtime_path_get();
+
+/*
+je_file_user_path_get [基本接口]
+获取当前引擎的用户数据路径，与“宿主环境路径”“运行时路径”无关
+若没有使用 je_file_user_path_set 设置此路径，则此路径默认为引擎的可
+执行文件所在路径
+请参见：
+    je_file_user_path_set
+*/
+JE_API const char* je_file_user_path_get();
 
 /*
 je_file_native_operator_register [基本接口]

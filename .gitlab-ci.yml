@@ -157,6 +157,14 @@ build_win64_dx11_opengl_vk:
     - cd build
     - copy RELWITHDEBINFO\*
     - cd ..
+    # Bake the texture/shader caches into build/ before collecting artifacts:
+    # the core can only read .je4cache and an installed runtime may be
+    # read-only, so the caches cannot be produced on first launch. jedriver is
+    # a GUI subsystem executable, hence start /wait (cmd does not wait).
+    - cd build
+    - start /wait "" jedriver.exe --graphic-api none -r "%CI_PROJECT_DIR%\script\build_bundle.wo" --data-root "%CI_PROJECT_DIR%\build"
+    - if not exist "builtin\icon\Warning.png.je4cache" exit /b 1
+    - cd ..
   # Raw output, used only as transit artifacts for the packaging jobs below.
   artifacts:
     name: jeecs-win32-raw-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
@@ -284,8 +292,10 @@ build_macos_metal_opengl_vk:
     - if [ ! -d build ]; then mkdir build; fi
     - cd build
     - cmake ..
-      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=OFF
-      -DJE4_STATIC_LINK_MODULE_AND_PKGS=OFF
+      -DJE4_INSTALL_PKG_BY_BAOZI_WHEN_BUILD=ON
+      -DJE4_STATIC_LINK_MODULE_AND_PKGS=ON
+      -DJE4_BUILD_SHARED_CORE=ON
+      -DJE4_SPECIFY_HOST_RELATIVE_PATH=../Resources
       -DJE4_ENABLE_DX11_GAPI=OFF
       -DJE4_ENABLE_OPENGL330_GAPI=ON
       -DJE4_ENABLE_OPENGLES300_GAPI=OFF
@@ -296,10 +306,122 @@ build_macos_metal_opengl_vk:
     - if [ ! -d builtin ]; then mkdir builtin; fi
     - cmake --build . --config=RELWITHDEBINFO --target jedriver --parallel
     - cd ..
+    # Bake the .je4cache of builtin/ textures and shaders into build/ before
+    # staging dist: a signed .app is read-only at runtime and the core can
+    # only read caches. This build bakes a host path of ../Resources, so the
+    # build-tree driver resolves !/builtin against <repo>/Resources; expose
+    # build/ under that name for this pass only.
+    - ln -sfn build Resources
+    - cd build
+    - ./jedriver --graphic-api none -r "$CI_PROJECT_DIR/script/build_bundle.wo" --data-root "$CI_PROJECT_DIR/build"
+    - test -f builtin/icon/Warning.png.je4cache
+    - cd ..
+    - rm Resources
+    # dSYM bundles must be extracted in this job: dsymutil follows the debug
+    # maps to the object files, which only exist in the build tree here.
+    # Written to dsym/ (not build/) so the build/* cache stays unaffected.
+    - mkdir -p dsym
+    - dsymutil build/jedriver -o dsym/jedriver.dSYM
+    - dsymutil build/libjoyecs.dylib -o dsym/libjoyecs.dylib.dSYM
+    - dsymutil build/libwoo.dylib -o dsym/libwoo.dylib.dSYM
+    - dsymutil build/libwoort.dylib -o dsym/libwoort.dylib.dSYM
+    # Stage the runtime closure for the packaging job. cp -L flattens the
+    # libopenal* symlink chain into real files: artifact archives do not
+    # preserve symlinks (they arrive as 0-byte files, which then break bundle
+    # code signing with "code object is not signed at all").
+    - mkdir -p dist
+    - cp -RL build/jedriver build/libjoyecs.dylib build/libwoo.dylib build/libwoort.dylib build/libopenal*.dylib build/pkg build/builtin build/je build/licenses dist/
+  # Raw output, used only as transit artifacts for the packaging job below.
+  artifacts:
+    name: jeecs-macos-raw-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
+    paths:
+      - dist/*
+      - dsym/*
+    expire_in: 1 day
   cache:
     when: on_success
     key: $CI_JOB_NAME-$CI_CONCURRENT_PROJECT_ID
     paths:
         - "build/*"
+  tags:
+    - mac-arm64
+
+# Package the macOS build into a JoyEngine.app bundle. jedriver and its
+# dylibs live in Contents/MacOS/ (sibling dylibs are found via
+# @executable_path rpath), data dirs (pkg/builtin/je/licenses) live in
+# Contents/Resources/. The build job above compiles the core with
+# JE4_SPECIFY_HOST_RELATIVE_PATH=../Resources, so the engine resolves its
+# resource roots from Contents/Resources/ instead of the executable
+# directory (see jeecs_basic_file.cpp). codesign requires Contents/MacOS/ to contain
+# signed Mach-O code only; any data file there fails bundle signing with
+# "code object is not signed at all".
+# Nested dylibs must be ad-hoc signed BEFORE the bundle itself (linker-signed
+# ad-hoc signatures do not count for nested code).
+# The bundle is only ad-hoc signed, so Gatekeeper requires quarantined
+# downloads (browser-fetched artifacts) to be cleared with
+#   xattr -dr com.apple.quarantine JoyEngine.app
+package_macos_app:
+  stage: package
+  needs:
+    - build_macos_metal_opengl_vk
+  script:
+    - mkdir -p "JoyEngine.app/Contents/MacOS" "JoyEngine.app/Contents/Resources"
+    - cp dist/jedriver dist/libjoyecs.dylib dist/libwoo.dylib dist/libwoort.dylib dist/libopenal*.dylib "JoyEngine.app/Contents/MacOS/"
+    - cp -R dist/pkg dist/builtin dist/je dist/licenses "JoyEngine.app/Contents/Resources/"
+    # App icon: rendered from the repo's builtin/icon/icon.png (256x256 source;
+    # the 512/1024 variants are upscaled by sips) and packed with iconutil.
+    # Must land in Resources/ before the bundle is sealed by codesign below.
+    - |
+      mkdir -p AppIcon.iconset
+      for px in 16 32 128 256 512; do
+        sips -z $px $px builtin/icon/icon.png --out "AppIcon.iconset/icon_${px}x${px}.png" >/dev/null
+        sips -z $((px*2)) $((px*2)) builtin/icon/icon.png --out "AppIcon.iconset/icon_${px}x${px}@2x.png" >/dev/null
+      done
+      iconutil -c icns AppIcon.iconset
+      mv AppIcon.icns "JoyEngine.app/Contents/Resources/AppIcon.icns"
+    - printf 'APPL????' > "JoyEngine.app/Contents/PkgInfo"
+    - |
+      cat > "JoyEngine.app/Contents/Info.plist" <<EOF
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
+      <dict>
+          <key>CFBundleDevelopmentRegion</key><string>en</string>
+          <key>CFBundleDisplayName</key><string>JoyEngine</string>
+          <key>CFBundleExecutable</key><string>jedriver</string>
+          <key>CFBundleIconFile</key><string>AppIcon</string>
+          <key>CFBundleIdentifier</key><string>net.cinogama.joyengine</string>
+          <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+          <key>CFBundleName</key><string>JoyEngine</string>
+          <key>CFBundlePackageType</key><string>APPL</string>
+          <key>CFBundleShortVersionString</key><string>0.0.$CI_PIPELINE_IID</string>
+          <key>CFBundleVersion</key><string>$CI_COMMIT_SHORT_SHA</string>
+          <key>LSMinimumSystemVersion</key><string>11.0</string>
+          <key>NSHighResolutionCapable</key><true/>
+      </dict>
+      </plist>
+      EOF
+    - codesign --force --sign - JoyEngine.app/Contents/MacOS/*.dylib
+    - codesign --force --sign - "JoyEngine.app"
+  artifacts:
+    name: jeecs-macos-app-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
+    paths:
+      - JoyEngine.app
+  tags:
+    - mac-arm64
+
+# Debug symbols (dSYM bundles) of the macOS build, mirroring package_win64_pdb.
+# The bundles are already extracted in the build job (which owns the object
+# files); this job only re-uploads them under their own artifact name.
+package_macos_dsym:
+  stage: package
+  needs:
+    - build_macos_metal_opengl_vk
+  script:
+    - echo "dSYM bundles come from the build job transit artifacts."
+  artifacts:
+    name: jeecs-macos-dsym-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
+    paths:
+      - dsym/*
   tags:
     - mac-arm64

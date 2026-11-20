@@ -14,7 +14,8 @@
     JE_MODULE_MACRO(core_components_and_systems)\
     JE_MODULE_MACRO(woolang_runtime::towoo)     \
     JE_MODULE_MACRO(graphic)                    \
-    JE_MODULE_MACRO(ecs)
+    JE_MODULE_MACRO(ecs)                        \
+    JE_MODULE_MACRO(core)
 
 namespace jeecs
 {

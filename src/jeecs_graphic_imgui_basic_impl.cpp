@@ -76,8 +76,11 @@ void je_gui_backend_init(
             "!/builtin/shader/internal/imgui_image_displayer.shader")
         .value();
 
+    // Window layout is user state: keep it in the per-user data directory so
+    // it survives reinstalls and stays writable inside read-only install
+    // layouts (macOS .app). It is a plain ImGui ini file, not a je4cache.
     _je_gui_tls_ctx._jegui_imgui_config_path =
-        je_file_host_path_get() + string("/builtin/imgui.ini.je4cache");
+        je_file_user_path_get() + string("/imgui.ini");
 
     _je_gui_tls_ctx._jegui_stop_work_flag = false;
     ImGui::CreateContext();
