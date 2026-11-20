@@ -22,7 +22,7 @@ JE_API const char* je_file_user_path_get();
 
 ## 用法
 
-若没有使用 `je_file_user_path_set` 设置此路径，则此路径默认为引擎的可执行文件所在路径。
+引擎初始化时会按操作系统标准位置自动推导此路径（含以可执行文件名命名的应用子目录，参见 `je_file_user_path_set`）；无法推导时（如 Android/WebGL 端口尚未设置）回退为可执行文件所在路径。
 
 ### 示例
 
@@ -39,4 +39,5 @@ const char* user_path = je_file_user_path_get();
 ## 相关接口
 
 - [je_file_user_path_set](je_file_user_path_set.md) - 设置用户数据路径
+- [je_file_user_path_assure](je_file_user_path_assure.md) - 创建用户数据路径
 - [je_file_host_path_get](je_file_host_path_get.md) - 获取宿主环境路径

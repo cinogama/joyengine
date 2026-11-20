@@ -4,10 +4,15 @@
 #include "jeecs_basic_file_fimg_archive.hpp"
 #include "jeecs_basic_file.hpp"
 
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <sys/stat.h>
 
-#include <filesystem>
+#if defined(_WIN32)
+#include <direct.h>
+#endif
+
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -40,6 +45,114 @@ namespace jeecs::file
         {
             lock_guard<mutex> lock(_g_path_mutex);
             return _g_runtime_path;
+        }
+        bool _is_path_separator(char c)
+        {
+            return c == '/' || c == '\\';
+        }
+        bool _is_directory(const string& path)
+        {
+#if defined(_WIN32)
+            struct _stat64 info;
+            return _stat64(path.c_str(), &info) == 0
+                && (info.st_mode & _S_IFDIR) != 0;
+#else
+            struct stat info;
+            return stat(path.c_str(), &info) == 0 && S_ISDIR(info.st_mode);
+#endif
+        }
+        bool _make_directory(const string& path)
+        {
+#if defined(_WIN32)
+            const int result = _mkdir(path.c_str());
+#else
+            const int result = mkdir(path.c_str(), 0755);
+#endif
+            if (result == 0 || errno == EEXIST)
+                return true;
+
+            debug::logwarn("Failed to create directory '%s': %s",
+                path.c_str(), strerror(errno));
+            return false;
+        }
+        // Create `path` and every missing parent component, like mkdir -p.
+        // std::filesystem is avoided because some ports (Emscripten, old
+        // Android NDKs) support it poorly; every platform has a plain mkdir.
+        bool _create_directories(const string& path)
+        {
+            size_t len = path.size();
+            while (len > 0 && _is_path_separator(path[len - 1]))
+                --len;
+            if (len == 0)
+                return false;
+
+            string current;
+            current.reserve(len);
+
+            size_t pos = 0;
+#if defined(_WIN32)
+            if (len >= 2 && path[1] == ':')
+            {
+                // "C:" is a drive prefix, not a directory to create; keep it
+                // as the root and append components after it.
+                current.assign(path, 0, 2);
+                pos = 2;
+            }
+            else if (len >= 2 && _is_path_separator(path[0]) && _is_path_separator(path[1]))
+            {
+                // UNC path "\\server\share\...": the server and share already
+                // exist, only what follows them may need to be created.
+                size_t separators = 0;
+                while (pos < len)
+                {
+                    if (_is_path_separator(path[pos]) && ++separators == 4)
+                        break;
+                    ++pos;
+                }
+                if (separators < 3)
+                    return false;
+                if (separators == 3)
+                    return _is_directory(string(path, 0, len));
+
+                current.assign(path, 0, pos + 1);
+                ++pos;
+            }
+            else if (_is_path_separator(path[0]))
+            {
+                // Root-relative path "\foo\bar": the root of the current drive.
+                current.assign(1, '\\');
+                pos = 1;
+            }
+#else
+            if (path[0] == '/')
+            {
+                current.assign(1, '/');
+                pos = 1;
+            }
+#endif
+
+            while (pos < len)
+            {
+                while (pos < len && _is_path_separator(path[pos]))
+                    ++pos;
+                if (pos >= len)
+                    break;
+
+                const size_t begin = pos;
+                while (pos < len && !_is_path_separator(path[pos]))
+                    ++pos;
+
+                if (!current.empty() && !_is_path_separator(current.back()))
+                    current.push_back('/');
+                current.append(path, begin, pos - begin);
+
+                if (!_make_directory(current))
+                    return false;
+            }
+
+            // mkdir treats EEXIST as success, which also accepts an existing
+            // regular file; verify the final component is a directory.
+            return _is_directory(current);
         }
         string _join_root_and_rest(const string& root, const string& rest)
         {
@@ -119,16 +232,23 @@ void je_file_user_path_set(const char* path)
     assert(path != nullptr);
     lock_guard<mutex> lock(_g_path_mutex);
     _g_user_path = path;
+}
 
-    // The user path is the engine's writable home for user state (imgui.ini,
-    // project history, ...), so make sure the directory exists as soon as the
-    // path is pointed to. Read-only install layouts (macOS .app) never reach
-    // this directory, only per-user OS locations do.
-    error_code dir_error;
-    filesystem::create_directories(filesystem::path(_g_user_path), dir_error);
-    if (dir_error)
-        debug::logwarn("Failed to create user path directory '%s': %s",
-            _g_user_path.c_str(), dir_error.message().c_str());
+bool je_file_user_path_assure()
+{
+    string path;
+    {
+        lock_guard<mutex> lock(_g_path_mutex);
+        path = _g_user_path;
+    }
+
+    if (path.empty())
+    {
+        debug::logwarn("User path is empty, failed to create user path directory.");
+        return false;
+    }
+
+    return _create_directories(path);
 }
 
 const char* je_file_host_path_get()

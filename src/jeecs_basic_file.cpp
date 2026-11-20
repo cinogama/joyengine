@@ -19,6 +19,70 @@ using namespace jeecs::file;
 
 namespace jeecs::file
 {
+    namespace
+    {
+        // Application identity for the per-user data directory, derived from
+        // argv[0] (the executable path as launched). Returns an empty string
+        // when no usable argv is available (e.g. Android calls je_core_init
+        // with argc == 0); special platforms (Android/WebGL) set the final
+        // user path in their ports, where the executable name is meaningless.
+        string _application_name(int argc, /* OPTIONAL: If argc == 0 */ char** argv)
+        {
+            if (argc <= 0 || argv == nullptr || argv[0] == nullptr)
+                return {};
+
+            string name = argv[0];
+
+            const size_t separator = name.find_last_of("/\\");
+            if (separator != string::npos)
+                name.erase(0, separator + 1);
+
+            if (name.size() > 4)
+            {
+                const char* const extension = name.c_str() + name.size() - 4;
+                if (extension[0] == '.'
+                    && (extension[1] == 'e' || extension[1] == 'E')
+                    && (extension[2] == 'x' || extension[2] == 'X')
+                    && (extension[3] == 'e' || extension[3] == 'E'))
+                {
+                    name.resize(name.size() - 4);
+                }
+            }
+
+            return name;
+        }
+
+        // OS-standard per-user data directory for this application, or an
+        // empty string on platforms that do not use the environment scheme
+        // (Android/WebGL set the final path in their ports).
+        string _default_user_path(int argc, char** argv)
+        {
+            string base;
+#if defined(_WIN32)
+            if (const char* appdata = getenv("APPDATA");
+                appdata != nullptr && appdata[0] != '\0')
+                base = string(appdata) + "/JoyEngine";
+#elif defined(__APPLE__)
+            if (const char* home = getenv("HOME");
+                home != nullptr && home[0] != '\0')
+                base = string(home) + "/Library/Application Support/JoyEngine";
+#elif defined(__linux__) && !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+            // XDG Base Directory spec: a relative XDG_DATA_HOME is ignored.
+            if (const char* xdg_data_home = getenv("XDG_DATA_HOME");
+                xdg_data_home != nullptr && xdg_data_home[0] == '/')
+                base = string(xdg_data_home) + "/JoyEngine";
+            else if (const char* home = getenv("HOME");
+                home != nullptr && home[0] != '\0')
+                base = string(home) + "/.local/share/JoyEngine";
+#endif
+            if (base.empty())
+                return {};
+
+            const string application_name = _application_name(argc, argv);
+            return application_name.empty() ? base : base + "/" + application_name;
+        }
+    }
+
     namespace native
     {
         namespace
@@ -108,7 +172,7 @@ namespace jeecs::file
         }
     }
 
-    void bootup(int, char**)
+    void bootup(int argc, char** argv)
     {
         using namespace jeecs::file::native;
         using namespace jeecs::file::native;
@@ -149,22 +213,16 @@ namespace jeecs::file
         // User data path: the per-user OS-standard writable directory for
         // user state (editor window layout, project open history). Install
         // layouts such as a macOS .app keep the host path read-only, so user
-        // state must never target it. Special platforms (Android/WebGL) do
+        // state must never target it. User state is per-application, so the
+        // executable name is appended as a subdirectory: independent games do
+        // not overwrite each other's layouts or history, and uninstallers can
+        // remove just their own subtree. Special platforms (Android/WebGL) do
         // not use the environment scheme and keep the exe-dir default until
-        // the port overrides it.
-        string user_path = exe_path;
-#if defined(_WIN32)
-        if (const char* appdata = getenv("APPDATA"))
-            user_path = string(appdata) + "/JoyEngine";
-#elif defined(__APPLE__)
-        if (const char* home = getenv("HOME"))
-            user_path = string(home) + "/Library/Application Support/JoyEngine";
-#elif defined(__linux__) && !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
-        if (const char* xdg_data_home = getenv("XDG_DATA_HOME"))
-            user_path = string(xdg_data_home) + "/JoyEngine";
-        else if (const char* home = getenv("HOME"))
-            user_path = string(home) + "/.local/share/JoyEngine";
-#endif
+        // their ports set the final path.
+        string user_path = _default_user_path(argc, argv);
+        if (user_path.empty())
+            user_path = exe_path;
+
         je_file_user_path_set(user_path.c_str());
     }
     void shutdown()

@@ -79,6 +79,9 @@ WOORT_API woort_api wojeapi_get_user_path(void)
 WOORT_API woort_api wojeapi_set_user_path(void)
 {
     je_file_user_path_set(woort_string(0));
+    // A script setting the path is the final determination, so create the
+    // directory here (je_file_user_path_set itself has no side effects).
+    (void)je_file_user_path_assure();
     return woort_ret_void();
 }
 

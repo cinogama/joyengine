@@ -86,17 +86,37 @@ JE_API void je_file_runtime_path_set(const char* path);
 je_file_user_path_set [基本接口]
 设置当前引擎的用户数据路径，用于存放用户状态（编辑器窗口布局、
 项目打开历史等）
+    * 只记录路径，不会创建目录；确定最终路径后应调用
+    je_file_user_path_assure 创建目录
     * 这个目录必须是可写的：初始化时引擎会按操作系统标准位置自动
-    推导（Windows: %APPDATA%\JoyEngine；macOS:
-    ~/Library/Application Support/JoyEngine；Linux:
-    $XDG_DATA_HOME/JoyEngine 或 ~/.local/share/JoyEngine），并在设置
-    时尽力创建该目录
+    推导，并以可执行文件名作为应用子目录（Windows:
+    %APPDATA%\JoyEngine\<exe 名>；macOS:
+    ~/Library/Application Support/JoyEngine/<exe 名>；Linux:
+    $XDG_DATA_HOME/JoyEngine/<exe 名> 或
+    ~/.local/share/JoyEngine/<exe 名>），推导完成后由入口点调用
+    je_file_user_path_assure 创建该目录
     * 只读的安装布局（如 macOS .app 的 Contents/Resources）不应作为
     此路径，宿主路径（! 前缀）指向的目录可能只读，用户状态必须落
     在用户数据路径下
     * 特殊平台（Android/WebGL）不适用环境推导，由端口自行设置
+    并调用 je_file_user_path_assure
 */
 JE_API void je_file_user_path_set(const char* path);
+
+/*
+je_file_user_path_assure [基本接口]
+创建用户数据路径及其缺失的上级目录（等价于 mkdir -p）
+    * 设置路径本身不会创建目录；确定最终路径后应调用此接口
+    * 路径已存在时直接成功
+    * 桌面驱动（driver/main.cpp）在进入主循环前自动调用；特殊平台
+    （Android/WebGL）由端口在最终调用 je_file_user_path_set 之后
+    自行调用
+    * 目录存在或创建成功返回 true；路径为空或创建失败返回 false，
+    创建失败时记录警告
+请参见：
+    je_file_user_path_set
+*/
+JE_API bool je_file_user_path_assure();
 
 /*
 je_fimg_default_archive_set [基本接口]
@@ -132,8 +152,8 @@ JE_API const char* je_file_runtime_path_get();
 /*
 je_file_user_path_get [基本接口]
 获取当前引擎的用户数据路径，与“宿主环境路径”“运行时路径”无关
-若没有使用 je_file_user_path_set 设置此路径，则此路径默认为引擎的可
-执行文件所在路径
+引擎初始化时会按操作系统标准位置自动推导（含以可执行文件名命名的
+应用子目录）；无法推导时为引擎的可执行文件所在路径
 请参见：
     je_file_user_path_set
 */

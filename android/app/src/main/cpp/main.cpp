@@ -448,6 +448,7 @@ extern "C" {
         // NOTE: cache_dir can be purged by the OS; switch to filesDir here
         // (and pass it from Java) if user state must survive cache eviction.
         je_file_user_path_set(jni_cstring(env, cache_path).c_str());
+        (void)je_file_user_path_assure();
 
         je_fimg_default_archive_set("#");
     }
