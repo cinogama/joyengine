@@ -157,16 +157,8 @@ build_win64_dx11_opengl_vk:
     - cd build
     - copy RELWITHDEBINFO\*
     - cd ..
-    # Bake the texture/shader caches into build/ before collecting artifacts:
-    # the core can only read .je4cache and an installed runtime may be
-    # read-only, so the caches cannot be produced on first launch. jedriver is
-    # a GUI subsystem executable, hence start /wait (cmd does not wait).
-    - cd build
-    - start /wait "" jedriver.exe --graphic-api none -r "%CI_PROJECT_DIR%\script\build_bundle.wo" --data-root "%CI_PROJECT_DIR%\build"
-    - if not exist "builtin\icon\Warning.png.je4cache" exit /b 1
-    - if not exist "builtin\editor\main.wo.je4cache" exit /b 1
-    - cd ..
   # Raw output, used only as transit artifacts for the packaging jobs below.
+  # The .je4cache files are baked by package_win64_release, not here.
   artifacts:
     name: jeecs-win32-raw-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
     paths:
@@ -201,10 +193,25 @@ package_win64_release:
     - build_win64_dx11_opengl_vk
   script:
     - if exist build\*.pdb ( del build\*.pdb )
+    # Bake the texture/shader caches at release packaging time (mirrors
+    # package_macos_app): the core can only read .je4cache and an installed
+    # runtime may be read-only, so the caches cannot be produced on first
+    # launch. jedriver is a GUI subsystem executable, hence start /wait
+    # (cmd does not wait). The raw build artifacts arrive without caches.
+    - cd build
+    - start /wait "" jedriver.exe --graphic-api none -r "%CI_PROJECT_DIR%\script\build_bundle.wo" --data-root "%CI_PROJECT_DIR%\build"
+    - if not exist "builtin\icon\Warning.png.je4cache" exit /b 1
+    - if not exist "builtin\editor\main.wo.je4cache" exit /b 1
+    # Second entry point: Editor.exe is a copy of jedriver.exe (the startup
+    # role is decided by the data files, not the executable name; only the
+    # per-user data directory is keyed on it, so the editor gets its own).
+    - copy /Y jedriver.exe Editor.exe
+    - cd ..
   artifacts:
     name: jeecs-win32-release-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
     paths:
       - build/jedriver.exe
+      - build/Editor.exe
       - build/OpenAL32.dll
       - build/libjoyecs.dll
       - build/libwoo.dll
@@ -342,7 +349,8 @@ build_macos_metal_opengl_vk:
   tags:
     - mac-arm64
 
-# Package the macOS build into a JoyEngine.app bundle. jedriver and its
+# Package the macOS build into a JoyEngine.app bundle. Editor (a copy of
+# jedriver, named by CFBundleExecutable) plus jedriver and its
 # dylibs live in Contents/MacOS/ (sibling dylibs are found via
 # @executable_path rpath), data dirs (pkg/builtin/je/licenses) live in
 # Contents/Resources/. The build job above compiles the core with
@@ -369,6 +377,9 @@ package_macos_app:
   script:
     - mkdir -p "JoyEngine.app/Contents/MacOS" "JoyEngine.app/Contents/Resources"
     - cp dist/jedriver dist/libjoyecs.dylib dist/libwoo.dylib dist/libwoort.dylib dist/libopenal*.dylib "JoyEngine.app/Contents/MacOS/"
+    # The bundle launches Editor (CFBundleExecutable below); jedriver stays for
+    # direct runtime invocation. Same binary, see package_win64_release.
+    - cp dist/jedriver "JoyEngine.app/Contents/MacOS/Editor"
     - cp -R dist/pkg dist/builtin dist/je dist/licenses "JoyEngine.app/Contents/Resources/"
     # Bake the .je4cache files into Contents/Resources before codesign seals
     # the bundle: the core can only read caches, and a signed .app is
@@ -403,7 +414,7 @@ package_macos_app:
       <dict>
           <key>CFBundleDevelopmentRegion</key><string>en</string>
           <key>CFBundleDisplayName</key><string>JoyEngine</string>
-          <key>CFBundleExecutable</key><string>jedriver</string>
+          <key>CFBundleExecutable</key><string>Editor</string>
           <key>CFBundleIconFile</key><string>AppIcon</string>
           <key>CFBundleIdentifier</key><string>net.cinogama.joyengine</string>
           <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
@@ -416,7 +427,7 @@ package_macos_app:
       </dict>
       </plist>
       EOF
-    - codesign --force --sign - JoyEngine.app/Contents/MacOS/*.dylib
+    - codesign --force --sign - JoyEngine.app/Contents/MacOS/*.dylib "JoyEngine.app/Contents/MacOS/Editor" "JoyEngine.app/Contents/MacOS/jedriver"
     - codesign --force --sign - "JoyEngine.app"
   artifacts:
     name: jeecs-macos-app-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHA
